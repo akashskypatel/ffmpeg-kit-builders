@@ -35,12 +35,11 @@ ARCH_ARM64_V8A=4            # android
 ARCH_ARM64=5                # ios, tvos, macos
 ARCH_ARM64E=6               # ios
 ARCH_I386=7                 # ios
-ARCH_X86=8                  # android
+ARCH_X86=8                  # android, windows
 ARCH_X86_64=9               # android, ios, linux, macos, tvos, windows
 ARCH_X86_64_MAC_CATALYST=10 # ios
 ARCH_ARM64_MAC_CATALYST=11  # ios
 ARCH_ARM64_SIMULATOR=12     # ios
-ARCH_WIN32=13               # windows
 
 # ARCH VARIANT INDEXES
 ARCH_VAR_IOS=1              # ios
@@ -146,7 +145,6 @@ LIBRARY_LINUX_TESSERACT=89
 LIBRARY_LINUX_VAAPI=90
 LIBRARY_LINUX_VO_AMRWBENC=91
 LIBRARY_AMF_HEADERS=92
-LIBRARY_AOM=93
 LIBRARY_ARIBB24=94 #gpl
 LIBRARY_AUDIOTOOLBOXWRAPPER=95
 LIBRARY_AVISYNTH=96 #gpl
@@ -193,15 +191,12 @@ LIBRARY_LIBMODPLUG=136
 LIBRARY_LIBMYSOFA=137
 LIBRARY_LIBMXF=138
 LIBRARY_LIBOPENCORE=139
-LIBRARY_LIBOPENH264=140
 LIBRARY_LIBOPENJPEG=141
-LIBRARY_LIBOPUS=142
 LIBRARY_LIBPLACEBO=143
 LIBRARY_LIBPROXY=144
 LIBRARY_LIBPSL=145
 LIBRARY_LIBRTMFP=146
 LIBRARY_LIBSSH2=147
-LIBRARY_LIBTIFF=148
 LIBRARY_LIBUNISTRING=149
 LIBRARY_LIBUNWIND=150
 LIBRARY_LIBVPL=151
@@ -250,11 +245,10 @@ export MINGW_W64_BRANCH="master"
 export BINUTILS_BRANCH="binutils-2_44-branch"
 export GCC_BRANCH="releases/gcc-14"
 
-export top_dir=$(pwd)
 export sandbox="prebuilt"
-export cur_dir="$top_dir/$sandbox"
-export patch_dir="$top_dir/patches"
-export cpu_count="$(grep -c processor /proc/cpuinfo 2>/dev/null)" # linux cpu count
+export WORKDIR="$BASEDIR/$sandbox"
+export WINWINPATCHDIR="$BASEDIR/windows/patches"
+export SCRIPTDIR="$BASEDIR/scripts"
 
 # variables with their defaults
 export build_ffmpeg_static=y
@@ -297,7 +291,7 @@ export build_svt_hevc=n
 export build_svt_vp9=n
 export build_dependencies_only=n
 
-export original_cpu_count=$cpu_count # save it away for some that revert it temporarily
+export original_cpu_count=$(get_cpu_count) # save it away for some that revert it temporarily
 
 export PKG_CONFIG_LIBDIR= # disable pkg-config from finding [and using] normal linux system installed libs [yikes]
 export original_path="$PATH"
@@ -389,11 +383,11 @@ export BUILD_STEPS=(
 
 while true; do
   case $1 in
-    -top_dir | --top_dir) echo "$top_dir" ; shift;;
+    -top_dir | --top_dir) echo "$BASEDIR" ; shift;;
     -sandbox | --sandbox) echo "$sandbox" ; shift;;
     -cur_dir | --cur_dir) echo "$cur_dir" ; shift;;
-    -patch_dir | --patch_dir) echo "$patch_dir" ; shift;;
-    -cpu_count | --cpu_count) echo "$cpu_count" ; shift;;
+    -patch_dir | --patch_dir) echo "$WINPATCHDIR" ; shift;;
+    -cpu_count | --cpu_count) echo "$(get_cpu_count)" ; shift;;
     -build_ffmpeg_static | --build_ffmpeg_static) echo "$build_ffmpeg_static" ; shift;;
     -build_ffmpeg_shared | --build_ffmpeg_shared) echo "$build_ffmpeg_shared" ; shift;;
     -build_dvbtee | --build_dvbtee) echo "$build_dvbtee" ; shift;;
@@ -421,11 +415,11 @@ while true; do
     -build_dependencies_only | --build_dependencies_only) echo "$build_dependencies_only" ; shift;;
     -original_cpu_count | --original_cpu_count) echo "$original_cpu_count" ; shift;;
     -a | --all) 
-    echo -e "top_dir=$top_dir\n" \
+    echo -e "top_dir=$BASEDIR\n" \
             "sandbox=$sandbox\n" \
             "cur_dir=$cur_dir\n" \
-            "patch_dir=$patch_dir\n" \
-            "cpu_count=$cpu_count\n" \
+            "patch_dir=$WINPATCHDIR\n" \
+            "cpu_count=$(get_cpu_count)\n" \
             "build_ffmpeg_static=$build_ffmpeg_static\n" \
             "build_ffmpeg_shared=$build_ffmpeg_shared\n" \
             "build_dvbtee=$build_dvbtee\n" \

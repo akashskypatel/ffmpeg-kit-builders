@@ -120,9 +120,9 @@ fi
 
 # LOAD INITIAL SETTINGS
 export BASEDIR="$(pwd)"
-source "${BASEDIR}"/scripts/variable.sh
+source ${SCRIPTDIR}/variable.sh
 export FFMPEG_KIT_BUILD_TYPE="apple"
-source "${BASEDIR}"/scripts/function-${FFMPEG_KIT_BUILD_TYPE}.sh
+source ${SCRIPTDIR}/function-${FFMPEG_KIT_BUILD_TYPE}.sh
 
 # SET DEFAULTS SETTINGS
 enable_default_architecture_variants

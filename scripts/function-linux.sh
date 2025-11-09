@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "${BASEDIR}/scripts/function.sh"
+source "${SCRIPTDIR}/function.sh"
 
 prepare_inline_sed
 

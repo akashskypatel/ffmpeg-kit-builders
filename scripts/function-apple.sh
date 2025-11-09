@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "${BASEDIR}/scripts/function.sh"
+source "${SCRIPTDIR}/function.sh"
 
 export FFMPEG_LIBS=("libavcodec" "libavdevice" "libavfilter" "libavformat" "libavutil" "libswresample" "libswscale")
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ENABLE COMMON FUNCTIONS
-source "${BASEDIR}"/scripts/function-"${FFMPEG_KIT_BUILD_TYPE}".sh 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+source ${SCRIPTDIR}/function-"${FFMPEG_KIT_BUILD_TYPE}".sh 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 LIB_NAME="ffmpeg-kit"
 

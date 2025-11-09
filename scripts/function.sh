@@ -2,8 +2,8 @@
 
 echo -e "INFO: Running scripts\function.sh\n" 1>>"${BASEDIR}"/build.log 2>&1
 
-source "${BASEDIR}"/scripts/source.sh
-source "$(pwd)/scripts/variable.sh"
+source ${SCRIPTDIR}/source.sh
+source "${SCRIPTDIR}/variable.sh"
 
 get_arch_name() {
   case $1 in
@@ -1620,9 +1620,6 @@ set_library() {
   amf-headers)
     ENABLED_LIBRARIES[LIBRARY_AMF_HEADERS]=$2
     ;;
-  aom)
-    ENABLED_LIBRARIES[LIBRARY_AOM]=$2
-    ;;
   aribb24)
     ENABLED_LIBRARIES[LIBRARY_ARIBB24]=$2
     ;;
@@ -1761,14 +1758,8 @@ set_library() {
   libopencore)
     ENABLED_LIBRARIES[LIBRARY_LIBOPENCORE]=$2
     ;;
-  libopenh264)
-    ENABLED_LIBRARIES[LIBRARY_LIBOPENH264]=$2
-    ;;
   libopenjpeg)
     ENABLED_LIBRARIES[LIBRARY_LIBOPENJPEG]=$2
-    ;;
-  libopus)
-    ENABLED_LIBRARIES[LIBRARY_LIBOPUS]=$2
     ;;
   libplacebo)
     ENABLED_LIBRARIES[LIBRARY_LIBPLACEBO]=$2
@@ -1784,9 +1775,6 @@ set_library() {
     ;;
   libssh2)
     ENABLED_LIBRARIES[LIBRARY_LIBSSH2]=$2
-    ;;
-  libtiff)
-    ENABLED_LIBRARIES[LIBRARY_LIBTIFF]=$2
     ;;
   libunistring)
     ENABLED_LIBRARIES[LIBRARY_LIBUNISTRING]=$2
@@ -3275,7 +3263,7 @@ unset UNAME
 download_gcc_build_script() {
     local zeranoe_script_name=$1
     rm -f $zeranoe_script_name || exit 1
-    curl -4 file://$patch_dir/$zeranoe_script_name -O --fail || exit 1
+    curl -4 file://$WINPATCHDIR/$zeranoe_script_name -O --fail || exit 1
     chmod u+x $zeranoe_script_name
 }
 
@@ -3482,7 +3470,7 @@ do_configure() {
     nice -n 5 "$configure_name" $configure_options || { echo "failed configure $english_name"; exit 1;} # less nicey than make (since single thread, and what if you're running another ffmpeg nice build elsewhere?)
     touch -- "$touch_name"
     echo "doing preventative make clean"
-    nice make clean -j $cpu_count # sometimes useful when files change, etc.
+    nice make clean -j $(get_cpu_count) # sometimes useful when files change, etc.
   #else
   #  echo "already configured $(basename $cur_dir2)"
   fi
@@ -3490,7 +3478,7 @@ do_configure() {
 
 do_make() {
   local extra_make_options="$1"
-  extra_make_options="$extra_make_options -j $cpu_count"
+  extra_make_options="$extra_make_options -j $(get_cpu_count)"
   local cur_dir2=$(pwd)
   local touch_name=$(get_small_touchfile_name already_ran_make "$extra_make_options" )
 
@@ -3499,7 +3487,7 @@ do_make() {
     echo "Making $cur_dir2 as $ PATH=$mingw_bin_path:\$PATH make $extra_make_options"
     echo
     if [ ! -f configure ]; then
-      nice make clean -j $cpu_count # just in case helpful if old junk left around and this is a 're make' and wasn't cleaned at reconfigure time
+      nice make clean -j $(get_cpu_count) # just in case helpful if old junk left around and this is a 're make' and wasn't cleaned at reconfigure time
     fi
     nice make $extra_make_options || exit 1
     touch $touch_name || exit 1 # only touch if the build was OK
@@ -3613,7 +3601,7 @@ do_meson() {
 generic_meson() {
     local extra_configure_options="$1"
     mkdir -pv build
-    do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" # --cross-file=${top_dir}/meson-cross.mingw.txt
+    do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" # --cross-file=${BASEDIR}/meson-cross.mingw.txt
 }
 
 generic_meson_ninja_install() {
@@ -3633,7 +3621,7 @@ do_ninja_and_ninja_install() {
 }
 
 do_ninja() {
-  local extra_make_options=" -j $cpu_count"
+  local extra_make_options=" -j $(get_cpu_count)"
   local cur_dir2=$(pwd)
   local touch_name=$(get_small_touchfile_name already_ran_make "${extra_make_options}")
 
@@ -3771,7 +3759,7 @@ build_dlfcn() {
 build_bzip2() {
   download_and_unpack_file https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
   cd bzip2-1.0.8
-    apply_patch file://$patch_dir/bzip2-1.0.8_brokenstuff.diff
+    apply_patch file://$WINPATCHDIR/bzip2-1.0.8_brokenstuff.diff
     if [[ ! -f ./libbz2.a ]] || [[ -f $mingw_w64_x86_64_prefix/lib/libbz2.a && ! $(/usr/bin/env md5sum ./libbz2.a) = $(/usr/bin/env md5sum $mingw_w64_x86_64_prefix/lib/libbz2.a) ]]; then # Not built or different build installed
       do_make "$make_prefix_options libbz2.a"
       install -m644 bzlib.h $mingw_w64_x86_64_prefix/include/bzlib.h
@@ -3843,7 +3831,7 @@ build_zstd() {
 build_sdl2() {
   download_and_unpack_file https://www.libsdl.org/release/SDL2-2.32.10.tar.gz
   cd SDL2-2.32.10
-    apply_patch file://$patch_dir/SDL2-2.32.10_lib-only.diff
+    apply_patch file://$WINPATCHDIR/SDL2-2.32.10_lib-only.diff
     if [[ ! -f configure.bak ]]; then
       sed -i.bak "s/ -mwindows//" configure # Allow ffmpeg to output anything to console.
     fi
@@ -3955,7 +3943,7 @@ build_glib() {
   generic_download_and_make_and_install  https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz
   download_and_unpack_file  https://github.com/libffi/libffi/releases/download/v3.5.2/libffi-3.5.2.tar.gz # also dep
   cd libffi-3.5.2
-    apply_patch file://$patch_dir/libffi.patch -p1 
+    apply_patch file://$WINPATCHDIR/libffi.patch -p1 
     generic_configure_make_install
   cd ..
   
@@ -3965,7 +3953,7 @@ build_glib() {
     local meson_options="setup --force-fallback-for=libpcre -Dforce_posix_threads=true -Dman-pages=disabled -Dsysprof=disabled -Dglib_debug=disabled -Dtests=false --wrap-mode=default . build"
     if [[ $compiler_flavors != "native" ]]; then
       # get_local_meson_cross_with_propeties 
-      meson_options+=" --cross-file=${top_dir}/meson-cross.mingw.txt"
+      meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
       do_meson "$meson_options"      
     else
       generic_meson "$meson_options"
@@ -4146,7 +4134,7 @@ build_harfbuzz() {
       local meson_options="setup -Dglib=disabled -Dgobject=disabled -Dcairo=disabled -Dicu=disabled -Dtests=disabled -Dintrospection=disabled -Ddocs=disabled . build"
       if [[ $compiler_flavors != "native" ]]; then
         # get_local_meson_cross_with_propeties 
-        meson_options+=" --cross-file=${top_dir}/meson-cross.mingw.txt"
+        meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
         do_meson "$meson_options"      
       else
         generic_meson "$meson_options"
@@ -4171,7 +4159,7 @@ build_freetype() {
     local meson_options="setup $config_options . build"
     if [[ $compiler_flavors != "native" ]]; then
       # get_local_meson_cross_with_propeties 
-      meson_options+=" --cross-file=${top_dir}/meson-cross.mingw.txt"
+      meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
       do_meson "$meson_options"      
     else
       generic_meson "$meson_options"
@@ -4195,7 +4183,7 @@ build_libvmaf() {
     local meson_options="setup -Denable_float=true -Dbuilt_in_models=true -Denable_tests=false -Denable_docs=false . build"
     if [[ $compiler_flavors != "native" ]]; then
       # get_local_meson_cross_with_propeties 
-      meson_options+=" --cross-file=${top_dir}/meson-cross.mingw.txt"
+      meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
       do_meson "$meson_options"      
     else
       generic_meson "$meson_options"
@@ -4236,11 +4224,11 @@ build_librtmfp() {
   cd ../../..
   cd librtmfp_git
     if [[ $compiler_flavors != "native" ]]; then
-      apply_patch file://$patch_dir/rtmfp.static.cross.patch -p1 # works e48efb4f
-      apply_patch file://$patch_dir/rtmfp_capitalization.diff -p1 # cross for windows needs it if on linux...
-      apply_patch file://$patch_dir/librtmfp_xp.diff.diff -p1 # cross for windows needs it if on linux...
+      apply_patch file://$WINPATCHDIR/rtmfp.static.cross.patch -p1 # works e48efb4f
+      apply_patch file://$WINPATCHDIR/rtmfp_capitalization.diff -p1 # cross for windows needs it if on linux...
+      apply_patch file://$WINPATCHDIR/librtmfp_xp.diff.diff -p1 # cross for windows needs it if on linux...
     else
-      apply_patch file://$patch_dir/rtfmp.static.make.patch -p1
+      apply_patch file://$WINPATCHDIR/rtfmp.static.make.patch -p1
     fi
     do_make "$make_prefix_options GPP=${cross_prefix}g++"
     do_make_install "prefix=$mingw_w64_x86_64_prefix PKGCONFIGPATH=$PKG_CONFIG_PATH"
@@ -4300,7 +4288,7 @@ build_gnutls() {
 build_openssl-1.0.2() {
   download_and_unpack_file https://www.openssl.org/source/openssl-1.0.2p.tar.gz
   cd openssl-1.0.2p
-    apply_patch file://$patch_dir/openssl-1.0.2l_lib-only.diff
+    apply_patch file://$WINPATCHDIR/openssl-1.0.2l_lib-only.diff
     export CC="${cross_prefix}gcc"
     export AR="${cross_prefix}ar"
     export RANLIB="${cross_prefix}ranlib"
@@ -4324,8 +4312,8 @@ build_openssl-1.0.2() {
     if [ "$1" = "dllonly" ]; then
       do_make "build_libs"
 
-      mkdir -p $cur_dir/redist # Strip and pack shared libraries.
-      archive="$cur_dir/redist/openssl-${arch}-v1.0.2l.7z"
+      mkdir -p $WORKDIR/redist # Strip and pack shared libraries.
+      archive="$WORKDIR/redist/openssl-${arch}-v1.0.2l.7z"
       if [[ ! -f $archive ]]; then
         for sharedlib in *.dll; do
           ${cross_prefix}strip $sharedlib
@@ -4377,8 +4365,8 @@ build_openssl-1.1.1() {
     fi
     do_make "build_libs"
     if [ "$1" = "dllonly" ]; then
-      mkdir -p $cur_dir/redist # Strip and pack shared libraries.
-      archive="$cur_dir/redist/openssl-${arch}-v1.1.0f.7z"
+      mkdir -p $WORKDIR/redist # Strip and pack shared libraries.
+      archive="$WORKDIR/redist/openssl-${arch}-v1.1.0f.7z"
       if [[ ! -f $archive ]]; then
         for sharedlib in *.dll; do
           ${cross_prefix}strip $sharedlib
@@ -4481,9 +4469,9 @@ build_twolame() {
     if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
       sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit 1
     fi
-    cpu_count=1 # maybe can't handle it http://betterlogic.com/roger/2017/07/mp3lame-woe/ comments
+    (get_cpu_count)=1 # maybe can't handle it http://betterlogic.com/roger/2017/07/mp3lame-woe/ comments
     generic_configure_make_install
-    cpu_count=$original_cpu_count
+    (get_cpu_count)=$original_cpu_count
   cd ..
 }
 
@@ -4561,15 +4549,15 @@ build_opencv() {
   download_and_unpack_file https://github.com/opencv/opencv/archive/3.4.5.zip opencv-3.4.5
   mkdir -p opencv-3.4.5/build
   cd opencv-3.4.5
-     apply_patch file://$patch_dir/opencv.detection_based.patch
+     apply_patch file://$WINPATCHDIR/opencv.detection_based.patch
   cd ..
   cd opencv-3.4.5/build
     # could do more here, it seems to think it needs its own internal libwebp etc...
-    cpu_count=1
+    (get_cpu_count)=1
     do_cmake_from_build_dir .. "-DWITH_FFMPEG=0 -DOPENCV_GENERATE_PKGCONFIG=1 -DHAVE_DSHOW=0" # https://stackoverflow.com/q/40262928/32453, no pkg config by default on "windows", who cares ffmpeg
     do_make_and_make_install
     cp unix-install/opencv.pc $PKG_CONFIG_PATH
-    cpu_count=$original_cpu_count
+    (get_cpu_count)=$original_cpu_count
   cd ../..
 }
 
@@ -4577,7 +4565,7 @@ build_facebooktransform360() {
   build_opencv
   do_git_checkout https://github.com/facebook/transform360.git
   cd transform360_git
-    apply_patch file://$patch_dir/transform360.pi.diff -p1
+    apply_patch file://$WINPATCHDIR/transform360.pi.diff -p1
   cd ..
   cd transform360_git/Transform360
     do_cmake ""
@@ -4594,7 +4582,7 @@ build_libbluray() {
     local meson_options="setup -Denable_examples=false -Dbdj_jar=disabled --wrap-mode=default . build"
     if [[ $compiler_flavors != "native" ]]; then
       # get_local_meson_cross_with_propeties 
-      meson_options+=" --cross-file=${top_dir}/meson-cross.mingw.txt"
+      meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
       do_meson "$meson_options"      
     else
       generic_meson "$meson_options"
@@ -4608,7 +4596,7 @@ build_libbluray() {
 build_libbs2b() {
   download_and_unpack_file https://downloads.sourceforge.net/project/bs2b/libbs2b/3.1.0/libbs2b-3.1.0.tar.gz
   cd libbs2b-3.1.0
-    apply_patch file://$patch_dir/libbs2b.patch
+    apply_patch file://$WINPATCHDIR/libbs2b.patch
     sed -i.bak "s/AC_FUNC_MALLOC//" configure.ac # #270
     export LIBS=-lm # avoid pow failure linux native
     generic_configure_make_install
@@ -4626,7 +4614,7 @@ build_libsoxr() {
 build_libflite() {
   do_git_checkout https://github.com/festvox/flite.git flite_git
   cd flite_git
-    apply_patch file://$patch_dir/flite-2.1.0_mingw-w64-fixes.patch
+    apply_patch file://$WINPATCHDIR/flite-2.1.0_mingw-w64-fixes.patch
     if [[ ! -f main/Makefile.bak ]]; then									
     sed -i.bak "s/cp -pd/cp -p/" main/Makefile # friendlier cp for OS X
     fi
@@ -4653,7 +4641,7 @@ build_vamp_plugin() {
   download_and_unpack_file https://github.com/vamp-plugins/vamp-plugin-sdk/archive/refs/tags/vamp-plugin-sdk-v2.10.zip vamp-plugin-sdk-vamp-plugin-sdk-v2.10
   #cd vamp-plugin-sdk-2.10.0
   cd vamp-plugin-sdk-vamp-plugin-sdk-v2.10
-    apply_patch file://$patch_dir/vamp-plugin-sdk-2.10_static-lib.diff
+    apply_patch file://$WINPATCHDIR/vamp-plugin-sdk-2.10_static-lib.diff
     if [[ $compiler_flavors != "native" && ! -f src/vamp-sdk/PluginAdapter.cpp.bak ]]; then
       sed -i.bak "s/#include <mutex>/#include <mingw.mutex.h>/" src/vamp-sdk/PluginAdapter.cpp
     fi
@@ -4684,7 +4672,7 @@ build_libsamplerate() {
 build_librubberband() {
   do_git_checkout https://github.com/breakfastquay/rubberband.git rubberband_git 18c06ab8c431854056407c467f4755f761e36a8e
   cd rubberband_git
-    apply_patch file://$patch_dir/rubberband_git_static-lib.diff # create install-static target
+    apply_patch file://$WINPATCHDIR/rubberband_git_static-lib.diff # create install-static target
     do_configure "--host=$host_target --prefix=$mingw_w64_x86_64_prefix --disable-ladspa"
     do_make "install-static AR=${cross_prefix}ar" # No need for 'do_make_install', because 'install-static' already has install-instructions.
     sed -i.bak 's/-lrubberband.*$/-lrubberband -lfftw3 -lsamplerate -lstdc++/' $PKG_CONFIG_PATH/rubberband.pc
@@ -4699,13 +4687,13 @@ build_frei0r() {
     sed -i.bak 's/-arch i386//' CMakeLists.txt # OS X https://github.com/dyne/frei0r/issues/64
     do_cmake_and_install "-DWITHOUT_OPENCV=1" # XXX could look at this more...
 
-    mkdir -p $cur_dir/redist # Strip and pack shared libraries.
+    mkdir -p $WORKDIR/redist # Strip and pack shared libraries.
     if [ $bits_target = 32 ]; then
       local arch=x86
     else
       local arch=x86_64
     fi
-    archive="$cur_dir/redist/frei0r-plugins-${arch}-$(git describe --tags).7z"
+    archive="$WORKDIR/redist/frei0r-plugins-${arch}-$(git describe --tags).7z"
     if [[ ! -f "$archive.done" ]]; then
       for sharedlib in $mingw_w64_x86_64_prefix/lib/frei0r-1/*.dll; do
         ${cross_prefix}strip $sharedlib
@@ -4770,7 +4758,7 @@ build_libmysofa() {
 build_libcaca() {
   do_git_checkout https://github.com/cacalabs/libcaca.git libcaca_git 813baea7a7bc28986e474541dd1080898fac14d7
   cd libcaca_git
-    apply_patch file://$patch_dir/libcaca_git_stdio-cruft.diff -p1 # Fix WinXP incompatibility.
+    apply_patch file://$WINPATCHDIR/libcaca_git_stdio-cruft.diff -p1 # Fix WinXP incompatibility.
     cd caca
       sed -i.bak "s/__declspec(dllexport)//g" *.h # get rid of the declspec lines otherwise the build will fail for undefined symbols
       sed -i.bak "s/__declspec(dllimport)//g" *.h
@@ -4811,7 +4799,7 @@ build_libsrt() {
   download_and_unpack_file https://github.com/Haivision/srt/archive/v1.5.4.tar.gz srt-1.5.4
   cd srt-1.5.4
     if [[ $compiler_flavors != "native" ]]; then
-      apply_patch file://$patch_dir/srt.app.patch -p1
+      apply_patch file://$WINPATCHDIR/srt.app.patch -p1
     fi
     # CMake Warning at CMakeLists.txt:893 (message):
     #   On MinGW, some C++11 apps are blocked due to lacking proper C++11 headers
@@ -4928,7 +4916,7 @@ build_libplacebo() {
     local meson_options="setup -Ddemos=false -Dbench=false -Dfuzz=false -Dvulkan=enabled -Dvk-proc-addr=disabled -Dshaderc=enabled -Dglslang=disabled -Dc_link_args=-static -Dcpp_link_args=-static $config_options . build" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined 
    if [[ $compiler_flavors != "native" ]]; then
       # get_local_meson_cross_with_propeties 
-      meson_options+=" --cross-file=${top_dir}/meson-cross.mingw.txt"
+      meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
       do_meson "$meson_options"      
     else
       generic_meson "$meson_options"
@@ -4992,7 +4980,7 @@ build_libdavs2() {
 build_libxvid() {
   download_and_unpack_file https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz xvidcore
   cd xvidcore/build/generic
-    apply_patch file://$patch_dir/xvidcore-1.3.7_static-lib.patch
+    apply_patch file://$WINPATCHDIR/xvidcore-1.3.7_static-lib.patch
     do_configure "--host=$host_target --prefix=$mingw_w64_x86_64_prefix" # no static option...
     do_make_and_make_install
   cd ../../..
@@ -5001,7 +4989,7 @@ build_libxvid() {
 build_libvpx() {
   do_git_checkout https://chromium.googlesource.com/webm/libvpx.git libvpx_git "origin/main"
   cd libvpx_git
-    # apply_patch file://$patch_dir/vpx_160_semaphore.patch -p1 # perhaps someday can remove this after 1.6.0 or mingw fixes it LOL
+    # apply_patch file://$WINPATCHDIR/vpx_160_semaphore.patch -p1 # perhaps someday can remove this after 1.6.0 or mingw fixes it LOL
     if [[ $compiler_flavors == "native" ]]; then
       local config_options=""
     elif [[ "$bits_target" = "32" ]]; then
@@ -5038,20 +5026,20 @@ build_dav1d() {
   activate_meson
   cd libdav1d
     if [[ $bits_target == 32 || $bits_target == 64 ]]; then # XXX why 64???
-      apply_patch file://$patch_dir/david_no_asm.patch -p1 # XXX report
+      apply_patch file://$WINPATCHDIR/david_no_asm.patch -p1 # XXX report
     fi
-    cpu_count=1 # XXX report :|
+    (get_cpu_count)=1 # XXX report :|
     local meson_options="setup -Denable_tests=false -Denable_examples=false . build"
     if [[ $compiler_flavors != "native" ]]; then
       # get_local_meson_cross_with_propeties 
-      meson_options+=" --cross-file=${top_dir}/meson-cross.mingw.txt"
+      meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
       do_meson "$meson_options"      
     else
       generic_meson "$meson_options"
     fi
     do_ninja_and_ninja_install
     cp build/src/libdav1d.a $mingw_w64_x86_64_prefix/lib || exit 1 # avoid 'run ranlib' weird failure, possibly older meson's https://github.com/mesonbuild/meson/issues/4138 :|
-    cpu_count=$original_cpu_count
+    (get_cpu_count)=$original_cpu_count
   deactivate
   cd ..
 }
@@ -5102,7 +5090,7 @@ build_libx265() {
 
   # Apply x86 noasm detection fix on newer versions
   if [[ $x265_git_checkout_version != *"3.5"* ]] && [[ $x265_git_checkout_version != *"3.4"* ]] && [[ $x265_git_checkout_version != *"3.3"* ]] && [[ $x265_git_checkout_version != *"3.2"* ]] && [[ $x265_git_checkout_version != *"3.1"* ]]; then
-    git apply "$patch_dir/x265_x86_noasm_fix.patch"
+    git apply "$WINPATCHDIR/x265_x86_noasm_fix.patch"
   fi
 
   if [ "$bits_target" = "32" ]; then
@@ -5342,12 +5330,12 @@ build_qt() {
   # download_and_unpack_file http://download.qt-project.org/official_releases/qt/5.1/5.1.1/submodules/qtbase-opensource-src-5.1.1.tar.xz qtbase-opensource-src-5.1.1 # not officially supported seems...so didn't try it
   download_and_unpack_file http://pkgs.fedoraproject.org/repo/pkgs/qt/qt-everywhere-opensource-src-4.8.5.tar.gz/1864987bdbb2f58f8ae8b350dfdbe133/qt-everywhere-opensource-src-4.8.5.tar.gz
   cd qt-everywhere-opensource-src-4.8.5
-    apply_patch file://$patch_dir/imageformats.patch
-    apply_patch file://$patch_dir/qt-win64.patch
+    apply_patch file://$WINPATCHDIR/imageformats.patch
+    apply_patch file://$WINPATCHDIR/qt-win64.patch
     # vlc's configure options...mostly
     do_configure "-static -release -fast -no-exceptions -no-stl -no-sql-sqlite -no-qt3support -no-gif -no-libmng -qt-libjpeg -no-libtiff -no-qdbus -no-openssl -no-webkit -sse -no-script -no-multimedia -no-phonon -opensource -no-scripttools -no-opengl -no-script -no-scripttools -no-declarative -no-declarative-debug -opensource -no-s60 -host-little-endian -confirm-license -xplatform win32-g++ -device-option CROSS_COMPILE=$cross_prefix -prefix $mingw_w64_x86_64_prefix -prefix-install -nomake examples"
     if [ ! -f 'already_qt_maked_k' ]; then
-      make sub-src -j $cpu_count
+      make sub-src -j $(get_cpu_count)
       make install sub-src # let it fail, baby, it still installs a lot of good stuff before dying on mng...? huh wuh?
       cp ./plugins/imageformats/libqjpeg.a $mingw_w64_x86_64_prefix/lib || exit 1 # I think vlc's install is just broken to need this [?]
       cp ./plugins/accessible/libqtaccessiblewidgets.a  $mingw_w64_x86_64_prefix/lib || exit 1 # this feels wrong...
@@ -5378,7 +5366,7 @@ build_vlc() {
   # currently vlc itself currently broken :|
   do_git_checkout https://github.com/videolan/vlc.git
   cd vlc_git
-  #apply_patch file://$patch_dir/vlc_localtime_s.patch # git revision needs it...
+  #apply_patch file://$WINPATCHDIR/vlc_localtime_s.patch # git revision needs it...
   # outdated and patch doesn't apply cleanly anymore apparently...
   #if [[ "$non_free" = "y" ]]; then
   #  apply_patch https://raw.githubusercontent.com/gcsx/ffmpeg-windows-build-helpers/patch-5/patches/priorize_avcodec.patch
@@ -5464,7 +5452,7 @@ get_local_meson_cross_with_propeties() {
   if [[ -z $local_dir ]]; then
     local_dir="."
   fi
-  cp ${top_dir}/meson-cross.mingw.txt "$local_dir"
+  cp ${BASEDIR}/meson-cross.mingw.txt "$local_dir"
   cat >> meson-cross.mingw.txt << EOF
 EOF
 }
@@ -5526,7 +5514,7 @@ build_mp4box() { # like build_gpac
 build_libMXF() {
   download_and_unpack_file https://sourceforge.net/projects/ingex/files/1.0.0/libMXF/libMXF-src-1.0.0.tgz "libMXF-src-1.0.0"
   cd libMXF-src-1.0.0
-    apply_patch file://$patch_dir/libMXF.diff
+    apply_patch file://$WINPATCHDIR/libMXF.diff
     do_make "MINGW_CC_PREFIX=$cross_prefix"
     #
     # Manual equivalent of make install. Enable it if desired. We shouldn't need it in theory since we never use libMXF.a file and can just hand pluck out the *.exe files already...

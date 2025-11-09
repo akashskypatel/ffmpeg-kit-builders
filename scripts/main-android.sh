@@ -175,7 +175,7 @@ while [ ${#enabled_library_list[@]} -gt $completed ]; do
 
         echo -n "${library}: "
 
-        "${BASEDIR}"/scripts/run-android.sh "${library}" 1>>"${BASEDIR}"/build.log 2>&1
+        ${SCRIPTDIR}/run-android.sh "${library}" 1>>"${BASEDIR}"/build.log 2>&1
 
         RC=$?
 
@@ -219,7 +219,7 @@ for custom_library_index in "${CUSTOM_LIBRARIES[@]}"; do
 
     echo -n "${!library_name}: "
 
-    "${BASEDIR}"/scripts/run-android.sh "${!library_name}" 1>>"${BASEDIR}"/build.log 2>&1
+    ${SCRIPTDIR}/run-android.sh "${!library_name}" 1>>"${BASEDIR}"/build.log 2>&1
 
     RC=$?
 
@@ -242,7 +242,7 @@ done
 if [[ ${SKIP_ffmpeg} -ne 1 ]]; then
 
   # BUILD FFMPEG
-  source "${BASEDIR}"/scripts/android/ffmpeg.sh
+  source ${SCRIPTDIR}/android/ffmpeg.sh
 
   if [[ $? -ne 0 ]]; then
     exit 1

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ENABLE COMMON FUNCTIONS
-source "${BASEDIR}"/scripts/function-"${FFMPEG_KIT_BUILD_TYPE}".sh || return 1
+source ${SCRIPTDIR}/function-"${FFMPEG_KIT_BUILD_TYPE}".sh || return 1
 
 LIB_NAME=$1
 ENABLED_LIBRARY_PATH="${LIB_INSTALL_BASE}/${LIB_NAME}"
@@ -12,7 +12,7 @@ if [ -d "${ENABLED_LIBRARY_PATH}" ]; then
 fi
 
 # PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
-SCRIPT_PATH="${BASEDIR}/scripts/linux/${LIB_NAME}.sh"
+SCRIPT_PATH="${SCRIPTDIR}/linux/${LIB_NAME}.sh"
 set_toolchain_paths "${LIB_NAME}"
 
 # SET BUILD FLAGS

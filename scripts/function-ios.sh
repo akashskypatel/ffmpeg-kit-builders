@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "${BASEDIR}/scripts/function-apple.sh"
+source "${SCRIPTDIR}/function-apple.sh"
 
 prepare_inline_sed
 

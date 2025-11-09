@@ -3,8 +3,8 @@
 # LOAD INITIAL SETTINGS
 export BASEDIR="$(pwd)"
 export FFMPEG_KIT_BUILD_TYPE="linux"
-source "${BASEDIR}"/scripts/variable.sh
-source "${BASEDIR}"/scripts/function-${FFMPEG_KIT_BUILD_TYPE}.sh
+source ${SCRIPTDIR}/variable.sh
+source ${SCRIPTDIR}/function-${FFMPEG_KIT_BUILD_TYPE}.sh
 disabled_libraries=()
 
 # SET DEFAULTS SETTINGS
@@ -188,7 +188,7 @@ for run_arch in {0..12}; do
     export FULL_ARCH=$(get_full_arch_name "$run_arch")
 
     # EXECUTE MAIN BUILD SCRIPT
-    . "${BASEDIR}"/scripts/main-linux.sh "${ENABLED_LIBRARIES[@]}"
+    . ${SCRIPTDIR}/main-linux.sh "${ENABLED_LIBRARIES[@]}"
 
     TARGET_ARCH_LIST+=("${FULL_ARCH}")
 

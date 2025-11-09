@@ -1,14 +1,14 @@
 # #!/bin/bash
 
-source "$(pwd)/scripts/variable.sh"
-source "$(pwd)/scripts/function.sh"
-source "$(pwd)/scripts/function-windows.sh"
+source "${SCRIPTDIR}/variable.sh"
+source "${SCRIPTDIR}/function.sh"
+source "${SCRIPTDIR}/function-windows.sh"
 
-if [ -z "$cpu_count" ]; then
-  cpu_count=$(sysctl -n hw.ncpu | tr -d '\n') # OS X cpu count
-  if [ -z "$cpu_count" ]; then
+if [ -z "$(get_cpu_count)" ]; then
+  (get_cpu_count)=$(sysctl -n hw.ncpu | tr -d '\n') # OS X cpu count
+  if [ -z "$(get_cpu_count)" ]; then
     echo "warning, unable to determine cpu count, defaulting to 1"
-    cpu_count=1 # else default to just 1, instead of blank, which means infinite
+    (get_cpu_count)=1 # else default to just 1, instead of blank, which means infinite
   fi
 fi
 
@@ -19,7 +19,7 @@ if [[ $box_memory_size_bytes -lt 600000000 ]]; then
 fi
 
 if [[ $box_memory_size_bytes -gt 2000000000 ]]; then
-  gcc_cpu_count=$cpu_count # they can handle it seemingly...
+  gcc_cpu_count=$(get_cpu_count) # they can handle it seemingly...
 else
   echo "low RAM detected so using only one cpu for gcc compilation"
   gcc_cpu_count=1 # compatible low RAM...
@@ -109,4 +109,4 @@ EOF
   esac
 }
 
-source "$(pwd)/scripts/run-windows.sh"
+source "${SCRIPTDIR}/run-windows.sh"

@@ -3,7 +3,9 @@
 # Copyright (C) 2012 Roger Pack, the script is under the GPLv3, but output FFmpeg's executables aren't
 # set -x
 
-source "$(pwd)/scripts/variable.sh"
+export BASEDIR="$(pwd)"
+export FFMPEG_KIT_BUILD_TYPE="windows"
+source "${SCRIPTDIR}/variable.sh"
 
 # If --get-total-steps is passed, just print the size of the array and exit.
 if [[ "$1" == "--get-total-steps" ]]; then
@@ -106,4 +108,4 @@ while true; do
   esac
 done
 
-source "$(pwd)/scripts/main-windows.sh"
+source "${SCRIPTDIR}/main-windows.sh"

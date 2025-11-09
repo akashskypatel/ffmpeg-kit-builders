@@ -14,8 +14,8 @@ fi
 # LOAD INITIAL SETTINGS
 export BASEDIR="$(pwd)"
 export FFMPEG_KIT_BUILD_TYPE="tvos"
-source "${BASEDIR}"/scripts/variable.sh
-source "${BASEDIR}"/scripts/function-${FFMPEG_KIT_BUILD_TYPE}.sh
+source ${SCRIPTDIR}/variable.sh
+source ${SCRIPTDIR}/function-${FFMPEG_KIT_BUILD_TYPE}.sh
 disabled_libraries=()
 
 # SET DEFAULTS SETTINGS
@@ -238,7 +238,7 @@ for run_arch in {0..12}; do
     export SDK_NAME=$(get_sdk_name)
 
     # EXECUTE MAIN BUILD SCRIPT
-    . "${BASEDIR}"/scripts/main-tvos.sh "${ENABLED_LIBRARIES[@]}"
+    . ${SCRIPTDIR}/main-tvos.sh "${ENABLED_LIBRARIES[@]}"
 
     TARGET_ARCH_LIST+=("${FULL_ARCH}")
 

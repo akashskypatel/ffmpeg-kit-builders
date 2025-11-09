@@ -13,8 +13,8 @@ fi
 # LOAD INITIAL SETTINGS
 export BASEDIR="$(pwd)"
 export FFMPEG_KIT_BUILD_TYPE="android"
-source "${BASEDIR}"/scripts/variable.sh
-source "${BASEDIR}"/scripts/function-${FFMPEG_KIT_BUILD_TYPE}.sh
+source ${SCRIPTDIR}/variable.sh
+source ${SCRIPTDIR}/function-${FFMPEG_KIT_BUILD_TYPE}.sh
 disabled_libraries=()
 
 # SET DEFAULTS SETTINGS
@@ -231,7 +231,7 @@ for run_arch in {0..12}; do
     export TOOLCHAIN_ARCH=$(get_toolchain_arch)
 
     # EXECUTE MAIN BUILD SCRIPT
-    . "${BASEDIR}"/scripts/main-android.sh "${ENABLED_LIBRARIES[@]}" || exit 1
+    . ${SCRIPTDIR}/main-android.sh "${ENABLED_LIBRARIES[@]}" || exit 1
 
     # CLEAR FLAGS
     for library in {0..61}; do

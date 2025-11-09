@@ -1,7 +1,7 @@
 #!/bin/bash
 
-source "$(pwd)/scripts/variable.sh"
-source "$(pwd)/scripts/function.sh"
+source "${SCRIPTDIR}/variable.sh"
+source "${SCRIPTDIR}/function.sh"
 
 find_all_build_exes() {
   local found=""
@@ -73,7 +73,7 @@ build_ffmpeg() {
   fi
 
   cd "$output_dir" || exit
-    apply_patch file://"$patch_dir"/frei0r_load-shared-libraries-dynamically.diff
+    apply_patch file://"$WINPATCHDIR"/frei0r_load-shared-libraries-dynamically.diff
     if [ "$bits_target" = "32" ]; then
       local arch=x86
     else
@@ -198,7 +198,7 @@ build_ffmpeg() {
       # SVT-HEVC patches and enable
       if [[ $ffmpeg_git_checkout_version == *"n4.4"* ]] || [[ $ffmpeg_git_checkout_version == *"n4.3"* ]] || [[ $ffmpeg_git_checkout_version == *"n4.2"* ]]; then
         git apply "$work_dir/SVT-HEVC_git/ffmpeg_plugin/n4.4-0001-lavc-svt_hevc-add-libsvt-hevc-encoder-wrapper.patch"
-        git apply "$patch_dir/SVT-HEVC-0002-doc-Add-libsvt_hevc-encoder-docs.patch"
+        git apply "$WINPATCHDIR/SVT-HEVC-0002-doc-Add-libsvt_hevc-encoder-docs.patch"
       elif [[ $ffmpeg_git_checkout_version == *"n4.1"* ]] || [[ $ffmpeg_git_checkout_version == *"n3"* ]] || [[ $ffmpeg_git_checkout_version == *"n2"* ]]; then
         : # too old...
       else
@@ -281,7 +281,7 @@ build_ffmpeg() {
     if [[ "$non_free" = "y" ]]; then
       config_options+=" --enable-nonfree --enable-libfdk-aac"
       if [[ $OSTYPE != darwin* ]]; then
-        config_options+=" --enable-audiotoolbox --disable-outdev=audiotoolbox --extra-libs=-lAudioToolboxWrapper" && apply_patch file://"$patch_dir"/AudioToolBox.patch -p1
+        config_options+=" --enable-audiotoolbox --disable-outdev=audiotoolbox --extra-libs=-lAudioToolboxWrapper" && apply_patch file://"$WINPATCHDIR"/AudioToolBox.patch -p1
       fi
       if [[ $compiler_flavors != "native" ]]; then
         config_options+=" --enable-decklink"
@@ -313,8 +313,8 @@ build_ffmpeg() {
         echo "Done! You will find $bits_target-bit $1 non-redistributable binaries in $(pwd)"
       fi
     else
-      mkdir -p "$cur_dir"/redist
-      archive="$cur_dir/redist/ffmpeg-$(git describe --tags --match N)-win$bits_target-$1"
+      mkdir -p "$WORKDIR"/redist
+      archive="$WORKDIR/redist/ffmpeg-$(git describe --tags --match N)-win$bits_target-$1"
       if [[ $original_cflags =~ "pentium3" ]]; then
         archive+="_legacy"
       fi
@@ -617,34 +617,34 @@ setup_build_environment() {
   echo "************** Setting up environment for $flavor build... **************"
   if [[ $flavor == "win32" ]]; then
     host_target='i686-w64-mingw32'
-    mingw_w64_x86_64_prefix="$(realpath "$cur_dir"/cross_compilers/mingw-w64-i686/$host_target)"
-    mingw_bin_path="$(realpath "$cur_dir"/cross_compilers/mingw-w64-i686/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-i686/$host_target)"
+    mingw_bin_path="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-i686/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     bits_target=32
     cross_prefix="$mingw_bin_path/i686-w64-mingw32-"
     make_prefix_options="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
-    work_dir="$(realpath "$cur_dir"/win32)"
+    work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86)"
   elif [[ $flavor == "win64" ]]; then
     host_target='x86_64-w64-mingw32'
-    mingw_w64_x86_64_prefix="$(realpath "$cur_dir"/cross_compilers/mingw-w64-x86_64/$host_target)"
-    mingw_bin_path="$(realpath "$cur_dir"/cross_compilers/mingw-w64-x86_64/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-x86_64/$host_target)"
+    mingw_bin_path="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-x86_64/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     bits_target=64
     cross_prefix="$mingw_bin_path/x86_64-w64-mingw32-"
     make_prefix_options="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
-    work_dir="$(realpath "$cur_dir"/win64)"
+    work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86_64)"
   elif [[ $flavor == "native" ]]; then
-    mingw_w64_x86_64_prefix="$(realpath "$cur_dir"/cross_compilers/native)"
-    mingw_bin_path="$(realpath "$cur_dir"/cross_compilers/native/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/cross_compilers/native)"
+    mingw_bin_path="$(realpath "$WORKDIR"/cross_compilers/native/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     make_prefix_options="PREFIX=$mingw_w64_x86_64_prefix"
     if [[ $(uname -m) =~ 'i686' ]]; then bits_target=32; else bits_target=64; fi
-    export CPATH=$cur_dir/cross_compilers/native/include:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Carbon.framework/Versions/A/Headers # C_INCLUDE_PATH
-    export LIBRARY_PATH=$cur_dir/cross_compilers/native/lib
-    work_dir="$(realpath "$cur_dir"/native)"
+    export CPATH=$WORKDIR/cross_compilers/native/include:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Carbon.framework/Versions/A/Headers # C_INCLUDE_PATH
+    export LIBRARY_PATH=$WORKDIR/cross_compilers/native/lib
+    work_dir="$(realpath "$WORKDIR"/native)"
   else
     echo "Error: Unknown compiler flavor '$flavor'"
     exit 1

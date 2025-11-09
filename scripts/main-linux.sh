@@ -65,7 +65,7 @@ while [ ${#enabled_library_list[@]} -gt $completed ]; do
 
         echo -n "${library}: "
 
-        "${BASEDIR}"/scripts/run-linux.sh "${library}" 1>>"${BASEDIR}"/build.log 2>&1
+        ${SCRIPTDIR}/run-linux.sh "${library}" 1>>"${BASEDIR}"/build.log 2>&1
 
         RC=$?
 
@@ -109,7 +109,7 @@ for custom_library_index in "${CUSTOM_LIBRARIES[@]}"; do
 
     echo -n "${!library_name}: "
 
-    "${BASEDIR}"/scripts/run-linux.sh "${!library_name}" 1>>"${BASEDIR}"/build.log 2>&1
+    ${SCRIPTDIR}/run-linux.sh "${!library_name}" 1>>"${BASEDIR}"/build.log 2>&1
 
     RC=$?
 
@@ -147,7 +147,7 @@ if [[ ${SKIP_ffmpeg} -ne 1 ]]; then
   LIB_INSTALL_PREFIX="${LIB_INSTALL_BASE}/${LIB_NAME}"
 
   # BUILD FFMPEG
-  source "${BASEDIR}"/scripts/linux/ffmpeg.sh
+  source ${SCRIPTDIR}/linux/ffmpeg.sh
 
   if [[ $? -ne 0 ]]; then
     exit 1
@@ -160,7 +160,7 @@ fi
 if [[ ${SKIP_ffmpeg_kit} -ne 1 ]]; then
 
   # BUILD FFMPEG KIT
-  . "${BASEDIR}"/scripts/linux/ffmpeg-kit.sh "$@" || return 1
+  . ${SCRIPTDIR}/linux/ffmpeg-kit.sh "$@" || return 1
 else
   echo -e "\nffmpeg-kit: skipped"
 fi
