@@ -1,0 +1,6 @@
+/.tmp/
+/*.log
+/prebuilt/
+.*/
+src/
+docs/

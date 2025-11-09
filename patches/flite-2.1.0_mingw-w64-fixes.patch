@@ -1,0 +1,71 @@
+--- main/Makefile.bak	2020-05-11 20:18:26.039219862 +0000
++++ main/Makefile	2020-05-11 20:19:09.207549064 +0000
+@@ -133,12 +133,12 @@
+ 
+ install:
+ #       The basic binaries
+-	@ $(INSTALL) -m 755 $(BINDIR)/flite $(DESTDIR)$(INSTALLBINDIR)
++	@ $(INSTALL) -m 755 $(BINDIR)/flite$(EXEEXT) $(DESTDIR)$(INSTALLBINDIR)
+ 	@ for i in $(VOICES) ; \
+ 	do \
+-	   $(INSTALL) $(BINDIR)/flite_$$i $(DESTDIR)$(INSTALLBINDIR); \
++	   $(INSTALL) $(BINDIR)/flite_$$i$(EXEEXT) $(DESTDIR)$(INSTALLBINDIR); \
+ 	done
+-	$(INSTALL) -m 755 $(BINDIR)/flite_time $(DESTDIR)$(INSTALLBINDIR)
++	$(INSTALL) -m 755 $(BINDIR)/flite_time$(EXEEXT) $(DESTDIR)$(INSTALLBINDIR)
+ #       The libraries: static and shared (if built)
+ 	cp -pd $(flite_LIBS_deps) $(DESTDIR)$(INSTALLLIBDIR)
+ ifdef SHFLAGS
+--- include/cst_file.h.bak	2020-05-11 18:34:47.403125914 +0000
++++ include/cst_file.h	2020-05-11 19:18:42.268404656 +0000
+@@ -99,6 +99,9 @@
+ int cst_fprintf(cst_file fh, const char *fmt, ...);
+ int cst_sprintf(char *s, const char *fmt, ...);
+ #ifdef _WIN32
++#include <windows.h>
++/* Not needed if this is mingw-w64 */
++#ifndef __MINGW64_VERSION_MAJOR
+ #define snprintf c99_snprintf
+ 
+ __inline int c99_vsnprintf(char* str, size_t size, const char* format,
+@@ -121,6 +124,7 @@
+        return count;
+    }
+ #endif
++#endif
+ #define cst_snprintf snprintf
+ 
+ #if defined(__palmos__)
+--- ./src/utils/cst_tokenstream.c	2017-10-21 08:01:07.000000000 -0600
++++ ../cst_tokenstream.c	2024-01-20 23:42:18.301601000 -0700
+@@ -267,7 +267,7 @@
+ }
+ 
+  #if defined _WIN32 && !defined(__GNUC__)
+- __inline int ts_utf8_sequence_length(char c0)
++ int ts_utf8_sequence_length(char c0)
+  #else
+  int ts_utf8_sequence_length(char c0)
+  #endif
+--- ./src/utils/cst_val.c.bak	2024-01-20 23:54:46.864354500 -0700
++++ ./src/utils/cst_val.c	2024-01-20 23:55:00.448412300 -0700
+@@ -476,7 +476,7 @@
+ }
+ 
+ #ifdef _WIN32
+-__inline int utf8_sequence_length(char c0)
++int utf8_sequence_length(char c0)
+ #else
+ int utf8_sequence_length(char c0)
+ #endif
+--- main/Makefile.orig	2024-01-29 23:38:42.373755700 -0700
++++ main/Makefile	2024-01-29 23:38:56.806369400 -0700
+@@ -85,7 +85,7 @@
+ shared_libs: nothing
+ endif
+ 
+-.NOTPARALLEL: $(ALL)
++.NOTPARALLEL:
+ 
+ flite_lang_list: 
+ 	rm -f flite_lang_list.c

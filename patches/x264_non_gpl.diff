@@ -1,0 +1,12 @@
+diff --git a/configure b/configure
+index a1818dc853..ccbedfc981 100755
+--- a/configure
++++ b/configure
+@@ -5077,7 +5077,6 @@ die_license_disabled gpl libcdio
+ die_license_disabled gpl librubberband
+ die_license_disabled gpl libsmbclient
+ die_license_disabled gpl libvidstab
+-die_license_disabled gpl libx264
+ die_license_disabled gpl libx265
+ die_license_disabled gpl libxavs
+ die_license_disabled gpl libxvid
