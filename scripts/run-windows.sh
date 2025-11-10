@@ -1,5 +1,8 @@
 #!/bin/bash
 
+#echo "${SCRIPTDIR}/variable.sh"
+#echo "${SCRIPTDIR}/function.sh"
+
 source "${SCRIPTDIR}/variable.sh"
 source "${SCRIPTDIR}/function.sh"
 
@@ -11,7 +14,6 @@ install_cross_compiler
 
 if [[ -n "$build_only_index" ]]; then
   # Setup the environment based on the globally set compiler_flavors
-  setup_build_environment "$compiler_flavors"
   
   # Now, call the single requested build function by its index
   step_name="${BUILD_STEPS[$build_only_index]}"
@@ -34,8 +36,6 @@ else
       export PATH=$(pwd):$PATH
     cd ..
   fi
-
-  setup_build_environment "$compiler_flavors"
 
   cd "$work_dir" || exit
     if [[ $build_dependencies_only == "y" ]]; then

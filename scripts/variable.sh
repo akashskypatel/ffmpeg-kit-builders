@@ -1,7 +1,5 @@
 #!/bin/bash
 
-echo -e "INFO: Running scripts\variables.sh\n" 1>>"${BASEDIR}"/build.log 2>&1
-
 # DIRECTORY DEFINITIONS
 export FFMPEG_KIT_TMPDIR="${BASEDIR}/.tmp"
 
@@ -144,6 +142,7 @@ LIBRARY_LINUX_SDL=88
 LIBRARY_LINUX_TESSERACT=89
 LIBRARY_LINUX_VAAPI=90
 LIBRARY_LINUX_VO_AMRWBENC=91
+#=========WINDOWS=========
 LIBRARY_AMF_HEADERS=92
 LIBRARY_ARIBB24=94 #gpl
 LIBRARY_AUDIOTOOLBOXWRAPPER=95
@@ -247,8 +246,8 @@ export GCC_BRANCH="releases/gcc-14"
 
 export sandbox="prebuilt"
 export WORKDIR="$BASEDIR/$sandbox"
-export WINWINPATCHDIR="$BASEDIR/windows/patches"
 export SCRIPTDIR="$BASEDIR/scripts"
+export WINPATCHDIR="$SCRIPTDIR/windows/patches"
 
 # variables with their defaults
 export build_ffmpeg_static=y
@@ -290,8 +289,8 @@ export ffmpeg_source_dir=
 export build_svt_hevc=n
 export build_svt_vp9=n
 export build_dependencies_only=n
-
-export original_cpu_count=$(get_cpu_count) # save it away for some that revert it temporarily
+export cpu_count=$(nproc)
+export original_cpu_count=$(nproc) # save it away for some that revert it temporarily
 
 export PKG_CONFIG_LIBDIR= # disable pkg-config from finding [and using] normal linux system installed libs [yikes]
 export original_path="$PATH"
@@ -351,6 +350,7 @@ export BUILD_STEPS=(
   "build_libsnappy"
   "build_vamp_plugin"
   "build_fftw"
+  "build_chromaprint"
   "build_libsamplerate"
   "build_librubberband"
   "build_frei0r"  
@@ -385,7 +385,7 @@ while true; do
   case $1 in
     -top_dir | --top_dir) echo "$BASEDIR" ; shift;;
     -sandbox | --sandbox) echo "$sandbox" ; shift;;
-    -cur_dir | --cur_dir) echo "$cur_dir" ; shift;;
+    -cur_dir | --cur_dir) echo "$WORKDIR" ; shift;;
     -patch_dir | --patch_dir) echo "$WINPATCHDIR" ; shift;;
     -cpu_count | --cpu_count) echo "$(get_cpu_count)" ; shift;;
     -build_ffmpeg_static | --build_ffmpeg_static) echo "$build_ffmpeg_static" ; shift;;

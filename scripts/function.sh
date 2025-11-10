@@ -1,6 +1,7 @@
 #!/bin/bash
 
-echo -e "INFO: Running scripts\function.sh\n" 1>>"${BASEDIR}"/build.log 2>&1
+#echo ${SCRIPTDIR}/source.sh
+#echo "${SCRIPTDIR}/variable.sh"
 
 source ${SCRIPTDIR}/source.sh
 source "${SCRIPTDIR}/variable.sh"
@@ -2860,7 +2861,7 @@ get_cpu_count() {
   if [ "$(uname)" == "Darwin" ]; then
     echo $(sysctl -n hw.logicalcpu)
   else
-    echo $(nproc)
+    echo $cpu_count
   fi
 }
 
@@ -3036,6 +3037,9 @@ initialize_folder() {
   return 0
 }
 
+#===============================================================================================
+#                                           WINDOWS
+#===============================================================================================
 
 set_box_memory_size_bytes() {
   if [[ $OSTYPE == darwin* ]]; then
@@ -3262,8 +3266,10 @@ unset UNAME
 # made into a method so I don't/don't have to download this script every time if only doing just 32 or just6 64 bit builds...
 download_gcc_build_script() {
     local zeranoe_script_name=$1
-    rm -f $zeranoe_script_name || exit 1
-    curl -4 file://$WINPATCHDIR/$zeranoe_script_name -O --fail || exit 1
+    cp $WINPATCHDIR/$zeranoe_script_name $WINPATCHDIR/$zeranoe_script_name.bak
+    cp $WINPATCHDIR/$zeranoe_script_name $zeranoe_script_name
+    #rm -f $WINPATCHDIR/$zeranoe_script_name || exit 1
+    #curl -4 file://$zeranoe_script_name -O --fail || exit 1
     chmod u+x $zeranoe_script_name
 }
 
@@ -3286,7 +3292,7 @@ install_cross_compiler() {
     echo "native build, not building any cross compilers..."
     return
   fi
-
+  setup_build_environment "$compiler_flavors"
   mkdir -p cross_compilers
   cd cross_compilers
 
@@ -4469,9 +4475,9 @@ build_twolame() {
     if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
       sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit 1
     fi
-    (get_cpu_count)=1 # maybe can't handle it http://betterlogic.com/roger/2017/07/mp3lame-woe/ comments
+    cpu_count=1 # maybe can't handle it http://betterlogic.com/roger/2017/07/mp3lame-woe/ comments
     generic_configure_make_install
-    (get_cpu_count)=$original_cpu_count
+    cpu_count=$original_cpu_count
   cd ..
 }
 
@@ -4553,11 +4559,11 @@ build_opencv() {
   cd ..
   cd opencv-3.4.5/build
     # could do more here, it seems to think it needs its own internal libwebp etc...
-    (get_cpu_count)=1
+    cpu_count=1
     do_cmake_from_build_dir .. "-DWITH_FFMPEG=0 -DOPENCV_GENERATE_PKGCONFIG=1 -DHAVE_DSHOW=0" # https://stackoverflow.com/q/40262928/32453, no pkg config by default on "windows", who cares ffmpeg
     do_make_and_make_install
     cp unix-install/opencv.pc $PKG_CONFIG_PATH
-    (get_cpu_count)=$original_cpu_count
+    cpu_count=$original_cpu_count
   cd ../..
 }
 
@@ -4657,7 +4663,7 @@ build_vamp_plugin() {
 build_fftw() {
   download_and_unpack_file http://fftw.org/fftw-3.3.10.tar.gz
   cd fftw-3.3.10
-    generic_configure "--disable-doc"
+    generic_configure "--disable-doc --prefix=$mingw_w64_x86_64_prefix --host=$host_target --enable-static --disable-shared"
     do_make_and_make_install
   cd ..
 }
@@ -5028,7 +5034,7 @@ build_dav1d() {
     if [[ $bits_target == 32 || $bits_target == 64 ]]; then # XXX why 64???
       apply_patch file://$WINPATCHDIR/david_no_asm.patch -p1 # XXX report
     fi
-    (get_cpu_count)=1 # XXX report :|
+    cpu_count=1 # XXX report :|
     local meson_options="setup -Denable_tests=false -Denable_examples=false . build"
     if [[ $compiler_flavors != "native" ]]; then
       # get_local_meson_cross_with_propeties 
@@ -5039,7 +5045,7 @@ build_dav1d() {
     fi
     do_ninja_and_ninja_install
     cp build/src/libdav1d.a $mingw_w64_x86_64_prefix/lib || exit 1 # avoid 'run ranlib' weird failure, possibly older meson's https://github.com/mesonbuild/meson/issues/4138 :|
-    (get_cpu_count)=$original_cpu_count
+    cpu_count=$original_cpu_count
   deactivate
   cd ..
 }
@@ -5546,6 +5552,25 @@ build_lsw() {
 }
 
 build_chromaprint() {
-  # TODO
+  echo $mingw_w64_x86_64_prefix
+  build_fftw
+  do_git_checkout https://github.com/acoustid/chromaprint.git chromaprint
+  cd chromaprint
+    cat > toolchain.cmake << EOF  
+set(CMAKE_SYSTEM_NAME Windows)  
+set(CMAKE_C_COMPILER x86_64-w64-mingw32-gcc)  
+set(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)  
+set(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)  
+set(CMAKE_FIND_ROOT_PATH $mingw_w64_x86_64_prefix)  
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)  
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)  
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)  
+set(CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES "")  
+set(CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "")
+set(CMAKE_C_FLAGS "-static -static-libgcc -static-libstdc++")  
+set(CMAKE_CXX_FLAGS "-static -static-libgcc -static-libstdc++")
+EOF
+    do_cmake_and_install "-DCMAKE_BUILD_TYPE=Release -DBUILD_TOOLS=OFF -DBUILD_TESTS=OFF -DFFT_LIB=fftw3 -DCMAKE_TOOLCHAIN_FILE=toolchain.cmake"
+  cd ..
 }
 

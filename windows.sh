@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+
 # ffmpeg windows cross compile helper/download script, see github repo README
 # Copyright (C) 2012 Roger Pack, the script is under the GPLv3, but output FFmpeg's executables aren't
 # set -x
 
 export BASEDIR="$(pwd)"
 export FFMPEG_KIT_BUILD_TYPE="windows"
+export SCRIPTDIR="$BASEDIR/scripts"
 source "${SCRIPTDIR}/variable.sh"
 
 # If --get-total-steps is passed, just print the size of the array and exit.

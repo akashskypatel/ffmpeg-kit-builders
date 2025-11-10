@@ -1,14 +1,18 @@
 # #!/bin/bash
 
+#echo "${SCRIPTDIR}/variable.sh"
+#echo "${SCRIPTDIR}/function.sh"
+#echo "${SCRIPTDIR}/function-windows.sh"
+
 source "${SCRIPTDIR}/variable.sh"
 source "${SCRIPTDIR}/function.sh"
 source "${SCRIPTDIR}/function-windows.sh"
 
 if [ -z "$(get_cpu_count)" ]; then
-  (get_cpu_count)=$(sysctl -n hw.ncpu | tr -d '\n') # OS X cpu count
+  cpu_count=$(sysctl -n hw.ncpu | tr -d '\n') # OS X cpu count
   if [ -z "$(get_cpu_count)" ]; then
     echo "warning, unable to determine cpu count, defaulting to 1"
-    (get_cpu_count)=1 # else default to just 1, instead of blank, which means infinite
+    cpu_count=1 # else default to just 1, instead of blank, which means infinite
   fi
 fi
 
@@ -50,7 +54,7 @@ intro() {
   cat <<EOL
      ##################### Welcome ######################
   Welcome to the ffmpeg cross-compile builder-helper script.
-  Downloads and builds will be installed to directories within $cur_dir
+  Downloads and builds will be installed to directories within $WORKDIR
   If this is not ok, then exit now, and cd to the directory where you'd
   like them installed, then run this script again from there.
   NB that once you build your compilers, you can no longer rename/move
@@ -63,8 +67,8 @@ EOL
     echo "Building in $PWD/$sandbox, will use ~ 285GB space!"
     echo
   fi
-  mkdir -p "$cur_dir"
-  cd "$cur_dir" || exit
+  mkdir -p "$WORKDIR"
+  cd "$WORKDIR" || exit
   if [[ $disable_nonfree = "y" ]]; then
     non_free="n"
   else

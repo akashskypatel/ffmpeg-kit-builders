@@ -1,5 +1,8 @@
 #!/bin/bash
 
+#echo "${SCRIPTDIR}/variable.sh"
+#echo "${SCRIPTDIR}/function.sh"
+
 source "${SCRIPTDIR}/variable.sh"
 source "${SCRIPTDIR}/function.sh"
 
@@ -517,6 +520,7 @@ build_ffmpeg_dependencies() {
   build_libsnappy # Uses zlib (only for unittests [disabled]) and dlfcn.
   build_vamp_plugin # Needs libsndfile for 'vamp-simple-host.exe' [disabled].
   build_fftw # Uses dlfcn.
+  build_chromaprint
   build_libsamplerate # Needs libsndfile >= 1.0.6 and fftw >= 0.15.0 for tests. Uses dlfcn.
   build_librubberband # Needs libsamplerate, libsndfile, fftw and vamp_plugin. 'configure' will fail otherwise. Eventhough librubberband doesn't necessarily need them (libsndfile only for 'rubberband.exe' and vamp_plugin only for "Vamp audio analysis plugin"). How to use the bundled libraries '-DUSE_SPEEX' and '-DUSE_KISSFFT'?
   build_frei0r # Needs dlfcn. could use opencv...
@@ -617,27 +621,29 @@ setup_build_environment() {
   echo "************** Setting up environment for $flavor build... **************"
   if [[ $flavor == "win32" ]]; then
     host_target='i686-w64-mingw32'
-    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-i686/$host_target)"
-    mingw_bin_path="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-i686/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86/cross_compilers/mingw-w64-i686/$host_target)"
+    mingw_bin_path="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86/cross_compilers/mingw-w64-i686/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     bits_target=32
     cross_prefix="$mingw_bin_path/i686-w64-mingw32-"
     make_prefix_options="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
     work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86)"
+    echo $work_dir
   elif [[ $flavor == "win64" ]]; then
     host_target='x86_64-w64-mingw32'
-    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-x86_64/$host_target)"
-    mingw_bin_path="$(realpath "$WORKDIR"/cross_compilers/mingw-w64-x86_64/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86_64/cross_compilers/mingw-w64-x86_64/$host_target)"
+    mingw_bin_path="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86_64/cross_compilers/mingw-w64-x86_64/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     bits_target=64
     cross_prefix="$mingw_bin_path/x86_64-w64-mingw32-"
     make_prefix_options="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
     work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86_64)"
+    echo $work_dir
   elif [[ $flavor == "native" ]]; then
-    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/cross_compilers/native)"
-    mingw_bin_path="$(realpath "$WORKDIR"/cross_compilers/native/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/native/cross_compilers/native)"
+    mingw_bin_path="$(realpath "$WORKDIR"/native/cross_compilers/native/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     make_prefix_options="PREFIX=$mingw_w64_x86_64_prefix"
@@ -645,6 +651,7 @@ setup_build_environment() {
     export CPATH=$WORKDIR/cross_compilers/native/include:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Carbon.framework/Versions/A/Headers # C_INCLUDE_PATH
     export LIBRARY_PATH=$WORKDIR/cross_compilers/native/lib
     work_dir="$(realpath "$WORKDIR"/native)"
+    echo $work_dir
   else
     echo "Error: Unknown compiler flavor '$flavor'"
     exit 1
