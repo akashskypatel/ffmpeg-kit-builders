@@ -314,8 +314,10 @@ static void print_codec(const AVCodec *c)
         av_log(NULL, AV_LOG_ERROR, "delay ");
     if (c->capabilities & AV_CODEC_CAP_SMALL_LAST_FRAME)
         av_log(NULL, AV_LOG_ERROR, "small ");
-    if (c->capabilities & AV_CODEC_CAP_SUBFRAMES)
-        av_log(NULL, AV_LOG_ERROR, "subframes ");
+    //2023-05-15 - 8b20d0dcb5c - lavc 60 - codec.h
+    //Deprecate AV_CODEC_CAP_SUBFRAMES without replacement.
+    //if (c->capabilities & AV_CODEC_CAP_SUBFRAMES)
+        //av_log(NULL, AV_LOG_ERROR, "subframes ");
     if (c->capabilities & AV_CODEC_CAP_EXPERIMENTAL)
         av_log(NULL, AV_LOG_ERROR, "exp ");
     if (c->capabilities & AV_CODEC_CAP_CHANNEL_CONF)
@@ -855,7 +857,9 @@ int show_filters(void *optctx, const char *opt, const char *arg)
         av_log(NULL, AV_LOG_ERROR, " %c%c%c %-17s %-10s %s\n",
                filter->flags & AVFILTER_FLAG_SUPPORT_TIMELINE ? 'T' : '.',
                filter->flags & AVFILTER_FLAG_SLICE_THREADS    ? 'S' : '.',
-               filter->process_command                        ? 'C' : '.',
+               //Deprecated?
+               //filter->process_command                      ? 'C' : '.',
+               filter->flags & AVFILTER_FLAG_SUPPORT_TIMELINE ? 'C' : '.',
                filter->name, descr, filter->description);
     }
 #else
