@@ -4,7 +4,7 @@
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_kvazaar} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_kvazaar} -eq 1 ]]; then
   autoreconf_library "${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 fi
 
@@ -17,7 +17,7 @@ else
 fi
 
 # WORKAROUND TO DISABLE LINKING TO -lrt
-${SED_INLINE} 's/\-lrt//g' "${BASEDIR}"/src/"${LIB_NAME}"/configure || return 1
+${SED_INLINE} 's/\-lrt//g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure || return 1
 
 LIBS="${LTS_SUPPORT_LIBS}" ./configure \
   --prefix="${LIB_INSTALL_PREFIX}" \

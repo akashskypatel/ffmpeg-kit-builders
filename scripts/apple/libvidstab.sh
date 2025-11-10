@@ -15,7 +15,7 @@ mkdir -p "${BUILD_DIR}" || return 1
 cd "${BUILD_DIR}" || return 1
 
 # WORKAROUND TO DETECT ASM FLAGS PROPERLY
-${SED_INLINE} 's/ ${CPUINFO}/ "${CPUINFO}"/g' "${BASEDIR}"/src/"${LIB_NAME}"/CMakeModules/FindSSE.cmake 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+${SED_INLINE} 's/ ${CPUINFO}/ "${CPUINFO}"/g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/CMakeModules/FindSSE.cmake 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 cmake -Wno-dev \
   -DCMAKE_VERBOSE_MAKEFILE=0 \
@@ -36,7 +36,7 @@ cmake -Wno-dev \
   -DUSE_OMP=0 \
   ${ASM_OPTIONS} \
   -DCMAKE_SYSTEM_PROCESSOR="$(get_target_cpu)" \
-  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 make -j$(get_cpu_count) || return 1
 

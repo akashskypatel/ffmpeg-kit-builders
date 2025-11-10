@@ -28,7 +28,7 @@ export CXXFLAGS=$(get_cxxflags "${LIB_NAME}")
 export LDFLAGS=$(get_ldflags "${LIB_NAME}")
 export PKG_CONFIG_LIBDIR="${INSTALL_PKG_CONFIG_DIR}"
 
-cd "${BASEDIR}"/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 # SET EXTRA BUILD FLAGS
 FFMPEG_CFLAGS=""
@@ -464,11 +464,11 @@ if [[ -z ${NO_WORKSPACE_CLEANUP_ffmpeg} ]]; then
   make distclean 2>/dev/null 1>/dev/null
 
   # WORKAROUND TO MANUALLY DELETE UNCLEANED FILES
-  rm -f "${BASEDIR}"/src/"${LIB_NAME}"/libavfilter/opencl/*.o 1>>"${BASEDIR}"/build.log 2>&1
-  rm -f "${BASEDIR}"/src/"${LIB_NAME}"/libavcodec/neon/*.o 1>>"${BASEDIR}"/build.log 2>&1
+  rm -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/libavfilter/opencl/*.o 1>>"${BASEDIR}"/build.log 2>&1
+  rm -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/libavcodec/neon/*.o 1>>"${BASEDIR}"/build.log 2>&1
 
   # DELETE SHARED FRAMEWORK WORKAROUNDS
-  git checkout "${BASEDIR}/src/ffmpeg/ffbuild" 1>>"${BASEDIR}"/build.log 2>&1
+  git checkout "${BASEDIR}/prebuilt/src/ffmpeg/ffbuild" 1>>"${BASEDIR}"/build.log 2>&1
 fi
 
 ########################### CUSTOMIZATIONS #######################
@@ -481,16 +481,17 @@ ${SED_INLINE} 's/check_cflags -mdynamic-no-pic && add_asflags -mdynamic-no-pic;/
 
 # 2. Workaround for videotoolbox on mac catalyst
 if [[ ${ARCH} == *-mac-catalyst ]]; then
-  ${SED_INLINE} 's/    CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/   \/\/ CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/g' "${BASEDIR}"/src/${LIB_NAME}/libavcodec/videotoolbox.c || return 1
+  ${SED_INLINE} 's/    CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/   \/\/ CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/g' "${BASEDIR}"/prebuilt/src/${LIB_NAME}/libavcodec/videotoolbox.c || return 1
 else
-  ${SED_INLINE} 's/   \/\/ CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/    CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/g' "${BASEDIR}"/src/${LIB_NAME}/libavcodec/videotoolbox.c || return 1
+  ${SED_INLINE} 's/   \/\/ CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/    CFDictionarySetValue(buffer_attributes\, kCVPixelBufferOpenGLESCompatibilityKey/g' "${BASEDIR}"/prebuilt/src/${LIB_NAME}/libavcodec/videotoolbox.c || return 1
 fi
 
 # 3. Use thread local log levels
-${SED_INLINE} 's/static int av_log_level/__thread int av_log_level/g' "${BASEDIR}"/src/${LIB_NAME}/libavutil/log.c 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+${SED_INLINE} 's/static int av_log_level/__thread int av_log_level/g' "${BASEDIR}"/prebuilt/src/${LIB_NAME}/libavutil/log.c 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 ###################################################################
 
+  #--disable-postproc \
 ./configure \
   --cross-prefix="${HOST}-" \
   --sysroot="${SDK_PATH}" \
@@ -527,7 +528,6 @@ ${SED_INLINE} 's/static int av_log_level/__thread int av_log_level/g' "${BASEDIR
   ${DEBUG_OPTIONS} \
   --disable-neon-clobber-test \
   --disable-programs \
-  --disable-postproc \
   --disable-doc \
   --disable-htmlpages \
   --disable-manpages \
@@ -599,7 +599,7 @@ install_ffmpeg() {
   fi
 }
 
-${SED_INLINE} 's|$(SLIBNAME_WITH_MAJOR),|$(SLIBPREF)$(FULLNAME).framework/$(SLIBPREF)$(FULLNAME),|g' ${BASEDIR}/src/ffmpeg/ffbuild/config.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+${SED_INLINE} 's|$(SLIBNAME_WITH_MAJOR),|$(SLIBPREF)$(FULLNAME).framework/$(SLIBPREF)$(FULLNAME),|g' ${BASEDIR}/prebuilt/src/ffmpeg/ffbuild/config.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 # BUILD DYNAMIC LIBRARIES WITH DEFAULT OPTIONS
 build_ffmpeg
@@ -624,9 +624,9 @@ create_temporary_framework "libavutil"
 create_temporary_framework "libswresample"
 create_temporary_framework "libswscale"
 
-${SED_INLINE} 's|$(SLIBNAME_WITH_MAJOR),|$(SLIBPREF)$(FULLNAME).framework/$(SLIBPREF)$(FULLNAME),|g' ${BASEDIR}/src/ffmpeg/ffbuild/config.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
-${SED_INLINE} 's|$(LD_LIB)|-framework lib% |g' ${BASEDIR}/src/ffmpeg/ffbuild/common.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
-${SED_INLINE} "s|\$(LD_PATH)lib%|-F ${FFMPEG_LIBRARY_PATH}/framework|g" ${BASEDIR}/src/ffmpeg/ffbuild/common.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+${SED_INLINE} 's|$(SLIBNAME_WITH_MAJOR),|$(SLIBPREF)$(FULLNAME).framework/$(SLIBPREF)$(FULLNAME),|g' ${BASEDIR}/prebuilt/src/ffmpeg/ffbuild/config.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+${SED_INLINE} 's|$(LD_LIB)|-framework lib% |g' ${BASEDIR}/prebuilt/src/ffmpeg/ffbuild/common.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+${SED_INLINE} "s|\$(LD_PATH)lib%|-F ${FFMPEG_LIBRARY_PATH}/framework|g" ${BASEDIR}/prebuilt/src/ffmpeg/ffbuild/common.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 # BUILD FRAMEWORKS AS DYNAMIC LIBRARIES
 build_ffmpeg
@@ -638,26 +638,26 @@ mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm 1>>"${BASEDIR}"/build.lo
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/config.h "${FFMPEG_LIBRARY_PATH}"/include/config.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/x86/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/arm/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavformat/network.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/network.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavformat/os_support.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/os_support.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavformat/url.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/url.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/attributes_internal.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/attributes_internal.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/bprint.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/bprint.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/getenv_utf8.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/getenv_utf8.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/internal.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/internal.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/libm.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/libm.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/reverse.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/reverse.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/thread.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/thread.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/timer.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/x86/asm.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/asm.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/x86/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/timer.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/arm/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm/timer.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/aarch64/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64/timer.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/x86/emms.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/emms.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/config.h "${FFMPEG_LIBRARY_PATH}"/include/config.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/x86/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/arm/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/network.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/network.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/os_support.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/os_support.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/url.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/url.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/attributes_internal.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/attributes_internal.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/bprint.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/bprint.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/getenv_utf8.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/getenv_utf8.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/internal.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/internal.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/libm.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/libm.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/reverse.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/reverse.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/thread.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/thread.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/timer.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/x86/asm.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/asm.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/x86/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/timer.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/arm/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm/timer.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/aarch64/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64/timer.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/x86/emms.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/emms.h 1>>"${BASEDIR}"/build.log 2>&1
 
 if [ $? -eq 0 ]; then
   echo "ok"

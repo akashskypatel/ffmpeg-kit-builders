@@ -12,7 +12,7 @@ esac
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_zimg} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_zimg} -eq 1 ]]; then
   ./autogen.sh || return 1
 fi
 

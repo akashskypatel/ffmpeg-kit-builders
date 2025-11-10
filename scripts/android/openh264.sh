@@ -24,13 +24,13 @@ esac
 make clean 2>/dev/null 1>/dev/null
 
 # DISCARD APPLE WORKAROUNDS
-git checkout "${BASEDIR}"/src/"${LIB_NAME}"/build || return 1
-git checkout "${BASEDIR}"/src/"${LIB_NAME}"/codec || return 1
+git checkout "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/build || return 1
+git checkout "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/codec || return 1
 
 # WORKAROUND TO DISABLE PARTS THAT COMPILE cpu-features INTO libopenh264.a
-${SED_INLINE} 's/^COMMON_INCLUDES +=/# COMMON_INCLUDES +=/' "${BASEDIR}"/src/"${LIB_NAME}"/build/platform-android.mk
-${SED_INLINE} 's/^COMMON_OBJS +=/# COMMON_OBJS +=/' "${BASEDIR}"/src/"${LIB_NAME}"/build/platform-android.mk
-${SED_INLINE} 's/^COMMON_CFLAGS +=/# COMMON_CFLAGS +=/' "${BASEDIR}"/src/"${LIB_NAME}"/build/platform-android.mk
+${SED_INLINE} 's/^COMMON_INCLUDES +=/# COMMON_INCLUDES +=/' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/build/platform-android.mk
+${SED_INLINE} 's/^COMMON_OBJS +=/# COMMON_OBJS +=/' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/build/platform-android.mk
+${SED_INLINE} 's/^COMMON_CFLAGS +=/# COMMON_CFLAGS +=/' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/build/platform-android.mk
 
 make -j$(get_cpu_count) \
   ARCH="$(get_toolchain_arch)" \
@@ -49,4 +49,4 @@ make -j$(get_cpu_count) \
   TARGET="android-${API}" install-static || return 1
 
 # MANUALLY COPY PKG-CONFIG FILES
-cp "${BASEDIR}"/src/"${LIB_NAME}"/openh264-static.pc "${INSTALL_PKG_CONFIG_DIR}"/openh264.pc || return 1
+cp "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/openh264-static.pc "${INSTALL_PKG_CONFIG_DIR}"/openh264.pc || return 1

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd "${BASEDIR}"/src/"${LIB_NAME}"/"${LIB_NAME}"/build/generic || return 1
+cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/"${LIB_NAME}"/build/generic || return 1
 
 # SET BUILD OPTIONS
 ASM_OPTIONS=""
@@ -17,7 +17,7 @@ esac
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/"${LIB_NAME}"/build/generic/configure ]] || [[ ${RECONF_xvidcore} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/"${LIB_NAME}"/build/generic/configure ]] || [[ ${RECONF_xvidcore} -eq 1 ]]; then
   ./bootstrap.sh
 fi
 

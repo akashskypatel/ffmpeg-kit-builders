@@ -44,7 +44,7 @@ cmake -Wno-dev \
  -DENABLE_LOGGING=0 \
  -DENABLE_HEAVY_LOGGING=0 \
  -DENABLE_APPS=0 \
- -DENABLE_SHARED=0 "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+ -DENABLE_SHARED=0 "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 make -j$(get_cpu_count) || return 1
 

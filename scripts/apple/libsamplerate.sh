@@ -4,7 +4,7 @@
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_libsamplerate} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_libsamplerate} -eq 1 ]]; then
   autoreconf_library "${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 fi
 
@@ -20,8 +20,8 @@ fi
   --host="${HOST}" || return 1
 
 # WORKAROUND TO DISABLE BUILDING OF EXAMPLES AND TESTS
-${SED_INLINE} 's/^examples_/#examples_/g' "${BASEDIR}"/src/"${LIB_NAME}"/Makefile || return 1
-${SED_INLINE} 's/^tests_/#tests_/g' "${BASEDIR}"/src/"${LIB_NAME}"/Makefile || return 1
+${SED_INLINE} 's/^examples_/#examples_/g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/Makefile || return 1
+${SED_INLINE} 's/^tests_/#tests_/g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/Makefile || return 1
 
 make -j$(get_cpu_count) || return 1
 

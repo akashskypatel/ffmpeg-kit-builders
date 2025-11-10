@@ -9,7 +9,7 @@ export LEPTONICA_LIBS=" $(pkg-config --libs lept 2>>"${BASEDIR}"/build.log)"
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_tesseract} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_tesseract} -eq 1 ]]; then
   ./autogen.sh 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 fi
 

@@ -1017,7 +1017,7 @@ android_ndk_cmake() {
     -DCMAKE_SYSROOT="${ANDROID_SYSROOT}" \
     -DCMAKE_FIND_ROOT_PATH="${ANDROID_SYSROOT}" \
     -DCMAKE_INSTALL_PREFIX="${LIB_INSTALL_PREFIX}" \
-    -H"${BASEDIR}"/src/"${LIB_NAME}" \
+    -H"${BASEDIR}"/prebuilt/src/"${LIB_NAME}" \
     -B"${BUILD_DIR}" \
     "${ASM_OPTIONS}" \
     -DANDROID_PLATFORM=android-"${API}"

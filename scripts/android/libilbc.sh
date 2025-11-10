@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # INIT SUBMODULES
-${SED_INLINE} 's|/abseil/|/arthenica/|g' "${BASEDIR}"/src/"${LIB_NAME}"/.gitmodules || return 1
+${SED_INLINE} 's|/abseil/|/arthenica/|g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/.gitmodules || return 1
 git submodule update --init || return 1
 
 mkdir -p "${BUILD_DIR}" || return 1
@@ -28,7 +28,7 @@ cmake -Wno-dev \
   -DENABLE_STATIC=1 \
   -DENABLE_SHARED=0 \
   -DCMAKE_SYSTEM_PROCESSOR=$(get_cmake_system_processor) \
-  "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+  "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 make -j$(get_cpu_count) || return 1
 

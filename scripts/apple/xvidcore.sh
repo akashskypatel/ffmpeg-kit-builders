@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd "${BASEDIR}"/src/"${LIB_NAME}"/"${LIB_NAME}"/build/generic || return 1
+cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/"${LIB_NAME}"/build/generic || return 1
 
 # SET BUILD OPTIONS
 ASM_OPTIONS=""

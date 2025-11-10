@@ -4,10 +4,10 @@
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_libvorbis} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_libvorbis} -eq 1 ]]; then
 
   # -mno-ieee-fp OPTION IS NOT COMPATIBLE WITH clang. REMOVING IT
-  ${SED_INLINE} 's/\-mno-ieee-fp//g' "${BASEDIR}"/src/"${LIB_NAME}"/configure.ac || return 1
+  ${SED_INLINE} 's/\-mno-ieee-fp//g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure.ac || return 1
 
   autoreconf_library "${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 fi

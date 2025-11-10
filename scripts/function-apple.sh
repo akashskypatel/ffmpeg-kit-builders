@@ -257,7 +257,7 @@ create_ffmpeg_universal_library() {
 
     destination_license_path="${FFMPEG_UNIVERSAL_LIBRARY_DIRECTORY}/LICENSE.${library_name_uppercase}"
 
-    cp "${BASEDIR}/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
+    cp "${BASEDIR}/prebuilt/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
 
     RC=$?
 
@@ -422,7 +422,7 @@ create_ffmpeg_framework() {
 
         destination_license_path="${FFMPEG_LIB_FRAMEWORK_RESOURCE_PATH}/LICENSE.${ENABLED_LIBRARY_NAME_UPPERCASE}"
 
-        cp "${BASEDIR}/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
+        cp "${BASEDIR}/prebuilt/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
 
         RC=$?
 

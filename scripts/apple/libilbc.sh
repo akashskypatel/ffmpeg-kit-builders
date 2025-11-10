@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # INIT SUBMODULES
-${SED_INLINE} 's|/abseil/|/arthenica/|g' "${BASEDIR}"/src/"${LIB_NAME}"/.gitmodules || return 1
+${SED_INLINE} 's|/abseil/|/arthenica/|g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/.gitmodules || return 1
 git submodule update --init || return 1
 
 mkdir -p "${BUILD_DIR}" || return 1
@@ -26,7 +26,7 @@ cmake -Wno-dev \
   -DCMAKE_AR="$(xcrun --sdk $(get_sdk_name) -f ar)" \
   -DCMAKE_AS="$AS" \
   -DCMAKE_SYSTEM_PROCESSOR="$(get_target_cpu)" \
-  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 make -j$(get_cpu_count) || return 1
 

@@ -9,7 +9,7 @@ rm -rf ../android/ffmpeg-kit-android-lib/build
 rm -rf ../android/obj
 rm -rf ../android/libs
 
-rm -rf ../src/*
+rm -rf ../prebuilt/src/*
 
 rm -rf ../apple/src/.deps
 rm -rf ../apple/src/.libs

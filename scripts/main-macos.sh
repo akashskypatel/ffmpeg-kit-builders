@@ -221,7 +221,7 @@ if [[ ${SKIP_ffmpeg} -ne 1 ]]; then
   export LDFLAGS=$(get_ldflags "${LIB_NAME}")
   export PKG_CONFIG_LIBDIR="${INSTALL_PKG_CONFIG_DIR}"
 
-  cd "${BASEDIR}"/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+  cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
   LIB_INSTALL_PREFIX="${LIB_INSTALL_BASE}/${LIB_NAME}"
 

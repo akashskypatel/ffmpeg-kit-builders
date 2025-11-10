@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SET BUILD FLAGS
-CROSS_FILE="${BASEDIR}"/src/"${LIB_NAME}"/package/crossfiles/$ARCH-$FFMPEG_KIT_BUILD_TYPE.meson
+CROSS_FILE="${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/package/crossfiles/$ARCH-$FFMPEG_KIT_BUILD_TYPE.meson
 
 create_mason_cross_file "$CROSS_FILE" || return 1
 

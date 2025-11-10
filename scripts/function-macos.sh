@@ -330,7 +330,7 @@ set_toolchain_paths() {
 
   LOCAL_GAS_PREPROCESSOR="${FFMPEG_KIT_TMPDIR}/gas-preprocessor.pl"
   if [ "$1" == "x264" ]; then
-    LOCAL_GAS_PREPROCESSOR="${BASEDIR}/src/x264/tools/gas-preprocessor.pl"
+    LOCAL_GAS_PREPROCESSOR="${BASEDIR}/prebuilt/src/x264/tools/gas-preprocessor.pl"
   fi
 
   export AR="$(xcrun --sdk "$(get_sdk_name)" -f ar 2>>"${BASEDIR}"/build.log)"

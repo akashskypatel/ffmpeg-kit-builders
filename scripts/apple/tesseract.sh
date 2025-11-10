@@ -9,7 +9,7 @@ export LEPTONICA_LIBS=" $(pkg-config --libs lept 2>>"${BASEDIR}"/build.log)"
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_tesseract} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_tesseract} -eq 1 ]]; then
   ./autogen.sh 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 fi
 
@@ -29,11 +29,11 @@ fi
   --host="${HOST}" || return 1
 
 # WORKAROUNDS
-git checkout ${BASEDIR}/src/${LIB_NAME}/libtool 1>>"${BASEDIR}"/build.log 2>&1
+git checkout ${BASEDIR}/prebuilt/src/${LIB_NAME}/libtool 1>>"${BASEDIR}"/build.log 2>&1
 if [[ ${FFMPEG_KIT_BUILD_TYPE} != "macos" ]]; then
 
   # WORKAROUND TO REMOVE -bind_at_load FLAG WHICH CAN NOT BE USED WHEN BITCODE IS ENABLED
-  ${SED_INLINE} 's/$wl-bind_at_load//g' ${BASEDIR}/src/${LIB_NAME}/libtool
+  ${SED_INLINE} 's/$wl-bind_at_load//g' ${BASEDIR}/prebuilt/src/${LIB_NAME}/libtool
 fi
 
 make -j$(get_cpu_count) || return 1

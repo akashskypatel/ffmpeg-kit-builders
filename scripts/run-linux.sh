@@ -22,7 +22,7 @@ export CXXFLAGS=$(get_cxxflags "${LIB_NAME}")
 export LDFLAGS=$(get_ldflags "${LIB_NAME}")
 export PKG_CONFIG_LIBDIR="${INSTALL_PKG_CONFIG_DIR}"
 
-cd "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 LIB_INSTALL_PREFIX="${ENABLED_LIBRARY_PATH}"
 BUILD_DIR=$(get_cmake_build_directory)

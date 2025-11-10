@@ -23,7 +23,7 @@ armv7 | armv7s | arm64*)
 esac
 
 # WORKAROUND TO FIX ASM FLAGS
-${SED_INLINE} 's/${CMAKE_C_FLAGS} ${CMAKE_ASM_FLAGS}/${CMAKE_ASM_FLAGS}/g' "${BASEDIR}"/src/"${LIB_NAME}"/simd/CMakeLists.txt
+${SED_INLINE} 's/${CMAKE_C_FLAGS} ${CMAKE_ASM_FLAGS}/${CMAKE_ASM_FLAGS}/g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/simd/CMakeLists.txt
 
 mkdir -p "${BUILD_DIR}" || return 1
 cd "${BUILD_DIR}" || return 1
@@ -52,7 +52,7 @@ cmake -Wno-dev \
   -DWITH_TURBOJPEG=0 \
   -DWITH_JAVA=0 \
   -DCMAKE_SYSTEM_PROCESSOR="$(get_target_cpu)" \
-  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 make -j$(get_cpu_count) || return 1
 

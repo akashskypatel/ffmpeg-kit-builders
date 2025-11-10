@@ -6,7 +6,7 @@ cd "${LIB_NAME}" || return 1
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/"${LIB_NAME}"/configure ]] || [[ ${RECONF_expat} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/"${LIB_NAME}"/configure ]] || [[ ${RECONF_expat} -eq 1 ]]; then
   autoreconf_library "${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 fi
 

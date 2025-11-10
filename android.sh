@@ -13,6 +13,7 @@ fi
 # LOAD INITIAL SETTINGS
 export BASEDIR="$(pwd)"
 export FFMPEG_KIT_BUILD_TYPE="android"
+export SCRIPTDIR="$BASEDIR/scripts"
 source ${SCRIPTDIR}/variable.sh
 source ${SCRIPTDIR}/function-${FFMPEG_KIT_BUILD_TYPE}.sh
 disabled_libraries=()
@@ -316,7 +317,7 @@ if [[ -n ${ANDROID_ARCHITECTURES} ]]; then
 
     destination_license_path="${LICENSE_BASEDIR}/license_${!library_name}.txt"
 
-    cp "${BASEDIR}/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
+    cp "${BASEDIR}/prebuilt/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
 
     RC=$?
 

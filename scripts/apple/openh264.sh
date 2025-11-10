@@ -35,15 +35,15 @@ esac
 make clean 2>/dev/null 1>/dev/null
 
 # DISCARD APPLE WORKAROUNDS
-git checkout "${BASEDIR}"/src/"${LIB_NAME}"/build || return 1
-git checkout "${BASEDIR}"/src/"${LIB_NAME}"/codec || return 1
+git checkout "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/build || return 1
+git checkout "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/codec || return 1
 
 # MAKE SURE THAT ASM IS ENABLED FOR ALL IOS ARCHITECTURES - EXCEPT x86-64
-${SED_INLINE} 's/arm64 aarch64/arm64% aarch64/g' ${BASEDIR}/src/${LIB_NAME}/build/arch.mk
-${SED_INLINE} 's/%86 x86_64,/%86 x86_64 x86-64%,/g' ${BASEDIR}/src/${LIB_NAME}/build/arch.mk
-${SED_INLINE} 's/filter-out arm64,/filter-out arm64%,/g' ${BASEDIR}/src/${LIB_NAME}/build/arch.mk
-${SED_INLINE} 's/CFLAGS += -DHAVE_NEON/#CFLAGS += -DHAVE_NEON/g' ${BASEDIR}/src/${LIB_NAME}/build/arch.mk
-${SED_INLINE} 's/ifeq (\$(ASM_ARCH), arm64)/ifneq (\$(filter arm64%, \$(ASM_ARCH)),)/g' ${BASEDIR}/src/${LIB_NAME}/codec/common/targets.mk
+${SED_INLINE} 's/arm64 aarch64/arm64% aarch64/g' ${BASEDIR}/prebuilt/src/${LIB_NAME}/build/arch.mk
+${SED_INLINE} 's/%86 x86_64,/%86 x86_64 x86-64%,/g' ${BASEDIR}/prebuilt/src/${LIB_NAME}/build/arch.mk
+${SED_INLINE} 's/filter-out arm64,/filter-out arm64%,/g' ${BASEDIR}/prebuilt/src/${LIB_NAME}/build/arch.mk
+${SED_INLINE} 's/CFLAGS += -DHAVE_NEON/#CFLAGS += -DHAVE_NEON/g' ${BASEDIR}/prebuilt/src/${LIB_NAME}/build/arch.mk
+${SED_INLINE} 's/ifeq (\$(ASM_ARCH), arm64)/ifneq (\$(filter arm64%, \$(ASM_ARCH)),)/g' ${BASEDIR}/prebuilt/src/${LIB_NAME}/codec/common/targets.mk
 
 make -j$(get_cpu_count) \
   ASM_ARCH="$(get_local_asm_arch)" \
@@ -61,4 +61,4 @@ make -j$(get_cpu_count) \
   install-static || return 1
 
 # MANUALLY COPY PKG-CONFIG FILES
-cp ${BASEDIR}/src/${LIB_NAME}/openh264-static.pc ${INSTALL_PKG_CONFIG_DIR}/openh264.pc || return 1
+cp ${BASEDIR}/prebuilt/src/${LIB_NAME}/openh264-static.pc ${INSTALL_PKG_CONFIG_DIR}/openh264.pc || return 1

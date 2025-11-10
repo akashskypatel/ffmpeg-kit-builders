@@ -32,7 +32,7 @@ export PKG_CONFIG_PATH="${INSTALL_PKG_CONFIG_DIR}:$(pkg-config --variable pc_pat
 
 echo -e "\nINFO: Using PKG_CONFIG_PATH: ${PKG_CONFIG_PATH}\n" 1>>"${BASEDIR}"/build.log 2>&1
 
-cd "${BASEDIR}"/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 # SET BUILD OPTIONS
 TARGET_CPU=""
@@ -156,6 +156,7 @@ if [[ -z ${NO_WORKSPACE_CLEANUP_ffmpeg} ]]; then
   make distclean 2>/dev/null 1>/dev/null
 fi
 
+  #--disable-postproc \
 ./configure \
   --cross-prefix="${HOST}-" \
   --prefix="${FFMPEG_LIBRARY_PATH}" \
@@ -181,7 +182,6 @@ fi
   --disable-xmm-clobber-test \
   ${DEBUG_OPTIONS} \
   --disable-programs \
-  --disable-postproc \
   --disable-doc \
   --disable-htmlpages \
   --disable-manpages \

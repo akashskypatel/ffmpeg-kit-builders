@@ -19,6 +19,10 @@
  */
 
 /*
+ * 11.2025
+ *
+ * Additional external declarations av_stream_new_side_data, av_stream_get_side_data, av_stream_get_nb_side_data
+ *
  * This file is the modified version of ffmpeg.h file living in ffmpeg source code under the fftools folder. We
  * manually update it each time we depend on a new ffmpeg version. Below you can see the list of changes applied
  * by us to develop mobile-ffmpeg and later ffmpeg-kit libraries.
@@ -757,6 +761,11 @@ typedef struct OutputFile {
     int shortest;
     int bitexact;
 } OutputFile;
+
+// added 8.0
+extern uint8_t *av_stream_new_side_data(AVStream *stream, enum AVPacketSideDataType type, int size);
+extern const AVPacketSideData *av_stream_get_side_data(const AVStream *stream, enum AVPacketSideDataType type, int *size);
+extern int av_stream_get_nb_side_data(const AVStream *stream);
 
 extern __thread InputFile   **input_files;
 extern __thread int        nb_input_files;

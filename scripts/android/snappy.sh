@@ -24,7 +24,7 @@ cmake -Wno-dev \
   -DHAVE_LIBLZO2=0 \
   -DHAVE_LIBZ=1 \
   -DCMAKE_SYSTEM_PROCESSOR=$(get_cmake_system_processor) \
-  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+  -DBUILD_SHARED_LIBS=0 "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 make -j$(get_cpu_count) || return 1
 

@@ -30,7 +30,7 @@ echo -e "INFO: System information\n"
 echo -e "INFO: $(uname -a)\n"
 echo -e "----------------------------------------------------------------\n"
 
-cd "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 LIB_INSTALL_PREFIX="${ENABLED_LIBRARY_PATH}"
 ANDROID_SYSROOT="${ANDROID_NDK_ROOT}"/toolchains/llvm/prebuilt/"${TOOLCHAIN}"/sysroot

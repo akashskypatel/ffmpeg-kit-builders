@@ -14,6 +14,7 @@ fi
 # LOAD INITIAL SETTINGS
 export BASEDIR="$(pwd)"
 export FFMPEG_KIT_BUILD_TYPE="macos"
+export SCRIPTDIR="$BASEDIR/scripts"
 source ${SCRIPTDIR}/variable.sh
 source ${SCRIPTDIR}/function-${FFMPEG_KIT_BUILD_TYPE}.sh
 disabled_libraries=()

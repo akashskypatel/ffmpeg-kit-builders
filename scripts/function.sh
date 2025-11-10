@@ -924,99 +924,99 @@ either version 3 of the License, or (at your option) any later version."
 }
 
 get_ffmpeg_libavcodec_version() {
-  local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
-  local MINOR=$(grep -Eo ' LIBAVCODEC_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MINOR||g;s| ||g')
-  local MICRO=$(grep -Eo ' LIBAVCODEC_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MICRO||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
+  local MINOR=$(grep -Eo ' LIBAVCODEC_VERSION_MINOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MINOR||g;s| ||g')
+  local MICRO=$(grep -Eo ' LIBAVCODEC_VERSION_MICRO .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MICRO||g;s| ||g')
 
   echo "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavcodec_major_version() {
-  local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
 
   echo "${MAJOR}"
 }
 
 get_ffmpeg_libavdevice_version() {
-  local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
-  local MINOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MINOR||g;s| ||g')
-  local MICRO=$(grep -Eo ' LIBAVDEVICE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MICRO||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
+  local MINOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MINOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MINOR||g;s| ||g')
+  local MICRO=$(grep -Eo ' LIBAVDEVICE_VERSION_MICRO .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MICRO||g;s| ||g')
 
   echo "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavdevice_major_version() {
-  local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
 
   echo "${MAJOR}"
 }
 
 get_ffmpeg_libavfilter_version() {
-  local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
-  local MINOR=$(grep -Eo ' LIBAVFILTER_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MINOR||g;s| ||g')
-  local MICRO=$(grep -Eo ' LIBAVFILTER_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MICRO||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
+  local MINOR=$(grep -Eo ' LIBAVFILTER_VERSION_MINOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MINOR||g;s| ||g')
+  local MICRO=$(grep -Eo ' LIBAVFILTER_VERSION_MICRO .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MICRO||g;s| ||g')
 
   echo "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavfilter_major_version() {
-  local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
 
   echo "${MAJOR}"
 }
 
 get_ffmpeg_libavformat_version() {
-  local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
-  local MINOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MINOR||g;s| ||g')
-  local MICRO=$(grep -Eo ' LIBAVFORMAT_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MICRO||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
+  local MINOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MINOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MINOR||g;s| ||g')
+  local MICRO=$(grep -Eo ' LIBAVFORMAT_VERSION_MICRO .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MICRO||g;s| ||g')
 
   echo "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavformat_major_version() {
-  local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
 
   echo "${MAJOR}"
 }
 
 get_ffmpeg_libavutil_version() {
-  local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
-  local MINOR=$(grep -Eo ' LIBAVUTIL_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MINOR||g;s| ||g')
-  local MICRO=$(grep -Eo ' LIBAVUTIL_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MICRO||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
+  local MINOR=$(grep -Eo ' LIBAVUTIL_VERSION_MINOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MINOR||g;s| ||g')
+  local MICRO=$(grep -Eo ' LIBAVUTIL_VERSION_MICRO .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MICRO||g;s| ||g')
 
   echo "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavutil_major_version() {
-  local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version_major.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/version_major.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
 
   echo "${MAJOR}"
 }
 
 get_ffmpeg_libswresample_version() {
-  local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
-  local MINOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MINOR||g;s| ||g')
-  local MICRO=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MICRO||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
+  local MINOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MINOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MINOR||g;s| ||g')
+  local MICRO=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MICRO .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MICRO||g;s| ||g')
 
   echo "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libswresample_major_version() {
-  local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
 
   echo "${MAJOR}"
 }
 
 get_ffmpeg_libswscale_version() {
-  local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
-  local MINOR=$(grep -Eo ' LIBSWSCALE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MINOR||g;s| ||g')
-  local MICRO=$(grep -Eo ' LIBSWSCALE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MICRO||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
+  local MINOR=$(grep -Eo ' LIBSWSCALE_VERSION_MINOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MINOR||g;s| ||g')
+  local MICRO=$(grep -Eo ' LIBSWSCALE_VERSION_MICRO .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MICRO||g;s| ||g')
 
   echo "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libswscale_major_version() {
-  local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
+  local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/prebuilt/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
 
   echo "${MAJOR}"
 }
@@ -1466,9 +1466,9 @@ set_library() {
   speex)
     ENABLED_LIBRARIES[LIBRARY_SPEEX]=$2
     ;;
-  srt)
+  openssl | srt)
     ENABLED_LIBRARIES[LIBRARY_SRT]=$2
-    set_library "openssl" $2
+    #set_library "openssl" $2
     ;;
   tesseract)
     ENABLED_LIBRARIES[LIBRARY_TESSERACT]=$2
@@ -2314,19 +2314,19 @@ print_custom_libraries() {
 # 1 - library index
 get_external_library_license_path() {
   case $1 in
-  1) echo "${BASEDIR}/src/$(get_library_name "$1")/LICENSE.TXT" ;;
-  12) echo "${BASEDIR}/src/$(get_library_name "$1")/Copyright" ;;
-  35) echo "${BASEDIR}/src/$(get_library_name "$1")/LICENSE.txt" ;;
-  3 | 42) echo "${BASEDIR}/src/$(get_library_name "$1")/COPYING.LESSERv3" ;;
-  5 | 44) echo "${BASEDIR}/src/$(get_library_name "$1")/$(get_library_name "$1")/COPYING" ;;
-  19) echo "${BASEDIR}/src/$(get_library_name "$1")/$(get_library_name "$1")/LICENSE" ;;
-  26) echo "${BASEDIR}/src/$(get_library_name "$1")/COPYING.LGPL" ;;
-  28 | 38) echo "${BASEDIR}/src/$(get_library_name "$1")/LICENSE.md " ;;
-  30) echo "${BASEDIR}/src/$(get_library_name "$1")/COPYING.txt" ;;
-  43) echo "${BASEDIR}/src/$(get_library_name "$1")/COPYRIGHT" ;;
-  46) echo "${BASEDIR}/src/$(get_library_name "$1")/leptonica-license.txt" ;;
-  4 | 10 | 13 | 17 | 21 | 27 | 31 | 32 | 36 | 40 | 49) echo "${BASEDIR}/src/$(get_library_name "$1")/LICENSE" ;;
-  *) echo "${BASEDIR}/src/$(get_library_name "$1")/COPYING" ;;
+  1) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/LICENSE.TXT" ;;
+  12) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/Copyright" ;;
+  35) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/LICENSE.txt" ;;
+  3 | 42) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/COPYING.LESSERv3" ;;
+  5 | 44) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/$(get_library_name "$1")/COPYING" ;;
+  19) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/$(get_library_name "$1")/LICENSE" ;;
+  26) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/COPYING.LGPL" ;;
+  28 | 38) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/LICENSE.md " ;;
+  30) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/COPYING.txt" ;;
+  43) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/COPYRIGHT" ;;
+  46) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/leptonica-license.txt" ;;
+  4 | 10 | 13 | 17 | 21 | 27 | 31 | 32 | 36 | 40 | 49) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/LICENSE" ;;
+  *) echo "${BASEDIR}/prebuilt/src/$(get_library_name "$1")/COPYING" ;;
   esac
 }
 
@@ -2644,7 +2644,7 @@ download() {
 download_library_source() {
   local SOURCE_REPO_URL=""
   local LIB_NAME="$1"
-  local LIB_LOCAL_PATH=${BASEDIR}/src/${LIB_NAME}
+  local LIB_LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
   local SOURCE_ID=""
   local LIBRARY_RC=""
   local DOWNLOAD_RC=""
@@ -2702,7 +2702,7 @@ download_file() {
   local DOWNLOAD_URL="$1"
   local LIB_NAME="$2"
   local SOURCE_ID="$3"
-  local LIB_LOCAL_PATH=${BASEDIR}/src/${LIB_NAME}
+  local LIB_LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
   local FILE_NAME=$(basename "${DOWNLOAD_URL}")
   local FILE_PATH="${FFMPEG_KIT_TMPDIR}/${FILE_NAME}"
 
@@ -2777,7 +2777,7 @@ download_custom_library_source() {
 
   local SOURCE_REPO_URL=""
   local LIB_NAME="${!LIBRARY_NAME}"
-  local LIB_LOCAL_PATH=${BASEDIR}/src/${LIB_NAME}
+  local LIB_LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
   local SOURCE_ID=""
   local LIBRARY_RC=""
   local DOWNLOAD_RC=""
@@ -2875,7 +2875,7 @@ library_is_downloaded() {
   local REDOWNLOAD_VARIABLE
   REDOWNLOAD_VARIABLE=$(echo "REDOWNLOAD_$1" | sed "s/\-/\_/g")
 
-  LOCAL_PATH=${BASEDIR}/src/${LIB_NAME}
+  LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
 
   echo -e "DEBUG: Checking if ${LIB_NAME} is already downloaded at ${LOCAL_PATH}\n" 1>>"${BASEDIR}"/build.log 2>&1
 

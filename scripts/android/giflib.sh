@@ -4,13 +4,13 @@
 export CFLAGS=$(get_cflags "${LIB_NAME}")" -DS_IREAD=S_IRUSR -DS_IWRITE=S_IWUSR"
 
 # COPY BUILD FILES
-cp "${BASEDIR}"/tools/patch/make/giflib/* "${BASEDIR}"/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
+cp "${BASEDIR}"/tools/patch/make/giflib/* "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 
 # ALWAYS CLEAN THE PREVIOUS BUILD
 make distclean 2>/dev/null 1>/dev/null
 
 # REGENERATE BUILD FILES IF NECESSARY OR REQUESTED
-if [[ ! -f "${BASEDIR}"/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_giflib} -eq 1 ]]; then
+if [[ ! -f "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/configure ]] || [[ ${RECONF_giflib} -eq 1 ]]; then
   autoreconf_library "${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 fi
 

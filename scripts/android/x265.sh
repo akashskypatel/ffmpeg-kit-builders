@@ -21,7 +21,7 @@ mkdir -p "${BUILD_DIR}" || return 1
 cd "${BUILD_DIR}" || return 1
 
 # WORKAROUND TO FIX static_assert ERRORS
-${SED_INLINE} 's/gnu++98/c++11/g' "${BASEDIR}"/src/"${LIB_NAME}"/source/CMakeLists.txt || return 1
+${SED_INLINE} 's/gnu++98/c++11/g' "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/source/CMakeLists.txt || return 1
 
 cmake -Wno-dev \
   -DCMAKE_VERBOSE_MAKEFILE=0 \
@@ -45,7 +45,7 @@ cmake -Wno-dev \
   -DHIGH_BIT_DEPTH=1 \
   ${ASM_OPTIONS} \
   -DCMAKE_SYSTEM_PROCESSOR="${ARCH}" \
-  -DENABLE_SHARED=0 "${BASEDIR}"/src/"${LIB_NAME}"/source || return 1
+  -DENABLE_SHARED=0 "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/source || return 1
 
 make -j$(get_cpu_count) || return 1
 

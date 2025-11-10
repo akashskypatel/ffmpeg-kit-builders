@@ -12,8 +12,8 @@ esac
 make clean 2>/dev/null 1>/dev/null
 
 # DISCARD APPLE WORKAROUNDS
-git checkout "${BASEDIR}"/src/"${LIB_NAME}"/build || return 1
-git checkout "${BASEDIR}"/src/"${LIB_NAME}"/codec || return 1
+git checkout "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/build || return 1
+git checkout "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/codec || return 1
 
 make -j$(get_cpu_count) \
   ARCH="$(get_target_cpu)" \
@@ -29,4 +29,4 @@ make -j$(get_cpu_count) \
   install-static || return 1
 
 # MANUALLY COPY PKG-CONFIG FILES
-cp "${BASEDIR}"/src/"${LIB_NAME}"/openh264-static.pc "${INSTALL_PKG_CONFIG_DIR}"/openh264.pc || return 1
+cp "${BASEDIR}"/prebuilt/src/"${LIB_NAME}"/openh264-static.pc "${INSTALL_PKG_CONFIG_DIR}"/openh264.pc || return 1

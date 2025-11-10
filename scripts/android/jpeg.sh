@@ -26,7 +26,7 @@ cmake -Wno-dev \
   -DWITH_TURBOJPEG=0 \
   -DWITH_JAVA=0 \
   -DCMAKE_SYSTEM_PROCESSOR=$(get_cmake_system_processor) \
-  "${BASEDIR}"/src/"${LIB_NAME}" || return 1
+  "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" || return 1
 
 make -j$(get_cpu_count) || return 1
 
