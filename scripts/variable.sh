@@ -243,6 +243,7 @@ LIBRARY_ZVBI=189
 export MINGW_W64_BRANCH="master"
 export BINUTILS_BRANCH="binutils-2_44-branch"
 export GCC_BRANCH="releases/gcc-14"
+export LOG_FILE="${BASEDIR}"/build.log
 
 export sandbox="prebuilt"
 export WORKDIR="$BASEDIR/$sandbox"
@@ -250,8 +251,8 @@ export SCRIPTDIR="$BASEDIR/scripts"
 export WINPATCHDIR="$SCRIPTDIR/windows/patches"
 
 # variables with their defaults
-export build_ffmpeg_static=y
-export build_ffmpeg_shared=n
+export build_ffmpeg_static=n
+export build_ffmpeg_shared=y
 export build_dvbtee=n
 export build_libmxf=n
 export build_mp4box=n
@@ -261,9 +262,7 @@ export build_lsw=n # To build x264 with L-Smash-Works.
 export build_dependencies=y
 export git_get_latest=y
 export prefer_stable=y # Only for x264 and x265.
-export build_intel_qsv=y # libvpl 
 export build_amd_amf=y
-export disable_nonfree=y # comment out to force user y/n selection
 export original_cflags='-mtune=generic -O3 -pipe' # high compatible by default, see #219, some other good options are listed below, or you could use -march=native to target your local box:
 export original_cppflags='-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3' # Needed for mingw-w64 7 as FORTIFY_SOURCE is now partially implemented, but not actually working
 # if you specify a march it needs to first so x264's configure will use it :| [ is that still the case ?]
@@ -280,7 +279,7 @@ export original_cppflags='-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3' # Needed for mi
 #else
 #  original_cflags='-mtune=generic -O2'
 #fi
-export ffmpeg_git_checkout_version=
+export ffmpeg_git_checkout_version="n8.0"
 export build_ismindex=n
 export enable_gpl=y
 export build_x264_with_libav=n # To build x264 with Libavformat.
@@ -380,72 +379,3 @@ export BUILD_STEPS=(
   "build_libx264"
   "build_apps"
 )
-
-while true; do
-  case $1 in
-    -top_dir | --top_dir) echo "$BASEDIR" ; shift;;
-    -sandbox | --sandbox) echo "$sandbox" ; shift;;
-    -cur_dir | --cur_dir) echo "$WORKDIR" ; shift;;
-    -patch_dir | --patch_dir) echo "$WINPATCHDIR" ; shift;;
-    -cpu_count | --cpu_count) echo "$(get_cpu_count)" ; shift;;
-    -build_ffmpeg_static | --build_ffmpeg_static) echo "$build_ffmpeg_static" ; shift;;
-    -build_ffmpeg_shared | --build_ffmpeg_shared) echo "$build_ffmpeg_shared" ; shift;;
-    -build_dvbtee | --build_dvbtee) echo "$build_dvbtee" ; shift;;
-    -build_libmxf | --build_libmxf) echo "$build_libmxf" ; shift;;
-    -build_mp4box | --build_mp4box) echo "$build_mp4box" ; shift;;
-    -build_mplayer | --build_mplayer) echo "$build_mplayer" ; shift;;
-    -build_vlc | --build_vlc) echo "$build_vlc" ; shift;;
-    -build_lsw | --build_lsw) echo "$build_lsw" ; shift;;
-    -build_dependencies | --build_dependencies) echo "$build_dependencies" ; shift;;
-    -git_get_latest | --git_get_latest) echo "$git_get_latest" ; shift;;
-    -prefer_stable | --prefer_stable) echo "$prefer_stable" ; shift;;
-    -build_intel_qsv | --build_intel_qsv) echo "$build_intel_qsv" ; shift;;
-    -build_amd_amf | --build_amd_amf) echo "$build_amd_amf" ; shift;;
-    -disable_nonfree | --disable_nonfree) echo "$disable_nonfree" ; shift;;
-    -original_cflags | --original_cflags) echo "$original_cflags" ; shift;;
-    -original_cppflags | --original_cppflags) echo "$original_cppflags" ; shift;;
-    -ffmpeg_git_checkout_version | --ffmpeg_git_checkout_version) echo "$ffmpeg_git_checkout_version" ; shift;;
-    -build_ismindex | --build_ismindex) echo "$build_ismindex" ; shift;;
-    -enable_gpl | --enable_gpl) echo "$enable_gpl" ; shift;;
-    -build_x264_with_libav | --build_x264_with_libav) echo "$build_x264_with_libav" ; shift;;
-    -ffmpeg_git_checkout | --ffmpeg_git_checkout) echo "$ffmpeg_git_checkout" ; shift;;
-    -ffmpeg_source_dir | --ffmpeg_source_dir) echo "$ffmpeg_source_dir" ; shift;;
-    -build_svt_hevc | --build_svt_hevc) echo "$build_svt_hevc" ; shift;;
-    -build_svt_vp9 | --build_svt_vp9) echo "$build_svt_vp9" ; shift;;
-    -build_dependencies_only | --build_dependencies_only) echo "$build_dependencies_only" ; shift;;
-    -original_cpu_count | --original_cpu_count) echo "$original_cpu_count" ; shift;;
-    -a | --all) 
-    echo -e "top_dir=$BASEDIR\n" \
-            "sandbox=$sandbox\n" \
-            "cur_dir=$cur_dir\n" \
-            "patch_dir=$WINPATCHDIR\n" \
-            "cpu_count=$(get_cpu_count)\n" \
-            "build_ffmpeg_static=$build_ffmpeg_static\n" \
-            "build_ffmpeg_shared=$build_ffmpeg_shared\n" \
-            "build_dvbtee=$build_dvbtee\n" \
-            "build_libmxf=$build_libmxf\n" \
-            "build_mp4box=$build_mp4box\n" \
-            "build_mplayer=$build_mplayer\n" \
-            "build_vlc=$build_vlc\n" \
-            "build_lsw=$build_lsw\n" \
-            "build_dependencies=$build_dependencies\n" \
-            "git_get_latest=$git_get_latest\n" \
-            "prefer_stable=$prefer_stable\n" \
-            "build_intel_qsv=$build_intel_qsv\n" \
-            "build_amd_amf=$build_amd_amf\n" \
-            "disable_nonfree=$disable_nonfree\n" \
-            "original_cflags=$original_cflags\n" \
-            "original_cppflags=$original_cppflags\n" \
-            "ffmpeg_git_checkout_version=$ffmpeg_git_checkout_version\n" \
-            "build_ismindex=$build_ismindex\n" \
-            "enable_gpl=$enable_gpl\n" \
-            "build_x264_with_libav=$build_x264_with_libav\n" \
-            "ffmpeg_git_checkout=$ffmpeg_git_checkout\n" \
-            "ffmpeg_source_dir=$ffmpeg_source_dir\n" \
-            "build_svt_hevc=$build_svt_hevc\n" \
-            "build_svt_vp9=$build_svt_vp9\n" \
-            "build_dependencies_only=$build_dependencies_only\n" \
-            "original_cpu_count=$original_cpu_count\n" ; shift;;
-    *) break;;
-  esac
-done

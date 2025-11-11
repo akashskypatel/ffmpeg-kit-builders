@@ -208,7 +208,7 @@ create_linux_bundle() {
 
 get_cmake_system_processor() {
   case ${ARCH} in
-  x86-64)
+  x86-64| x86_64)
     echo "x86_64"
     ;;
   esac
@@ -216,7 +216,7 @@ get_cmake_system_processor() {
 
 get_target_cpu() {
   case ${ARCH} in
-  x86-64)
+  x86-64 | x86_64)
     echo "x86_64"
     ;;
   esac
@@ -236,7 +236,7 @@ get_common_cflags() {
 
 get_arch_specific_cflags() {
   case ${ARCH} in
-  x86-64)
+  x86-64 | x86_64)
     echo "-target $(get_target) -DFFMPEG_KIT_X86_64"
     ;;
   esac
@@ -251,7 +251,7 @@ get_size_optimization_cflags() {
 
   local ARCH_OPTIMIZATION=""
   case ${ARCH} in
-  x86-64)
+  x86-64 | x86_64)
     case $1 in
     ffmpeg)
       ARCH_OPTIMIZATION="${LINK_TIME_OPTIMIZATION_FLAGS} -Os -ffunction-sections -fdata-sections"

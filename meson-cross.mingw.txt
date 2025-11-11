@@ -1,0 +1,32 @@
+[built-in options]
+buildtype = 'release'
+wrap_mode = 'nofallback'  
+default_library = 'static'  
+prefer_static = 'true'
+default_both_libraries = 'static'
+backend = 'ninja'
+prefix = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32'
+libdir = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/lib'
+ 
+[binaries]
+c = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-gcc'
+cpp = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-g++'
+ld = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-ld'
+ar = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-ar'
+strip = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-strip'
+nm = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-nm'
+windres = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-windres'
+dlltool = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-dlltool'
+pkg-config = 'pkg-config'
+nasm = 'nasm'
+cmake = 'cmake'
+
+[host_machine]
+system = 'windows'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+
+[properties]
+pkg_config_sysroot_dir = '/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32'
+pkg_config_libdir = '/lib/pkgconfig'

@@ -37,90 +37,19 @@ cd "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" 1>>"${BASEDIR}"/build.log 2>&1 || ret
 # SET BUILD OPTIONS
 TARGET_CPU=""
 TARGET_ARCH=""
-ASM_OPTIONS=""
 case ${ARCH} in
-x86-64)
+x86-64 | win64)
   TARGET_CPU="x86_64"
   TARGET_ARCH="x86_64"
-  ASM_OPTIONS=" --enable-asm --enable-inline-asm"
   ;;
-win32)
+x86 | i686 | win32)
   TARGET_CPU="i686"
   TARGET_ARCH="x86"
-  ASM_OPTIONS=" --enable-asm --enable-inline-asm"
   ;;
 esac
 
 CONFIGURE_POSTFIX=""
 HIGH_PRIORITY_INCLUDES=""
-
-# SET CONFIGURE OPTIONS
-for library in {0..189}; do
-  if [[ ${ENABLED_LIBRARIES[$library]} -eq 1 ]]; then
-    ENABLED_LIBRARY=$(get_library_name ${library})
-
-    echo -e "INFO: Enabling library ${ENABLED_LIBRARY}\n" 1>>"${BASEDIR}"/build.log 2>&1
-
-    case ${ENABLED_LIBRARY} in
-    windows-zlib)
-      CONFIGURE_POSTFIX+=" --enable-zlib"
-      ;;
-    windows-bzip2)
-      CONFIGURE_POSTFIX+=" --enable-bzlib"
-      ;;
-    chromaprint)
-      CFLAGS+=" $(pkg-config --cflags libchromaprint 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static libchromaprint 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-chromaprint"
-      ;;
-    dav1d)
-      CFLAGS+=" $(pkg-config --cflags dav1d 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static dav1d 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libdav1d"
-      ;;
-    kvazaar)
-      CFLAGS+=" $(pkg-config --cflags kvazaar 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static kvazaar 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libkvazaar"
-      ;;
-    libilbc)
-      CFLAGS+=" $(pkg-config --cflags libilbc 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static libilbc 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libilbc"
-      ;;
-    libaom)
-      CFLAGS+=" $(pkg-config --cflags aom 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static aom 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libaom"
-      ;;
-    openh264)
-      CFLAGS+=" $(pkg-config --cflags openh264 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static openh264 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libopenh264"
-      ;;
-    openssl)
-      CFLAGS+=" $(pkg-config --cflags openssl 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static openssl 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-openssl"
-      ;;
-    srt)
-      CFLAGS+=" $(pkg-config --cflags srt 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static srt 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libsrt"
-      ;;
-    x264)
-      CFLAGS+=" $(pkg-config --cflags x264 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static x264 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libx264"
-      ;;
-    zimg)
-      CFLAGS+=" $(pkg-config --cflags zimg 2>>"${BASEDIR}"/build.log)"
-      LDFLAGS+=" $(pkg-config --libs --static zimg 2>>"${BASEDIR}"/build.log)"
-      CONFIGURE_POSTFIX+=" --enable-libzimg"
-      ;;
-    esac
-  fi
-done
 
 # SET ENABLE GPL FLAG WHEN REQUESTED
 if [ "$GPL_ENABLED" == "yes" ]; then
@@ -156,6 +85,38 @@ if [[ -z ${NO_WORKSPACE_CLEANUP_ffmpeg} ]]; then
   make distclean 2>/dev/null 1>/dev/null
 fi
 
+echo "INFO: Building FFMPEG with config:\n \
+  --cross-prefix=$HOST-\n \
+  --prefix=$FFMPEG_LIBRARY_PATH\n \
+  --pkg-config=$HOST_PKG_CONFIG_PATH\n \
+  --enable-version3\n \
+  --arch=$TARGET_ARCH\n \
+  --cpu=$TARGET_CPU\n \
+  --target-os=mingw32\n \
+  --ar=$AR\n \
+  --cc=$CC\n \
+  --cxx=$CXX\n \
+  --ranlib=$RANLIB\n \
+  --strip=$STRIP\n \
+  --nm=$NM\n \
+  --disable-autodetect\n \
+  --enable-cross-compile\n \
+  --enable-pic\n \
+  --enable-optimizations\n \
+  --enable-swscale\n \
+  $BUILD_LIBRARY_OPTIONS\n \
+  --enable-pthreads\n \
+  --disable-v4l2-m2m\n \
+  $SIZE_OPTIONS\n \
+  --disable-xmm-clobber-test\n \
+  $DEBUG_OPTIONS\n \
+  --disable-doc\n \
+  --disable-htmlpages\n \
+  --disable-manpages\n \
+  --disable-podpages\n \
+  --disable-txtpages\n \
+  $CONFIGURE_POSTFIX" 1>> $LOG_FILE 2>&1
+
   #--disable-postproc \
 ./configure \
   --cross-prefix="${HOST}-" \
@@ -165,7 +126,6 @@ fi
   --arch="${TARGET_ARCH}" \
   --cpu="${TARGET_CPU}" \
   --target-os=mingw32 \
-  ${ASM_OPTIONS} \
   --ar="${AR}" \
   --cc="${CC}" \
   --cxx="${CXX}" \
@@ -177,11 +137,13 @@ fi
   --enable-pic \
   --enable-optimizations \
   --enable-swscale \
-  ${BUILD_LIBRARY_OPTIONS} \
+  --disable-static \
+  --enable-shared \
+  --enable-pthreads \
+  --disable-v4l2-m2m \
   ${SIZE_OPTIONS} \
   --disable-xmm-clobber-test \
   ${DEBUG_OPTIONS} \
-  --disable-programs \
   --disable-doc \
   --disable-htmlpages \
   --disable-manpages \
@@ -232,6 +194,32 @@ overwrite_file "${FFMPEG_LIBRARY_PATH}"/lib/pkgconfig/libavdevice.pc "${INSTALL_
 overwrite_file "${FFMPEG_LIBRARY_PATH}"/lib/pkgconfig/libavfilter.pc "${INSTALL_PKG_CONFIG_DIR}/libavfilter.pc" || return 1
 overwrite_file "${FFMPEG_LIBRARY_PATH}"/lib/pkgconfig/libavcodec.pc "${INSTALL_PKG_CONFIG_DIR}/libavcodec.pc" || return 1
 overwrite_file "${FFMPEG_LIBRARY_PATH}"/lib/pkgconfig/libavutil.pc "${INSTALL_PKG_CONFIG_DIR}/libavutil.pc" || return 1
+
+# MANUALLY ADD REQUIRED HEADERS
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86 1>>"${BASEDIR}"/build.log 2>&1
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm 1>>"${BASEDIR}"/build.log 2>&1
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64 1>>"${BASEDIR}"/build.log 2>&1
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86 1>>"${BASEDIR}"/build.log 2>&1
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/config.h "${FFMPEG_LIBRARY_PATH}"/include/config.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/x86/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavcodec/arm/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/network.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/network.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/os_support.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/os_support.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavformat/url.h "${FFMPEG_LIBRARY_PATH}"/include/libavformat/url.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/attributes_internal.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/attributes_internal.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/bprint.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/bprint.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/getenv_utf8.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/getenv_utf8.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/internal.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/internal.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/libm.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/libm.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/reverse.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/reverse.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/thread.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/thread.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/timer.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/x86/asm.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/asm.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/x86/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/timer.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/arm/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm/timer.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/prebuilt/src/ffmpeg/libavutil/aarch64/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64/timer.h 1>>"${BASEDIR}"/build.log 2>&1
 
 if [ $? -eq 0 ]; then
   echo "ok"

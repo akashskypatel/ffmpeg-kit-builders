@@ -67,19 +67,8 @@ EOL
     echo "Building in $PWD/$sandbox, will use ~ 285GB space!"
     echo
   fi
-  mkdir -p "$WORKDIR"
-  cd "$WORKDIR" || exit
-  if [[ $disable_nonfree = "y" ]]; then
-    non_free="n"
-  else
-    if  [[ $disable_nonfree = "n" ]]; then
-      non_free="y"
-    else
-      yes_no_sel "Would you like to include non-free (non GPL compatible) libraries, like [libfdk_aac,decklink -- note that the internal AAC encoder is ruled almost as high a quality as fdk-aac these days]
-The resultant binary may not be distributable, but can be useful for in-house use. Include these non-free license libraries [y/N]?" "n"
-      non_free="$user_input" # save it away
-    fi
-  fi
+  create_dir "$WORKDIR"
+  change_dir "$WORKDIR" || exit
   echo "sit back, this may take awhile..."
 }
 
@@ -113,4 +102,70 @@ EOF
   esac
 }
 
-source "${SCRIPTDIR}/run-windows.sh"
+reset_cflags # also overrides any "native" CFLAGS, which we may need if there are some 'linux only' settings in there
+reset_cppflags # Ensure CPPFLAGS are cleared and set to what is configured
+check_missing_packages # do this first since it's annoying to go through prompts then be rejected
+intro # remember to always run the intro, since it adjust pwd
+install_cross_compiler
+
+if [[ -n "$build_only_index" ]]; then
+  # Setup the environment based on the globally set compiler_flavors
+  
+  # Now, call the single requested build function by its index
+  step_name="${BUILD_STEPS[$build_only_index]}"
+  echo "--- Executing single build step: $step_name ---"
+  build_ffmpeg_dependencies_only "$step_name"
+
+else
+
+  if [[ $OSTYPE == darwin* ]]; then
+    # mac add some helper scripts
+    create_dir mac_helper_scripts
+    change_dir mac_helper_scripts || exit
+      if [[ ! -x readlink ]]; then
+        # make some scripts behave like linux...
+        curl -4 file://"$WINPATCHDIR"/md5sum.mac --fail > md5sum  || exit 1
+        chmod u+x ./md5sum
+        curl -4 file://"$WINPATCHDIR"/readlink.mac --fail > readlink  || exit 1
+        chmod u+x ./readlink
+      fi
+      export PATH=$(pwd):$PATH
+    change_dir ..
+  fi
+
+  change_dir "$work_dir" || exit
+    if [[ $build_dependencies_only == "y" || $build_dependencies_only == "yes" || $build_dependencies_only == "1" ]]; then
+      build_ffmpeg_dependencies      
+    elif [[ $build_ffmpeg_only == "y"|| $build_ffmpeg_only == "yes" || $build_ffmpeg_only == "1" ]]; then
+      #build_ffmpeg_lib
+      download_ffmpeg
+    elif [[ $build_ffmpeg_kit_only == "y" || $build_ffmpeg_kit_only == "yes" || $build_ffmpeg_kit_only == "1" ]]; then
+      build_ffmpeg_kit
+    else
+      build_ffmpeg_dependencies
+      # BUILD FFMPEG-KIT BUNDLE
+      echo -e -n "\nCreating the bundle under prebuilt: "
+
+      build_ffmpeg_lib
+      build_ffmpeg_kit
+
+      echo -e "\nINFO: Completed build for ${ARCH} at $(date)\n" 1>>$LOG_FILE 2>&1
+
+      echo -e "DEBUG: Creating the bundle directory\n" 1>>$LOG_FILE 2>&1
+
+      create_windows_bundle
+
+      echo -e "ok\n"
+      
+      echo -e "\nINFO: Completed bundle at ${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/lib\n" 1>>$LOG_FILE 2>&1
+      
+    fi
+  change_dir ..
+
+  # if [[ $build_dependencies_only == "n" || $build_dependencies_only == "no" || $build_dependencies_only == "0" ]]; then
+  #   echo "searching for all local exe's (some may not have been built this round, NB)..."
+  #   for file in $(find_all_build_exes); do
+  #     echo "built $file"
+  #   done
+  # fi
+fi

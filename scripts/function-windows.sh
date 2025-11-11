@@ -20,6 +20,44 @@ find_all_build_exes() {
   echo "$found" # pseudo return value...
 }
 
+download_ffmpeg() {
+  if [[ -z $1 ]]; then
+    local output_dir="ffmpeg_git"
+  else
+    local output_dir=$1
+  fi
+  if [[ $GPL_ENABLED == 'n' ]] || [[ $GPL_ENABLED == 'no' ]]; then
+    output_dir+="_lgpl"
+  fi
+
+  if [[ ! -z $ffmpeg_git_checkout_version ]]; then
+    local output_branch_sanitized=$(echo "${ffmpeg_git_checkout_version}" | sed "s/\//_/g") # release/4.3 to release_4.3
+    output_dir+="_$output_branch_sanitized"
+  else
+    # If version not provided, assume master branch desired
+    ffmpeg_git_checkout_version="master"
+  fi
+
+  local postpend_configure_opts=""
+  local install_prefix=""
+  # can't mix and match --enable-static --enable-shared unfortunately, or the final executable seems to just use shared if the're both present
+  if [[ $build_ffmpeg_shared == "y" ]]; then
+    output_dir+="_shared"
+    install_prefix="$(pwd)/${output_dir}" # install them to their a separate dir
+  else
+    install_prefix="${mingw_w64_x86_64_prefix}" # don't really care since we just pluck ffmpeg.exe out of the src dir for static, but x264 pre wants it installed...
+  fi
+
+  # allow using local source directory version of ffmpeg
+  if [[ -z $ffmpeg_source_dir ]]; then
+    do_git_checkout "$ffmpeg_git_checkout" "$output_dir" "$ffmpeg_git_checkout_version" || exit 1
+  else
+    output_dir="${ffmpeg_source_dir}"
+    install_prefix="${output_dir}"
+  fi
+  echo $output_dir
+  echo $install_prefix
+}
 
 build_ffmpeg() {
   local extra_postpend_configure_options=$2
@@ -29,13 +67,7 @@ build_ffmpeg() {
   else
     local output_dir=$3
   fi
-  if [[ "$non_free" = "y" ]]; then
-    output_dir+="_with_fdk_aac"
-  fi
-  if [[ $build_intel_qsv == "n" ]]; then
-    output_dir+="_xp_compat"
-  fi
-  if [[ $enable_gpl == 'n' ]]; then
+  if [[ $GPL_ENABLED == 'n' ]] || [[ $GPL_ENABLED == 'no' ]]; then
     output_dir+="_lgpl"
   fi
 
@@ -75,7 +107,7 @@ build_ffmpeg() {
     postpend_configure_opts="${postpend_configure_opts} --disable-libdav1d " # dav1d has diverged since so isn't compat with older ffmpegs
   fi
 
-  cd "$output_dir" || exit
+  change_dir "$output_dir" || exit
     apply_patch file://"$WINPATCHDIR"/frei0r_load-shared-libraries-dynamically.diff
     if [ "$bits_target" = "32" ]; then
       local arch=x86
@@ -226,7 +258,7 @@ build_ffmpeg() {
 
     # SVT-AV1
     if [[ $ffmpeg_git_checkout_version != *"n6"* ]] && [[ $ffmpeg_git_checkout_version != *"n5"* ]] && [[ $ffmpeg_git_checkout_version != *"n4"* ]] && [[ $ffmpeg_git_checkout_version != *"n3"* ]] && [[ $ffmpeg_git_checkout_version != *"n2"* ]]; then
-      git apply "$work_dir/SVT-AV1_git/.gitlab/workflows/linux/ffmpeg_n7_fix.patch"
+      git apply "$work_dir/SVT-AV1_git/.gitlab/workflows/windows/ffmpeg_n7_fix.patch"
     fi
     config_options+=" --enable-libsvtav1"
 
@@ -240,7 +272,7 @@ build_ffmpeg() {
       config_options+=" --enable-amf"
     fi
 
-    if [[ $build_intel_qsv = y && $compiler_flavors != "native" ]]; then 
+    if [[ $compiler_flavors != "native" ]]; then 
       config_options+=" --enable-libvpl"
     else
       config_options+=" --disable-libvpl"
@@ -250,7 +282,7 @@ build_ffmpeg() {
       config_options+=" --enable-libaribcaption"
     fi
     
-    if [[ $enable_gpl == 'y' ]]; then
+    if [[ $GPL_ENABLED == 'y' ]] || [[ $GPL_ENABLED == 'yes' ]]; then
       config_options+=" --enable-gpl --enable-frei0r --enable-librubberband --enable-libvidstab --enable-libx265 --enable-avisynth"
       config_options+=" --enable-libxvid --enable-libdavs2"
       if [[ $host_target != 'i686-w64-mingw32' ]]; then
@@ -281,15 +313,15 @@ build_ffmpeg() {
 
     config_options+=" $postpend_configure_opts"
 
-    if [[ "$non_free" = "y" ]]; then
-      config_options+=" --enable-nonfree --enable-libfdk-aac"
-      if [[ $OSTYPE != darwin* ]]; then
-        config_options+=" --enable-audiotoolbox --disable-outdev=audiotoolbox --extra-libs=-lAudioToolboxWrapper" && apply_patch file://"$WINPATCHDIR"/AudioToolBox.patch -p1
-      fi
-      if [[ $compiler_flavors != "native" ]]; then
-        config_options+=" --enable-decklink"
-      fi
-    fi
+    # if [[ "$non_free" = "y" ]]; then
+    #   config_options+=" --enable-nonfree --enable-libfdk-aac"
+    #   if [[ $OSTYPE != darwin* ]]; then
+    #     config_options+=" --enable-audiotoolbox --disable-outdev=audiotoolbox --extra-libs=-lAudioToolboxWrapper" && apply_patch file://"$WINPATCHDIR"/AudioToolBox.patch -p1
+    #   fi
+    #   if [[ $compiler_flavors != "native" ]]; then
+    #     config_options+=" --enable-decklink"
+    #   fi
+    # fi
 
     do_debug_build=n
     if [[ "$do_debug_build" = "y" ]]; then
@@ -309,44 +341,44 @@ build_ffmpeg() {
       make tools/ismindex.exe || exit 1
     fi
 
-    if [[ $non_free == "y" ]]; then
-      if [[ $build_type == "shared" ]]; then
-        echo "Done! You will find $bits_target-bit $1 non-redistributable binaries in $(pwd)/bin"
-      else
-        echo "Done! You will find $bits_target-bit $1 non-redistributable binaries in $(pwd)"
+    # if [[ $non_free == "y" ]]; then
+    #   if [[ $build_type == "shared" ]]; then
+    #     echo "Done! You will find $bits_target-bit $1 non-redistributable binaries in $(pwd)/bin"
+    #   else
+    #     echo "Done! You will find $bits_target-bit $1 non-redistributable binaries in $(pwd)"
+    #   fi
+    # else
+    create_dir "$WORKDIR"/redist
+    archive="$WORKDIR/redist/ffmpeg-$(git describe --tags --match N)-win$bits_target-$1"
+    if [[ $original_cflags =~ "pentium3" ]]; then
+      archive+="_legacy"
+    fi
+    if [[ $build_type == "shared" ]]; then
+      echo "Done! You will find $bits_target-bit $1 binaries in $(pwd)/bin"
+      if [[ ! -f $archive.7z ]]; then
+        sed "s/$/\r/" COPYING.GPLv3 > bin/COPYING.GPLv3.txt
+        cp -r include bin
+        change_dir bin || exit
+          7z a -mx=9 "$archive".7z include *.exe *.dll *.lib COPYING.GPLv3.txt && remove_dir -f COPYING.GPLv3.txt
+        change_dir ..
       fi
     else
-      mkdir -p "$WORKDIR"/redist
-      archive="$WORKDIR/redist/ffmpeg-$(git describe --tags --match N)-win$bits_target-$1"
-      if [[ $original_cflags =~ "pentium3" ]]; then
-        archive+="_legacy"
-      fi
-      if [[ $build_type == "shared" ]]; then
-        echo "Done! You will find $bits_target-bit $1 binaries in $(pwd)/bin"
-        if [[ ! -f $archive.7z ]]; then
-          sed "s/$/\r/" COPYING.GPLv3 > bin/COPYING.GPLv3.txt
-          cp -r include bin
-          cd bin || exit
-            7z a -mx=9 "$archive".7z include *.exe *.dll *.lib COPYING.GPLv3.txt && rm -f COPYING.GPLv3.txt
-          cd ..
-        fi
+      echo "Done! You will find $bits_target-bit $1 binaries in $(pwd)" $(date)
+      if [[ ! -f $archive.7z ]]; then
+        sed "s/$/\r/" COPYING.GPLv3 > COPYING.GPLv3.txt
+        echo "creating distro zip..."
+        7z a -mx=9 "$archive".7z ffmpeg.exe ffplay.exe ffprobe.exe COPYING.GPLv3.txt && remove_dir -f COPYING.GPLv3.txt
       else
-        echo "Done! You will find $bits_target-bit $1 binaries in $(pwd)" $(date)
-        if [[ ! -f $archive.7z ]]; then
-          sed "s/$/\r/" COPYING.GPLv3 > COPYING.GPLv3.txt
-          echo "creating distro zip..."
-          7z a -mx=9 "$archive".7z ffmpeg.exe ffplay.exe ffprobe.exe COPYING.GPLv3.txt && rm -f COPYING.GPLv3.txt
-        else
-          echo "not creating distro zip as one already exists..."
-        fi
+        echo "not creating distro zip as one already exists..."
       fi
-      echo "You will find redistributable archive .7z file in $archive.7z"
     fi
+    echo "You will find redistributable archive .7z file in $archive.7z"
+    #fi
 
   if [[ -z $ffmpeg_source_dir ]]; then
-    cd ..
+    change_dir ..
   else
-    cd "$work_dir" || exit
+    change_dir "$work_dir" || exit
   fi
 }
 
@@ -368,7 +400,7 @@ check_gpulibs() {
   if [[ $build_amd_amf = y ]]; then
     build_amd_amf_headers
   fi
-  if [[ $build_intel_qsv = y && $compiler_flavors != "native" ]]; then
+  if [[ $compiler_flavors != "native" ]]; then
     build_libvpl
   fi
 }
@@ -390,15 +422,15 @@ check_svt() {
 }
 
 check_audiotoolbox() {
-  if [[ "$non_free" = "y" ]]; then
-    build_fdk-aac # Uses dlfcn.
-	if [[ $OSTYPE != darwin* ]]; then
-      build_AudioToolboxWrapper # This wrapper library enables FFmpeg to use AudioToolbox codecs on Windows, with DLLs shipped with iTunes.
-	fi
-    if [[ $compiler_flavors != "native" ]]; then
-      build_libdecklink # Error finding rpc.h in native builds even if it's available
-    fi
+  # if [[ "$non_free" = "y" ]]; then
+  #   build_fdk-aac # Uses dlfcn.
+	# if [[ $OSTYPE != darwin* ]]; then
+  #     build_AudioToolboxWrapper # This wrapper library enables FFmpeg to use AudioToolbox codecs on Windows, with DLLs shipped with iTunes.
+	# fi
+  if [[ $compiler_flavors != "native" ]]; then
+    build_libdecklink # Error finding rpc.h in native builds even if it's available
   fi
+  #fi
 }
 
 check_libaribcaption() {
@@ -438,6 +470,7 @@ build_ffmpeg_dependencies_only() {
 }
 
 build_ffmpeg_dependencies() {
+  echo -e "DEBUG: Building dependencies\n" 1>>$LOG_FILE 2>&1
   if [[ $build_dependencies = "n" && $build_dependencies_only != "y" ]]; then
     echo "Skip build ffmpeg dependency libraries..."
     return
@@ -467,7 +500,7 @@ build_ffmpeg_dependencies() {
   if [[ $build_amd_amf = y ]]; then
     build_amd_amf_headers
   fi
-  if [[ $build_intel_qsv = y && $compiler_flavors != "native" ]]; then
+  if [[ $compiler_flavors != "native" ]]; then
     build_libvpl
   fi
 
@@ -539,15 +572,15 @@ build_ffmpeg_dependencies() {
   #build_facebooktransform360 # needs modified ffmpeg to use it so not typically useful
   build_libmysofa # Needed for FFmpeg's SOFAlizer filter (https://ffmpeg.org/ffmpeg-filters.html#sofalizer). Uses dlfcn.
   
-  if [[ "$non_free" = "y" ]]; then
-    build_fdk-aac # Uses dlfcn.
-	if [[ $OSTYPE != darwin* ]]; then
-      build_AudioToolboxWrapper # This wrapper library enables FFmpeg to use AudioToolbox codecs on Windows, with DLLs shipped with iTunes.
-	fi
-    if [[ $compiler_flavors != "native" ]]; then
-      build_libdecklink # Error finding rpc.h in native builds even if it's available
-    fi
+  # if [[ "$non_free" = "y" ]]; then
+  #   build_fdk-aac # Uses dlfcn.
+	# if [[ $OSTYPE != darwin* ]]; then
+  #     build_AudioToolboxWrapper # This wrapper library enables FFmpeg to use AudioToolbox codecs on Windows, with DLLs shipped with iTunes.
+	# fi
+  if [[ $compiler_flavors != "native" ]]; then
+    build_libdecklink # Error finding rpc.h in native builds even if it's available
   fi
+  #fi
 
   build_zvbi # Uses iconv, libpng and dlfcn.
   build_fribidi # Uses dlfcn.
@@ -584,6 +617,7 @@ build_ffmpeg_dependencies() {
   build_libvvenc
   build_libvvdec
   build_libx264 # at bottom as it might internally build a copy of ffmpeg (which needs all the above deps...
+  echo -e "INFO: Done Building dependencies\n" 1>>$LOG_FILE 2>&1
  }
 
 build_apps() {
@@ -620,26 +654,29 @@ setup_build_environment() {
   echo
   echo "************** Setting up environment for $flavor build... **************"
   if [[ $flavor == "win32" ]]; then
+    export ARCH=$(get_arch_name $(from_arch_name $flavor))
+    export FULL_ARCH="i686"
     host_target='i686-w64-mingw32'
-    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86/cross_compilers/mingw-w64-i686/$host_target)"
-    mingw_bin_path="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86/cross_compilers/mingw-w64-i686/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH"/cross_compilers/mingw-w64-i686/$host_target)"
+    mingw_bin_path="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH"/cross_compilers/mingw-w64-i686/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     bits_target=32
     cross_prefix="$mingw_bin_path/i686-w64-mingw32-"
     make_prefix_options="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
-    work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86)"
-    echo $work_dir
+    work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH")"
   elif [[ $flavor == "win64" ]]; then
+    export ARCH=$(get_arch_name $(from_arch_name $flavor))
+    export FULL_ARCH="x86_64"
     host_target='x86_64-w64-mingw32'
-    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86_64/cross_compilers/mingw-w64-x86_64/$host_target)"
-    mingw_bin_path="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86_64/cross_compilers/mingw-w64-x86_64/bin)"
+    mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH"/cross_compilers/mingw-w64-x86_64/$host_target)"
+    mingw_bin_path="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH"/cross_compilers/mingw-w64-x86_64/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     bits_target=64
     cross_prefix="$mingw_bin_path/x86_64-w64-mingw32-"
     make_prefix_options="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
-    work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"_x86_64)"
+    work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH")"
     echo $work_dir
   elif [[ $flavor == "native" ]]; then
     mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/native/cross_compilers/native)"
@@ -647,7 +684,15 @@ setup_build_environment() {
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     make_prefix_options="PREFIX=$mingw_w64_x86_64_prefix"
-    if [[ $(uname -m) =~ 'i686' ]]; then bits_target=32; else bits_target=64; fi
+    if [[ $(uname -m) =~ 'i686' ]]; then 
+      export ARCH="i686"
+      export FULL_ARCH="i686"
+      bits_target=32; 
+    else 
+      export ARCH="x86-64"
+      export FULL_ARCH="x86_64"
+      bits_target=64; 
+    fi
     export CPATH=$WORKDIR/cross_compilers/native/include:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Carbon.framework/Versions/A/Headers # C_INCLUDE_PATH
     export LIBRARY_PATH=$WORKDIR/cross_compilers/native/lib
     work_dir="$(realpath "$WORKDIR"/native)"
@@ -656,7 +701,481 @@ setup_build_environment() {
     echo "Error: Unknown compiler flavor '$flavor'"
     exit 1
   fi
+  echo "Environment:\n \
+    ARCH: $ARCH\n \
+    FULL_ARCH: $FULL_ARCH\n \
+    host_target: $host_target\n \
+    mingw_w64_x86_64_prefix: $mingw_w64_x86_64_prefix\n \
+    mingw_bin_path: $mingw_bin_path\n \
+    PKG_CONFIG_PATH: $PKG_CONFIG_PATH\n \
+    PATH: $PATH\n \
+    bits_target: $bits_target\n \
+    cross_prefix: $cross_prefix\n \
+    make_prefix_options: $make_prefix_options\n \
+    work_dir: $work_dir" 1>> $LOG_FILE 2>&1
+  create_dir "$work_dir"
+  change_dir "$work_dir" || exit
+}
 
-  mkdir -p "$work_dir"
-  cd "$work_dir" || exit
+export LIB_INSTALL_BASE="$WORKDIR/$FFMPEG_KIT_BUILD_TYPE-$FULL_ARCH"
+export FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY="$WORKDIR/$FFMPEG_KIT_BUILD_TYPE-$FULL_ARCH/ffmpeg-kit/pkgconfig"
+export INSTALL_PKG_CONFIG_DIR="$WORKDIR/$FFMPEG_KIT_BUILD_TYPE-$FULL_ARCH/pkgconfig"
+
+create_ffmpegkit_package_config() {
+  local FFMPEGKIT_VERSION="$1"
+
+  cat >"${INSTALL_PKG_CONFIG_DIR}/ffmpeg-kit.pc" <<EOF
+prefix=${LIB_INSTALL_BASE}/ffmpeg-kit
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: ffmpeg-kit
+Description: FFmpeg for applications
+Version: ${FFMPEGKIT_VERSION}
+
+Libs: -L\${libdir} -lstdc++ -lffmpegkit -lavutil
+Requires: libavfilter, libswscale, libavformat, libavcodec, libswresample, libavutil
+Cflags: -I\${includedir}
+EOF
+}
+
+create_mason_cross_file() {
+  cat >"$1" <<EOF
+[binaries]
+c = '$CC'
+cpp = '$CXX'
+ar = '$AR'
+strip = '$STRIP'
+pkgconfig = 'pkg-config'
+
+[properties]
+has_function_printf = true
+
+[host_machine]
+system = '$(get_meson_target_host_family)'
+cpu_family = '$(get_meson_target_cpu_family)'
+cpu = '$(get_cmake_system_processor)'
+endian = 'little'
+
+[built-in options]
+default_library = 'static'
+prefix = '${LIB_INSTALL_PREFIX}'
+EOF
+}
+
+get_arch_specific_ldflags() {
+  case ${ARCH} in
+  x86-64)
+    echo "-march=x86-64 -Wl,-z,text"
+    ;;
+  esac
+}
+
+get_size_optimization_ldflags() {
+  if [[ -z ${NO_LINK_TIME_OPTIMIZATION} ]]; then
+    local LINK_TIME_OPTIMIZATION_FLAGS="-flto"
+  else
+    local LINK_TIME_OPTIMIZATION_FLAGS=""
+  fi
+
+  case ${ARCH} in
+  x86-64)
+    case $1 in
+    ffmpeg)
+      echo "${LINK_TIME_OPTIMIZATION_FLAGS} -O2 -ffunction-sections -fdata-sections -finline-functions"
+      ;;
+    *)
+      echo "-Os -ffunction-sections -fdata-sections"
+      ;;
+    esac
+    ;;
+  esac
+}
+
+get_common_linked_libraries() {
+  local COMMON_LIBRARIES=""
+
+  case $1 in
+  chromaprint | ffmpeg-kit | kvazaar | srt | zimg)
+    echo "-stdlib=libstdc++ -lstdc++ -lc -lm ${COMMON_LIBRARIES}"
+    ;;
+  *)
+    echo "-lc -lm -ldl ${COMMON_LIBRARIES}"
+    ;;
+  esac
+}
+
+get_ldflags() {
+  local ARCH_FLAGS=$(get_arch_specific_ldflags)
+  if [[ -z ${FFMPEG_KIT_DEBUG} ]]; then
+    local OPTIMIZATION_FLAGS="$(get_size_optimization_ldflags "$1")"
+  else
+    local OPTIMIZATION_FLAGS="${FFMPEG_KIT_DEBUG}"
+  fi
+  local COMMON_LINKED_LIBS=$(get_common_linked_libraries "$1")
+
+  echo "${ARCH_FLAGS} ${OPTIMIZATION_FLAGS} ${COMMON_LINKED_LIBS} ${LLVM_CONFIG_LDFLAGS} -Wl,--hash-style=both -fuse-ld=lld"
+}
+
+get_cxxflags() {
+  if [[ -z ${NO_LINK_TIME_OPTIMIZATION} ]]; then
+    local LINK_TIME_OPTIMIZATION_FLAGS="-flto"
+  else
+    local LINK_TIME_OPTIMIZATION_FLAGS=""
+  fi
+
+  if [[ -z ${FFMPEG_KIT_DEBUG} ]]; then
+    local OPTIMIZATION_FLAGS="-Os -ffunction-sections -fdata-sections"
+  else
+    local OPTIMIZATION_FLAGS="${FFMPEG_KIT_DEBUG}"
+  fi
+
+  local BUILD_DATE="-DFFMPEG_KIT_BUILD_DATE=$(date +%Y%m%d 2>>$LOG_FILE)"
+  local COMMON_FLAGS="-stdlib=libstdc++ -std=c++11 ${OPTIMIZATION_FLAGS} ${BUILD_DATE} $(get_arch_specific_cflags)"
+
+  case $1 in
+  ffmpeg)
+    if [[ -z ${FFMPEG_KIT_DEBUG} ]]; then
+      echo "${LINK_TIME_OPTIMIZATION_FLAGS} -stdlib=libstdc++ -std=c++11 -O2 -ffunction-sections -fdata-sections"
+    else
+      echo "${FFMPEG_KIT_DEBUG} -stdlib=libstdc++ -std=c++11"
+    fi
+    ;;
+  ffmpeg-kit)
+    echo "${COMMON_FLAGS}"
+    ;;
+  srt | tesseract | zimg)
+    echo "${COMMON_FLAGS} -fcxx-exceptions -fPIC"
+    ;;
+  *)
+    echo "${COMMON_FLAGS} -fno-exceptions -fno-rtti"
+    ;;
+  esac
+}
+
+get_common_includes() {
+  echo "-I${LLVM_CONFIG_INCLUDEDIR:-.}"
+}
+
+get_size_optimization_cflags() {
+  if [[ -z ${NO_LINK_TIME_OPTIMIZATION} ]]; then
+    local LINK_TIME_OPTIMIZATION_FLAGS="-flto"
+  else
+    local LINK_TIME_OPTIMIZATION_FLAGS=""
+  fi
+
+  local ARCH_OPTIMIZATION=""
+  case ${ARCH} in
+  x86-64 | x86_64)
+    case $1 in
+    ffmpeg)
+      ARCH_OPTIMIZATION="${LINK_TIME_OPTIMIZATION_FLAGS} -Os -ffunction-sections -fdata-sections"
+      ;;
+    *)
+      ARCH_OPTIMIZATION="-Os -ffunction-sections -fdata-sections"
+      ;;
+    esac
+    ;;
+  esac
+
+  local LIB_OPTIMIZATION=""
+
+  echo "${ARCH_OPTIMIZATION} ${LIB_OPTIMIZATION}"
+}
+
+get_common_cflags() {
+  if [[ -n ${FFMPEG_KIT_LTS_BUILD} ]]; then
+    local LTS_BUILD_FLAG="-DFFMPEG_KIT_LTS "
+  fi
+
+  echo "-fstrict-aliasing -fPIC -DWINDOWS ${LTS_BUILD_FLAG} ${LLVM_CONFIG_CFLAGS}"
+}
+
+get_app_specific_cflags() {
+  local APP_FLAGS=""
+  case $1 in
+  ffmpeg)
+    APP_FLAGS="-Wno-unused-function"
+    ;;
+  ffmpeg-kit)
+    APP_FLAGS="-Wno-unused-function -Wno-pointer-sign -Wno-switch -Wno-deprecated-declarations"
+    ;;
+  kvazaar)
+    APP_FLAGS="-std=gnu99 -Wno-unused-function"
+    ;;
+  openh264)
+    APP_FLAGS="-std=gnu99 -Wno-unused-function -fstack-protector-all"
+    ;;
+  srt)
+    APP_FLAGS="-Wno-unused-function"
+    ;;
+  *)
+    APP_FLAGS="-std=c99 -Wno-unused-function"
+    ;;
+  esac
+
+  echo "${APP_FLAGS}"
+}
+
+get_arch_specific_cflags() {
+  case ${ARCH} in
+  x86-64 | x86_64)
+    echo "-target $(get_target) -DFFMPEG_KIT_X86_64"
+    ;;
+  esac
+}
+
+get_cflags() {
+  local ARCH_FLAGS=$(get_arch_specific_cflags)
+  local APP_FLAGS=$(get_app_specific_cflags "$1")
+  local COMMON_FLAGS=$(get_common_cflags)
+  if [[ -z ${FFMPEG_KIT_DEBUG} ]]; then
+    local OPTIMIZATION_FLAGS=$(get_size_optimization_cflags "$1")
+  else
+    local OPTIMIZATION_FLAGS="${FFMPEG_KIT_DEBUG}"
+  fi
+  local COMMON_INCLUDES=$(get_common_includes)
+
+  echo "${ARCH_FLAGS} ${APP_FLAGS} ${COMMON_FLAGS} ${OPTIMIZATION_FLAGS} ${COMMON_INCLUDES}"
+}
+
+get_target_cpu() {
+  case ${ARCH} in
+  i686 | x86 | win32)
+    echo "i686" 
+    ;;
+  x86-64 | x86_64 | win64)
+    echo "x86_64"
+    ;;
+  esac
+}
+
+get_build_directory() {
+  local LTS_POSTFIX=""
+  if [[ -n ${FFMPEG_KIT_LTS_BUILD} ]]; then
+    LTS_POSTFIX="-lts"
+  fi
+
+  echo "windows-$(get_target_cpu)${LTS_POSTFIX}"
+}
+
+detect_clang_version() {
+  if [[ -n ${FFMPEG_KIT_LTS_BUILD} ]]; then
+    for clang_version in 6 .. 10; do
+      if [[ $(command_exists "clang-$clang_version") -eq 0 ]]; then
+        echo "$clang_version"
+        return
+      elif [[ $(command_exists "clang-$clang_version.0") -eq 0 ]]; then
+        echo "$clang_version.0"
+        return
+      fi
+    done
+    echo "none"
+  else
+    for clang_version in 11 .. 20; do
+      if [[ $(command_exists "clang-$clang_version") -eq 0 ]]; then
+        echo "$clang_version"
+        return
+      elif [[ $(command_exists "clang-$clang_version.0") -eq 0 ]]; then
+        echo "$clang_version.0"
+        return
+      fi
+    done
+    echo "none"
+  fi
+}
+
+set_toolchain_paths() {
+  HOST=$(get_host)
+  CLANG_VERSION=$(detect_clang_version)
+
+  if [[ $CLANG_VERSION != "none" ]]; then
+    local CLANG_POSTFIX="-$CLANG_VERSION"
+    export LLVM_CONFIG_CFLAGS=$(llvm-config-$CLANG_VERSION --cflags 2>>$LOG_FILE)
+    export LLVM_CONFIG_INCLUDEDIR=$(llvm-config-$CLANG_VERSION --includedir 2>>$LOG_FILE)
+    export LLVM_CONFIG_LDFLAGS=$(llvm-config-$CLANG_VERSION --ldflags 2>>$LOG_FILE)
+  else
+    local CLANG_POSTFIX=""
+    export LLVM_CONFIG_CFLAGS=$(llvm-config --cflags 2>>$LOG_FILE)
+    export LLVM_CONFIG_INCLUDEDIR=$(llvm-config --includedir 2>>$LOG_FILE)
+    export LLVM_CONFIG_LDFLAGS=$(llvm-config --ldflags 2>>$LOG_FILE)
+  fi
+
+  export CC=$(command -v "clang$CLANG_POSTFIX")
+  export CXX=$(command -v "clang++$CLANG_POSTFIX")
+  export AS=$(command -v "llvm-as$CLANG_POSTFIX")
+  export AR=$(command -v "llvm-ar$CLANG_POSTFIX")
+  export LD=$(command -v "ld.lld$CLANG_POSTFIX")
+  export RANLIB=$(command -v "llvm-ranlib$CLANG_POSTFIX")
+  export STRIP=$(command -v "llvm-strip$CLANG_POSTFIX")
+  export NM=$(command -v "llvm-nm$CLANG_POSTFIX")
+  export INSTALL_PKG_CONFIG_DIR="${BASEDIR}"/prebuilt/$(get_build_directory)/pkgconfig
+
+  if [ ! -d "${INSTALL_PKG_CONFIG_DIR}" ]; then
+    create_dir "${INSTALL_PKG_CONFIG_DIR}" 1>>$LOG_FILE 2>&1
+  fi
+}
+
+enable_lts_build() {
+  export FFMPEG_KIT_LTS_BUILD="1"
+}
+
+install_pkg_config_file() {
+  local FILE_NAME="$1"
+  local SOURCE="${INSTALL_PKG_CONFIG_DIR}/${FILE_NAME}"
+  local DESTINATION="${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}/${FILE_NAME}"
+
+  # DELETE OLD FILE
+  remove_dir -f "$DESTINATION" 2>>$LOG_FILE
+  if [[ $? -ne 0 ]]; then
+    echo -e "failed\n\nSee $LOG_FILE for details\n"
+    exit 1
+  fi
+
+  # INSTALL THE NEW FILE
+  cp "$SOURCE" "$DESTINATION" 2>>$LOG_FILE
+  if [[ $? -ne 0 ]]; then
+    echo -e "failed\n\nSee $LOG_FILE for details\n"
+    exit 1
+  fi
+
+  # UPDATE PATHS
+  ${SED_INLINE} "s|${LIB_INSTALL_BASE}/ffmpeg-kit|${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
+  ${SED_INLINE} "s|${LIB_INSTALL_BASE}/ffmpeg|${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
+}
+
+get_ffmpeg_kit_version() {
+  local FFMPEG_KIT_VERSION=$(grep -Eo 'FFmpegKitVersion = .*' "${BASEDIR}/windows/src/FFmpegKitConfig.h" 2>>$LOG_FILE | grep -Eo ' \".*' | tr -d '"; ')
+
+  echo "${FFMPEG_KIT_VERSION}"
+}
+
+
+get_bundle_directory() {
+  local LTS_POSTFIX=""
+  if [[ -n ${FFMPEG_KIT_LTS_BUILD} ]]; then
+    LTS_POSTFIX="-lts"
+  fi
+
+  echo "bundle-windows${LTS_POSTFIX}"
+}
+
+create_windows_bundle() {
+  echo -e "INFO: Creating bundle\n" 1>>$LOG_FILE 2>&1
+  set_toolchain_paths ""
+
+  local FFMPEG_KIT_VERSION=$(get_ffmpeg_kit_version)
+
+  local FFMPEG_KIT_BUNDLE_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit"
+  local FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/include"
+  local FFMPEG_KIT_BUNDLE_LIB_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/lib"
+  local FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/pkgconfig"
+
+  initialize_folder "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}"
+  initialize_folder "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}"
+  initialize_folder "${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}"
+
+  # COPY HEADERS
+  cp -r -P "${LIB_INSTALL_BASE}"/ffmpeg-kit/include/* "${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/include" 2>>$LOG_FILE
+  cp -r -P "${LIB_INSTALL_BASE}"/ffmpeg/include/* "${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/include" 2>>$LOG_FILE
+
+  # COPY LIBS
+  cp -P "${LIB_INSTALL_BASE}"/ffmpeg-kit/lib/lib* "${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/lib" 2>>$LOG_FILE
+  cp -P "${LIB_INSTALL_BASE}"/ffmpeg/lib/lib* "${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/lib" 2>>$LOG_FILE
+
+  install_pkg_config_file "libavformat.pc"
+  install_pkg_config_file "libswresample.pc"
+  install_pkg_config_file "libswscale.pc"
+  install_pkg_config_file "libavdevice.pc"
+  install_pkg_config_file "libavfilter.pc"
+  install_pkg_config_file "libavcodec.pc"
+  install_pkg_config_file "libavutil.pc"
+  install_pkg_config_file "ffmpeg-kit.pc"
+
+  # COPY EXTERNAL LIBRARY LICENSES
+  local LICENSE_BASEDIR="${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/lib"
+  remove_dir -f "${LICENSE_BASEDIR}"/*.txt 1>>$LOG_FILE 2>&1 || exit 1
+  for library in {0..49}; do
+    if [[ ${ENABLED_LIBRARIES[$library]} -eq 1 ]]; then
+      ENABLED_LIBRARY=$(get_library_name ${library} | sed 's/-/_/g')
+      LICENSE_FILE="${LICENSE_BASEDIR}/license_${ENABLED_LIBRARY}.txt"
+
+      RC=$(copy_external_library_license_file ${library} "${LICENSE_FILE}")
+
+      if [[ ${RC} -ne 0 ]]; then
+        echo -e "DEBUG: Failed to copy the license file of ${ENABLED_LIBRARY}\n" 1>>$LOG_FILE 2>&1
+        echo -e "failed\n\nSee $LOG_FILE for details\n"
+        exit 1
+      fi
+
+      echo -e "DEBUG: Copied the license file of ${ENABLED_LIBRARY} successfully\n" 1>>$LOG_FILE 2>&1
+    fi
+  done
+
+  # COPY CUSTOM LIBRARY LICENSES
+  for custom_library_index in "${CUSTOM_LIBRARIES[@]}"; do
+    library_name="CUSTOM_LIBRARY_${custom_library_index}_NAME"
+    relative_license_path="CUSTOM_LIBRARY_${custom_library_index}_LICENSE_FILE"
+
+    destination_license_path="${LICENSE_BASEDIR}/license_${!library_name}.txt"
+
+    cp "${BASEDIR}/prebuilt/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>$LOG_FILE 2>&1
+
+    RC=$?
+
+    if [[ ${RC} -ne 0 ]]; then
+      echo -e "DEBUG: Failed to copy the license file of custom library ${!library_name}\n" 1>>$LOG_FILE 2>&1
+      echo -e "failed\n\nSee $LOG_FILE for details\n"
+      exit 1
+    fi
+
+    echo -e "DEBUG: Copied the license file of custom library ${!library_name} successfully\n" 1>>$LOG_FILE 2>&1
+  done
+
+  # COPY LIBRARY LICENSES
+  if [[ ${GPL_ENABLED} == "yes" ]]; then
+    cp "${BASEDIR}"/tools/license/LICENSE.GPLv3 "${LICENSE_BASEDIR}"/license.txt 1>>$LOG_FILE 2>&1 || exit 1
+  else
+    cp "${BASEDIR}"/LICENSE "${LICENSE_BASEDIR}"/license.txt 1>>$LOG_FILE 2>&1 || exit 1
+  fi
+
+  cp "${BASEDIR}"/tools/source/SOURCE "${LICENSE_BASEDIR}"/source.txt 1>>$LOG_FILE 2>&1 || exit 1
+
+  echo -e "DEBUG: Copied the ffmpeg-kit license successfully\n" 1>>$LOG_FILE 2>&1
+  echo -e "INFO: Done creating bundle\n" 1>>$LOG_FILE 2>&1
+}
+
+build_ffmpeg_lib() {
+  echo -e "INFO: Building ffmpeg libs\n" 1>>$LOG_FILE 2>&1
+  # SKIP TO SPEED UP THE BUILD
+  # PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
+  LIB_NAME="ffmpeg"
+  set_toolchain_paths "${LIB_NAME}"
+
+  # SET BUILD FLAGS
+  HOST=$(get_host)
+  export CFLAGS=$(get_cflags "${LIB_NAME}")
+  export CXXFLAGS=$(get_cxxflags "${LIB_NAME}")
+  export LDFLAGS=$(get_ldflags "${LIB_NAME}")
+  export PKG_CONFIG_LIBDIR="${INSTALL_PKG_CONFIG_DIR}"
+
+  change_dir "${BASEDIR}"/prebuilt/src/"${LIB_NAME}" 1>>$LOG_FILE 2>&1 || return 1
+
+  LIB_INSTALL_PREFIX="${LIB_INSTALL_BASE}/${LIB_NAME}"
+
+  # BUILD FFMPEG
+  source ${SCRIPTDIR}/windows/ffmpeg.sh
+
+  if [[ $? -ne 0 ]]; then
+    exit 1
+  fi
+  echo -e "INFO: Done Building ffmpeg libs\n" 1>>$LOG_FILE 2>&1
+}
+
+build_ffmpeg_kit() {
+  echo -e "INFO: Building ffmpeg kit\n" 1>>$LOG_FILE 2>&1
+  # BUILD FFMPEG KIT
+  . ${SCRIPTDIR}/windows/ffmpeg-kit.sh "$@" || return 1
+  echo -e "INFO: Done building ffmpeg kit\n" 1>>$LOG_FILE 2>&1
 }

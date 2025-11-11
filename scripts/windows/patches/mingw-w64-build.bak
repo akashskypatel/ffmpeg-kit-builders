@@ -101,27 +101,42 @@ execute()
 create_dir()
 {
     local path="$1"
-    shift 1
 
-    execute "" "unable to create directory '$path'" \
+    if [ -z "$path" ]; then
+        error_exit "ERROR: path argument is required"
+    fi
+
+    execute "INFO: creating path: '$path'" "ERROR: unable to create directory '$path'" \
         mkdir -p "$path"
+    
+    execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" \
+        sudo chown -R "$USER":"$USER" "$path"
 }
 
 remove_path()
 {
     local path="$1"
-    shift 1
+    
+    if [ -z "$path" ]; then
+        error_exit "ERROR: path argument is required"
+    fi
 
-    execute "" "unable to remove path '$path'" \
+    execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" \
+        sudo chown -R "$USER":"$USER" "$path"
+
+    execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" \
         rm -fr "$path"
 }
 
 change_dir()
 {
     local path="$1"
-    shift 1
+    
+    if [ -z "$path" ]; then
+        error_exit "ERROR: path argument is required"
+    fi
 
-    execute "" "unable to cd to directory '$path'" \
+    execute "INFO: changing to path: '$path'" "ERROR: unable to cd to directory '$path'" \
         cd "$path"
 }
 
