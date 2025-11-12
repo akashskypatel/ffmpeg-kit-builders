@@ -1,5 +1,8 @@
 #!/bin/bash
 
+#echo ${SCRIPTDIR}/source.sh
+#echo "${SCRIPTDIR}/variable.sh"
+
 source ${SCRIPTDIR}/source.sh
 source "${SCRIPTDIR}/variable.sh"
 
@@ -383,12 +386,358 @@ copy_external_library_license_file() {
   echo 0
 }
 
+#
+# 1. <url>
+# 2. <local file name>
+# 3. <on error action>
+#
+download() {
+  if [ ! -d "${FFMPEG_KIT_TMPDIR}" ]; then
+    create_dir "${FFMPEG_KIT_TMPDIR}"
+  fi
+
+  (curl --fail --location "$1" -o "${FFMPEG_KIT_TMPDIR}"/"$2" 1>>"${BASEDIR}"/build.log 2>&1)
+
+  local RC=$?
+
+  if [ ${RC} -eq 0 ]; then
+    echo -e "\nDEBUG: Downloaded $1 to ${FFMPEG_KIT_TMPDIR}/$2\n" 1>>"${BASEDIR}"/build.log 2>&1
+  else
+    remove_path -f "${FFMPEG_KIT_TMPDIR}"/"$2" 1>>"${BASEDIR}"/build.log 2>&1
+
+    echo -e -n "\nINFO: Failed to download $1 to ${FFMPEG_KIT_TMPDIR}/$2, rc=${RC}. " 1>>"${BASEDIR}"/build.log 2>&1
+
+    if [ "$3" == "exit" ]; then
+      echo -e "DEBUG: Build will now exit.\n" 1>>"${BASEDIR}"/build.log 2>&1
+      exit 1
+    else
+      echo -e "DEBUG: Build will continue.\n" 1>>"${BASEDIR}"/build.log 2>&1
+    fi
+  fi
+
+  echo ${RC}
+}
+
+#
+# 1. library name
+#
+download_library_source() {
+  local SOURCE_REPO_URL=""
+  local LIB_NAME="$1"
+  local LIB_LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
+  local SOURCE_ID=""
+  local LIBRARY_RC=""
+  local DOWNLOAD_RC=""
+  local SOURCE_TYPE=""
+
+  echo -e "DEBUG: Downloading library source: $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+
+  SOURCE_REPO_URL=$(get_library_source "${LIB_NAME}" 1)
+  SOURCE_ID=$(get_library_source "${LIB_NAME}" 2)
+  SOURCE_TYPE=$(get_library_source "${LIB_NAME}" 3)
+
+  LIBRARY_RC=$(library_is_downloaded "${LIB_NAME}")
+
+  if [ ${LIBRARY_RC} -eq 0 ]; then
+    echo -e "INFO: $1 already downloaded. Source folder found at ${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+    return
+  fi
+
+  # Handle different source types
+  case "${SOURCE_TYPE}" in
+    "TAG"|"BRANCH"|"COMMIT")
+      if [ "${SOURCE_TYPE}" == "TAG" ]; then
+        DOWNLOAD_RC=$(clone_git_repository_with_tag "${SOURCE_REPO_URL}" "${SOURCE_ID}" "${LIB_LOCAL_PATH}")
+      else
+        DOWNLOAD_RC=$(clone_git_repository_with_commit_id "${SOURCE_REPO_URL}" "${LIB_LOCAL_PATH}" "${SOURCE_ID}")
+      fi
+      ;;
+    "DOWNLOAD")
+      # For DOWNLOAD type, SOURCE_REPO_URL is the direct download URL
+      # and SOURCE_ID is the version identifier
+      DOWNLOAD_RC=$(download_file "${SOURCE_REPO_URL}" "${LIB_NAME}" "${SOURCE_ID}")
+      ;;
+    *)
+      echo -e "INFO: Unknown source type '${SOURCE_TYPE}' for library $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+      DOWNLOAD_RC=1
+      ;;
+  esac
+
+  if [ ${DOWNLOAD_RC} -ne 0 ]; then
+    echo -e "INFO: Downloading library $1 failed. Can not get library from ${SOURCE_REPO_URL}\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo ${DOWNLOAD_RC}
+  else
+    echo -e "\nINFO: $1 library downloaded" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+  fi
+}
+
+#
+# 1. download url
+# 2. library name
+# 3. source id (version)
+#
+download_file() {
+  local DOWNLOAD_URL="$1"
+  local LIB_NAME="$2"
+  local SOURCE_ID="$3"
+  local LIB_LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
+  local FILE_NAME=$(basename "${DOWNLOAD_URL}")
+  local FILE_PATH="${FFMPEG_KIT_TMPDIR}/${FILE_NAME}"
+
+  echo -e "DEBUG: Downloading file from ${DOWNLOAD_URL} to ${FILE_PATH}\n" 1>>"${BASEDIR}"/build.log 2>&1
+
+  # Create temporary directory
+  create_dir "${FFMPEG_KIT_TMPDIR}" 1>>"${BASEDIR}"/build.log 2>&1
+
+  # Download the file
+  (curl --fail --location "${DOWNLOAD_URL}" -o "${FILE_PATH}" 1>>"${BASEDIR}"/build.log 2>&1)
+
+  local CURL_RC=$?
+
+  if [ ${CURL_RC} -ne 0 ]; then
+    echo -e "INFO: Failed to download ${DOWNLOAD_URL}\n" 1>>"${BASEDIR}"/build.log 2>&1
+    remove_path -f "${FILE_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+    echo ${CURL_RC}
+    return
+  fi
+
+  # Create library directory
+  create_dir "${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+
+  local EXTRACT_RC=0
+
+  # Extract based on file extension
+  case "${FILE_NAME}" in
+    *.zip)
+      (unzip -q "${FILE_PATH}" -d "${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1)
+      EXTRACT_RC=$?
+      ;;
+    *.tar.gz|*.tgz)
+      (tar -xzf "${FILE_PATH}" -C "${LIB_LOCAL_PATH}" --strip-components=1 1>>"${BASEDIR}"/build.log 2>&1)
+      EXTRACT_RC=$?
+      ;;
+    *.tar.bz2)
+      (tar -xjf "${FILE_PATH}" -C "${LIB_LOCAL_PATH}" --strip-components=1 1>>"${BASEDIR}"/build.log 2>&1)
+      EXTRACT_RC=$?
+      ;;
+    *.tar.xz)
+      (tar -xJf "${FILE_PATH}" -C "${LIB_LOCAL_PATH}" --strip-components=1 1>>"${BASEDIR}"/build.log 2>&1)
+      EXTRACT_RC=$?
+      ;;
+    *)
+      echo -e "INFO: Unknown archive format for ${FILE_NAME}\n" 1>>"${BASEDIR}"/build.log 2>&1
+      EXTRACT_RC=1
+      ;;
+  esac
+
+  # Clean up downloaded file
+  remove_path -f "${FILE_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+
+  if [ ${EXTRACT_RC} -ne 0 ]; then
+    echo -e "INFO: Failed to extract ${FILE_NAME}\n" 1>>"${BASEDIR}"/build.log 2>&1
+    remove_path -rf "${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+    echo ${EXTRACT_RC}
+    return
+  fi
+
+  echo -e "DEBUG: Successfully downloaded and extracted ${LIB_NAME}\n" 1>>"${BASEDIR}"/build.log 2>&1
+  echo 0
+}
+
+#
+# 1. custom library index
+#
+download_custom_library_source() {
+  local LIBRARY_NAME="CUSTOM_LIBRARY_$1_NAME"
+  local LIBRARY_REPO="CUSTOM_LIBRARY_$1_REPO"
+  local LIBRARY_REPO_COMMIT="CUSTOM_LIBRARY_$1_REPO_COMMIT"
+  local LIBRARY_REPO_TAG="CUSTOM_LIBRARY_$1_REPO_TAG"
+
+  local SOURCE_REPO_URL=""
+  local LIB_NAME="${!LIBRARY_NAME}"
+  local LIB_LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
+  local SOURCE_ID=""
+  local LIBRARY_RC=""
+  local DOWNLOAD_RC=""
+  local SOURCE_TYPE=""
+
+  echo -e "DEBUG: Downloading custom library source: ${LIB_NAME}\n" 1>>"${BASEDIR}"/build.log 2>&1
+
+  SOURCE_REPO_URL=${!LIBRARY_REPO}
+  if [ -n "${!LIBRARY_REPO_TAG}" ]; then
+    SOURCE_ID=${!LIBRARY_REPO_TAG}
+    SOURCE_TYPE="TAG"
+  else
+    SOURCE_ID=${!LIBRARY_REPO_COMMIT}
+    SOURCE_TYPE="COMMIT"
+  fi
+
+  LIBRARY_RC=$(library_is_downloaded "${LIB_NAME}")
+
+  if [ ${LIBRARY_RC} -eq 0 ]; then
+    echo -e "INFO: ${LIB_NAME} already downloaded. Source folder found at ${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+    return
+  fi
+
+  if [ "${SOURCE_TYPE}" == "TAG" ]; then
+    DOWNLOAD_RC=$(clone_git_repository_with_tag "${SOURCE_REPO_URL}" "${SOURCE_ID}" "${LIB_LOCAL_PATH}")
+  else
+    DOWNLOAD_RC=$(clone_git_repository_with_commit_id "${SOURCE_REPO_URL}" "${LIB_LOCAL_PATH}" "${SOURCE_ID}")
+  fi
+
+  if [ ${DOWNLOAD_RC} -ne 0 ]; then
+    echo -e "INFO: Downloading custom library ${LIB_NAME} failed. Can not get library from ${SOURCE_REPO_URL}\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo ${DOWNLOAD_RC}
+  else
+    echo -e "\nINFO: ${LIB_NAME} custom library downloaded" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+  fi
+}
+
+download_gnu_config() {
+  local SOURCE_REPO_URL=""
+  local LIB_NAME="config"
+  local LIB_LOCAL_PATH="${FFMPEG_KIT_TMPDIR}/source/${LIB_NAME}"
+  local SOURCE_ID=""
+  local DOWNLOAD_RC=""
+  local SOURCE_TYPE=""
+  REDOWNLOAD_VARIABLE=$(echo "REDOWNLOAD_$LIB_NAME")
+
+  echo -e "DEBUG: Downloading gnu config source.\n" 1>>"${BASEDIR}"/build.log 2>&1
+
+  SOURCE_REPO_URL=$(get_library_source "${LIB_NAME}" 1)
+  SOURCE_ID=$(get_library_source "${LIB_NAME}" 2)
+  SOURCE_TYPE=$(get_library_source "${LIB_NAME}" 3)
+
+  if [[ -d "${LIB_LOCAL_PATH}" ]]; then
+    if [[ ${REDOWNLOAD_VARIABLE} -eq 1 ]]; then
+      echo -e "INFO: gnu config already downloaded but re-download requested\n" 1>>"${BASEDIR}"/build.log 2>&1
+      remove_path -rf "${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+    else
+      echo -e "INFO: gnu config already downloaded. Source folder found at ${LIB_LOCAL_PATH}\n" 1>>"${BASEDIR}"/build.log 2>&1
+      return
+    fi
+  fi
+
+  DOWNLOAD_RC=$(clone_git_repository_with_tag "${SOURCE_REPO_URL}" "${SOURCE_ID}" "${LIB_LOCAL_PATH}")
+
+  if [[ ${DOWNLOAD_RC} -ne 0 ]]; then
+    echo -e "INFO: Downloading gnu config failed. Can not get source from ${SOURCE_REPO_URL}\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo -e "failed\n"
+    exit 1
+  else
+    echo -e "\nINFO: gnu config downloaded successfully\n" 1>>"${BASEDIR}"/build.log 2>&1
+  fi
+}
+
+is_gnu_config_files_up_to_date() {
+  echo $(grep aarch64-apple-darwin config.guess | wc -l 2>>"${BASEDIR}"/build.log)
+}
+
 get_cpu_count() {
   if [ "$(uname)" == "Darwin" ]; then
     echo $(sysctl -n hw.logicalcpu)
   else
     echo $cpu_count
   fi
+}
+
+#
+# 1. <lib name>
+#
+library_is_downloaded() {
+  local LOCAL_PATH
+  local LIB_NAME=$1
+  local FILE_COUNT
+  local REDOWNLOAD_VARIABLE
+  REDOWNLOAD_VARIABLE=$(echo "REDOWNLOAD_$1" | sed "s/\-/\_/g")
+
+  LOCAL_PATH=${BASEDIR}/prebuilt/src/${LIB_NAME}
+
+  echo -e "DEBUG: Checking if ${LIB_NAME} is already downloaded at ${LOCAL_PATH}\n" 1>>"${BASEDIR}"/build.log 2>&1
+
+  if [ ! -d "${LOCAL_PATH}" ]; then
+    echo -e "INFO: ${LOCAL_PATH} directory not found\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 1
+    return
+  fi
+
+  FILE_COUNT=$(ls -l "${LOCAL_PATH}" | wc -l)
+
+  if [[ ${FILE_COUNT} -eq 0 ]]; then
+    echo -e "INFO: No files found under ${LOCAL_PATH}\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 1
+    return
+  fi
+
+  if [[ ${REDOWNLOAD_VARIABLE} -eq 1 ]]; then
+    echo -e "INFO: ${LIB_NAME} library already downloaded but re-download requested\n" 1>>"${BASEDIR}"/build.log 2>&1
+    remove_path -rf "${LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 1
+  else
+    echo -e "INFO: ${LIB_NAME} library already downloaded\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+  fi
+}
+
+library_is_installed() {
+  local INSTALL_PATH=$1
+  local LIB_NAME=$2
+  local HEADER_COUNT
+  local LIB_COUNT
+
+  echo -e "DEBUG: Checking if ${LIB_NAME} is already built and installed at ${INSTALL_PATH}/${LIB_NAME}\n" 1>>"${BASEDIR}"/build.log 2>&1
+
+  if [ ! -d "${INSTALL_PATH}"/"${LIB_NAME}" ]; then
+    echo -e "INFO: ${INSTALL_PATH}/${LIB_NAME} directory not found\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+    return
+  fi
+
+  if [ ! -d "${INSTALL_PATH}/${LIB_NAME}/lib" ] && [ ! -d "${INSTALL_PATH}/${LIB_NAME}/lib64" ]; then
+    echo -e "INFO: ${INSTALL_PATH}/${LIB_NAME}/lib{lib64} directory not found\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+    return
+  fi
+
+  if [ ! -d "${INSTALL_PATH}"/"${LIB_NAME}"/include ]; then
+    echo -e "INFO: ${INSTALL_PATH}/${LIB_NAME}/include directory not found\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+    return
+  fi
+
+  HEADER_COUNT=$(ls -l "${INSTALL_PATH}"/"${LIB_NAME}"/include | wc -l)
+  LIB_COUNT=$(ls -l ${INSTALL_PATH}/${LIB_NAME}/lib* | wc -l)
+
+  if [[ ${HEADER_COUNT} -eq 0 ]]; then
+    echo -e "INFO: No headers found under ${INSTALL_PATH}/${LIB_NAME}/include\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+    return
+  fi
+
+  if [[ ${LIB_COUNT} -eq 0 ]]; then
+    echo -e "INFO: No libraries found under ${INSTALL_PATH}/${LIB_NAME}/lib{lib64}\n" 1>>"${BASEDIR}"/build.log 2>&1
+    echo 0
+    return
+  fi
+
+  echo -e "INFO: ${LIB_NAME} library is already built and installed\n" 1>>"${BASEDIR}"/build.log 2>&1
+  echo 1
+}
+
+prepare_inline_sed() {
+  if [ "$(uname)" == "Darwin" ]; then
+    export SED_INLINE="sed -i .tmp"
+  else
+    export SED_INLINE="sed -i"
+  fi
+}
+
+to_capital_case() {
+  echo "$(echo ${1:0:1} | tr '[a-z]' '[A-Z]')${1:1}"
 }
 
 #
@@ -399,6 +748,45 @@ overwrite_file() {
   copy_path "$2" "$2.bak" # backup
   remove_path -f "$2" 2>>"${BASEDIR}"/build.log
   copy_path "$1" "$2" 2>>"${BASEDIR}"/build.log
+}
+
+#
+# 1. destination file
+#
+create_file() {
+  remove_path -f "$1"
+  echo "" > "$1" 1>>"${BASEDIR}"/build.log 2>&1
+}
+
+compare_versions() {
+  VERSION_PARTS_1=($(echo $1 | tr "." " "))
+  VERSION_PARTS_2=($(echo $2 | tr "." " "))
+
+  for((i=0;(i<${#VERSION_PARTS_1[@]})&&(i<${#VERSION_PARTS_2[@]});i++))
+  do
+
+    local CURRENT_PART_1=${VERSION_PARTS_1[$i]}
+    local CURRENT_PART_2=${VERSION_PARTS_2[$i]}
+
+    if [[ -z ${CURRENT_PART_1} ]]; then
+      CURRENT_PART_1=0
+    fi
+
+    if [[ -z ${CURRENT_PART_2} ]]; then
+      CURRENT_PART_2=0
+    fi
+
+    if [[ CURRENT_PART_1 -gt CURRENT_PART_2 ]]; then
+      echo "1"
+      return;
+    elif [[ CURRENT_PART_1 -lt CURRENT_PART_2 ]]; then
+      echo "-1"
+      return;
+    fi
+  done
+
+  echo "0"
+  return;
 }
 
 #
@@ -1080,7 +1468,6 @@ build_dlfcn() {
     do_configure "--prefix=$mingw_w64_x86_64_prefix --cross-prefix=$cross_prefix" # rejects some normal cross compile options so custom here
     do_make_and_make_install
     gen_ld_script libdl.a dl_s -lpsapi # dlfcn-win32's 'README.md': "If you are linking to the static 'dl.lib' or 'libdl.a', then you would need to explicitly add 'psapi.lib' or '-lpsapi' to your linking command, depending on if MinGW is used."
-    pkg_cfg="/home/devcontainers/ffmpeg-kit-builders/prebuilt/windows-x86_64/cross_compilers/mingw-w64-x86_64/x86_64-w64-mingw32/lib/pkgconfig"
   change_dir ..
 }
 
