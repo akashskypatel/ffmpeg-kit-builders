@@ -137,16 +137,21 @@ else
     if [[ $build_dependencies_only == "y" || $build_dependencies_only == "yes" || $build_dependencies_only == "1" ]]; then
       build_ffmpeg_dependencies      
     elif [[ $build_ffmpeg_only == "y"|| $build_ffmpeg_only == "yes" || $build_ffmpeg_only == "1" ]]; then
-      #build_ffmpeg_lib
       download_ffmpeg
+      configure_ffmpeg
+      install_ffmpeg
     elif [[ $build_ffmpeg_kit_only == "y" || $build_ffmpeg_kit_only == "yes" || $build_ffmpeg_kit_only == "1" ]]; then
-      build_ffmpeg_kit
+      download_ffmpeg
+      configure_ffmpeg
+      install_ffmpeg
     else
       build_ffmpeg_dependencies
+      download_ffmpeg
+      configure_ffmpeg
+      install_ffmpeg
       # BUILD FFMPEG-KIT BUNDLE
       echo -e -n "\nCreating the bundle under prebuilt: "
 
-      build_ffmpeg_lib
       build_ffmpeg_kit
 
       echo -e "\nINFO: Completed build for ${ARCH} at $(date)\n" 1>>$LOG_FILE 2>&1

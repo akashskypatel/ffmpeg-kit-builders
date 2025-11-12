@@ -88,6 +88,7 @@ while true; do
     --build-dependencies-only=*) export build_dependencies_only="${1#*=}"; shift ;;
     --build-ffmpeg-only=*) export build_ffmpeg_only="${1#*=}"; shift ;;
     --build-ffmpeg-kit-only=*) export build_ffmpeg_kit_only="${1#*=}"; shift ;;
+    --flavor=*) export compiler_flavors="${1#*=}"; shift ;;
     -- ) shift; break ;;
     -* ) echo "Error, unknown option: '$1'."; exit 1 ;;
     * ) break ;;

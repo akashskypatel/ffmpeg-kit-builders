@@ -1,0 +1,716 @@
+[
+  {
+    "lib_name": "dlfcn-win32",
+    "version": "",
+    "repo_url": "https://github.com/dlfcn-win32/dlfcn-win32.git",
+    "src_dir": "dlfcn-win32_git"
+  },
+  {
+    "lib_name": "bzip2",
+    "version": "1.0.8",
+    "repo_url": "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
+    "src_dir": "bzip2-1.0.8"
+  },
+  {
+    "lib_name": "liblzma",
+    "version": "5.8.1",
+    "repo_url": "https://sourceforge.net/projects/lzmautils/files/xz-5.8.1.tar.xz",
+    "src_dir": "xz-5.8.1"
+  },
+  {
+    "lib_name": "zlib",
+    "version": "",
+    "repo_url": "https://github.com/madler/zlib.git",
+    "src_dir": "zlib_git"
+  },
+  {
+    "lib_name": "libiconv",
+    "version": "1.18",
+    "repo_url": "https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.18.tar.gz",
+    "src_dir": "libiconv-1.18"
+  },
+  {
+    "lib_name": "brotli",
+    "version": "v1.0.9",
+    "repo_url": "https://github.com/google/brotli.git",
+    "src_dir": "brotli_git"
+  },
+  {
+    "lib_name": "zstd",
+    "version": "v1.5.7",
+    "repo_url": "https://github.com/facebook/zstd.git",
+    "src_dir": "zstd_git"
+  },
+  {
+    "lib_name": "SDL2",
+    "version": "2.32.10",
+    "repo_url": "https://www.libsdl.org/release/SDL2-2.32.10.tar.gz",
+    "src_dir": "SDL2-2.32.10"
+  },
+  {
+    "lib_name": "AMF",
+    "version": "",
+    "repo_url": "https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git",
+    "src_dir": "amf_headers_git"
+  },
+  {
+    "lib_name": "nv-codec-headers",
+    "version": "",
+    "repo_url": "https://github.com/FFmpeg/nv-codec-headers.git",
+    "src_dir": "nv-codec-headers_git"
+  },
+  {
+    "lib_name": "mfx_dispatch",
+    "version": "2cd279f",
+    "repo_url": "https://github.com/lu-zero/mfx_dispatch.git",
+    "src_dir": "mfx_dispatch_git"
+  },
+  {
+    "lib_name": "libvpl",
+    "version": "",
+    "repo_url": "https://github.com/intel/libvpl.git",
+    "src_dir": "libvpl_git"
+  },
+  {
+    "lib_name": "giflib",
+    "version": "5.1.4",
+    "repo_url": "https://sourceforge.net/projects/giflib/files/giflib-5.1.4.tar.gz",
+    "src_dir": "giflib-5.1.4"
+  },
+  {
+    "lib_name": "leptonica",
+    "version": "",
+    "repo_url": "https://github.com/DanBloomberg/leptonica.git",
+    "src_dir": "leptonica_git"
+  },
+  {
+    "lib_name": "tiff",
+    "version": "4.7.1",
+    "repo_url": "http://download.osgeo.org/libtiff/tiff-4.7.1.tar.gz",
+    "src_dir": "tiff-4.7.1"
+  },
+  {
+    "lib_name": "Tensorflow",
+    "version": "2.18.1",
+    "repo_url": "https://storage.googleapis.com/tensorflow/versions/2.18.1/libtensorflow-cpu-windows-x86_64.zip",
+    "src_dir": "Tensorflow"
+  },
+  {
+    "lib_name": "libffi",
+    "version": "3.5.2",
+    "repo_url": "https://github.com/libffi/libffi/releases/download/v3.5.2/libffi-3.5.2.tar.gz",
+    "src_dir": "libffi-3.5.2"
+  },
+  {
+    "lib_name": "gettext",
+    "version": "0.26",
+    "repo_url": "https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz",
+    "src_dir": "gettext-0.26"
+  },
+  {
+    "lib_name": "glib",
+    "version": "",
+    "repo_url": "https://github.com/GNOME/glib.git",
+    "src_dir": "glib_git"
+  },
+  {
+    "lib_name": "lensfun",
+    "version": "",
+    "repo_url": "https://github.com/lensfun/lensfun.git",
+    "src_dir": "lensfun_git"
+  },
+  {
+    "lib_name": "lz4",
+    "version": "1.10.0",
+    "repo_url": "https://github.com/lz4/lz4/releases/download/v1.10.0/lz4-1.10.0.tar.gz",
+    "src_dir": "lz4-1.10.0"
+  },
+  {
+    "lib_name": "libarchive",
+    "version": "3.8.1",
+    "repo_url": "https://github.com/libarchive/libarchive/releases/download/v3.8.1/libarchive-3.8.1.tar.gz",
+    "src_dir": "libarchive-3.8.1"
+  },
+  {
+    "lib_name": "flac",
+    "version": "",
+    "repo_url": "https://github.com/xiph/flac.git",
+    "src_dir": "flac_git"
+  },
+  {
+    "lib_name": "openmpt",
+    "version": "",
+    "repo_url": "https://github.com/OpenMPT/openmpt.git",
+    "src_dir": "openmpt_git"
+  },
+  {
+    "lib_name": "libpsl",
+    "version": "0.21.5",
+    "repo_url": "https://github.com/rockdaboot/libpsl/releases/download/0.21.5/libpsl-0.21.5.tar.gz",
+    "src_dir": "libpsl-0.21.5"
+  },
+  {
+    "lib_name": "nghttp2",
+    "version": "1.67.1",
+    "repo_url": "https://github.com/nghttp2/nghttp2/releases/download/v1.67.1/nghttp2-1.67.1.tar.gz",
+    "src_dir": "nghttp2-1.67.1"
+  },
+  {
+    "lib_name": "libssh2",
+    "version": "1.11.1",
+    "repo_url": "https://github.com/libssh2/libssh2/releases/download/libssh2-1.11.1/libssh2-1.11.1.tar.gz",
+    "src_dir": "libssh2"
+  },
+  {
+    "lib_name": "curl",
+    "version": "8_16_0",
+    "repo_url": "https://github.com/curl/curl.git",
+    "src_dir": "curl_git"
+  },
+  {
+    "lib_name": "tesseract",
+    "version": "",
+    "repo_url": "https://github.com/tesseract-ocr/tesseract.git",
+    "src_dir": "tesseract_git"
+  },
+  {
+    "lib_name": "zimg",
+    "version": "",
+    "repo_url": "https://github.com/sekrit-twc/zimg.git",
+    "src_dir": "zimg_git"
+  },
+  {
+    "lib_name": "openjpeg",
+    "version": "",
+    "repo_url": "https://github.com/uclouvain/openjpeg.git",
+    "src_dir": "openjpeg_git"
+  },
+  {
+    "lib_name": "glew",
+    "version": "2.2.0",
+    "repo_url": "https://sourceforge.net/projects/glew/files/glew/2.2.0/glew-2.2.0.tgz",
+    "src_dir": "glew-2.2.0/build"
+  },
+  {
+    "lib_name": "glfw",
+    "version": "3.4",
+    "repo_url": "https://github.com/glfw/glfw/releases/download/3.4/glfw-3.4.zip",
+    "src_dir": "glfw-3.4"
+  },
+  {
+    "lib_name": "libpng",
+    "version": "",
+    "repo_url": "https://github.com/glennrp/libpng.git",
+    "src_dir": "libpng_git"
+  },
+  {
+    "lib_name": "libwebp",
+    "version": "",
+    "repo_url": "https://chromium.googlesource.com/webm/libwebp.git",
+    "src_dir": "libwebp_git"
+  },
+  {
+    "lib_name": "harfbuzz",
+    "version": "10.4.0",
+    "repo_url": "https://github.com/harfbuzz/harfbuzz.git",
+    "src_dir": "harfbuzz_git"
+  },
+  {
+    "lib_name": "freetype",
+    "version": "",
+    "repo_url": "https://github.com/freetype/freetype.git",
+    "src_dir": "freetype_git"
+  },
+  {
+    "lib_name": "libxml2",
+    "version": "",
+    "repo_url": "https://gitlab.gnome.org/GNOME/libxml2.git",
+    "src_dir": "libxml2_git"
+  },
+  {
+    "lib_name": "vmaf",
+    "version": "",
+    "repo_url": "https://github.com/Netflix/vmaf.git",
+    "src_dir": "vmaf_git/libvmaf"
+  },
+  {
+    "lib_name": "fontconfig",
+    "version": "",
+    "repo_url": "https://gitlab.freedesktop.org/fontconfig/fontconfig.git",
+    "src_dir": "fontconfig_git"
+  },
+  {
+    "lib_name": "gmp",
+    "version": "6.3.0",
+    "repo_url": "https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz",
+    "src_dir": "gmp-6.3.0"
+  },
+  {
+    "lib_name": "librtmfp",
+    "version": "",
+    "repo_url": "https://github.com/MonaSolutions/librtmfp.git",
+    "src_dir": "librtmfp_git"
+  },
+  {
+    "lib_name": "nettle",
+    "version": "3.10.2",
+    "repo_url": "https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz",
+    "src_dir": "nettle-3.10.2"
+  },
+  {
+    "lib_name": "libunistring",
+    "version": "1.4.1",
+    "repo_url": "https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz",
+    "src_dir": "libunistring-1.4.1"
+  },
+  {
+    "lib_name": "libidn2",
+    "version": "2.3.8",
+    "repo_url": "https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz",
+    "src_dir": "libidn2-2.3.8"
+  },
+  {
+    "lib_name": "gnutls",
+    "version": "3.8.9",
+    "repo_url": "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.9.tar.xz",
+    "src_dir": "gnutls-3.8.9"
+  },
+  {
+    "lib_name": "openssl",
+    "version": "1.0.2p",
+    "repo_url": "https://www.openssl.org/source/openssl-1.0.2p.tar.gz",
+    "src_dir": "openssl-1.0.2p"
+  },
+  {
+    "lib_name": "openssl-1.1.1",
+    "version": "1.1.1",
+    "repo_url": "https://www.openssl.org/source/openssl-1.1.1.tar.gz",
+    "src_dir": "openssl-1.1.1"
+  },
+  {
+    "lib_name": "ogg",
+    "version": "",
+    "repo_url": "https://github.com/xiph/ogg.git",
+    "src_dir": "ogg_git"
+  },
+  {
+    "lib_name": "vorbis",
+    "version": "",
+    "repo_url": "https://github.com/xiph/vorbis.git",
+    "src_dir": "vorbis_git"
+  },
+  {
+    "lib_name": "opus",
+    "version": "",
+    "repo_url": "https://github.com/xiph/opus.git",
+    "src_dir": "opus_git"
+  },
+  {
+    "lib_name": "speexdsp",
+    "version": "",
+    "repo_url": "https://github.com/xiph/speexdsp.git",
+    "src_dir": "speexdsp_git"
+  },
+  {
+    "lib_name": "speex",
+    "version": "",
+    "repo_url": "https://github.com/xiph/speex.git",
+    "src_dir": "speex_git"
+  },
+  {
+    "lib_name": "theora",
+    "version": "",
+    "repo_url": "https://github.com/xiph/theora.git",
+    "src_dir": "theora_git"
+  },
+  {
+    "lib_name": "libsndfile",
+    "version": "",
+    "repo_url": "https://github.com/libsndfile/libsndfile.git",
+    "src_dir": "libsndfile_git"
+  },
+  {
+    "lib_name": "mpg123",
+    "version": "r5008",
+    "repo_url": "svn://scm.orgis.org/mpg123/trunk",
+    "src_dir": "mpg123_svn"
+  },
+  {
+    "lib_name": "lame",
+    "version": "r6525",
+    "repo_url": "https://svn.code.sf.net/p/lame/svn/trunk/lame",
+    "src_dir": "lame_svn"
+  },
+  {
+    "lib_name": "twolame",
+    "version": "",
+    "repo_url": "https://github.com/njh/twolame.git",
+    "src_dir": "twolame_git"
+  },
+  {
+    "lib_name": "opencore",
+    "version": "0.1.6",
+    "repo_url": "https://sourceforge.net/projects/opencore-amr/files/opencore-amr/opencore-amr-0.1.6.tar.gz",
+    "src_dir": "opencore-amr-0.1.6"
+  },
+  {
+    "lib_name": "vo-amrwbenc",
+    "version": "0.1.3",
+    "repo_url": "https://sourceforge.net/projects/opencore-amr/files/vo-amrwbenc/vo-amrwbenc-0.1.3.tar.gz",
+    "src_dir": "vo-amrwbenc-0.1.3"
+  },
+  {
+    "lib_name": "libilbc",
+    "version": "",
+    "repo_url": "https://github.com/TimothyGu/libilbc.git",
+    "src_dir": "libilbc_git"
+  },
+  {
+    "lib_name": "libmodplug",
+    "version": "",
+    "repo_url": "https://github.com/Konstanty/libmodplug.git",
+    "src_dir": "libmodplug_git"
+  },
+  {
+    "lib_name": "game-music-emu",
+    "version": "0.6.3",
+    "repo_url": "https://bitbucket.org/mpyne/game-music-emu/downloads/game-music-emu-0.6.3.tar.xz",
+    "src_dir": "game-music-emu-0.6.3"
+  },
+  {
+    "lib_name": "opencv",
+    "version": "3.4.5",
+    "repo_url": "https://github.com/opencv/opencv/archive/3.4.5.zip",
+    "src_dir": "opencv-3.4.5/build"
+  },
+  {
+    "lib_name": "transform360",
+    "version": "",
+    "repo_url": "https://github.com/facebook/transform360.git",
+    "src_dir": "transform360_git/Transform360"
+  },
+  {
+    "lib_name": "libbluray",
+    "version": "",
+    "repo_url": "https://code.videolan.org/videolan/libbluray.git",
+    "src_dir": "libbluray_git"
+  },
+  {
+    "lib_name": "libbs2b",
+    "version": "3.1.0",
+    "repo_url": "https://downloads.sourceforge.net/project/bs2b/libbs2b/3.1.0/libbs2b-3.1.0.tar.gz",
+    "src_dir": "libbs2b-3.1.0"
+  },
+  {
+    "lib_name": "soxr",
+    "version": "",
+    "repo_url": "https://github.com/chirlu/soxr.git",
+    "src_dir": "soxr_git"
+  },
+  {
+    "lib_name": "flite",
+    "version": "",
+    "repo_url": "https://github.com/festvox/flite.git",
+    "src_dir": "flite_git"
+  },
+  {
+    "lib_name": "snappy",
+    "version": "",
+    "repo_url": "https://github.com/google/snappy.git",
+    "src_dir": "snappy_git"
+  },
+  {
+    "lib_name": "vamp-plugin-sdk",
+    "version": "2.10",
+    "repo_url": "https://github.com/vamp-plugins/vamp-plugin-sdk/archive/refs/tags/vamp-plugin-sdk-v2.10.zip",
+    "src_dir": "vamp-plugin-sdk-vamp-plugin-sdk-v2.10"
+  },
+  {
+    "lib_name": "fftw",
+    "version": "3.3.10",
+    "repo_url": "http://fftw.org/fftw-3.3.10.tar.gz",
+    "src_dir": "fftw-3.3.10"
+  },
+  {
+    "lib_name": "libsamplerate",
+    "version": "",
+    "repo_url": "https://github.com/erikd/libsamplerate.git",
+    "src_dir": "libsamplerate_git"
+  },
+  {
+    "lib_name": "rubberband",
+    "version": "18c06ab8c431854056407c467f4755f761e36a8e",
+    "repo_url": "https://github.com/breakfastquay/rubberband.git",
+    "src_dir": "rubberband_git"
+  },
+  {
+    "lib_name": "frei0r",
+    "version": "2.3.3",
+    "repo_url": "https://github.com/dyne/frei0r/archive/refs/tags/v2.3.3.tar.gz",
+    "src_dir": "frei0r-2.3.3"
+  },
+  {
+    "lib_name": "SVT-HEVC",
+    "version": "",
+    "repo_url": "https://github.com/OpenVisualCloud/SVT-HEVC.git",
+    "src_dir": "SVT-HEVC_git/release"
+  },
+  {
+    "lib_name": "SVT-VP9",
+    "version": "",
+    "repo_url": "https://github.com/OpenVisualCloud/SVT-VP9.git",
+    "src_dir": "SVT-VP9_git/Build"
+  },
+  {
+    "lib_name": "cpuinfo",
+    "version": "",
+    "repo_url": "https://github.com/pytorch/cpuinfo.git",
+    "src_dir": "cpuinfo_git"
+  },
+  {
+    "lib_name": "SVT-AV1",
+    "version": "",
+    "repo_url": "https://gitlab.com/AOMediaCodec/SVT-AV1.git",
+    "src_dir": "SVT-AV1_git"
+  },
+  {
+    "lib_name": "vid.stab",
+    "version": "",
+    "repo_url": "https://github.com/georgmartius/vid.stab.git",
+    "src_dir": "vid.stab_git"
+  },
+  {
+    "lib_name": "libmysofa",
+    "version": "",
+    "repo_url": "https://github.com/hoene/libmysofa.git",
+    "src_dir": "libmysofa_git"
+  },
+  {
+    "lib_name": "libcaca",
+    "version": "813baea7a7bc28986e474541dd1080898fac14d7",
+    "repo_url": "https://github.com/cacalabs/libcaca.git",
+    "src_dir": "libcaca_git"
+  },
+  {
+    "lib_name": "decklink-headers",
+    "version": "47d84f8d272ca6872b5440eae57609e36014f3b6",
+    "repo_url": "https://gitlab.com/m-ab-s/decklink-headers.git",
+    "src_dir": "decklink-headers_git"
+  },
+  {
+    "lib_name": "zvbi",
+    "version": "",
+    "repo_url": "https://github.com/zapping-vbi/zvbi.git",
+    "src_dir": "zvbi_git"
+  },
+  {
+    "lib_name": "fribidi",
+    "version": "1.0.16",
+    "repo_url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz",
+    "src_dir": "fribidi-1.0.16"
+  },
+  {
+    "lib_name": "srt",
+    "version": "1.5.4",
+    "repo_url": "https://github.com/Haivision/srt/archive/v1.5.4.tar.gz",
+    "src_dir": "srt-1.5.4"
+  },
+  {
+    "lib_name": "libass",
+    "version": "",
+    "repo_url": "https://github.com/libass/libass.git",
+    "src_dir": "libass_git"
+  },
+  {
+    "lib_name": "Vulkan-Headers",
+    "version": "v1.4.326",
+    "repo_url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+    "src_dir": "Vulkan-Headers_git"
+  },
+  {
+    "lib_name": "Vulkan-Shim-Loader",
+    "version": "9657ca8e395ef16c79b57c8bd3f4c1aebb319137",
+    "repo_url": "https://github.com/BtbN/Vulkan-Shim-Loader.git",
+    "src_dir": "Vulkan-Shim-Loader.git"
+  },
+  {
+    "lib_name": "libunwind",
+    "version": "",
+    "repo_url": "https://github.com/libunwind/libunwind.git",
+    "src_dir": "libunwind_git"
+  },
+  {
+    "lib_name": "xxHash",
+    "version": "",
+    "repo_url": "https://github.com/Cyan4973/xxHash.git",
+    "src_dir": "xxHash_git"
+  },
+  {
+    "lib_name": "spirv-cross",
+    "version": "b26ac3fa8bcfe76c361b56e3284b5276b23453ce",
+    "repo_url": "https://github.com/KhronosGroup/SPIRV-Cross.git",
+    "src_dir": "SPIRV-Cross_git"
+  },
+  {
+    "lib_name": "dovi_tool",
+    "version": "",
+    "repo_url": "https://github.com/quietvoid/dovi_tool.git",
+    "src_dir": "dovi_tool_git"
+  },
+  {
+    "lib_name": "shaderc",
+    "version": "3a44d5d7850da3601aa43d523a3d228f045fb43d",
+    "repo_url": "https://github.com/google/shaderc.git",
+    "src_dir": "shaderc_git"
+  },
+  {
+    "lib_name": "lcms",
+    "version": "",
+    "repo_url": "https://github.com/ImageMagick/lcms.git",
+    "src_dir": "lcms_git"
+  },
+  {
+    "lib_name": "libplacebo",
+    "version": "515da9548ad734d923c7d0988398053f87b454d5",
+    "repo_url": "https://code.videolan.org/videolan/libplacebo.git",
+    "src_dir": "libplacebo_git"
+  },
+  {
+    "lib_name": "libaribb24",
+    "version": "",
+    "repo_url": "https://github.com/nkoriyama/aribb24",
+    "src_dir": "aribb24_git"
+  },
+  {
+    "lib_name": "libaribcaption",
+    "version": "",
+    "repo_url": "https://github.com/xqq/libaribcaption",
+    "src_dir": "libaribcaption/build"
+  },
+  {
+    "lib_name": "xavs",
+    "version": "",
+    "repo_url": "https://github.com/Distrotech/xavs.git",
+    "src_dir": "xavs_git"
+  },
+  {
+    "lib_name": "xavs2",
+    "version": "",
+    "repo_url": "https://github.com/pkuvcl/xavs2.git",
+    "src_dir": "xavs2_git/build/linux"
+  },
+  {
+    "lib_name": "davs2",
+    "version": "",
+    "repo_url": "https://github.com/pkuvcl/davs2.git",
+    "src_dir": "davs2_git/build/linux"
+  },
+  {
+    "lib_name": "xvidcore",
+    "version": "1.3.7",
+    "repo_url": "https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz",
+    "src_dir": "xvidcore/build/generic"
+  },
+  {
+    "lib_name": "libvpx",
+    "version": "",
+    "repo_url": "https://chromium.googlesource.com/webm/libvpx.git",
+    "src_dir": "libvpx_git"
+  },
+  {
+    "lib_name": "libaom",
+    "version": "",
+    "repo_url": "https://aomedia.googlesource.com/aom",
+    "src_dir": "aom_git"
+  },
+  {
+    "lib_name": "dav1d",
+    "version": "",
+    "repo_url": "https://code.videolan.org/videolan/dav1d.git",
+    "src_dir": "libdav1d"
+  },
+  {
+    "lib_name": "avisynth",
+    "version": "",
+    "repo_url": "https://github.com/AviSynth/AviSynthPlus.git",
+    "src_dir": "avisynth_git/avisynth-build"
+  },
+  {
+    "lib_name": "libvvenc",
+    "version": "",
+    "repo_url": "https://github.com/fraunhoferhhi/vvenc.git",
+    "src_dir": "libvvenc_git"
+  },
+  {
+    "lib_name": "libvvdec",
+    "version": "",
+    "repo_url": "https://github.com/fraunhoferhhi/vvdec.git",
+    "src_dir": "libvvdec_git"
+  },
+  {
+    "lib_name": "libx265",
+    "version": "",
+    "repo_url": "https://bitbucket.org/multicoreware/x265_git",
+    "src_dir": "x265"
+  },
+  {
+    "lib_name": "libopenh264",
+    "version": "v2.6.0",
+    "repo_url": "https://github.com/cisco/openh264.git",
+    "src_dir": "openh264_git"
+  },
+  {
+    "lib_name": "libx264",
+    "version": "",
+    "repo_url": "https://code.videolan.org/videolan/x264.git",
+    "src_dir": "x264"
+  },
+  {
+    "lib_name": "lsmash",
+    "version": "",
+    "repo_url": "https://github.com/l-smash/l-smash.git",
+    "src_dir": "l-smash"
+  },
+  {
+    "lib_name": "libdvdread",
+    "version": "4.9.9",
+    "repo_url": "http://dvdnav.mplayerhq.hu/releases/libdvdread-4.9.9.tar.xz",
+    "src_dir": "libdvdread-4.9.9"
+  },
+  {
+    "lib_name": "libdvdnav",
+    "version": "4.2.1",
+    "repo_url": "http://dvdnav.mplayerhq.hu/releases/libdvdnav-4.2.1.tar.xz",
+    "src_dir": "libdvdnav-4.2.1"
+  },
+  {
+    "lib_name": "libdvdcss",
+    "version": "1.2.13",
+    "repo_url": "https://download.videolan.org/pub/videolan/libdvdcss/1.2.13/libdvdcss-1.2.13.tar.bz2",
+    "src_dir": "libdvdcss-1.2.13"
+  },
+  {
+    "lib_name": "libjpeg-turbo",
+    "version": "",
+    "repo_url": "https://github.com/libjpeg-turbo/libjpeg-turbo",
+    "src_dir": "libjpeg-turbo_git"
+  },
+  {
+    "lib_name": "libproxy",
+    "version": "0.4.11",
+    "repo_url": "https://libproxy.googlecode.com/files/libproxy-0.4.11.tar.gz",
+    "src_dir": "libproxy-0.4.11"
+  },
+  {
+    "lib_name": "lua",
+    "version": "5.3.3",
+    "repo_url": "https://www.lua.org/ftp/lua-5.3.3.tar.gz",
+    "src_dir": "lua-5.3.3"
+  },
+  {
+    "lib_name": "libhdhomerun",
+    "version": "20150826",
+    "repo_url": "https://download.silicondust.com/hdhomerun/libhdhomerun_20150826.tgz",
+    "src_dir": "libhdhomerun"
+  }
+]

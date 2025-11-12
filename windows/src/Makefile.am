@@ -1,5 +1,6 @@
 lib_LTLIBRARIES = libffmpegkit.la
 
+# Use the libraries discovered by pkg-config. This now includes ALL dependencies.
 libffmpegkit_la_LIBADD = @FFMPEG_LIBS@
 
 libffmpegkit_la_SOURCES = \
@@ -71,7 +72,12 @@ include_HEADERS = \
     fftools_sync_queue.h \
     fftools_thread_queue.h
 
-libffmpegkit_la_CFLAGS = $(CFLAGS)
-libffmpegkit_la_OBJCFLAGS = $(CFLAGS)
-libffmpegkit_la_CXXFLAGS = $(CXXFLAGS)
-libffmpegkit_la_LDFLAGS = -version-info @VERSION_INFO@
+AM_CPPFLAGS = @FFMPEG_CFLAGS@
+libffmpegkit_la_CXXFLAGS = $(AM_CXXFLAGS)
+libffmpegkit_la_CFLAGS = $(AM_CFLAGS)
+libffmpegkit_la_LDFLAGS = -version-info @VERSION_INFO@ -no-undefined
+
+# Add Windows specific system libraries using the conditional from configure.ac
+if AM_WINDOWS
+  libffmpegkit_la_LIBADD += -lws2_32 -lpsapi -lole32 -lshlwapi -lgdi32 -lbcrypt
+endif

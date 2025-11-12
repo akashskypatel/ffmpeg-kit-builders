@@ -14,6 +14,9 @@ AC_DEFINE_UNQUOTED(VERSION_OS, "$VERSION_OS", [os version])
 # Check host so we can infer target CPU (and assembly optimizations)
 AC_CANONICAL_HOST
 
++# Create a conditional for Windows-specific build steps
++AM_CONDITIONAL([AM_WINDOWS], [test "x$host_os" = xmingw32])
+
 # Check for processor characteristics
 AC_C_BIGENDIAN(AC_DEFINE([HIGHFIRST], [1], [big-endian machine]))
 
@@ -25,8 +28,11 @@ AX_CXX_COMPILE_STDCXX(11, noext)
 AM_PROG_AR
 CFLAGS="$cflags_bckup"
 
-FFMPEG_LIBS="-lavcodec -lavfilter -lavformat -lavutil -lswscale -lswresample"
-AC_SUBST(FFMPEG_LIBS)
+# Use pkg-config to find all necessary FFmpeg libraries and their dependencies
+# This is the most important change.
+PKG_PROG_PKG_CONFIG
+PKG_CHECK_MODULES([FFMPEG], [libavcodec libavfilter libavformat libavutil libswscale libswresample], [],
+  [AC_MSG_ERROR([Could not find FFmpeg libraries using pkg-config. Make sure they are installed and PKG_CONFIG_PATH is set correctly.])])
 
 # CURRENT INTERFACE:REVISION:AGE
 VERSION_INFO="11:0:6"
@@ -41,7 +47,13 @@ AC_CHECK_HEADERS([libavformat/avformat.h libavcodec/avcodec.h libavfilter/avfilt
 AC_CHECK_HEADERS([rapidjson/document.h], [], [
   AC_MSG_ERROR([unable to find rapidjson headers])
 ])
-AC_CHECK_HEADERS([fcntl.h limits.h stdint.h stdlib.h string.h sys/ioctl.h sys/time.h termios.h unistd.h])
+
+AC_CHECK_HEADERS([fcntl.h limits.h stdint.h stdlib.h string.h])
+
+# Conditionally check for POSIX headers only on non-Windows builds
+if test "x$host_os" != xmingw32; then
+  AC_CHECK_HEADERS([sys/ioctl.h sys/time.h termios.h unistd.h])
+fi
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE

@@ -122,7 +122,7 @@ remove_path()
     fi
 
     execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" \
-        sudo chown -R "$USER":"$USER" "$path"
+        sudo chown -R "$USER":"$USER" "$SRC_PATH"
 
     execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" \
         rm -fr "$path"

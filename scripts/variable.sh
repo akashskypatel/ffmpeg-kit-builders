@@ -251,6 +251,7 @@ export SCRIPTDIR="$BASEDIR/scripts"
 export WINPATCHDIR="$SCRIPTDIR/windows/patches"
 
 # variables with their defaults
+export BUILD_FORCE="0"
 export build_ffmpeg_static=n
 export build_ffmpeg_shared=y
 export build_dvbtee=n
@@ -279,12 +280,13 @@ export original_cppflags='-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3' # Needed for mi
 #else
 #  original_cflags='-mtune=generic -O2'
 #fi
-export ffmpeg_git_checkout_version="n8.0"
+export ffmpeg_git_checkout_version="release/8.0"
 export build_ismindex=n
-export enable_gpl=y
+export GPL_ENABLED=y
 export build_x264_with_libav=n # To build x264 with Libavformat.
 export ffmpeg_git_checkout="https://github.com/FFmpeg/FFmpeg.git"
 export ffmpeg_source_dir=
+export install_prefix=
 export build_svt_hevc=n
 export build_svt_vp9=n
 export build_dependencies_only=n
