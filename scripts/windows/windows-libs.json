@@ -712,5 +712,11 @@
     "version": "20150826",
     "repo_url": "https://download.silicondust.com/hdhomerun/libhdhomerun_20150826.tgz",
     "src_dir": "libhdhomerun"
+  },
+  {
+    "lib_name": "jsoncpp",
+    "version": "",
+    "repo_url": "https://github.com/open-source-parsers/jsoncpp",
+    "src_dir": "jsoncpp"
   }
 ]

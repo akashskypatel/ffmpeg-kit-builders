@@ -1,8 +1,8 @@
 lib_LTLIBRARIES = libffmpegkit.la
 
-# Use the libraries discovered by pkg-config. This now includes ALL dependencies.
 libffmpegkit_la_LIBADD = @FFMPEG_LIBS@
 
+# Base sources
 libffmpegkit_la_SOURCES = \
     AbstractSession.cpp \
     ArchDetect.cpp \
@@ -34,6 +34,7 @@ libffmpegkit_la_SOURCES = \
     fftools_opt_common.c \
     fftools_sync_queue.c \
     fftools_thread_queue.c
+
 
 include_HEADERS = \
     AbstractSession.h \
@@ -72,12 +73,19 @@ include_HEADERS = \
     fftools_sync_queue.h \
     fftools_thread_queue.h
 
-AM_CPPFLAGS = @FFMPEG_CFLAGS@
-libffmpegkit_la_CXXFLAGS = $(AM_CXXFLAGS)
-libffmpegkit_la_CFLAGS = $(AM_CFLAGS)
-libffmpegkit_la_LDFLAGS = -version-info @VERSION_INFO@ -no-undefined
+# Platform-specific flags
+if WINDOWS
+libffmpegkit_la_CFLAGS = $(CFLAGS) @WINDOWS_CFLAGS@ -DFFMPEG_KIT_WINDOWS
+libffmpegkit_la_CXXFLAGS = $(CXXFLAGS) @WINDOWS_CXXFLAGS@ -DFFMPEG_KIT_WINDOWS -std=c++11
 
-# Add Windows specific system libraries using the conditional from configure.ac
-if AM_WINDOWS
-  libffmpegkit_la_LIBADD += -lws2_32 -lpsapi -lole32 -lshlwapi -lgdi32 -lbcrypt
+# REMOVE -static-libgcc -static-libstdc++ for shared libraries!
+libffmpegkit_la_LDFLAGS = -no-undefined -version-info @VERSION_INFO@ \
+                          -Wl,--export-all-symbols -Wl,--enable-auto-import \
+                          -Wl,--allow-multiple-definition
+else
+libffmpegkit_la_CFLAGS = $(CFLAGS)
+libffmpegkit_la_CXXFLAGS = $(CXXFLAGS) -std=c++11
+libffmpegkit_la_LDFLAGS = -version-info @VERSION_INFO@
 endif
+
+libffmpegkit_la_OBJCFLAGS = $(libffmpegkit_la_CFLAGS)

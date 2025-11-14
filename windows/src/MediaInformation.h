@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Taner Sener
+ * Copyright (c) 2025 Akash Patel
  *
  * This file is part of FFmpegKit.
  *
@@ -22,6 +22,7 @@
 
 #include "Chapter.h"
 #include "StreamInformation.h"
+#include <json/value.h>
 #include <memory>
 #include <vector>
 
@@ -42,7 +43,7 @@ namespace ffmpegkit {
             static constexpr const char* KeyBitRate = "bit_rate";
             static constexpr const char* KeyTags = "tags";
 
-            MediaInformation(std::shared_ptr<rapidjson::Value> mediaInformationValue, std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::StreamInformation>>> streams, std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::Chapter>>> chapters);
+            MediaInformation(std::shared_ptr<Json::Value> mediaInformationValue, std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::StreamInformation>>> streams, std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::Chapter>>> chapters);
 
             /**
              * Returns file name.
@@ -98,7 +99,7 @@ namespace ffmpegkit {
              *
              * @return tags Value
              */
-            std::shared_ptr<rapidjson::Value> getTags();
+            std::shared_ptr<Json::Value> getTags();
 
             /**
              * Returns all streams.
@@ -133,7 +134,7 @@ namespace ffmpegkit {
              *
              * @return property in a Value or nullptr if the key is not found
             */
-            std::shared_ptr<rapidjson::Value> getProperty(const char* key);
+            std::shared_ptr<Json::Value> getProperty(const char* key);
 
             /**
              * Returns the format property associated with the key.
@@ -154,24 +155,24 @@ namespace ffmpegkit {
              *
              * @return format property in a Value or nullptr if the key is not found
             */
-            std::shared_ptr<rapidjson::Value> getFormatProperty(const char* key);
+            std::shared_ptr<Json::Value> getFormatProperty(const char* key);
 
             /**
              * Returns all format properties defined.
              *
              * @return all format properties in a Value or nullptr if no format properties are defined
             */
-            std::shared_ptr<rapidjson::Value> getFormatProperties();
+            std::shared_ptr<Json::Value> getFormatProperties();
 
             /**
              * Returns all properties defined.
              *
              * @return all properties in a Value or nullptr if no properties are defined
             */
-            std::shared_ptr<rapidjson::Value> getAllProperties();
+            std::shared_ptr<Json::Value> getAllProperties();
 
         private:
-            std::shared_ptr<rapidjson::Value> _mediaInformationValue;
+            std::shared_ptr<Json::Value> _mediaInformationValue;
             std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::StreamInformation>>> _streams;
             std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::Chapter>>> _chapters;
     };

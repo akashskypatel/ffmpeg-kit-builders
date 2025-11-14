@@ -258,7 +258,7 @@ typedef enum
   SECTION_ID_SUBTITLE,
 } SectionID;
 
-__thread static struct section sections[] = {
+static __thread struct section sections[] = {
     [SECTION_ID_CHAPTERS] = {SECTION_ID_CHAPTERS, "chapters", SECTION_FLAG_IS_ARRAY, {SECTION_ID_CHAPTER, -1}},
     [SECTION_ID_CHAPTER] = {SECTION_ID_CHAPTER, "chapter", 0, {SECTION_ID_CHAPTER_TAGS, -1}},
     [SECTION_ID_CHAPTER_TAGS] = {SECTION_ID_CHAPTER_TAGS, "tags", SECTION_FLAG_HAS_VARIABLE_FIELDS, {-1}, .element_name = "tag", .unique_name = "chapter_tags"},

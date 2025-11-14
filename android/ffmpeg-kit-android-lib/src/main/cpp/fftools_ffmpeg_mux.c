@@ -1,6 +1,6 @@
 /*
  * This file is part of FFmpeg.
- * Copyright (c) 2022 Taner Sener
+ * Copyright (c) 2025 Akash Patel
  * Copyright (c) 2023 ARTHENICA LTD
  *
  * FFmpeg is free software; you can redistribute it and/or

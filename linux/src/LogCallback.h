@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Taner Sener
+ * Copyright (c) 2025 Akash Patel
  *
  * This file is part of FFmpegKit.
  *
