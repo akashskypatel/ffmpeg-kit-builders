@@ -502,10 +502,11 @@ include_HEADERS = \
 @WINDOWS_TRUE@libffmpegkit_la_CFLAGS = $(CFLAGS) @WINDOWS_CFLAGS@ -DFFMPEG_KIT_WINDOWS
 @WINDOWS_FALSE@libffmpegkit_la_CXXFLAGS = $(CXXFLAGS) -std=c++11
 @WINDOWS_TRUE@libffmpegkit_la_CXXFLAGS = $(CXXFLAGS) @WINDOWS_CXXFLAGS@ -DFFMPEG_KIT_WINDOWS -std=c++11
-@WINDOWS_FALSE@libffmpegkit_la_LDFLAGS = -version-info @VERSION_INFO@
+# Use -avoid-version for Linux as well to remove .so version numbers
+@WINDOWS_FALSE@libffmpegkit_la_LDFLAGS = -avoid-version
 
-# REMOVE -static-libgcc -static-libstdc++ for shared libraries!
-@WINDOWS_TRUE@libffmpegkit_la_LDFLAGS = -no-undefined -version-info @VERSION_INFO@ \
+# Use -avoid-version to remove version numbers from DLL name
+@WINDOWS_TRUE@libffmpegkit_la_LDFLAGS = -no-undefined -avoid-version \
 @WINDOWS_TRUE@                          -Wl,--export-all-symbols -Wl,--enable-auto-import \
 @WINDOWS_TRUE@                          -Wl,--allow-multiple-definition
 

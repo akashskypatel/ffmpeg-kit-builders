@@ -326,8 +326,6 @@ __thread struct AVHashContext *hash;
 
 __thread int main_ffprobe_return_code = 0;
 extern __thread int longjmp_value;
-extern const AVPacketSideData *av_stream_get_side_data(const AVStream *stream, enum AVPacketSideDataType type, int *size);
-extern int av_stream_get_nb_side_data(const AVStream *stream);
 static const struct
 {
   double bin_val;
@@ -3600,21 +3598,26 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
     writer_print_section_footer(w);
   }
 
-  if (do_show_stream_tags)
-    ret = show_tags(w, stream->metadata, in_program ? SECTION_ID_PROGRAM_STREAM_TAGS : SECTION_ID_STREAM_TAGS);
-
-  if (av_stream_get_nb_side_data(stream))
-  {
-    const AVPacketSideData *side_data = av_stream_get_side_data(stream, 0 + 1, NULL);
-    print_pkt_side_data(w, stream->codecpar, side_data, av_stream_get_nb_side_data(stream),
-                        SECTION_ID_STREAM_SIDE_DATA_LIST,
+  if (do_show_stream_tags)  
+    ret = show_tags(w, stream->metadata, in_program ? SECTION_ID_PROGRAM_STREAM_TAGS : SECTION_ID_STREAM_TAGS);  
+  
+  if (stream->codecpar->nb_coded_side_data) {  
+      writer_print_section_header(w, SECTION_ID_STREAM_SIDE_DATA_LIST);  
+      for (int i = 0; i < stream->codecpar->nb_coded_side_data; i++) {
+        print_pkt_side_data(w, stream->codecpar,   
+                        stream->codecpar->coded_side_data,  
+                        stream->codecpar->nb_coded_side_data,  
+                        SECTION_ID_STREAM_SIDE_DATA_LIST,  
                         SECTION_ID_STREAM_SIDE_DATA);
-  }
-
-  writer_print_section_footer(w);
-  av_bprint_finalize(&pbuf, NULL);
-  fflush(stdout);
-
+        writer_print_section_footer(w);  
+      }  
+      writer_print_section_footer(w);  
+  }  
+    
+  writer_print_section_footer(w);  
+  av_bprint_finalize(&pbuf, NULL);  
+  fflush(stdout);  
+    
   return ret;
 }
 

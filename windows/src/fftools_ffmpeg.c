@@ -3469,50 +3469,26 @@ static int init_output_stream_streamcopy(OutputStream *ost)
                                  ifile->start_time + ifile->ts_offset);
     }
   }
-  /*
-  if (av_stream_get_nb_side_data(ist->st)) {
-      for (i = 0; i < av_stream_get_nb_side_data(ist->st); i++) {
-          //const AVPacketSideData *sd_src = &ist->st->side_data[i];
-          uint8_t *dst_data;
-
-          dst_data = av_stream_new_side_data(ost->st, sd_src->type, sd_src->size);
-          if (!dst_data)
-              return AVERROR(ENOMEM);
-          memcpy(dst_data, sd_src->data, sd_src->size);
-      }
-  }
-  */
-  if (av_stream_get_nb_side_data(ist->st))
-  {
-    const AVPacketSideData *sd_src = NULL;
-    uint8_t *dst_data;
-    int sd_size;
-
-    for (enum AVPacketSideDataType type = 0 + 1;
-         type < AV_PKT_DATA_NB;
-         type++)
-    {
-      sd_src = av_stream_get_side_data(ist->st, type, &sd_size);
-
-      if (!sd_src || sd_src->size == 0)
-        continue;
-
-      dst_data = av_stream_new_side_data(ost->st, sd_src->type, sd_src->size);
-
-      if (!dst_data)
-        return AVERROR(ENOMEM);
-
-      memcpy(dst_data, sd_src->data, sd_src->size);
-    }
-  }
+  for (int i = 0; i < ist->st->codecpar->nb_coded_side_data; i++) {  
+    const AVPacketSideData *sd_src = &ist->st->codecpar->coded_side_data[i];  
+    AVPacketSideData *sd_dst;  
+  
+    sd_dst = av_packet_side_data_new(&ost->st->codecpar->coded_side_data,  
+                                     &ost->st->codecpar->nb_coded_side_data,  
+                                     sd_src->type, sd_src->size, 0);  
+    if (!sd_dst)  
+        return AVERROR(ENOMEM);  
+    memcpy(sd_dst->data, sd_src->data, sd_src->size);  
+}  
 #if FFMPEG_ROTATION_METADATA
-  if (ost->rotate_overridden)
-  {
-    uint8_t *sd = av_stream_new_side_data(ost->st, AV_PKT_DATA_DISPLAYMATRIX,
-                                          sizeof(int32_t) * 9);
-    if (sd)
-      av_display_rotation_set((int32_t *)sd, -ost->rotate_override_value);
-  }
+  if (ost->rotate_overridden) {  
+    AVPacketSideData *sd = av_packet_side_data_new(&ost->st->codecpar->coded_side_data,  
+                                                   &ost->st->codecpar->nb_coded_side_data,  
+                                                   AV_PKT_DATA_DISPLAYMATRIX,  
+                                                   sizeof(int32_t) * 9, 0);  
+    if (sd)  
+        av_display_rotation_set((int32_t *)sd->data, -ost->rotate_override_value);  
+  }  
 #endif
 
   switch (par->codec_type)
@@ -3856,21 +3832,19 @@ static int init_output_stream(OutputStream *ost, AVFrame *frame,
       exit_program(1);
     }
 
-    if (ost->enc_ctx->nb_coded_side_data)
-    {
-      int i;
-
-      for (i = 0; i < ost->enc_ctx->nb_coded_side_data; i++)
-      {
-        const AVPacketSideData *sd_src = &ost->enc_ctx->coded_side_data[i];
-        uint8_t *dst_data;
-
-        dst_data = av_stream_new_side_data(ost->st, sd_src->type, sd_src->size);
-        if (!dst_data)
-          return AVERROR(ENOMEM);
-        memcpy(dst_data, sd_src->data, sd_src->size);
-      }
-    }
+    if (ost->enc_ctx->nb_coded_side_data) {  
+    for (int i = 0; i < ost->enc_ctx->nb_coded_side_data; i++) {  
+        const AVPacketSideData *sd_src = &ost->enc_ctx->coded_side_data[i];  
+        AVPacketSideData *sd_dst;  
+  
+        sd_dst = av_packet_side_data_new(&ost->st->codecpar->coded_side_data,  
+                                         &ost->st->codecpar->nb_coded_side_data,  
+                                         sd_src->type, sd_src->size, 0);  
+        if (!sd_dst)  
+            return AVERROR(ENOMEM);  
+        memcpy(sd_dst->data, sd_src->data, sd_src->size);  
+      }  
+    }  
 
     /*
      * Add global input side data. For now this is naive, and copies it
@@ -3879,40 +3853,24 @@ static int init_output_stream(OutputStream *ost, AVFrame *frame,
      * packet side data, and then potentially using the first packet for
      * global side data.
      */
-    if (ist)
-    {
-      int i;
-      // for (i = 0; i < ist->av_stream_get_nb_side_data(st); i++) {
-      //     //AVPacketSideData *sd = &ist->st->side_data[i];
-      //     if (sd->type != AV_PKT_DATA_CPB_PROPERTIES) {
-      //         uint8_t *dst = av_stream_new_side_data(ost->st, sd->type, sd->size);
-      //         if (!dst)
-      //             return AVERROR(ENOMEM);
-      //         memcpy(dst, sd->data, sd->size);
-      //         if (ist->autorotate && sd->type == AV_PKT_DATA_DISPLAYMATRIX)
-      //             av_display_rotation_set((int32_t *)dst, 0);
-      //     }
-      // }
-      const AVPacketSideData *sd_src = NULL;
-      uint8_t *dst_data;
-      int sd_size;
-
-      for (enum AVPacketSideDataType type = 0 + 1;
-           type < AV_PKT_DATA_NB;
-           type++)
-      {
-        sd_src = av_stream_get_side_data(ist->st, type, &sd_size);
-
-        if (!sd_src || sd_src->size == 0)
-          continue;
-
-        dst_data = av_stream_new_side_data(ost->st, sd_src->type, sd_src->size);
-
-        if (!dst_data)
-          return AVERROR(ENOMEM);
-
-        memcpy(dst_data, sd_src->data, sd_src->size);
-      }
+    if (ist) {  
+      for (int i = 0; i < ist->st->codecpar->nb_coded_side_data; i++) {  
+        const AVPacketSideData *sd_src = &ist->st->codecpar->coded_side_data[i];  
+        AVPacketSideData *sd_dst;  
+  
+        if (sd_src->type == AV_PKT_DATA_CPB_PROPERTIES)  
+            continue;  
+  
+        sd_dst = av_packet_side_data_new(&ost->st->codecpar->coded_side_data,  
+                                         &ost->st->codecpar->nb_coded_side_data,  
+                                         sd_src->type, sd_src->size, 0);  
+        if (!sd_dst)  
+            return AVERROR(ENOMEM);  
+        memcpy(sd_dst->data, sd_src->data, sd_src->size);  
+  
+        if (ist->autorotate && sd_src->type == AV_PKT_DATA_DISPLAYMATRIX)  
+            av_display_rotation_set((int32_t *)sd_dst->data, 0);  
+      }  
     }
     // copy timebase while removing common factors
     if (ost->st->time_base.num <= 0 || ost->st->time_base.den <= 0)
@@ -4515,29 +4473,25 @@ static int process_input(int file_index)
     goto discard_packet;
 
   /* add the stream-global side data to the first packet */
-  if (ist->nb_packets == 1)
-  {
-    AVPacketSideData *src_sd = NULL;
-    int src_sd_size;
-    for (enum AVPacketSideDataType type = 0 + 1;
-             type < AV_PKT_DATA_NB;
-             type++)
-    {
-      src_sd = av_stream_get_side_data(ist->st, type, &src_sd_size);
-      uint8_t *dst_data;
-
-      if (src_sd->type == AV_PKT_DATA_DISPLAYMATRIX)
-        continue;
-
-      if (av_packet_get_side_data(pkt, src_sd->type, NULL))
-        continue;
-
-      dst_data = av_packet_new_side_data(pkt, src_sd->type, src_sd->size);
-      if (!dst_data)
-        report_and_exit(AVERROR(ENOMEM));
-
-      memcpy(dst_data, src_sd->data, src_sd->size);
-    }
+  if (ist->nb_packets == 1)  
+  {  
+      for (int i = 0; i < ist->st->codecpar->nb_coded_side_data; i++)  
+      {  
+          const AVPacketSideData *sd_src = &ist->st->codecpar->coded_side_data[i];  
+          uint8_t *dst_data;  
+    
+          if (sd_src->type == AV_PKT_DATA_DISPLAYMATRIX)  
+              continue;  
+    
+          if (av_packet_get_side_data(pkt, sd_src->type, NULL))  
+              continue;  
+    
+          dst_data = av_packet_new_side_data(pkt, sd_src->type, sd_src->size);  
+          if (!dst_data)  
+              report_and_exit(AVERROR(ENOMEM));  
+    
+          memcpy(dst_data, sd_src->data, sd_src->size);  
+      }  
   }
 
   // detect and try to correct for timestamp discontinuities

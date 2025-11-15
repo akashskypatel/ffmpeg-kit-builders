@@ -572,37 +572,42 @@ static int guess_input_channel_layout(InputStream *ist)
     return 1;
 }
 
-static void add_display_matrix_to_stream(const OptionsContext *o,
-                                         AVFormatContext *ctx, AVStream *st)
-{
-    double rotation = DBL_MAX;
-    int hflip = -1, vflip = -1;
-    int hflip_set = 0, vflip_set = 0, rotation_set = 0;
-    int32_t *buf;
-
-    MATCH_PER_STREAM_OPT(display_rotations, dbl, rotation, ctx, st);
-    MATCH_PER_STREAM_OPT(display_hflips,    i,   hflip,    ctx, st);
-    MATCH_PER_STREAM_OPT(display_vflips,    i,   vflip,    ctx, st);
-
-    rotation_set = rotation != DBL_MAX;
-    hflip_set    = hflip != -1;
-    vflip_set    = vflip != -1;
-
-    if (!rotation_set && !hflip_set && !vflip_set)
-        return;
-
-    buf = (int32_t *)av_stream_new_side_data(st, AV_PKT_DATA_DISPLAYMATRIX, sizeof(int32_t) * 9);
-    if (!buf) {
-        av_log(NULL, AV_LOG_FATAL, "Failed to generate a display matrix!\n");
-        exit_program(1);
-    }
-
-    av_display_rotation_set(buf,
-                            rotation_set ? -(rotation) : -0.0f);
-
-    av_display_matrix_flip(buf,
-                           hflip_set ? hflip : 0,
-                           vflip_set ? vflip : 0);
+static void add_display_matrix_to_stream(const OptionsContext *o,  
+                                         AVFormatContext *ctx, AVStream *st)  
+{  
+    double rotation = DBL_MAX;  
+    int hflip = -1, vflip = -1;  
+    int hflip_set = 0, vflip_set = 0, rotation_set = 0;  
+    AVPacketSideData *sd;  
+    int32_t *buf;  
+  
+    MATCH_PER_STREAM_OPT(display_rotations, dbl, rotation, ctx, st);  
+    MATCH_PER_STREAM_OPT(display_hflips,    i,   hflip,    ctx, st);  
+    MATCH_PER_STREAM_OPT(display_vflips,    i,   vflip,    ctx, st);  
+  
+    rotation_set = rotation != DBL_MAX;  
+    hflip_set    = hflip != -1;  
+    vflip_set    = vflip != -1;  
+  
+    if (!rotation_set && !hflip_set && !vflip_set)  
+        return;  
+  
+    sd = av_packet_side_data_new(&st->codecpar->coded_side_data,  
+                                 &st->codecpar->nb_coded_side_data,  
+                                 AV_PKT_DATA_DISPLAYMATRIX,  
+                                 sizeof(int32_t) * 9, 0);  
+    if (!sd) {  
+        av_log(NULL, AV_LOG_FATAL, "Failed to generate a display matrix!\n");  
+        exit_program(1);  
+    }  
+  
+    buf = (int32_t *)sd->data;  
+    av_display_rotation_set(buf,  
+                            rotation_set ? -(rotation) : -0.0f);  
+  
+    av_display_matrix_flip(buf,  
+                           hflip_set ? hflip : 0,  
+                           vflip_set ? vflip : 0);  
 }
 
 /* Add all the streams from the given input file to the demuxer */

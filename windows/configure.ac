@@ -176,7 +176,7 @@ if test "x$target_os_clean" = "xwindows"; then
     CXXFLAGS="$CXXFLAGS $WINDOWS_CXXFLAGS"
 else
     # Linux/Unix libraries  
-    FFMPEG_LIBS="-lavcodec -lavfilter -lavformat -lavutil -lswscale -lswresample -lavdevice -lpostproc -lpthread"
+    FFMPEG_LIBS="-lavcodec -lavfilter -lavformat -lavutil -lswscale -lswresample -lavdevice -lpthread"
 fi
 
 AC_SUBST(FFMPEG_LIBS)

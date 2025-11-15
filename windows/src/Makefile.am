@@ -78,14 +78,15 @@ if WINDOWS
 libffmpegkit_la_CFLAGS = $(CFLAGS) @WINDOWS_CFLAGS@ -DFFMPEG_KIT_WINDOWS
 libffmpegkit_la_CXXFLAGS = $(CXXFLAGS) @WINDOWS_CXXFLAGS@ -DFFMPEG_KIT_WINDOWS -std=c++11
 
-# REMOVE -static-libgcc -static-libstdc++ for shared libraries!
-libffmpegkit_la_LDFLAGS = -no-undefined -version-info @VERSION_INFO@ \
+# Use -avoid-version to remove version numbers from DLL name
+libffmpegkit_la_LDFLAGS = -no-undefined -avoid-version \
                           -Wl,--export-all-symbols -Wl,--enable-auto-import \
                           -Wl,--allow-multiple-definition
 else
 libffmpegkit_la_CFLAGS = $(CFLAGS)
 libffmpegkit_la_CXXFLAGS = $(CXXFLAGS) -std=c++11
-libffmpegkit_la_LDFLAGS = -version-info @VERSION_INFO@
+# Use -avoid-version for Linux as well to remove .so version numbers
+libffmpegkit_la_LDFLAGS = -avoid-version
 endif
 
 libffmpegkit_la_OBJCFLAGS = $(libffmpegkit_la_CFLAGS)
