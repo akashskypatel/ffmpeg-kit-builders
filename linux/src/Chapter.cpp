@@ -19,7 +19,7 @@
 
 #include "Chapter.h"
 
-ffmpegkit::Chapter::Chapter(std::shared_ptr<rapidjson::Value> chapterValue) : _chapterValue{chapterValue} {
+ffmpegkit::Chapter::Chapter(std::shared_ptr<Json::Value> chapterValue) : _chapterValue{chapterValue} {
 }
 
 std::shared_ptr<int64_t> ffmpegkit::Chapter::getId() {
@@ -46,29 +46,29 @@ std::shared_ptr<std::string> ffmpegkit::Chapter::getEndTime() {
     return getStringProperty(KeyEndTime);
 }
 
-std::shared_ptr<rapidjson::Value> ffmpegkit::Chapter::getTags() {
+std::shared_ptr<Json::Value> ffmpegkit::Chapter::getTags() {
     return getProperty(KeyTags);
 }
 
 std::shared_ptr<std::string> ffmpegkit::Chapter::getStringProperty(const char* key) {
-    if (_chapterValue->HasMember(key)) {
-        return std::make_shared<std::string>((*_chapterValue)[key].GetString());
+    if (_chapterValue->isMember(key)) {
+        return std::make_shared<std::string>((*_chapterValue)[key].asString());
     } else {
         return nullptr;
     }
 }
 
 std::shared_ptr<int64_t> ffmpegkit::Chapter::getNumberProperty(const char* key) {
-    if (_chapterValue->HasMember(key)) {
-        return std::make_shared<int64_t>((*_chapterValue)[key].GetInt64());
+    if (_chapterValue->isMember(key)) {
+        return std::make_shared<int64_t>((*_chapterValue)[key].asInt64());
     } else {
         return nullptr;
     }
 }
 
-std::shared_ptr<rapidjson::Value> ffmpegkit::Chapter::getProperty(const char* key) {
-    if (_chapterValue->HasMember(key)) {
-        auto value = std::make_shared<rapidjson::Value>();
+std::shared_ptr<Json::Value> ffmpegkit::Chapter::getProperty(const char* key) {
+    if (_chapterValue->isMember(key)) {
+        auto value = std::make_shared<Json::Value>();
         *value = (*_chapterValue)[key];
         return value;
     } else {
@@ -76,10 +76,10 @@ std::shared_ptr<rapidjson::Value> ffmpegkit::Chapter::getProperty(const char* ke
     }
 }
 
-std::shared_ptr<rapidjson::Value> ffmpegkit::Chapter::getAllProperties() {
+std::shared_ptr<Json::Value> ffmpegkit::Chapter::getAllProperties() {
     if (_chapterValue != nullptr) {
-        auto all = std::make_shared<rapidjson::Value>();
-        *all =  (*_chapterValue);
+        auto all = std::make_shared<Json::Value>();
+        *all = (*_chapterValue);
         return all;
     } else {
         return nullptr;

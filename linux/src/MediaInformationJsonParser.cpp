@@ -18,12 +18,9 @@
  */
 
 #include "MediaInformationJsonParser.h"
-// OVERRIDING THE MACRO TO PREVENT APPLICATION TERMINATION
-#define RAPIDJSON_ASSERT(x)
-#include "rapidjson/reader.h"
-#include "rapidjson/document.h"
-#include "rapidjson/error/en.h"
+#include <json/json.h>
 #include <memory>
+#include <iostream>
 
 static const char* MediaInformationJsonParserKeyStreams =  "streams";
 static const char* MediaInformationJsonParserKeyChapters = "chapters";
@@ -38,38 +35,50 @@ std::shared_ptr<ffmpegkit::MediaInformation> ffmpegkit::MediaInformationJsonPars
 }
 
 std::shared_ptr<ffmpegkit::MediaInformation> ffmpegkit::MediaInformationJsonParser::fromWithError(const std::string& ffprobeJsonOutput) {
-    std::shared_ptr<rapidjson::Document> document = std::make_shared<rapidjson::Document>();
+    Json::Value root;
+    Json::CharReaderBuilder readerBuilder;
+    std::unique_ptr<Json::CharReader> reader(readerBuilder.newCharReader());
+    
+    std::string errors;
+    bool parsingSuccessful = reader->parse(ffprobeJsonOutput.c_str(), 
+                                          ffprobeJsonOutput.c_str() + ffprobeJsonOutput.length(), 
+                                          &root, 
+                                          &errors);
 
-    document->Parse(ffprobeJsonOutput.c_str());
-
-    if (document->HasParseError()) {
-        throw std::runtime_error(GetParseError_En(document->GetParseError()));
-    } else {
-        std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::StreamInformation>>> streams = std::make_shared<std::vector<std::shared_ptr<ffmpegkit::StreamInformation>>>();
-        std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::Chapter>>> chapters = std::make_shared<std::vector<std::shared_ptr<ffmpegkit::Chapter>>>();
-
-        if (document->HasMember(MediaInformationJsonParserKeyStreams)) {
-            rapidjson::Value& streamArray = (*document.get())[MediaInformationJsonParserKeyStreams];
-            if (streamArray.IsArray()) {
-                for (rapidjson::SizeType i = 0; i < streamArray.Size(); i++) {
-                    auto stream = std::make_shared<rapidjson::Value>();
-                    *stream = streamArray[i];
-                    streams->push_back(std::make_shared<ffmpegkit::StreamInformation>(stream));
-                }
-            }
-        }
-
-        if (document->HasMember(MediaInformationJsonParserKeyChapters)) {
-            rapidjson::Value& chapterArray = (*document.get())[MediaInformationJsonParserKeyChapters];
-            if (chapterArray.IsArray()) {
-                for (rapidjson::SizeType i = 0; i < chapterArray.Size(); i++) {
-                    auto chapter = std::make_shared<rapidjson::Value>();
-                    *chapter = chapterArray[i];
-                    chapters->push_back(std::make_shared<ffmpegkit::Chapter>(chapter));
-                }
-            }
-        }
-
-        return std::make_shared<ffmpegkit::MediaInformation>(std::static_pointer_cast<rapidjson::Value>(document), streams, chapters);
+    if (!parsingSuccessful) {
+        throw std::runtime_error("JSON parse error: " + errors);
     }
+
+    std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::StreamInformation>>> streams = 
+        std::make_shared<std::vector<std::shared_ptr<ffmpegkit::StreamInformation>>>();
+    std::shared_ptr<std::vector<std::shared_ptr<ffmpegkit::Chapter>>> chapters = 
+        std::make_shared<std::vector<std::shared_ptr<ffmpegkit::Chapter>>>();
+
+    if (root.isMember(MediaInformationJsonParserKeyStreams)) {
+        Json::Value& streamArray = root[MediaInformationJsonParserKeyStreams];
+        if (streamArray.isArray()) {
+            for (Json::ArrayIndex i = 0; i < streamArray.size(); i++) {
+                auto stream = std::make_shared<Json::Value>();
+                *stream = streamArray[i];
+                streams->push_back(std::make_shared<ffmpegkit::StreamInformation>(stream));
+            }
+        }
+    }
+
+    if (root.isMember(MediaInformationJsonParserKeyChapters)) {
+        Json::Value& chapterArray = root[MediaInformationJsonParserKeyChapters];
+        if (chapterArray.isArray()) {
+            for (Json::ArrayIndex i = 0; i < chapterArray.size(); i++) {
+                auto chapter = std::make_shared<Json::Value>();
+                *chapter = chapterArray[i];
+                chapters->push_back(std::make_shared<ffmpegkit::Chapter>(chapter));
+            }
+        }
+    }
+
+    return std::make_shared<ffmpegkit::MediaInformation>(
+        std::make_shared<Json::Value>(root), 
+        streams, 
+        chapters
+    );
 }

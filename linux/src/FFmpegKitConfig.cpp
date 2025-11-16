@@ -17,6 +17,15 @@
  * along with FFmpegKit.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef _WIN32
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
+#else
+#include <unistd.h>
+#include <sys/stat.h>
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <pthread.h>
@@ -144,7 +153,13 @@ static bool fs_exists(const std::string& s, const bool isFile, const bool isDire
 
 static bool fs_create_dir(const std::string& s) {
     if (!fs_exists(s, false, true)) {
-        if (mkdir(s.c_str(), S_IRWXU | S_IRWXG | S_IROTH) != 0) {
+      bool mkdirSuccess = false;
+        #ifdef _WIN32
+              mkdirSuccess = (mkdir(s.c_str()) != 0);
+        #else
+              mkdirSuccess = (mkdir(s.c_str(), S_IRWXU | S_IRWXG | S_IROTH) != 0);
+        #endif
+        if (mkdirSuccess) {
             std::cout << "Failed to create directory: " << s << ". Operation failed with " << errno << "." << std::endl;
             return false;
         }
@@ -951,8 +966,30 @@ std::shared_ptr<std::string> ffmpegkit::FFmpegKitConfig::registerNewFFmpegPipe()
 
     // FIRST CLOSE OLD PIPES WITH THE SAME NAME
     ffmpegkit::FFmpegKitConfig::closeFFmpegPipe(newFFmpegPipePath->c_str());
+    int rc = 0;
+    #ifdef _WIN32
+        // Windows doesn't support mkfifo - use named pipes API
+        HANDLE hPipe = CreateNamedPipeA(
+            newFFmpegPipePath->c_str(),
+            PIPE_ACCESS_DUPLEX,
+            PIPE_TYPE_BYTE | PIPE_WAIT,
+            1,  // Number of instances
+            1024, // Out buffer size
+            1024, // In buffer size
+            0,   // Default timeout
+            NULL // Default security attributes
+        );
+        
+        if (hPipe == INVALID_HANDLE_VALUE) {
+            rc = -1;
+        } else {
+            CloseHandle(hPipe);
+            rc = 0;
+        }
+    #else
+        rc = mkfifo(newFFmpegPipePath->c_str(), S_IRWXU | S_IRWXG | S_IROTH);
+    #endif
 
-    int rc = mkfifo(newFFmpegPipePath->c_str(), S_IRWXU | S_IRWXG | S_IROTH);
     if (rc == 0) {
         return newFFmpegPipePath;
     } else {
@@ -992,7 +1029,11 @@ std::string ffmpegkit::FFmpegKitConfig::getBuildDate() {
 }
 
 int ffmpegkit::FFmpegKitConfig::setEnvironmentVariable(const std::string& variableName, const std::string& variableValue) {
-    return setenv(variableName.c_str(), variableValue.c_str(), true);
+    #ifdef _WIN32
+        return _putenv_s(variableName.c_str(), variableValue.c_str());
+    #else
+        return setenv(variableName.c_str(), variableValue.c_str(), 1);
+    #endif
 }
 
 void ffmpegkit::FFmpegKitConfig::ignoreSignal(const ffmpegkit::Signal signal) {

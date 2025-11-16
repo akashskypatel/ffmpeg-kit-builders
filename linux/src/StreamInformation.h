@@ -20,9 +20,7 @@
 #ifndef FFMPEG_KIT_STREAM_INFORMATION_H
 #define FFMPEG_KIT_STREAM_INFORMATION_H
 
-// OVERRIDING THE MACRO TO PREVENT APPLICATION TERMINATION
-#define RAPIDJSON_ASSERT(x)
-#include "rapidjson/document.h"
+#include <json/value.h>
 #include <string>
 #include <memory>
 
@@ -52,7 +50,7 @@ namespace ffmpegkit {
             static constexpr const char* KeyCodecTimeBase = "codec_time_base";
             static constexpr const char* KeyTags = "tags";
 
-            StreamInformation(std::shared_ptr<rapidjson::Value> streamInformationValue);
+            StreamInformation(std::shared_ptr<Json::Value> streamInformationValue);
 
             /**
              * Returns stream index.
@@ -178,7 +176,7 @@ namespace ffmpegkit {
              *
              * @return tags Value
              */
-            std::shared_ptr<rapidjson::Value> getTags();
+            std::shared_ptr<Json::Value> getTags();
 
             /**
              * Returns the stream property associated with the key.
@@ -199,17 +197,17 @@ namespace ffmpegkit {
              *
              * @return stream property in a Value or nullptr if the key is not found
             */
-            std::shared_ptr<rapidjson::Value> getProperty(const char* key);
+            std::shared_ptr<Json::Value> getProperty(const char* key);
 
             /**
              * Returns all stream properties defined.
              *
              * @return all stream properties in a Value or nullptr if no properties are defined
             */
-            std::shared_ptr<rapidjson::Value> getAllProperties();
+            std::shared_ptr<Json::Value> getAllProperties();
 
         private:
-            std::shared_ptr<rapidjson::Value> _streamInformationValue;
+            std::shared_ptr<Json::Value> _streamInformationValue;
     };
 
 }
