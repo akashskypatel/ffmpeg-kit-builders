@@ -233,16 +233,8 @@ setup_build_environment() {
   export LIB_INSTALL_BASE="$work_dir"
   export INSTALL_PKG_CONFIG_DIR="${work_dir}/pkgconfig"
   export ffmpeg_source_dir="${work_dir}/ffmpeg"
-  export install_prefix="$ffmpeg_source_dir/build" # install them to their a separate dir
-  export ffmpeg_kit_library="${work_dir}/ffmpeg-kit"
-  if [[ $build_ffmpeg_shared == "y" || $build_ffmpeg_shared == "yes" || $build_ffmpeg_shared == "1" ]]; then
-    install_prefix+="_shared"
-    ffmpeg_kit_library+="_shared"
-  else
-    install_prefix+="_static"
-    ffmpeg_kit_library+="_static"
-  fi
-  export FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY="${ffmpeg_kit_library}/pkgconfig"
+  export install_prefix="$ffmpeg_source_dir/build_$(get_build_type)" # install them to their a separate dir
+  export ffmpeg_kit_install="${work_dir}/ffmpeg-kit_$(get_build_type)"
 
   create_dir "$work_dir"
   change_dir "$work_dir" || exit
@@ -506,11 +498,11 @@ enable_lts_build() {
 
 install_pkg_config_file() {
   local FILE_NAME="$1"
-  local SOURCE="${install_prefix}/lib/pkgconfig/${FILE_NAME}"
+  local SOURCE="${INSTALL_PKG_CONFIG_DIR}/${FILE_NAME}"
   local DESTINATION="${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}/${FILE_NAME}"
 
   # DELETE OLD FILE
-  remove_dir -f "$DESTINATION" 2>>$LOG_FILE
+  remove_path -rf "$DESTINATION" 2>>$LOG_FILE
   if [[ $? -ne 0 ]]; then
     echo -e "failed\n\nSee $LOG_FILE for details\n"
     exit 1
@@ -522,71 +514,16 @@ install_pkg_config_file() {
     echo -e "failed\n\nSee $LOG_FILE for details\n"
     exit 1
   fi
-  local TYPE_POSTFIX=""
-  if [[ ${build_ffmpeg_static,,} =~ ^(y|yes|1|true|on)$ ]]; then
-    TYPE_POSTFIX="-static"
-  else
-    TYPE_POSTFIX="-shared"
-  fi
   prepare_inline_sed
   # UPDATE PATHS
-  ${SED_INLINE} "s|${ffmpeg_kit_library}|${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit${TYPE_POSTFIX}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
-  ${SED_INLINE} "s|${ffmpeg_source_dir}|${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit${TYPE_POSTFIX}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
+  ${SED_INLINE} "s|${ffmpeg_kit_install}|${FFMPEG_KIT_BUNDLE_DIRECTORY}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
+  ${SED_INLINE} "s|${ffmpeg_source_dir}|${FFMPEG_KIT_BUNDLE_DIRECTORY}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
 }
 
 get_ffmpeg_kit_version() {
   local FFMPEG_KIT_VERSION=$(grep -Eo 'FFmpegKitVersion = .*' "${BASEDIR}/windows/src/FFmpegKitConfig.h" 2>>$LOG_FILE | grep -Eo ' \".*' | tr -d '"; ')
 
   echo -e "${FFMPEG_KIT_VERSION}"
-}
-
-copy_library_licenses() {
-  # COPY EXTERNAL LIBRARY LICENSES
-  local LICENSE_BASEDIR="${BASEDIR}/prebuilt/$(get_bundle_directory)/ffmpeg-kit/lib"
-  remove_dir -f "${LICENSE_BASEDIR}"/*.txt 1>>$LOG_FILE 2>&1 || exit 1
-  for library in {0..49}; do
-    if [[ ${ENABLED_LIBRARIES[$library]} -eq 1 ]]; then
-      ENABLED_LIBRARY=$(get_library_name ${library} | sed 's/-/_/g')
-      LICENSE_FILE="${LICENSE_BASEDIR}/license_${ENABLED_LIBRARY}.txt"
-
-      RC=$(copy_external_library_license_file ${library} "${LICENSE_FILE}")
-
-      if [[ ${RC} -ne 0 ]]; then
-        echo -e "DEBUG: Failed to copy the license file of ${ENABLED_LIBRARY}\n" 1>>$LOG_FILE 2>&1
-        echo -e "failed\n\nSee $LOG_FILE for details\n"
-        exit 1
-      fi
-
-      echo -e "DEBUG: Copied the license file of ${ENABLED_LIBRARY} successfully\n" 1>>$LOG_FILE 2>&1
-    fi
-  done
-
-  # COPY CUSTOM LIBRARY LICENSES
-  for custom_library_index in "${CUSTOM_LIBRARIES[@]}"; do
-    library_name="CUSTOM_LIBRARY_${custom_library_index}_NAME"
-    relative_license_path="CUSTOM_LIBRARY_${custom_library_index}_LICENSE_FILE"
-
-    destination_license_path="${LICENSE_BASEDIR}/license_${!library_name}.txt"
-
-    copy_path "${BASEDIR}/prebuilt/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>$LOG_FILE 2>&1
-
-    RC=$?
-
-    if [[ ${RC} -ne 0 ]]; then
-      echo -e "DEBUG: Failed to copy the license file of custom library ${!library_name}\n" 1>>$LOG_FILE 2>&1
-      echo -e "failed\n\nSee $LOG_FILE for details\n"
-      exit 1
-    fi
-
-    echo -e "DEBUG: Copied the license file of custom library ${!library_name} successfully\n" 1>>$LOG_FILE 2>&1
-  done
-
-  # COPY LIBRARY LICENSES
-  if [[ ${GPL_ENABLED} == "yes" ]]; then
-    copy_path "${BASEDIR}"/tools/license/LICENSE.GPLv3 "${LICENSE_BASEDIR}"/license.txt 1>>$LOG_FILE 2>&1 || exit 1
-  else
-    copy_path "${BASEDIR}"/LICENSE "${LICENSE_BASEDIR}"/license.txt 1>>$LOG_FILE 2>&1 || exit 1
-  fi
 }
 
 build_ffmpeg_kit() {
@@ -683,21 +620,21 @@ check_builds() {
   static_build_exists=0
 
   # Check shared build
-  echo -e "DEBUG: Checking $ffmpeg_source_dir/build_shared"
-  if [[ -d "${ffmpeg_source_dir}/build_shared" && -d "${ffmpeg_source_dir}/build_shared/bin" ]]; then
-    echo -e "DEBUG: Checking binaries in $ffmpeg_source_dir/build_shared/bin"
+  echo -e "DEBUG: Checking $ffmpeg_source_dir/build_$(get_build_type)"
+  if [[ -d "${ffmpeg_source_dir}/build_$(get_build_type)" && -d "${ffmpeg_source_dir}/build_$(get_build_type)/bin" ]]; then
+    echo -e "DEBUG: Checking binaries in $ffmpeg_source_dir/build_$(get_build_type)/bin"
     check_binaries=0
-    if find "${ffmpeg_source_dir}/build_shared/bin" -maxdepth 1 -type f \( -name '*.a' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.lib' -o -name '*.exe' \) -print -quit | grep -q .; then
+    if find "${ffmpeg_source_dir}/build_$(get_build_type)/bin" -maxdepth 1 -type f \( -name '*.a' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.lib' -o -name '*.exe' \) -print -quit | grep -q .; then
       check_binaries=1
     fi
     [[ $check_binaries -eq 1 ]] && shared_build_exists=1
   fi
-  echo -e "DEBUG: Checking $ffmpeg_source_dir/build_static"
+  echo -e "DEBUG: Checking $ffmpeg_source_dir/build_$(get_build_type)"
   # Check static build  
-  if [[ -d "${ffmpeg_source_dir}/build_static" && -d "${ffmpeg_source_dir}/build_static/bin" ]]; then
-    echo -e "DEBUG: Checking binaries in $ffmpeg_source_dir/build_static/bin"
+  if [[ -d "${ffmpeg_source_dir}/build_$(get_build_type)" && -d "${ffmpeg_source_dir}/build_$(get_build_type)/bin" ]]; then
+    echo -e "DEBUG: Checking binaries in $ffmpeg_source_dir/build_$(get_build_type)/bin"
     check_binaries=0
-    if find "${ffmpeg_source_dir}/build_static/bin" -maxdepth 1 -type f \( -name '*.a' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.lib' -o -name '*.exe' \) -print -quit | grep -q .; then
+    if find "${ffmpeg_source_dir}/build_$(get_build_type)/bin" -maxdepth 1 -type f \( -name '*.a' -o -name '*.dll' -o -name '*.so' -o -name '*.dylib' -o -name '*.lib' -o -name '*.exe' \) -print -quit | grep -q .; then
       check_binaries=1
     fi
     [[ $check_binaries -eq 1 ]] && static_build_exists=1
@@ -709,7 +646,7 @@ check_builds() {
     echo -e "INFO: Static build requested..." | tee -a "$LOG_FILE"
     if [[ $static_build_exists == 0 || "$BUILD_FORCE" -eq 1 ]]; then
       echo -e "INFO: Static build does not exist or force requested. (Re-)configuring Ffmpeg for static build." | tee -a "$LOG_FILE"
-      remove_path -rf "${ffmpeg_source_dir}/build_static" 1>> $LOG_FILE 2>&1
+      remove_path -rf "${ffmpeg_source_dir}/build_$(get_build_type)" 1>> $LOG_FILE 2>&1
       remove_path -f ${ffmpeg_source_dir}/already_* 1>> $LOG_FILE 2>&1
       configure_ffmpeg 1>> $LOG_FILE 2>&1
     fi
@@ -717,7 +654,7 @@ check_builds() {
     echo -e "INFO: Shared build requested..." | tee -a "$LOG_FILE"
     if [[ $shared_build_exists == 0 || "$BUILD_FORCE" -eq 1 ]]; then
       echo -e "INFO: Shared build does not exist or force requested. (Re-)configuring Ffmpeg for shared build." | tee -a "$LOG_FILE"
-      remove_path -rf "${ffmpeg_source_dir}/build_shared" 1>> $LOG_FILE 2>&1
+      remove_path -rf "${ffmpeg_source_dir}/build_$(get_build_type)" 1>> $LOG_FILE 2>&1
       remove_path -f ${ffmpeg_source_dir}/already_* 1>> $LOG_FILE 2>&1
       configure_ffmpeg 1>> $LOG_FILE 2>&1
     fi
@@ -1064,52 +1001,60 @@ configure_ffmpeg() {
 
 configure_ffmpeg_kit() {
   echo -e "INFO: Configuring ffmpeg kit\n" | tee -a "$LOG_FILE"
-  remove_path -rf $ffmpeg_kit_library
-  create_dir $ffmpeg_kit_library
+  local TYPE_POSTFIX="$(get_build_type)"
+  local FFMPEG_KIT_VERSION=$(get_ffmpeg_kit_version)
 
-  change_dir "${BASEDIR}/windows"
-    export PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:${install_prefix}/lib/pkgconfig"
-    export PATH="${PATH}" \
-    " CC=${cross_prefix}gcc" \
-    " AR=$(realpath ${cross_prefix}ar)" \
-    " AS=$(realpath ${cross_prefix}as)" \
-    " NM=$(realpath ${cross_prefix}nm)" \
-    " RANLIB=$(realpath ${cross_prefix}ranlib)" \
-    " LD=$(realpath ${cross_prefix}ld)" \
-    " STRIP=$(realpath ${cross_prefix}strip)" \
-    " CXX=$(realpath ${cross_prefix}g++)"
-    reset_cflags
-    reset_cppflags
-    local BUILD_DATE="-DFFMPEG_KIT_BUILD_DATE=$(date +%Y%m%d 2>>"${BASEDIR}"/build.log)"
-    export CFLAGS="${CFLAGS} ${BUILD_DATE} -I${install_prefix}/include -L${install_prefix}/bin -L${install_prefix}/lib -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat -DHAVE_W32PTHREADS_H=1"
-    export CXXFLAGS="${CXXFLAGS} ${BUILD_DATE} -I${install_prefix}/include -L${install_prefix}/bin -L${install_prefix}/lib -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat"
-    
-    make distclean 2>/dev/null 1>/dev/null
-    remove_path -rf "${BASEDIR}"/windows/already_*
-    echo -e "DEBUG: PKG_CONFIG_PATH variable:"
-    echo -e "DEBUG: ${PKG_CONFIG_PATH}"
-    echo -e "DEBUG: PATH variable:"
-    echo -e "DEBUG: ${PATH}"
-    echo -e "DEBUG: CFLAGS variable:"
-    echo -e "DEBUG: ${CFLAGS}"
-    echo -e "DEBUG: CXXFLAGS variable:"
-    echo -e "DEBUG: ${CXXFLAGS}"
-    autoreconf_library "ffmpeg-kit" 1>> $LOG_FILE 2>&1 || return 1
+  if [[ $BUILD_FORCE == "1" ]]; then
+    remove_path -rf "${BASEDIR}"/windows/already_configured_*
+    remove_path -rf $ffmpeg_kit_install
+  fi
   
-    local config_options="--prefix=${ffmpeg_kit_library}"
-    
-    config_options+=" --host=${host_target}"
-    if [[ ${build_ffmpeg_static,,} =~ ^(y|yes|1|true|on)$ ]]; then
-      config_options+=" --enable-static" 
-      config_options+=" --disable-shared"
-    else
-      config_options+=" --enable-shared" 
-      config_options+=" --disable-static"
-    fi
+  create_dir $ffmpeg_kit_install
 
+  export PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:${install_prefix}/lib/pkgconfig"
+  export PATH="${PATH}"
+  export CC="${cross_prefix}gcc"
+  export AR="$(realpath "${cross_prefix}ar")"
+  export AS="$(realpath "${cross_prefix}as")"
+  export NM="$(realpath "${cross_prefix}nm")"
+  export RANLIB="$(realpath "${cross_prefix}ranlib")"
+  export LD="$(realpath "${cross_prefix}ld")"
+  export STRIP="$(realpath "${cross_prefix}strip")"
+  export CXX="$(realpath "${cross_prefix}g++")"
+
+  reset_cflags
+  reset_cppflags    
+  local local_cflags="${CFLAGS} -I${install_prefix}/include -L${install_prefix}/bin -L${install_prefix}/lib -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat -DHAVE_W32PTHREADS_H=1"
+  local local_cxxfalgs="${CXXFLAGS} -I${install_prefix}/include -L${install_prefix}/bin -L${install_prefix}/lib -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat"
+  
+  change_dir "${BASEDIR}/windows"
+    make distclean 2>/dev/null 1>/dev/null
+
+  local touch_name=$(get_small_touchfile_name already_autoreconf_${TYPE_POSTFIX} "$FFMPEG_KIT_VERSION $local_cflags $local_cxxfalgs")
+  if [ ! -f "$touch_name" ]; then
+    remove_path -f "${BASEDIR}"/windows/already_autoreconf_${TYPE_POSTFIX}*
+    change_dir "${BASEDIR}/windows"
+      autoreconf_library "ffmpeg-kit" 1>> $LOG_FILE 2>&1 || return 1
+    touch -- "$touch_name"
+    local BUILD_DATE="-DFFMPEG_KIT_BUILD_DATE=$(date +%Y%m%d 2>>"${BASEDIR}"/build.log)"
+    export CFLAGS="${local_cflags} ${BUILD_DATE}"
+    export CXXFLAGS="${local_cxxfalgs} ${BUILD_DATE}"
+  fi
+
+  local config_options="--prefix=${ffmpeg_kit_install}"
+  
+  config_options+=" --host=${host_target}"
+  if [[ ${build_ffmpeg_static,,} =~ ^(y|yes|1|true|on)$ ]]; then
+    config_options+=" --enable-static" 
+    config_options+=" --disable-shared"
+  else
+    config_options+=" --enable-shared" 
+    config_options+=" --disable-static"
+  fi
+  change_dir "${BASEDIR}/windows"
     do_configure "${config_options}" "./configure" 1>> $LOG_FILE 2>&1 || return 1
-    
-    echo -e "INFO: Done configuring ffmpeg kit\n" | tee -a "$LOG_FILE"
+  
+  echo -e "INFO: Done configuring ffmpeg kit\n" | tee -a "$LOG_FILE"
 }
 
 
@@ -1117,7 +1062,7 @@ create_ffmpegkit_package_config() {
   local FFMPEGKIT_VERSION="$1"
 
   cat >"${INSTALL_PKG_CONFIG_DIR}/ffmpeg-kit.pc" <<EOF
-prefix=${ffmpeg_kit_library}
+prefix=${ffmpeg_kit_install}
 libdir=\${exec_prefix}/lib
 includedir=\${prefix}/include
 
@@ -1141,15 +1086,14 @@ EOF
 
 
 install_ffmpeg_kit() {
-  echo -e "INFO: Installing ffmpeg kit to ${ffmpeg_kit_library}\n" | tee -a "$LOG_FILE"
+  echo -e "INFO: Installing ffmpeg kit to ${ffmpeg_kit_install}\n" | tee -a "$LOG_FILE"
   
   change_dir "${BASEDIR}/windows"
-  
-  do_make_and_make_install 1>>$LOG_FILE 2>&1
+    do_make_and_make_install 1>>$LOG_FILE 2>&1
 
   create_ffmpegkit_package_config "$(get_ffmpeg_kit_version)" 1>> $LOG_FILE 2>&1 || return 1
 
-  echo -e "INFO: Done installing ffmpeg kit to ${ffmpeg_kit_library}\n" | tee -a "$LOG_FILE"
+  echo -e "INFO: Done installing ffmpeg kit to ${ffmpeg_kit_install}\n" | tee -a "$LOG_FILE"
 }
 
 get_bundle_directory() {
@@ -1157,49 +1101,73 @@ get_bundle_directory() {
   if [[ -n ${FFMPEG_KIT_LTS_BUILD} ]]; then
     LTS_POSTFIX="-lts"
   fi
-  echo -e "bundle-windows${TYPE_POSTFIX}${LTS_POSTFIX}"
+  local TYPE_POSTFIX="$(get_build_type)"
+  echo -e "bundle-windows-${TYPE_POSTFIX}-${LTS_POSTFIX}"
+}
+
+get_build_type() {
+  if [[ ${build_ffmpeg_static,,} =~ ^(y|yes|1|true|on)$ ]]; then
+    echo "static"
+  else
+    echo "shared"
+  fi
 }
 
 create_windows_bundle() {
   echo -e "INFO: Creating bundle" 1>>$LOG_FILE 2>&1
-  local TYPE_POSTFIX=""
-  if [[ ${build_ffmpeg_static,,} =~ ^(y|yes|1|true|on)$ ]]; then
-    TYPE_POSTFIX="-static"
-  else
-    TYPE_POSTFIX="-shared"
+  local TYPE_POSTFIX="$(get_build_type)"
+  local FFMPEG_KIT_VERSION=$(get_ffmpeg_kit_version)
+  export FFMPEG_KIT_BUNDLE_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)"
+
+  if [[ $BUILD_FORCE == "1" ]]; then
+    remove_path -rf "${BASEDIR}"/windows/already_bundled_${TYPE_POSTFIX}*
   fi
 
-  local FFMPEG_KIT_VERSION=$(get_ffmpeg_kit_version)
+  local touch_name=$(get_small_touchfile_name already_bundled_${TYPE_POSTFIX} "$FFMPEG_KIT_VERSION $FFMPEG_KIT_BUNDLE_DIRECTORY")
+  if [ ! -f "$touch_name" ]; then
+    export FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/include"
+    export FFMPEG_KIT_BUNDLE_LIB_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/lib"
+    export FFMPEG_KIT_BUNDLE_BIN_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/bin"
+    export FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/pkgconfig"
+    remove_path "-rf" "${FFMPEG_KIT_BUNDLE_DIRECTORY}"
+    create_dir "${FFMPEG_KIT_BUNDLE_DIRECTORY}"
+    create_dir "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}"
+    create_dir "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}"
+    create_dir "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}"
+    create_dir "${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}"
+    
+    # COPY HEADERS
+    copy_path "${ffmpeg_kit_install}"/include/* "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P" 2>>"${BASEDIR}"/build.log
+    copy_path "${install_prefix}"/include/* "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P" 2>>"${BASEDIR}"/build.log
 
-  local FFMPEG_KIT_BUNDLE_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}"
-  local FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}/include"
-  local FFMPEG_KIT_BUNDLE_LIB_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}/lib"
-  local FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}/pkgconfig"
-  
-  create_dir "${FFMPEG_KIT_BUNDLE_DIRECTORY}"
-  #create_dir "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}"
-  #create_dir "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}"
-  create_dir "${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}"
+    # COPY LIBS
+    copy_path "${ffmpeg_kit_install}"/lib/* "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P" 2>>"${BASEDIR}"/build.log
+    copy_path "${install_prefix}"/lib/* "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P" 2>>"${BASEDIR}"/build.log
 
-  # COPY HEADERS
-  copy_path "${ffmpeg_kit_library}"/include/* "${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}/include" "-rP" 2>>$LOG_FILE
-  copy_path "${install_prefix}"/include/* "${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}/include" "-rP" 2>>$LOG_FILE
+    # COPY BINARIES
+    copy_path "${ffmpeg_kit_install}"/bin/* "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P" 2>>"${BASEDIR}"/build.log
+    copy_path "${install_prefix}"/bin/* "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P" 2>>"${BASEDIR}"/build.log
 
-  # COPY LIBS
-  copy_path "${ffmpeg_kit_library}"/lib "${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}/lib" "-P" 2>>$LOG_FILE
-  copy_path "${install_prefix}"/lib "${BASEDIR}/prebuilt/$(get_bundle_directory)/${TYPE_POSTFIX}/lib" "-P" 2>>$LOG_FILE
+    install_pkg_config_file "libavformat.pc"
+    install_pkg_config_file "libswresample.pc"
+    install_pkg_config_file "libswscale.pc"
+    install_pkg_config_file "libavdevice.pc"
+    install_pkg_config_file "libavfilter.pc"
+    install_pkg_config_file "libavcodec.pc"
+    install_pkg_config_file "libavutil.pc"
+    install_pkg_config_file "ffmpeg-kit.pc"
 
-  install_pkg_config_file "libavformat.pc"
-  install_pkg_config_file "libswresample.pc"
-  install_pkg_config_file "libswscale.pc"
-  install_pkg_config_file "libavdevice.pc"
-  install_pkg_config_file "libavfilter.pc"
-  install_pkg_config_file "libavcodec.pc"
-  install_pkg_config_file "libavutil.pc"
-  install_pkg_config_file "ffmpeg-kit.pc"
+    local LICENSE_BASEDIR="${FFMPEG_KIT_BUNDLE_DIRECTORY}/licenses"
 
-  copy_path "${BASEDIR}"/tools/source/SOURCE "${LICENSE_BASEDIR}"/source.txt 1>>$LOG_FILE 2>&1 || exit 1
+    create_dir "${LICENSE_BASEDIR}"
 
-  echo -e "DEBUG: Copied the ffmpeg-kit license successfully\n" 1>>$LOG_FILE 2>&1
+    echo -e "INFO: Copying licenses...\n" | tee -a "$LOG_FILE"
+    bash "${SCRIPTDIR}/extract_licenses.sh" "${work_dir}" "${LICENSE_BASEDIR}" 1>>$LOG_FILE 2>&1
+    echo -e "INFO: Done copying licenses\n" | tee -a "$LOG_FILE"
+
+    copy_path "${BASEDIR}"/tools/source/SOURCE "${LICENSE_BASEDIR}/source.txt" 1>>$LOG_FILE 2>&1
+    copy_path "${BASEDIR}"/tools/license/LICENSE.GPLv3 "${LICENSE_BASEDIR}"/license.txt 1>>"${BASEDIR}"/build.log 2>&1
+    touch -- "$touch_name"
+  fi
   echo -e "INFO: Done creating bundle\n" | tee -a "$LOG_FILE"
 }

@@ -46,13 +46,15 @@ create_dir()
     fi
 
     if [[ ! -e "$path" ]]; then
-      execute "INFO: creating path: '$path'" "ERROR: unable to create directory '$path'" "false" \
-          mkdir "-pv" "$path"
+      execute "INFO: creating path: '$path'" "ERROR: unable to create directory '$path'" "true" \
+          sudo mkdir "-pv" "$path"
     else
       echo -e "DEBUG: directory already exists, skipping creation." 1>> $LOG_FILE 2>&1
     fi
-    execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "false" \
+    execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
           sudo chown -R "$USER":"$USER" "$path"
+    execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
+          sudo chmod -R 755 "$USER":"$USER" "$path"
 }
 
 remove_path()
@@ -72,8 +74,9 @@ remove_path()
         
         if [[ -e "$path" ]]; then
             execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
-                sudo chown -R "$USER":"$USER" "$path"
-
+                chown -R "$USER":"$USER" "$path"
+            execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
+                chmod -R 755 "$USER":"$USER" "$path"
             execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" "true" \
                 rm $options "$path"
         else
@@ -93,6 +96,10 @@ change_dir()
     if [[ -e "$path" ]]; then
       execute "INFO: changing to path: '$path'" "ERROR: unable to cd to directory '$path'" "false" \
           cd "$path"
+      if [[ ! -r "$path" ]] || [[ ! -w "$path" ]] || [[ ! -x "$path" ]]; then
+        execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "false" \
+                chmod -R 755 "$USER":"$USER" "$path"
+      fi
     else
       echo -e "INFO: path ${path} does not exist" 1>> $LOG_FILE 2>&1
     fi
@@ -127,22 +134,23 @@ copy_path()
     destination_dir=$(dirname "$destination_path")
     
     if [ ! -d "$destination_dir" ]; then
-        execute "INFO: creating destination directory: '$destination_dir'" "ERROR: unable to create destination directory '$destination_dir'" "false" \
-            mkdir -pv "$destination_dir"
+      create_dir "$destination_dir"
     fi
 
     # Perform the copy operation
     if [ -n "$options" ]; then
-        execute "INFO: copying path: '$source_path' to '$destination_path' with options '$options'" "ERROR: unable to copy '$source_path' to '$destination_path'" "true" \
+        execute "INFO: copying path: '$source_path' to '$destination_path' with options '$options'" "ERROR: unable to copy '$source_path' to '$destination_path'" "false" \
             cp $options "$source_path" "$destination_path"
     else
-        execute "INFO: copying path: '$source_path' to '$destination_path'" "ERROR: unable to copy '$source_path' to '$destination_path'" "true" \
+        execute "INFO: copying path: '$source_path' to '$destination_path'" "ERROR: unable to copy '$source_path' to '$destination_path'" "false" \
             cp -r "$source_path" "$destination_path"
     fi
 
     # Update permissions on the copied path
-    execute "INFO: updating permissions on copied path: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "true" \
+    execute "INFO: updating permissions on copied path: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "false" \
         sudo chown -R "$USER":"$USER" "$destination_path"
+    execute "INFO: updating path permissions: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "false" \
+        chmod -R 755 "$USER":"$USER" "$destination_path"
 }
 
 check_files_exist()
@@ -3023,17 +3031,18 @@ get_small_touchfile_name() { # have to call with assignment like a=$(get_small..
 do_configure() {
   local configure_options="$1"
   local configure_name="$2"
+  local touch_suffix="_$3"
   if [[ "$configure_name" = "" ]]; then
     configure_name="./configure"
   fi
   local cur_dir2=$(pwd)
   local english_name=$(basename $cur_dir2)
-  local touch_name=$(get_small_touchfile_name already_configured "$configure_options $configure_name")
+  local touch_name=$(get_small_touchfile_name already_configured${touch_suffix} "$configure_options $configure_name")
   if [ ! -f "$touch_name" ]; then
     # make uninstall # does weird things when run under ffmpeg src so disabled for now...
 
     echo -e "configuring $english_name ($PWD) as $ PKG_CONFIG_PATH=$PKG_CONFIG_PATH PATH=$mingw_bin_path:\$PATH $configure_name $configure_options" # say it now in case bootstrap fails etc.
-    echo -e "all touch files" already_configured* touchname= "$touch_name"
+    echo -e "all touch files" already_configured${touch_suffix}* touchname= "$touch_name"
     echo -e "config options "$configure_options $configure_name""
     if [ -f bootstrap ]; then
       ./bootstrap # some need this to create ./configure :|
@@ -3055,12 +3064,14 @@ do_configure() {
   #  echo -e "already configured $(basename $cur_dir2)"
   fi
 }
-
+# 1. extra_make_options
+# 2. touch_suffix
 do_make() {
   local extra_make_options="$1"
+  local touch_suffix="_$2"
   extra_make_options="$extra_make_options -j $(get_cpu_count)"
   local cur_dir2=$(pwd)
-  local touch_name=$(get_small_touchfile_name already_ran_make "$extra_make_options" )
+  local touch_name=$(get_small_touchfile_name already_ran_make${touch_suffix} "$extra_make_options" )
 
   if [ ! -f $touch_name ]; then
     echo -e
@@ -3075,36 +3086,46 @@ do_make() {
     echo -e "Already made $(dirname "$cur_dir2") $(basename "$cur_dir2") ..."
   fi
 }
-
+# 1. extra_make_options
+# 2. extra_install_options
+# 3. touch_suffix
 do_make_and_make_install() {
-  local extra_make_options="$1"
-  do_make "$extra_make_options"
-  do_make_install "$extra_make_options"
+  extra_make_options="$1"
+  extra_install_options="$2"
+  touch_suffix="$3"
+  do_make "$extra_make_options" "$touch_suffix"
+  do_make_install "$extra_make_options" "$extra_install_options" "$touch_suffix"
 }
-
+# 1. extra_make_options
+# 2. extra_install_options
+# 3. touch_suffix
 do_make_install() {
   local extra_make_install_options="$1"
   local override_make_install_options="$2" # startingly, some need/use something different than just 'make install'
+  local touch_suffix="_$3"
   if [[ -z $override_make_install_options ]]; then
     local make_install_options="install $extra_make_install_options"
   else
     local make_install_options="$override_make_install_options $extra_make_install_options"
   fi
-  local touch_name=$(get_small_touchfile_name already_ran_make_install "$make_install_options")
+  local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_suffix} "$make_install_options")
   if [ ! -f $touch_name ]; then
     echo -e "make installing $(pwd) as $ PATH=$mingw_bin_path:\$PATH make $make_install_options"
     nice make $make_install_options || exit 1
     touch $touch_name || exit 1
   fi
 }
-
+# 1. extra_args
+# 2. source_dir
+# 3. touch_suffix
 do_cmake() {
   extra_args="$1"
   local build_from_dir="$2"
+  local touch_suffix="_$3"
   if [[ -z $build_from_dir ]]; then
     build_from_dir="."
   fi
-  local touch_name=$(get_small_touchfile_name already_ran_cmake "$extra_args")
+  local touch_name=$(get_small_touchfile_name already_ran_cmake${touch_suffix} "$extra_args")
 
   if [ ! -f $touch_name ]; then
     remove_path -f already_* # reset so that make will run again if option just changed
@@ -3126,16 +3147,24 @@ do_cmake() {
     touch $touch_name || exit 1
   fi
 }
-
+# 1. extra_args
+# 2. source_dir
+# 3. touch_suffix
 do_cmake_from_build_dir() { # some sources don't allow it, weird XXX combine with the above :)
   source_dir="$1"
   extra_args="$2"
-  do_cmake "$extra_args" "$source_dir"
+  touch_suffix="$3"
+  do_cmake "$extra_args" "$source_dir" "$touch_suffix"
 }
-
+# 1. extra_args
+# 2. source_dir
+# 3. touch_suffix
 do_cmake_and_install() {
-  do_cmake "$1"
-  do_make_and_make_install
+  source_dir="$1"
+  extra_args="$2"
+  touch_suffix="$3"
+  do_cmake "$extra_args" "$source_dir" "$touch_suffix"
+  do_make_and_make_install "$extra_args" "" "$touch_suffix"
 }
 
 activate_meson() {
@@ -3156,13 +3185,14 @@ do_meson() {
     local configure_options="$1 --unity=off"
     local configure_name="$2"
     local configure_env="$3"
+    local touch_suffix="_$4"
     local configure_noclean=""
     if [[ "$configure_name" = "" ]]; then
         configure_name="meson"
     fi
     local cur_dir2=$(pwd)
     local english_name=$(basename $cur_dir2)
-    local touch_name=$(get_small_touchfile_name already_built_meson "$configure_options $configure_name $LDFLAGS $CFLAGS")
+    local touch_name=$(get_small_touchfile_name already_built_meson${touch_suffix} "$configure_options $configure_name $LDFLAGS $CFLAGS")
     if [ ! -f "$touch_name" ]; then
         if [ "$configure_noclean" != "noclean" ]; then
             make clean # just in case
@@ -3177,22 +3207,25 @@ do_meson() {
         echo -e "Already used meson $(basename $cur_dir2)"
     fi
 }
-
+# 1. extra_args
+# 2. touch_suffix
 generic_meson() {
     local extra_configure_options="$1"
+    local touch_suffix="$2"
     create_dir build
-    do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" # --cross-file=${BASEDIR}/meson-cross.mingw.txt
+    do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" "$touch_suffix" # --cross-file=${BASEDIR}/meson-cross.mingw.txt
 }
 
 generic_meson_ninja_install() {
-    generic_meson "$1"
-    do_ninja_and_ninja_install
+    generic_meson "$1" "$2"
+    do_ninja_and_ninja_install "$2"
 }
 
 do_ninja_and_ninja_install() {
     local extra_ninja_options="$1"
+    local touch_suffix="_$2"
     do_ninja "$extra_ninja_options"
-    local touch_name=$(get_small_touchfile_name already_ran_make_install "$extra_ninja_options")
+    local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_suffix} "$extra_ninja_options")
     if [ ! -f $touch_name ]; then
         echo -e "ninja installing $(pwd) as $PATH=$PATH ninja -C build install $extra_make_options"
         ninja -C build install || exit 1
@@ -3201,9 +3234,10 @@ do_ninja_and_ninja_install() {
 }
 
 do_ninja() {
+  local touch_suffix="_$1"
   local extra_make_options=" -j $(get_cpu_count)"
   local cur_dir2=$(pwd)
-  local touch_name=$(get_small_touchfile_name already_ran_make "${extra_make_options}")
+  local touch_name=$(get_small_touchfile_name already_ran_make${touch_suffix} "${extra_make_options}")
 
   if [ ! -f $touch_name ]; then
     echo -e

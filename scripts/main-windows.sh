@@ -147,7 +147,7 @@ else
       echo -e "INFO: Building ffmpeg-kit only..."
       configure_ffmpeg_kit #1>>$LOG_FILE 2>&1
       install_ffmpeg_kit
-      #create_windows_bundle
+      create_windows_bundle
       exit 0
     else
       echo -e "INFO: Building all..."
