@@ -26,10 +26,10 @@ chown -R "$USER":"$USER" "$LOG_FILE"
 
 remove_path -f "$LOG_FILE"
 
-echo -e "INFO: Build options: $*\n" 1>> "$LOG_FILE" 2>&1
+echo -e "INFO: Build options: $*\n" 1>>"$LOG_FILE" 2>&1
 
 display_windows_help() {
-  echo -e "available option=default_value:
+	echo -e "available option=default_value:
       General Options:
       -h, --help\t\t\t                                              display this help and exit
       -d, --debug\t\t\t                                             build with debug information
@@ -61,70 +61,154 @@ display_windows_help() {
 
 # If --get-all-steps is passed, just print the array and exit.
 for arg in "$@"; do
-  if [[ "$arg" == "--get-all-steps" ]]; then
-    echo -e "Avaliable libraries: ${#BUILD_STEPS[@]}"
-    for i in "${!BUILD_STEPS[@]}"; do
-      echo "Index $i: ${BUILD_STEPS[i]}"
-    done
-    exit 0
-  fi
+	if [[ "$arg" == "--get-all-steps" ]]; then
+		echo -e "Avaliable libraries: ${#BUILD_STEPS[@]}"
+		for i in "${!BUILD_STEPS[@]}"; do
+			echo "Index $i: ${BUILD_STEPS[i]}"
+		done
+		exit 0
+	fi
 done
 
 # If --get-total-steps is passed, just print the size of the array and exit.
 for arg in "$@"; do
-  if [[ "$arg" == "--get-total-steps" ]]; then
-    echo -e ${#BUILD_STEPS[@]}
-    exit 0
-  fi
+	if [[ "$arg" == "--get-total-steps" ]]; then
+		echo -e ${#BUILD_STEPS[@]}
+		exit 0
+	fi
 done
 
 # If --get-step-name is passed, print the name at that index and exit.
 for arg in "$@"; do
-  if [[ "$arg" == --get-step-name=* ]]; then
-    index="${1#*=}"
-    echo -e "${BUILD_STEPS[$index]}"
-    exit 0
-  fi
+	if [[ "$arg" == --get-step-name=* ]]; then
+		index="${1#*=}"
+		echo -e "${BUILD_STEPS[$index]}"
+		exit 0
+	fi
 done
 
 # parse command line parameters, if any
 #      -v, --version\t\t\tdisplay version information and exit
 while true; do
-  case $1 in
-    -h | --help ) display_windows_help; shift;;
-#    -v | --version) display_version; shift ;;
-    -d | --debug ) enable_debug; set -x; shift ;;
-    -s | --speed) optimize_for_speed; shift ;;
-    -l | --lts) enable_lts_build; shift ;;
-    -f | --force) export BUILD_FORCE="1"; shift ;;
-    --no-output-redirection) no_output_redirection; shift ;;
-    --no-workspace-cleanup-*)
-      NO_WORKSPACE_CLEANUP_LIBRARY=$(echo -e "$1" | sed -e 's/^--[A-Za-z]*-[A-Za-z]*-[A-Za-z]*-//g')
-			export NO_WORKSPACE_CLEANUP_LIBRARY
-      no_workspace_cleanup_library "${NO_WORKSPACE_CLEANUP_LIBRARY}"; shift ;;
-    --no-link-time-optimization) no_link_time_optimization; shift ;;
-    --ffmpeg-git-checkout-version=* ) export ffmpeg_git_checkout_version="${1#*=}"; shift ;;
-    --ffmpeg-git-checkout=* ) export ffmpeg_git_checkout="${1#*=}"; shift ;;
-    --ffmpeg-source-dir=* ) export ffmpeg_source_dir="${1#*=}"; shift ;;
-    --cflags=* ) export original_cflags="${1#*=}"; echo -e "setting cflags as $original_cflags"; shift ;;
-    --git-get-latest=* ) export git_get_latest="${1#*=}"; shift ;;
-    --prefer-stable=* ) export prefer_stable="${1#*=}"; shift ;;
-    --enable-gpl=*) export GPL_ENABLED="${1#*=}"; shift ;;
-    --build-dependencies=* ) export build_dependencies="${1#*=}"; shift ;;
-    --build-only=*) export build_only="${1#*=}"; shift ;;
-    --build-dependencies-only=*) export build_dependencies_only="${1#*=}"; shift ;;
-    --build-ffmpeg-only=*) export build_ffmpeg_only="${1#*=}"; shift ;;
-    --build-ffmpeg-kit-only=*) export build_ffmpeg_kit_only="${1#*=}"; shift ;;
-    --build-ffmpeg-kit-bundle-only=*) export build_ffmpeg_kit_bundle_only="${1#*=}"; shift ;;
-    --compiler-flavors=*) export compiler_flavors="${1#*=}"; shift ;;
-    --enable-static|--static) export build_ffmpeg_static=y; export build_ffmpeg_shared=n; shift ;;
-    --enable-shared|--shared) export build_ffmpeg_static=n; export build_ffmpeg_shared=y; shift ;;
-    --get-total-steps|--get-all-steps|--get-step-name=*) exit 0 ;; # Handled above, just consume and ignore here
-    --clean-builds) export clean_builds=y; break ;;
-    -- ) shift; break ;;
-    -* ) echo -e "Error, unknown option: '$1'."; exit 1 ;;
-    * ) break ;;
-  esac
+	case $1 in
+	-h | --help)
+		display_windows_help
+		shift
+		;;
+		#    -v | --version) display_version; shift ;;
+	-d | --debug)
+		enable_debug
+		set -x
+		shift
+		;;
+	-s | --speed)
+		optimize_for_speed
+		shift
+		;;
+	-l | --lts)
+		enable_lts_build
+		shift
+		;;
+	-f | --force)
+		export BUILD_FORCE="1"
+		shift
+		;;
+	--no-output-redirection)
+		no_output_redirection
+		shift
+		;;
+	--no-workspace-cleanup-*)
+		NO_WORKSPACE_CLEANUP_LIBRARY=$(echo -e "$1" | sed -e 's/^--[A-Za-z]*-[A-Za-z]*-[A-Za-z]*-//g')
+		export NO_WORKSPACE_CLEANUP_LIBRARY
+		no_workspace_cleanup_library "${NO_WORKSPACE_CLEANUP_LIBRARY}"
+		shift
+		;;
+	--no-link-time-optimization)
+		no_link_time_optimization
+		shift
+		;;
+	--ffmpeg-git-checkout-version=*)
+		export ffmpeg_git_checkout_version="${1#*=}"
+		shift
+		;;
+	--ffmpeg-git-checkout=*)
+		export ffmpeg_git_checkout="${1#*=}"
+		shift
+		;;
+	--ffmpeg-source-dir=*)
+		export ffmpeg_source_dir="${1#*=}"
+		shift
+		;;
+	--cflags=*)
+		export original_cflags="${1#*=}"
+		echo -e "setting cflags as $original_cflags"
+		shift
+		;;
+	--git-get-latest=*)
+		export git_get_latest="${1#*=}"
+		shift
+		;;
+	--prefer-stable=*)
+		export prefer_stable="${1#*=}"
+		shift
+		;;
+	--enable-gpl=*)
+		export GPL_ENABLED="${1#*=}"
+		shift
+		;;
+	--build-dependencies=*)
+		export build_dependencies="${1#*=}"
+		shift
+		;;
+	--build-only=*)
+		export build_only="${1#*=}"
+		shift
+		;;
+	--build-dependencies-only=*)
+		export build_dependencies_only="${1#*=}"
+		shift
+		;;
+	--build-ffmpeg-only=*)
+		export build_ffmpeg_only="${1#*=}"
+		shift
+		;;
+	--build-ffmpeg-kit-only=*)
+		export build_ffmpeg_kit_only="${1#*=}"
+		shift
+		;;
+	--build-ffmpeg-kit-bundle-only=*)
+		export build_ffmpeg_kit_bundle_only="${1#*=}"
+		shift
+		;;
+	--compiler-flavors=*)
+		export compiler_flavors="${1#*=}"
+		shift
+		;;
+	--enable-static | --static)
+		export build_ffmpeg_static=y
+		export build_ffmpeg_shared=n
+		shift
+		;;
+	--enable-shared | --shared)
+		export build_ffmpeg_static=n
+		export build_ffmpeg_shared=y
+		shift
+		;;
+	--get-total-steps | --get-all-steps | --get-step-name=*) exit 0 ;; # Handled above, just consume and ignore here
+	--clean-builds)
+		export clean_builds=y
+		break
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		echo -e "Error, unknown option: '$1'."
+		exit 1
+		;;
+	*) break ;;
+	esac
 done
 
 source "${SCRIPTDIR}/main-windows.sh"

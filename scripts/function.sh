@@ -7,7 +7,6 @@
 #echo -e ${SCRIPTDIR}/source.sh
 #echo -e "${SCRIPTDIR}/variable.sh"
 
-
 source "${SCRIPTDIR}/source.sh"
 
 error_exit() {
@@ -1679,7 +1678,7 @@ print_enabled_architectures() {
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_arch_name "${print_arch}")"
-			(( enabled++ ))
+			((enabled++))
 		fi
 	done
 
@@ -1700,7 +1699,7 @@ print_enabled_architecture_variants() {
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_apple_architecture_variant "${print_arch_var}")"
-			(( enabled++ ))
+			((enabled++))
 		fi
 	done
 
@@ -1723,7 +1722,7 @@ print_enabled_libraries() {
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_library_name "${library}")"
-			(( enabled++ ))
+			((enabled++))
 		fi
 	done
 
@@ -1746,7 +1745,7 @@ print_enabled_xcframeworks() {
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_library_name "${library}")"
-			(( enabled++ ))
+			((enabled++))
 		fi
 	done
 
@@ -1773,7 +1772,7 @@ print_reconfigure_requested_libraries() {
 
 		echo -e -n "${RECONF_LIBRARY}"
 
-		(( counter++ ))
+		((counter++))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1793,7 +1792,7 @@ print_rebuild_requested_libraries() {
 
 		echo -e -n "${REBUILD_LIBRARY}"
 
-		(( counter++ ))
+		((counter++))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1813,7 +1812,7 @@ print_redownload_requested_libraries() {
 
 		echo -e -n "${REDOWNLOAD_LIBRARY}"
 
-		(( counter++ ))
+		((counter++))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1881,7 +1880,7 @@ print_custom_libraries() {
 
 		echo -e "INFO: Custom library options found for ${!LIBRARY_NAME}\n" 1>>"${BASEDIR}"/build.log 2>&1
 
-		(( counter++ ))
+		((counter++))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1926,12 +1925,12 @@ copy_external_library_license() {
 # 1 - library index
 # 2 - output path
 copy_external_library_license_file() {
-  if cp "$(get_external_library_license_path "$1")" "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
-      echo 0
-  else
-      echo 1
-      return 1
-  fi
+	if cp "$(get_external_library_license_path "$1")" "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
+		echo 0
+	else
+		echo 1
+		return 1
+	fi
 }
 
 get_cmake_build_directory() {
@@ -2037,45 +2036,45 @@ autoreconf_library() {
 # 3. <commit id>
 #
 clone_git_repository_with_commit_id() {
-  local RC
+	local RC
 
-  if ! mkdir -p "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
-      echo -e "\nINFO: Failed to create local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
-      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-      echo 1
-      return 1
-  fi
+	if ! mkdir -p "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
+		echo -e "\nINFO: Failed to create local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
+		remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+		echo 1
+		return 1
+	fi
 
-  echo -e "INFO: Cloning commit id $3 from repository $1 into local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
+	echo -e "INFO: Cloning commit id $3 from repository $1 into local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
 
-  if ! git clone "$1" "$2" --depth 1 1>>"${BASEDIR}"/build.log 2>&1; then
-      echo -e "\nINFO: Failed to clone $1\n" 1>>"${BASEDIR}"/build.log 2>&1
-      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-      echo 1
-      return 1
-  fi
+	if ! git clone "$1" "$2" --depth 1 1>>"${BASEDIR}"/build.log 2>&1; then
+		echo -e "\nINFO: Failed to clone $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+		remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+		echo 1
+		return 1
+	fi
 
-  if ! cd "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
-      echo -e "\nINFO: Failed to cd into $2\n" 1>>"${BASEDIR}"/build.log 2>&1
-      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-      echo 1
-      return 1
-  fi
+	if ! cd "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
+		echo -e "\nINFO: Failed to cd into $2\n" 1>>"${BASEDIR}"/build.log 2>&1
+		remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+		echo 1
+		return 1
+	fi
 
-  if ! git fetch --depth 1 origin "$3" 1>>"${BASEDIR}"/build.log 2>&1; then
-      echo -e "\nINFO: Failed to fetch commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
-      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-      echo 1
-      return 1
-  fi
+	if ! git fetch --depth 1 origin "$3" 1>>"${BASEDIR}"/build.log 2>&1; then
+		echo -e "\nINFO: Failed to fetch commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+		remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+		echo 1
+		return 1
+	fi
 
-  if ! git checkout "$3" 1>>"${BASEDIR}"/build.log 2>&1; then
-      echo -e "\nINFO: Failed to checkout commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
-      echo 1
-      return 1
-  fi
+	if ! git checkout "$3" 1>>"${BASEDIR}"/build.log 2>&1; then
+		echo -e "\nINFO: Failed to checkout commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+		echo 1
+		return 1
+	fi
 
-  echo 0
+	echo 0
 }
 
 #
@@ -2490,12 +2489,12 @@ library_is_installed() {
 	HEADER_COUNT=("${INSTALL_PATH}"/"${LIB_NAME}"/include/*)
 	LIB_COUNT=("${INSTALL_PATH}"/"${LIB_NAME}"/lib/*)
 
-  if [[ ${#HEADER_COUNT[@]} -eq 1 && ! -e "${HEADER_COUNT[0]}" ]]; then
+	if [[ ${#HEADER_COUNT[@]} -eq 1 && ! -e "${HEADER_COUNT[0]}" ]]; then
 		echo -e "INFO: No headers found under ${INSTALL_PATH}/${LIB_NAME}/include\n" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
 		return
 	fi
-  if [[ ${#LIB_COUNT[@]} -eq 1 && ! -e "${LIB_COUNT[0]}" ]]; then
+	if [[ ${#LIB_COUNT[@]} -eq 1 && ! -e "${LIB_COUNT[0]}" ]]; then
 		echo -e "INFO: No libraries found under ${INSTALL_PATH}/${LIB_NAME}/lib{lib64}\n" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
 		return
@@ -2514,7 +2513,7 @@ prepare_inline_sed() {
 }
 
 to_capital_case() {
-    echo "$(echo "${1:0:1}" | tr '[:lower:]' '[:upper:]')${1:1}"
+	echo "$(echo "${1:0:1}" | tr '[:lower:]' '[:upper:]')${1:1}"
 }
 
 #
@@ -2536,8 +2535,8 @@ create_file() {
 }
 
 compare_versions() {
-  VERSION_PARTS_1=("$(echo "$1" | tr "." " ")")
-  VERSION_PARTS_2=("$(echo "$2" | tr "." " ")")
+	VERSION_PARTS_1=("$(echo "$1" | tr "." " ")")
+	VERSION_PARTS_2=("$(echo "$2" | tr "." " ")")
 
 	for ((i = 0; (i < ${#VERSION_PARTS_1[@]}) && (i < ${#VERSION_PARTS_2[@]}); i++)); do
 
@@ -2581,13 +2580,13 @@ command_exists() {
 # 1. folder path
 #
 initialize_folder() {
-    if ! remove_path -rf "$1" 1>>"${BASEDIR}"/build.log 2>&1; then
-        return 1
-    fi
+	if ! remove_path -rf "$1" 1>>"${BASEDIR}"/build.log 2>&1; then
+		return 1
+	fi
 
-    if ! create_dir "$1" 1>>"${BASEDIR}"/build.log 2>&1; then
-        return 1
-    fi
+	if ! create_dir "$1" 1>>"${BASEDIR}"/build.log 2>&1; then
+		return 1
+	fi
 }
 
 #===============================================================================================
@@ -2659,7 +2658,7 @@ check_missing_packages() {
 	if [ "${VENDOR}" = "redhat" ] || [ "${VENDOR}" = "centos" ]; then
 		if [ -n "$(hash cmake 2>&1)" ] && [ -n "$(hash cmake3 2>&1)" ]; then missing_packages=('cmake' "${missing_packages[@]}"); fi
 	fi
-	
+
 	if [[ ${#missing_packages[@]} -gt 0 ]]; then
 		clear
 		echo -e "Could not find the following execs (svn is actually package subversion, makeinfo is actually package texinfo if you're missing them): ${missing_packages[*]}"
@@ -2928,8 +2927,8 @@ get_small_touchfile_name() { # have to call with assignment like a=$(get_small..
 	local beginning="$1"
 	local extra_stuff="$2"
 	local touch_name="${beginning}_$(echo -e -- "$extra_stuff" "$CFLAGS" "$LDFLAGS" | /usr/bin/env md5sum)" # md5sum to make it smaller, cflags to force rebuild if changes
-	touch_name=$(echo -e "$touch_name" | sed "s/ //g")                                                # md5sum introduces spaces, remove them
-	echo -e "$touch_name"                                                                             # bash cruddy return system LOL
+	touch_name=$(echo -e "$touch_name" | sed "s/ //g")                                                      # md5sum introduces spaces, remove them
+	echo -e "$touch_name"                                                                                   # bash cruddy return system LOL
 }
 # 1. configure_options
 # 2. configure_name
@@ -3162,8 +3161,8 @@ do_ninja() {
 	if [ ! -f "$touch_name" ]; then
 		echo -e
 		echo -e "ninja-ing $cur_dir2 as $ PATH=$PATH ninja -C build $extra_make_options"
-    echo -e
-    ninja -C build "$extra_make_options" || exit 1
+		echo -e
+		ninja -C build "$extra_make_options" || exit 1
 		touch "$touch_name" || exit 1 # only touch if the build was OK
 	else
 		echo -e "already did ninja $(basename "$cur_dir2")"
@@ -3243,7 +3242,8 @@ generic_download_and_make_and_install() {
 	fi
 	local extra_configure_options="$3"
 	download_and_unpack_file "$url" "$english_name"
-	change_dir "$english_name" || echo -e "unable to cd, may need to specify dir it will unpack to as parameter"; exit 1
+	change_dir "$english_name" || echo -e "unable to cd, may need to specify dir it will unpack to as parameter"
+	exit 1
 	generic_configure "$extra_configure_options"
 	do_make_and_make_install
 	change_dir ..

@@ -15,7 +15,7 @@ source "${SCRIPTDIR}/function.sh"
 
 build_dlfcn() {
 	if [[ $compiler_flavors != "native" ]]; then # build some stuff that don't build native...
-    change_dir "$src_dir"
+		change_dir "$src_dir"
 		do_git_checkout https://github.com/dlfcn-win32/dlfcn-win32.git
 		change_dir dlfcn-win32_git
 		if [[ ! -f Makefile.bak ]]; then # Change CFLAGS.
@@ -29,7 +29,7 @@ build_dlfcn() {
 }
 
 build_bzip2() {
-  change_dir "$src_dir"
+	change_dir "$src_dir"
 	download_and_unpack_file https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
 	change_dir bzip2-1.0.8
 	apply_patch "file://$WINPATCHDIR/bzip2-1.0.8_brokenstuff.diff"
@@ -161,8 +161,8 @@ build_nv_headers() {
 	change_dir "$src_dir"
 }
 
-build_intel_qsv_mfx() {   
-	change_dir "$src_dir"                                                            # disableable via command line switch...
+build_intel_qsv_mfx() {
+	change_dir "$src_dir"                                                                # disableable via command line switch...
 	do_git_checkout https://github.com/lu-zero/mfx_dispatch.git mfx_dispatch_git 2cd279f # lu-zero?? oh well seems somewhat supported...
 	change_dir mfx_dispatch_git
 	if [[ ! -f "configure" ]]; then
@@ -999,7 +999,7 @@ build_libsnappy() {
 	do_git_checkout https://github.com/google/snappy.git snappy_git # got weird failure once 1.1.8
 	change_dir snappy_git
 	do_cmake_and_install "-DBUILD_BINARY=OFF -DCMAKE_BUILD_TYPE=Release -DSNAPPY_BUILD_TESTS=OFF -DSNAPPY_BUILD_BENCHMARKS=OFF" # extra params from deadsix27 and from new cMakeLists.txt content
-	remove_path -f "$mingw_w64_x86_64_prefix/lib/libsnappy.dll.a"                                                                 # unintall shared :|
+	remove_path -f "$mingw_w64_x86_64_prefix/lib/libsnappy.dll.a"                                                               # unintall shared :|
 	change_dir "$src_dir"
 }
 
@@ -1454,7 +1454,7 @@ build_dav1d() {
 	do_git_checkout https://code.videolan.org/videolan/dav1d.git libdav1d
 	activate_meson
 	change_dir libdav1d
-	if [[ $bits_target == 32 || $bits_target == 64 ]]; then # XXX why 64???
+	if [[ $bits_target == 32 || $bits_target == 64 ]]; then   # XXX why 64???
 		apply_patch "file://$WINPATCHDIR/david_no_asm.patch" -p1 # XXX report
 	fi
 	cpu_count=1 # XXX report :|
@@ -1841,7 +1841,7 @@ build_qt() {
 	do_configure "-static -release -fast -no-exceptions -no-stl -no-sql-sqlite -no-qt3support -no-gif -no-libmng -qt-libjpeg -no-libtiff -no-qdbus -no-openssl -no-webkit -sse -no-script -no-multimedia -no-phonon -opensource -no-scripttools -no-opengl -no-script -no-scripttools -no-declarative -no-declarative-debug -opensource -no-s60 -host-little-endian -confirm-license -xplatform win32-g++ -device-option CROSS_COMPILE=$cross_prefix -prefix $mingw_w64_x86_64_prefix -prefix-install -nomake examples"
 	if [ ! -f 'already_qt_maked_k' ]; then
 		make sub-src -j "$(get_cpu_count)"
-		make install sub-src                                                                    # let it fail, baby, it still installs a lot of good stuff before dying on mng...? huh wuh?
+		make install sub-src                                                                      # let it fail, baby, it still installs a lot of good stuff before dying on mng...? huh wuh?
 		cp ./plugins/imageformats/libqjpeg.a "$mingw_w64_x86_64_prefix/lib" || exit 1             # I think vlc's install is just broken to need this [?]
 		cp ./plugins/accessible/libqtaccessiblewidgets.a "$mingw_w64_x86_64_prefix/lib" || exit 1 # this feels wrong...
 		# do_make_and_make_install "sub-src" # sub-src might make the build faster? # complains on mng? huh?
@@ -1881,7 +1881,7 @@ build_vlc() {
 	fi
 	export DVDREAD_LIBS='-ldvdread -ldvdcss -lpsapi'
 	do_configure "--disable-libgcrypt --disable-a52 --host=$host_target --disable-lua --disable-mad --enable-qt --disable-sdl --disable-mod" # don't have lua mingw yet, etc. [vlc has --disable-sdl [?]] x265 disabled until we care enough... Looks like the bluray problem was related to the BLURAY_LIBS definition. [not sure what's wrong with libmod]
-	remove_path -f "$(find . -name "*.exe")"                                                                                                     # try to force a rebuild...though there are tons of .a files we aren't rebuilding as well FWIW...:|
+	remove_path -f "$(find . -name "*.exe")"                                                                                                 # try to force a rebuild...though there are tons of .a files we aren't rebuilding as well FWIW...:|
 	remove_path -f already_ran_make*                                                                                                         # try to force re-link just in case...
 	do_make
 	# do some gymnastics to avoid building the mozilla plugin for now [couldn't quite get it to work]
@@ -2473,14 +2473,14 @@ install_pkg_config_file() {
 
 	# DELETE OLD FILE
 	if ! remove_path -rf "$DESTINATION" 2>>"$LOG_FILE"; then
-			echo -e "failed\n\nSee $LOG_FILE for details\n"
-			exit 1
+		echo -e "failed\n\nSee $LOG_FILE for details\n"
+		exit 1
 	fi
 
 	# INSTALL THE NEW FILE
 	if ! copy_path "$SOURCE" "$DESTINATION" 2>>"$LOG_FILE"; then
-			echo -e "failed\n\nSee $LOG_FILE for details\n"
-			exit 1
+		echo -e "failed\n\nSee $LOG_FILE for details\n"
+		exit 1
 	fi
 
 	prepare_inline_sed
@@ -2644,7 +2644,7 @@ install_ffmpeg() {
 	echo -e "INFO: Moving all binaries" | tee -a "$LOG_FILE"
 
 	{
-		mv "*/*.a" "${install_prefix}/bin" 
+		mv "*/*.a" "${install_prefix}/bin"
 		mv "*/*.dylib" "${install_prefix}/bin"
 		mv "*/*.lib" "${install_prefix}/bin"
 		mv "*/*.dll" "${install_prefix}/bin"
@@ -2688,32 +2688,32 @@ install_ffmpeg_pkg() {
 
 	# # MANUALLY ADD REQUIRED HEADERS
 	{
-		mkdir -p "${install_prefix}"/include/libavutil/x86 
-		mkdir -p "${install_prefix}"/include/libavutil/arm 
-		mkdir -p "${install_prefix}"/include/libavutil/aarch64 
-		mkdir -p "${install_prefix}"/include/libavcodec/x86 
-		mkdir -p "${install_prefix}"/include/libavcodec/arm 
-		overwrite_file "${ffmpeg_source_dir}"/config.h "${install_prefix}"/include/config.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavcodec/mathops.h "${install_prefix}"/include/libavcodec/mathops.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavcodec/x86/mathops.h "${install_prefix}"/include/libavcodec/x86/mathops.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavcodec/arm/mathops.h "${install_prefix}"/include/libavcodec/arm/mathops.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavformat/network.h "${install_prefix}"/include/libavformat/network.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavformat/os_support.h "${install_prefix}"/include/libavformat/os_support.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavformat/url.h "${install_prefix}"/include/libavformat/url.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/attributes_internal.h "${install_prefix}"/include/libavutil/attributes_internal.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/bprint.h "${install_prefix}"/include/libavutil/bprint.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/getenv_utf8.h "${install_prefix}"/include/libavutil/getenv_utf8.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/internal.h "${install_prefix}"/include/libavutil/internal.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/libm.h "${install_prefix}"/include/libavutil/libm.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/reverse.h "${install_prefix}"/include/libavutil/reverse.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/thread.h "${install_prefix}"/include/libavutil/thread.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/timer.h "${install_prefix}"/include/libavutil/timer.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/asm.h "${install_prefix}"/include/libavutil/x86/asm.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/timer.h "${install_prefix}"/include/libavutil/x86/timer.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/arm/timer.h "${install_prefix}"/include/libavutil/arm/timer.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/aarch64/timer.h "${install_prefix}"/include/libavutil/aarch64/timer.h 
-		overwrite_file "${ffmpeg_source_dir}"/compat/w32pthreads.h "${install_prefix}"/include/libavutil/compat/w32pthreads.h 
-		overwrite_file "${ffmpeg_source_dir}"/libavutil/wchar_filename.h "${install_prefix}"/include/libavutil/wchar_filename.h 
+		mkdir -p "${install_prefix}"/include/libavutil/x86
+		mkdir -p "${install_prefix}"/include/libavutil/arm
+		mkdir -p "${install_prefix}"/include/libavutil/aarch64
+		mkdir -p "${install_prefix}"/include/libavcodec/x86
+		mkdir -p "${install_prefix}"/include/libavcodec/arm
+		overwrite_file "${ffmpeg_source_dir}"/config.h "${install_prefix}"/include/config.h
+		overwrite_file "${ffmpeg_source_dir}"/libavcodec/mathops.h "${install_prefix}"/include/libavcodec/mathops.h
+		overwrite_file "${ffmpeg_source_dir}"/libavcodec/x86/mathops.h "${install_prefix}"/include/libavcodec/x86/mathops.h
+		overwrite_file "${ffmpeg_source_dir}"/libavcodec/arm/mathops.h "${install_prefix}"/include/libavcodec/arm/mathops.h
+		overwrite_file "${ffmpeg_source_dir}"/libavformat/network.h "${install_prefix}"/include/libavformat/network.h
+		overwrite_file "${ffmpeg_source_dir}"/libavformat/os_support.h "${install_prefix}"/include/libavformat/os_support.h
+		overwrite_file "${ffmpeg_source_dir}"/libavformat/url.h "${install_prefix}"/include/libavformat/url.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/attributes_internal.h "${install_prefix}"/include/libavutil/attributes_internal.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/bprint.h "${install_prefix}"/include/libavutil/bprint.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/getenv_utf8.h "${install_prefix}"/include/libavutil/getenv_utf8.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/internal.h "${install_prefix}"/include/libavutil/internal.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/libm.h "${install_prefix}"/include/libavutil/libm.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/reverse.h "${install_prefix}"/include/libavutil/reverse.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/thread.h "${install_prefix}"/include/libavutil/thread.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/timer.h "${install_prefix}"/include/libavutil/timer.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/asm.h "${install_prefix}"/include/libavutil/x86/asm.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/timer.h "${install_prefix}"/include/libavutil/x86/timer.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/arm/timer.h "${install_prefix}"/include/libavutil/arm/timer.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/aarch64/timer.h "${install_prefix}"/include/libavutil/aarch64/timer.h
+		overwrite_file "${ffmpeg_source_dir}"/compat/w32pthreads.h "${install_prefix}"/include/libavutil/compat/w32pthreads.h
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/wchar_filename.h "${install_prefix}"/include/libavutil/wchar_filename.h
 	} 1>>"$LOG_FILE"2 >&1
 
 	echo -e "INFO: Done installing ffmpeg pkg-config\n" | tee -a "$LOG_FILE"
