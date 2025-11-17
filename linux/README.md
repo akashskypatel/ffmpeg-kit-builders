@@ -28,7 +28,7 @@ valid for Debian/Ubuntu. Some packages may have a different name if you are on a
 - The following packages are required by the build scripts.
 
   ```
-  clang llvm lld libclang-14-dev libstdc++6 nasm autoconf automake libtool pkg-config curl git doxygen rapidjson-dev
+  clang llvm lld libclang-14-dev libstdc++6 nasm autoconf automake libtool pkg-config curl git doxygen jsoncpp-dev
   ```
 
 - These optional packages should be installed only if you want to build corresponding external libraries.
