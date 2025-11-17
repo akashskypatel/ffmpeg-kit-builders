@@ -19,45 +19,6 @@ find_all_build_exes() {
   echo -e "$found" # pseudo return value...
 }
 
-check_native() {
-  echo -e "Building ffmpeg dependency libraries..."
-  if [[ $compiler_flavors != "native" ]]; then # build some stuff that don't build native...
-    build_dlfcn
-    build_libxavs
-  fi
-}
-
-check_host_target() {
-  if [[ $host_target != 'i686-w64-mingw32' ]]; then
-    build_libxavs2
-  fi
-}
-
-check_gpulibs() {
-  if [[ $build_amd_amf = y ]]; then
-    build_amd_amf_headers
-  fi
-  if [[ $compiler_flavors != "native" ]]; then
-    build_libvpl
-  fi
-}
-
-check_build_libsndfile() {
-  build_libsndfile "install-libgsm"
-}
-
-check_svt() {
-  if [[ "$bits_target" != "32" ]]; then
-    if [[ $build_svt_hevc = y ]]; then
-      build_svt-hevc
-    fi
-    if [[ $build_svt_vp9 = y ]]; then
-      build_svt-vp9
-    fi
-    build_svt-av1
-  fi
-}
-
 check_audiotoolbox() {
   # if [[ "$non_free" = "y" ]]; then
   #   build_fdk-aac # Uses dlfcn.
@@ -68,26 +29,6 @@ check_audiotoolbox() {
     build_libdecklink # Error finding rpc.h in native builds even if it's available
   fi
   #fi
-}
-
-check_libaribcaption() {
-  if [[ $ffmpeg_git_checkout_version != *"n6.0"* ]] && [[ $ffmpeg_git_checkout_version != *"n5"* ]] && [[ $ffmpeg_git_checkout_version != *"n4"* ]] && [[ $ffmpeg_git_checkout_version != *"n3"* ]] && [[ $ffmpeg_git_checkout_version != *"n2"* ]]; then 
-    # Disable libaribcatption on old versions
-    build_libaribcaption
-  fi
-}
-
-check_libtensorflow() {
-  if [[ $compiler_flavors != "native" ]]; then
-    build_libtensorflow # requires tensorflow.dll
-  fi	
-}
-
-check_vulkan_libplacebo() {
-  if [[ $OSTYPE != darwin* ]]; then
-    build_vulkan
-    build_libplacebo
-  fi
 }
 
 build_all_ffmpeg_dependencies() {
@@ -205,26 +146,6 @@ setup_build_environment() {
 --strip=$(realpath ${cross_prefix}strip) \
 --cxx=$(realpath ${cross_prefix}g++)"
     export LIB_INSTALL_BASE=$work_dir
-  elif [[ $flavor == "native" ]]; then
-    export mingw_w64_x86_64_prefix="$(realpath "$WORKDIR"/native/cross_compilers/native)"
-    export mingw_bin_path="$(realpath "$WORKDIR"/native/cross_compilers/native/bin)"
-    export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
-    export PATH="$mingw_bin_path:$original_path"
-    export compiler_flags="PREFIX=$mingw_w64_x86_64_prefix"
-    export make_prefix_options="--prefix=$mingw_w64_x86_64_prefix"
-    if [[ $(uname -m) =~ 'i686' ]]; then 
-      export ARCH="i686"
-      export FULL_ARCH="i686"
-      export bits_target=32; 
-    else 
-      export ARCH="x86-64"
-      export FULL_ARCH="x86_64"
-      export bits_target=64; 
-    fi
-    export CPATH=$WORKDIR/cross_compilers/native/include:/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Carbon.framework/Versions/A/Headers # C_INCLUDE_PATH
-    export LIBRARY_PATH=$WORKDIR/cross_compilers/native/lib
-    export work_dir="$(realpath "$WORKDIR"/native)"
-    export LIB_INSTALL_BASE=$work_dir
   else
     echo -e "Error: Unknown compiler flavor '$flavor'"
     exit 1
@@ -235,7 +156,7 @@ setup_build_environment() {
   export ffmpeg_source_dir="${work_dir}/ffmpeg"
   export install_prefix="$ffmpeg_source_dir/build_$(get_build_type)" # install them to their a separate dir
   export ffmpeg_kit_install="${work_dir}/ffmpeg-kit_$(get_build_type)"
-
+  export ffmpeg_kit_bundle="${work_dir}/$(get_bundle_directory)"
   create_dir "$work_dir"
   change_dir "$work_dir" || exit
 }
@@ -463,33 +384,15 @@ detect_clang_version() {
 }
 
 set_toolchain_paths() {
-  HOST=$(get_host)
-  CLANG_VERSION=$(detect_clang_version)
-
-  if [[ $CLANG_VERSION != "none" ]]; then
-    local CLANG_POSTFIX="-$CLANG_VERSION"
-    export LLVM_CONFIG_CFLAGS=$(llvm-config-$CLANG_VERSION --cflags 2>>$LOG_FILE)
-    export LLVM_CONFIG_INCLUDEDIR=$(llvm-config-$CLANG_VERSION --includedir 2>>$LOG_FILE)
-    export LLVM_CONFIG_LDFLAGS=$(llvm-config-$CLANG_VERSION --ldflags 2>>$LOG_FILE)
-  else
-    local CLANG_POSTFIX=""
-    export LLVM_CONFIG_CFLAGS=$(llvm-config --cflags 2>>$LOG_FILE)
-    export LLVM_CONFIG_INCLUDEDIR=$(llvm-config --includedir 2>>$LOG_FILE)
-    export LLVM_CONFIG_LDFLAGS=$(llvm-config --ldflags 2>>$LOG_FILE)
-  fi
-
-  export CC=$(command -v "${cross_prefix}gcc")
-  export CXX=$(command -v "${cross_prefix}g++")
-  export AS=$(command -v "${cross_prefix}as")
-  export AR=$(command -v "${cross_prefix}ar")
-  export LD=$(command -v "${cross_prefix}ld")
-  export RANLIB=$(command -v "${cross_prefix}ranlib")
-  export STRIP=$(command -v "${cross_prefix}strip")
-  export NM=$(command -v "${cross_prefix}nm")
-
-  if [ ! -d "${INSTALL_PKG_CONFIG_DIR}" ]; then
-    create_dir "${INSTALL_PKG_CONFIG_DIR}" 1>>$LOG_FILE 2>&1
-  fi
+  export PATH="${PATH}:${mingw_bin_path}:${mingw_w64_x86_64_prefix}/bin"
+  export CC="${cross_prefix}gcc"
+  export AR="$(realpath "${cross_prefix}ar")"
+  export AS="$(realpath "${cross_prefix}as")"
+  export NM="$(realpath "${cross_prefix}nm")"
+  export RANLIB="$(realpath "${cross_prefix}ranlib")"
+  export LD="$(realpath "${cross_prefix}ld")"
+  export STRIP="$(realpath "${cross_prefix}strip")"
+  export CXX="$(realpath "${cross_prefix}g++")"
 }
 
 enable_lts_build() {
@@ -516,8 +419,8 @@ install_pkg_config_file() {
   fi
   prepare_inline_sed
   # UPDATE PATHS
-  ${SED_INLINE} "s|${ffmpeg_kit_install}|${FFMPEG_KIT_BUNDLE_DIRECTORY}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
-  ${SED_INLINE} "s|${ffmpeg_source_dir}|${FFMPEG_KIT_BUNDLE_DIRECTORY}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
+  ${SED_INLINE} "s|${ffmpeg_kit_install}|${ffmpeg_kit_bundle}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
+  ${SED_INLINE} "s|${ffmpeg_source_dir}|${ffmpeg_kit_bundle}|g" "$DESTINATION" 1>>$LOG_FILE 2>&1 || return 1
 }
 
 get_ffmpeg_kit_version() {
@@ -561,10 +464,6 @@ install_cross_compiler() {
 
   if [[ -z $compiler_flavors ]]; then
     pick_compiler_flavors
-  fi
-  if [[ $compiler_flavors == "native" ]]; then
-    echo -e "native build, not building any cross compilers..." 1>> $LOG_FILE 2>&1
-    return
   fi
   setup_build_environment "$compiler_flavors"
   create_dir cross_compilers
@@ -670,7 +569,7 @@ install_ffmpeg() {
 
   create_dir $install_prefix
 
-  do_make_and_make_install 1>> $LOG_FILE 2>&1
+  do_make_and_make_install "" "" "$(get_build_type)" 1>> $LOG_FILE 2>&1
   
   echo -e "INFO: Moving all binaries" | tee -a "$LOG_FILE"
 
@@ -755,7 +654,7 @@ configure_ffmpeg() {
   change_dir "$ffmpeg_source_dir" 1>>$LOG_FILE 2>&1 || return 1
 
   if [[ $BUILD_FORCE == "1" ]]; then
-    remove_path -f ${ffmpeg_source_dir}/already_*
+    remove_path -f ${ffmpeg_source_dir}/already_configured_$(get_build_type)*
   fi
 
   # SET DEBUG OPTIONS
@@ -994,7 +893,7 @@ configure_ffmpeg() {
     fi
     config_options+=" $extra_postpend_configure_options"
 
-    do_configure "$config_options" 1>> $LOG_FILE 2>&1
+    do_configure "$config_options" "./configure" "$(get_build_type)" 1>> $LOG_FILE 2>&1
 
   echo -e "INFO: Done configuering ffmpeg\n" | tee -a "$LOG_FILE"
 }
@@ -1012,15 +911,7 @@ configure_ffmpeg_kit() {
   create_dir $ffmpeg_kit_install
 
   export PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:${install_prefix}/lib/pkgconfig"
-  export PATH="${PATH}"
-  export CC="${cross_prefix}gcc"
-  export AR="$(realpath "${cross_prefix}ar")"
-  export AS="$(realpath "${cross_prefix}as")"
-  export NM="$(realpath "${cross_prefix}nm")"
-  export RANLIB="$(realpath "${cross_prefix}ranlib")"
-  export LD="$(realpath "${cross_prefix}ld")"
-  export STRIP="$(realpath "${cross_prefix}strip")"
-  export CXX="$(realpath "${cross_prefix}g++")"
+  set_toolchain_paths
 
   reset_cflags
   reset_cppflags    
@@ -1052,7 +943,7 @@ configure_ffmpeg_kit() {
     config_options+=" --disable-static"
   fi
   change_dir "${BASEDIR}/windows"
-    do_configure "${config_options}" "./configure" 1>> $LOG_FILE 2>&1 || return 1
+    do_configure "${config_options}" "./configure" "${TYPE_POSTFIX}" 1>> $LOG_FILE 2>&1 || return 1
   
   echo -e "INFO: Done configuring ffmpeg kit\n" | tee -a "$LOG_FILE"
 }
@@ -1089,7 +980,7 @@ install_ffmpeg_kit() {
   echo -e "INFO: Installing ffmpeg kit to ${ffmpeg_kit_install}\n" | tee -a "$LOG_FILE"
   
   change_dir "${BASEDIR}/windows"
-    do_make_and_make_install 1>>$LOG_FILE 2>&1
+    do_make_and_make_install "" "" "$(get_build_type)" 1>>$LOG_FILE 2>&1
 
   create_ffmpegkit_package_config "$(get_ffmpeg_kit_version)" 1>> $LOG_FILE 2>&1 || return 1
 
@@ -1102,35 +993,26 @@ get_bundle_directory() {
     LTS_POSTFIX="-lts"
   fi
   local TYPE_POSTFIX="$(get_build_type)"
-  echo -e "bundle-windows-${TYPE_POSTFIX}-${LTS_POSTFIX}"
-}
-
-get_build_type() {
-  if [[ ${build_ffmpeg_static,,} =~ ^(y|yes|1|true|on)$ ]]; then
-    echo "static"
-  else
-    echo "shared"
-  fi
+  echo -e "bundle-windows-${TYPE_POSTFIX}${LTS_POSTFIX}"
 }
 
 create_windows_bundle() {
   echo -e "INFO: Creating bundle" 1>>$LOG_FILE 2>&1
   local TYPE_POSTFIX="$(get_build_type)"
   local FFMPEG_KIT_VERSION=$(get_ffmpeg_kit_version)
-  export FFMPEG_KIT_BUNDLE_DIRECTORY="${BASEDIR}/prebuilt/$(get_bundle_directory)"
 
   if [[ $BUILD_FORCE == "1" ]]; then
     remove_path -rf "${BASEDIR}"/windows/already_bundled_${TYPE_POSTFIX}*
   fi
 
-  local touch_name=$(get_small_touchfile_name already_bundled_${TYPE_POSTFIX} "$FFMPEG_KIT_VERSION $FFMPEG_KIT_BUNDLE_DIRECTORY")
+  local touch_name=$(get_small_touchfile_name already_bundled_${TYPE_POSTFIX} "$FFMPEG_KIT_VERSION $ffmpeg_kit_bundle")
   if [ ! -f "$touch_name" ]; then
-    export FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/include"
-    export FFMPEG_KIT_BUNDLE_LIB_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/lib"
-    export FFMPEG_KIT_BUNDLE_BIN_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/bin"
-    export FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY="${FFMPEG_KIT_BUNDLE_DIRECTORY}/pkgconfig"
-    remove_path "-rf" "${FFMPEG_KIT_BUNDLE_DIRECTORY}"
-    create_dir "${FFMPEG_KIT_BUNDLE_DIRECTORY}"
+    export FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY="${ffmpeg_kit_bundle}/include"
+    export FFMPEG_KIT_BUNDLE_LIB_DIRECTORY="${ffmpeg_kit_bundle}/lib"
+    export FFMPEG_KIT_BUNDLE_BIN_DIRECTORY="${ffmpeg_kit_bundle}/bin"
+    export FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY="${ffmpeg_kit_bundle}/pkgconfig"
+    remove_path "-rf" "${ffmpeg_kit_bundle}"
+    create_dir "${ffmpeg_kit_bundle}"
     create_dir "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}"
     create_dir "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}"
     create_dir "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}"
@@ -1157,7 +1039,7 @@ create_windows_bundle() {
     install_pkg_config_file "libavutil.pc"
     install_pkg_config_file "ffmpeg-kit.pc"
 
-    local LICENSE_BASEDIR="${FFMPEG_KIT_BUNDLE_DIRECTORY}/licenses"
+    local LICENSE_BASEDIR="${ffmpeg_kit_bundle}/licenses"
 
     create_dir "${LICENSE_BASEDIR}"
 
@@ -1170,4 +1052,74 @@ create_windows_bundle() {
     touch -- "$touch_name"
   fi
   echo -e "INFO: Done creating bundle\n" | tee -a "$LOG_FILE"
+}
+
+
+pick_clean_type() {
+  while [[ ! "$clean_type" =~ ^([1-5]|"all"|"ffmpeg"|"ffmpeg-kit"|"ffmpeg-kit-bundle")$ ]]; do
+    if [[ -n "${unknown_opts[@]}" ]]; then
+      echo -e -n 'Unknown option(s)'
+      for unknown_opt in "${unknown_opts[@]}"; do
+        echo -e -n " '$unknown_opt'"
+      done
+      echo -e ', ignored.'; echo
+    fi
+    cat <<'EOF'
+What would you like to clean?
+  1. all
+  2. ffmpeg
+  3. ffmpeg-kit
+  4. ffmpeg-kit-bundle
+  5. Exit
+EOF
+    echo -e -n 'Input your choice [1-5]: '
+    read -r clean_type
+  done
+  case "$clean_type" in
+  1 )                 export clean_type="all" ;;
+  2 )                 export clean_type="ffmpeg" ;;
+  3 )                 export clean_type="ffmpeg-kit" ;;
+  4 )                 export clean_type="ffmpeg-kit-bundle" ;;
+  all )               export clean_type="all" ;;
+  ffmpeg )            export clean_type="ffmpeg" ;;
+  ffmpeg-kit )        export clean_type="ffmpeg-kit" ;;
+  ffmpeg-kit-bundle ) export clean_type="ffmpeg-kit-bundle" ;;
+  5 ) echo -e "exiting"; exit 0 ;;
+  * ) echo -e 'Your choice was not valid, please try again.'; echo ;;
+  esac
+}
+
+clean_ffmpeg_builds() {
+  if [[ -z $compiler_flavors ]]; then
+    pick_compiler_flavors
+  fi
+  pick_clean_type
+  if [[ ${compiler_flavors,,} =~ ^(multi)$ ]]; then
+    clean_builds "win32"
+    clean_builds "win64"
+  else
+    clean_builds "$compiler_flavors"
+    exit 0
+  fi
+}
+
+clean_builds() {
+  local build_flavor=$1
+  if [[ -z $build_flavor ]]; then
+    exit 1;
+  fi
+  pick_compiler_flavors $build_flavor
+  setup_build_environment "$compiler_flavors"
+  if [[ ${clean_type,,} =~ ^("all"|"ffmpeg")$ ]]; then
+    echo -e "INFO: Deleting ${install_prefix}..."
+    remove_path "${install_prefix}"
+  fi
+  if [[ ${clean_type,,} =~ ^("all"|"ffmpeg-kit")$ ]]; then
+    echo -e "INFO: Deleting ${ffmpeg_kit_install}..."
+    remove_path "${ffmpeg_kit_install}"
+  fi
+  if [[ ${clean_type,,} =~ ^("all"|"ffmpeg-kit-bundle")$ ]]; then
+    echo -e "INFO: Deleting ${ffmpeg_kit_bundle}..."
+    remove_path "${ffmpeg_kit_bundle}"
+  fi
 }

@@ -54,7 +54,7 @@ create_dir()
     execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
           sudo chown -R "$USER":"$USER" "$path"
     execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
-          sudo chmod -R 755 "$USER":"$USER" "$path"
+          sudo chmod -R 755 "$path"
 }
 
 remove_path()
@@ -76,7 +76,7 @@ remove_path()
             execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
                 chown -R "$USER":"$USER" "$path"
             execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
-                chmod -R 755 "$USER":"$USER" "$path"
+                sudo chmod -R 755 "$path"
             execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" "true" \
                 rm $options "$path"
         else
@@ -98,7 +98,7 @@ change_dir()
           cd "$path"
       if [[ ! -r "$path" ]] || [[ ! -w "$path" ]] || [[ ! -x "$path" ]]; then
         execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "false" \
-                chmod -R 755 "$USER":"$USER" "$path"
+                sudo chmod -R 755 "$path"
       fi
     else
       echo -e "INFO: path ${path} does not exist" 1>> $LOG_FILE 2>&1
@@ -150,7 +150,7 @@ copy_path()
     execute "INFO: updating permissions on copied path: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "false" \
         sudo chown -R "$USER":"$USER" "$destination_path"
     execute "INFO: updating path permissions: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "false" \
-        chmod -R 755 "$USER":"$USER" "$destination_path"
+        sudo chmod -R 755 "$destination_path"
 }
 
 check_files_exist()
@@ -2699,6 +2699,14 @@ initialize_folder() {
 #                                           WINDOWS
 #===============================================================================================
 
+get_build_type() {
+  if [[ ${build_ffmpeg_static,,} =~ ^(y|yes|1|true|on)$ ]]; then
+    echo "static"
+  else
+    echo "shared"
+  fi
+}
+
 set_box_memory_size_bytes() {
   if [[ $OSTYPE == darwin* ]]; then
     box_memory_size_bytes=20000000000 # 20G fake it out for now :|
@@ -3027,22 +3035,24 @@ get_small_touchfile_name() { # have to call with assignment like a=$(get_small..
   touch_name=$(echo -e "$touch_name" | sed "s/ //g") # md5sum introduces spaces, remove them
   echo -e "$touch_name" # bash cruddy return system LOL
 }
-
+# 1. configure_options
+# 2. configure_name
+# 3. touch_postfix
 do_configure() {
   local configure_options="$1"
   local configure_name="$2"
-  local touch_suffix="_$3"
+  local touch_postfix="_$3"
   if [[ "$configure_name" = "" ]]; then
     configure_name="./configure"
   fi
   local cur_dir2=$(pwd)
   local english_name=$(basename $cur_dir2)
-  local touch_name=$(get_small_touchfile_name already_configured${touch_suffix} "$configure_options $configure_name")
+  local touch_name=$(get_small_touchfile_name already_configured${touch_postfix} "$configure_options $configure_name")
   if [ ! -f "$touch_name" ]; then
     # make uninstall # does weird things when run under ffmpeg src so disabled for now...
 
     echo -e "configuring $english_name ($PWD) as $ PKG_CONFIG_PATH=$PKG_CONFIG_PATH PATH=$mingw_bin_path:\$PATH $configure_name $configure_options" # say it now in case bootstrap fails etc.
-    echo -e "all touch files" already_configured${touch_suffix}* touchname= "$touch_name"
+    echo -e "all touch files" already_configured${touch_postfix}* touchname= "$touch_name"
     echo -e "config options "$configure_options $configure_name""
     if [ -f bootstrap ]; then
       ./bootstrap # some need this to create ./configure :|
@@ -3065,13 +3075,13 @@ do_configure() {
   fi
 }
 # 1. extra_make_options
-# 2. touch_suffix
+# 2. touch_postfix
 do_make() {
   local extra_make_options="$1"
-  local touch_suffix="_$2"
+  local touch_postfix="_$2"
   extra_make_options="$extra_make_options -j $(get_cpu_count)"
   local cur_dir2=$(pwd)
-  local touch_name=$(get_small_touchfile_name already_ran_make${touch_suffix} "$extra_make_options" )
+  local touch_name=$(get_small_touchfile_name already_ran_make${touch_postfix} "$extra_make_options" )
 
   if [ ! -f $touch_name ]; then
     echo -e
@@ -3088,27 +3098,27 @@ do_make() {
 }
 # 1. extra_make_options
 # 2. extra_install_options
-# 3. touch_suffix
+# 3. touch_postfix
 do_make_and_make_install() {
   extra_make_options="$1"
   extra_install_options="$2"
-  touch_suffix="$3"
-  do_make "$extra_make_options" "$touch_suffix"
-  do_make_install "$extra_make_options" "$extra_install_options" "$touch_suffix"
+  touch_postfix="$3"
+  do_make "$extra_make_options" "$touch_postfix"
+  do_make_install "$extra_make_options" "$extra_install_options" "$touch_postfix"
 }
 # 1. extra_make_options
 # 2. extra_install_options
-# 3. touch_suffix
+# 3. touch_postfix
 do_make_install() {
   local extra_make_install_options="$1"
   local override_make_install_options="$2" # startingly, some need/use something different than just 'make install'
-  local touch_suffix="_$3"
+  local touch_postfix="_$3"
   if [[ -z $override_make_install_options ]]; then
     local make_install_options="install $extra_make_install_options"
   else
     local make_install_options="$override_make_install_options $extra_make_install_options"
   fi
-  local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_suffix} "$make_install_options")
+  local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_postfix} "$make_install_options")
   if [ ! -f $touch_name ]; then
     echo -e "make installing $(pwd) as $ PATH=$mingw_bin_path:\$PATH make $make_install_options"
     nice make $make_install_options || exit 1
@@ -3117,15 +3127,15 @@ do_make_install() {
 }
 # 1. extra_args
 # 2. source_dir
-# 3. touch_suffix
+# 3. touch_postfix
 do_cmake() {
   extra_args="$1"
   local build_from_dir="$2"
-  local touch_suffix="_$3"
+  local touch_postfix="_$3"
   if [[ -z $build_from_dir ]]; then
     build_from_dir="."
   fi
-  local touch_name=$(get_small_touchfile_name already_ran_cmake${touch_suffix} "$extra_args")
+  local touch_name=$(get_small_touchfile_name already_ran_cmake${touch_postfix} "$extra_args")
 
   if [ ! -f $touch_name ]; then
     remove_path -f already_* # reset so that make will run again if option just changed
@@ -3149,22 +3159,22 @@ do_cmake() {
 }
 # 1. extra_args
 # 2. source_dir
-# 3. touch_suffix
+# 3. touch_postfix
 do_cmake_from_build_dir() { # some sources don't allow it, weird XXX combine with the above :)
   source_dir="$1"
   extra_args="$2"
-  touch_suffix="$3"
-  do_cmake "$extra_args" "$source_dir" "$touch_suffix"
+  touch_postfix="$3"
+  do_cmake "$extra_args" "$source_dir" "$touch_postfix"
 }
 # 1. extra_args
 # 2. source_dir
-# 3. touch_suffix
+# 3. touch_postfix
 do_cmake_and_install() {
   source_dir="$1"
   extra_args="$2"
-  touch_suffix="$3"
-  do_cmake "$extra_args" "$source_dir" "$touch_suffix"
-  do_make_and_make_install "$extra_args" "" "$touch_suffix"
+  touch_postfix="$3"
+  do_cmake "$extra_args" "$source_dir" "$touch_postfix"
+  do_make_and_make_install "$extra_args" "" "$touch_postfix"
 }
 
 activate_meson() {
@@ -3180,19 +3190,22 @@ activate_meson() {
     fi
   change_dir ..
 }
-
+# 1. configure_options
+# 2. configure_name
+# 2. configure_env
+# 4. touch_postfix
 do_meson() {
     local configure_options="$1 --unity=off"
     local configure_name="$2"
     local configure_env="$3"
-    local touch_suffix="_$4"
+    local touch_postfix="_$4"
     local configure_noclean=""
     if [[ "$configure_name" = "" ]]; then
         configure_name="meson"
     fi
     local cur_dir2=$(pwd)
     local english_name=$(basename $cur_dir2)
-    local touch_name=$(get_small_touchfile_name already_built_meson${touch_suffix} "$configure_options $configure_name $LDFLAGS $CFLAGS")
+    local touch_name=$(get_small_touchfile_name already_built_meson${touch_postfix} "$configure_options $configure_name $LDFLAGS $CFLAGS")
     if [ ! -f "$touch_name" ]; then
         if [ "$configure_noclean" != "noclean" ]; then
             make clean # just in case
@@ -3208,24 +3221,26 @@ do_meson() {
     fi
 }
 # 1. extra_args
-# 2. touch_suffix
+# 2. touch_postfix
 generic_meson() {
     local extra_configure_options="$1"
-    local touch_suffix="$2"
+    local touch_postfix="$2"
     create_dir build
-    do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" "$touch_suffix" # --cross-file=${BASEDIR}/meson-cross.mingw.txt
+    do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" "$touch_postfix" # --cross-file=${BASEDIR}/meson-cross.mingw.txt
 }
-
+# 1. extra_args
+# 2. touch_postfix
 generic_meson_ninja_install() {
     generic_meson "$1" "$2"
-    do_ninja_and_ninja_install "$2"
+    do_ninja_and_ninja_install "$1" "$2"
 }
-
+# 1. extra_args
+# 2. touch_postfix
 do_ninja_and_ninja_install() {
     local extra_ninja_options="$1"
-    local touch_suffix="_$2"
-    do_ninja "$extra_ninja_options"
-    local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_suffix} "$extra_ninja_options")
+    local touch_postfix="_$2"
+    do_ninja "$extra_ninja_options" "$touch_postfix"
+    local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_postfix} "$extra_ninja_options")
     if [ ! -f $touch_name ]; then
         echo -e "ninja installing $(pwd) as $PATH=$PATH ninja -C build install $extra_make_options"
         ninja -C build install || exit 1
@@ -3233,11 +3248,12 @@ do_ninja_and_ninja_install() {
     fi
 }
 
+# 1. touch_postfix
 do_ninja() {
-  local touch_suffix="_$1"
+  local touch_postfix="_$1"
   local extra_make_options=" -j $(get_cpu_count)"
   local cur_dir2=$(pwd)
-  local touch_name=$(get_small_touchfile_name already_ran_make${touch_suffix} "${extra_make_options}")
+  local touch_name=$(get_small_touchfile_name already_ran_make${touch_postfix} "${extra_make_options}")
 
   if [ ! -f $touch_name ]; then
     echo -e
@@ -3363,15 +3379,17 @@ gen_ld_script() {
 #===============================================================================================
 
 build_dlfcn() {
-  do_git_checkout https://github.com/dlfcn-win32/dlfcn-win32.git
-  change_dir dlfcn-win32_git
-    if [[ ! -f Makefile.bak ]]; then # Change CFLAGS.
-      sed -i.bak "s/-O3/-O2/" Makefile
-    fi
-    do_configure "--prefix=$mingw_w64_x86_64_prefix --cross-prefix=$cross_prefix" # rejects some normal cross compile options so custom here
-    do_make_and_make_install
-    gen_ld_script libdl.a dl_s -lpsapi # dlfcn-win32's 'README.md': "If you are linking to the static 'dl.lib' or 'libdl.a', then you would need to explicitly add 'psapi.lib' or '-lpsapi' to your linking command, depending on if MinGW is used."
-  change_dir ..
+  if [[ $compiler_flavors != "native" ]]; then # build some stuff that don't build native...
+    do_git_checkout https://github.com/dlfcn-win32/dlfcn-win32.git
+    change_dir dlfcn-win32_git
+      if [[ ! -f Makefile.bak ]]; then # Change CFLAGS.
+        sed -i.bak "s/-O3/-O2/" Makefile
+      fi
+      do_configure "--prefix=$mingw_w64_x86_64_prefix --cross-prefix=$cross_prefix" # rejects some normal cross compile options so custom here
+      do_make_and_make_install
+      gen_ld_script libdl.a dl_s -lpsapi # dlfcn-win32's 'README.md': "If you are linking to the static 'dl.lib' or 'libdl.a', then you would need to explicitly add 'psapi.lib' or '-lpsapi' to your linking command, depending on if MinGW is used."
+    change_dir ..
+  fi
 }
 
 build_bzip2() {
@@ -3516,16 +3534,18 @@ build_intel_qsv_mfx() { # disableable via command line switch...
 }
 
 build_libvpl () {
-  # build_intel_qsv_mfx
-  do_git_checkout https://github.com/intel/libvpl.git libvpl_git # f8d9891 
-  change_dir libvpl_git
-    if [ "$bits_target" = "32" ]; then
-      apply_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-libvpl/0003-cmake-fix-32bit-install.patch" -p1
-    fi
-    do_cmake "-B build -GNinja -DCMAKE_BUILD_TYPE=Release -DINSTALL_EXAMPLES=OFF -DINSTALL_DEV=ON -DBUILD_EXPERIMENTAL=OFF" 
-    do_ninja_and_ninja_install
-    sed -i.bak "s/Libs: .*/& -lstdc++/" "$PKG_CONFIG_PATH/vpl.pc"
-  change_dir ..
+  if [[ $compiler_flavors != "native" ]]; then
+    # build_intel_qsv_mfx
+    do_git_checkout https://github.com/intel/libvpl.git libvpl_git # f8d9891 
+    change_dir libvpl_git
+      if [ "$bits_target" = "32" ]; then
+        apply_patch "https://raw.githubusercontent.com/msys2/MINGW-packages/master/mingw-w64-libvpl/0003-cmake-fix-32bit-install.patch" -p1
+      fi
+      do_cmake "-B build -GNinja -DCMAKE_BUILD_TYPE=Release -DINSTALL_EXAMPLES=OFF -DINSTALL_DEV=ON -DBUILD_EXPERIMENTAL=OFF" 
+      do_ninja_and_ninja_install
+      sed -i.bak "s/Libs: .*/& -lstdc++/" "$PKG_CONFIG_PATH/vpl.pc"
+    change_dir ..
+  fi
 }
 
 build_libleptonica() {
@@ -3546,14 +3566,16 @@ build_libtiff() {
 }
 
 build_libtensorflow() { 
-  if [[ ! -e Tensorflow ]]; then
-    mkdir Tensorflow
-    change_dir Tensorflow
-      wget https://storage.googleapis.com/tensorflow/versions/2.18.1/libtensorflow-cpu-windows-x86_64.zip # tensorflow.dll required by ffmpeg to run
-      unzip -o libtensorflow-cpu-windows-x86_64.zip -d $mingw_w64_x86_64_prefix
-      remove_path -f libtensorflow-cpu-windows-x86_64.zip
-    change_dir ..
-  else echo -e "Tensorflow already installed"
+  if [[ $compiler_flavors != "native" ]]; then
+    if [[ ! -e Tensorflow ]]; then
+      mkdir Tensorflow
+      change_dir Tensorflow
+        wget https://storage.googleapis.com/tensorflow/versions/2.18.1/libtensorflow-cpu-windows-x86_64.zip # tensorflow.dll required by ffmpeg to run
+        unzip -o libtensorflow-cpu-windows-x86_64.zip -d $mingw_w64_x86_64_prefix
+        remove_path -f libtensorflow-cpu-windows-x86_64.zip
+      change_dir ..
+    else echo -e "Tensorflow already installed"
+    fi
   fi
 }
 
@@ -4054,13 +4076,11 @@ build_libsndfile() {
   change_dir libsndfile_git
     generic_configure "--disable-sqlite --disable-external-libs --disable-full-suite"
     do_make_and_make_install
-    if [ "$1" = "install-libgsm" ]; then
-      if [[ ! -f $mingw_w64_x86_64_prefix/lib/libgsm.a ]]; then
-        install -m644 src/GSM610/gsm.h $mingw_w64_x86_64_prefix/include/gsm.h || exit 1
-        install -m644 src/GSM610/.libs/libgsm.a $mingw_w64_x86_64_prefix/lib/libgsm.a || exit 1
-      else
-        echo -e "already installed GSM 6.10 ..."
-      fi
+    if [[ ! -f $mingw_w64_x86_64_prefix/lib/libgsm.a ]]; then
+      install -m644 src/GSM610/gsm.h $mingw_w64_x86_64_prefix/include/gsm.h || exit 1
+      install -m644 src/GSM610/.libs/libgsm.a $mingw_w64_x86_64_prefix/lib/libgsm.a || exit 1
+    else
+      echo -e "already installed GSM 6.10 ..."
     fi
   change_dir ..
 }
@@ -4326,32 +4346,38 @@ build_frei0r() {
 }
 
 build_svt-hevc() {
-  do_git_checkout https://github.com/OpenVisualCloud/SVT-HEVC.git
-  create_dir SVT-HEVC_git/release
-  change_dir SVT-HEVC_git/release
-    do_cmake_from_build_dir .. "-DCMAKE_BUILD_TYPE=Release"
-    do_make_and_make_install
-  change_dir ../..
+  if [[ "$bits_target" != "32" ]] && [[ $build_svt_hevc = y ]]; then
+    do_git_checkout https://github.com/OpenVisualCloud/SVT-HEVC.git
+    create_dir SVT-HEVC_git/release
+    change_dir SVT-HEVC_git/release
+      do_cmake_from_build_dir .. "-DCMAKE_BUILD_TYPE=Release"
+      do_make_and_make_install
+    change_dir ../..
+  fi
 }
 
 build_svt-vp9() {
-  do_git_checkout https://github.com/OpenVisualCloud/SVT-VP9.git
-  change_dir SVT-VP9_git/Build
-    do_cmake_from_build_dir .. "-DCMAKE_BUILD_TYPE=Release"
-    do_make_and_make_install
-  change_dir ../..
+  if [[ "$bits_target" != "32" ]] && [[ $build_svt_vp9 = y ]]; then
+    do_git_checkout https://github.com/OpenVisualCloud/SVT-VP9.git
+    change_dir SVT-VP9_git/Build
+      do_cmake_from_build_dir .. "-DCMAKE_BUILD_TYPE=Release"
+      do_make_and_make_install
+    change_dir ../..
+  fi
 }
 
 build_svt-av1() {
-  do_git_checkout https://github.com/pytorch/cpuinfo.git
-  change_dir cpuinfo_git
-    do_cmake_and_install # builds included cpuinfo bugged
+  if [[ "$bits_target" != "32" ]]; then
+    do_git_checkout https://github.com/pytorch/cpuinfo.git
+    change_dir cpuinfo_git
+      do_cmake_and_install # builds included cpuinfo bugged
+    change_dir ..
+    do_git_checkout https://gitlab.com/AOMediaCodec/SVT-AV1.git SVT-AV1_git 
+    change_dir SVT-AV1_git
+      do_cmake "-B build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_CPUINFO=SYSTEM" # -DSVT_AV1_LTO=OFF if fails try adding this
+      do_ninja_and_ninja_install
   change_dir ..
-  do_git_checkout https://gitlab.com/AOMediaCodec/SVT-AV1.git SVT-AV1_git 
-  change_dir SVT-AV1_git
-    do_cmake "-B build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_CPUINFO=SYSTEM" # -DSVT_AV1_LTO=OFF if fails try adding this
-    do_ninja_and_ninja_install
- change_dir ..
+ fi
 }
 
 build_vidstab() {
@@ -4390,10 +4416,12 @@ build_libcaca() {
 }
 
 build_libdecklink() {
-  do_git_checkout https://gitlab.com/m-ab-s/decklink-headers.git decklink-headers_git 47d84f8d272ca6872b5440eae57609e36014f3b6
-  change_dir decklink-headers_git
-    do_make_install PREFIX=$mingw_w64_x86_64_prefix
-  change_dir ..
+  if [[ $compiler_flavors != "native" ]]; then
+    do_git_checkout https://gitlab.com/m-ab-s/decklink-headers.git decklink-headers_git 47d84f8d272ca6872b5440eae57609e36014f3b6
+    change_dir decklink-headers_git
+      do_make_install PREFIX=$mingw_w64_x86_64_prefix
+    change_dir ..
+  fi
 }
 
 build_zvbi() {
@@ -4432,10 +4460,12 @@ build_libass() {
 }
 
 build_vulkan() {
-  do_git_checkout https://github.com/KhronosGroup/Vulkan-Headers.git Vulkan-Headers_git v1.4.326
-  change_dir Vulkan-Headers_git
-    do_cmake_and_install "-DCMAKE_BUILD_TYPE=Release -DVULKAN_HEADERS_ENABLE_MODULE=NO -DVULKAN_HEADERS_ENABLE_TESTS=NO -DVULKAN_HEADERS_ENABLE_INSTALL=YES"
-  change_dir ..
+  if [[ $OSTYPE != darwin* ]]; then
+    do_git_checkout https://github.com/KhronosGroup/Vulkan-Headers.git Vulkan-Headers_git v1.4.326
+    change_dir Vulkan-Headers_git
+      do_cmake_and_install "-DCMAKE_BUILD_TYPE=Release -DVULKAN_HEADERS_ENABLE_MODULE=NO -DVULKAN_HEADERS_ENABLE_TESTS=NO -DVULKAN_HEADERS_ENABLE_INSTALL=YES"
+    change_dir ..
+  fi
 }
 
 build_vulkan_loader() {
@@ -4516,33 +4546,35 @@ build_shaderc() {
 }
 
 build_libplacebo() { 
-  build_vulkan_loader
-  do_git_checkout_and_make_install https://github.com/ImageMagick/lcms.git 
-  build_libunwind  
-  build_libxxhash 
-  build_spirv-cross
-  build_libdovi
-  build_shaderc
-  do_git_checkout https://code.videolan.org/videolan/libplacebo.git libplacebo_git 515da9548ad734d923c7d0988398053f87b454d5
-  activate_meson
-  change_dir libplacebo_git
-    git submodule update --init --recursive --depth=1 --filter=blob:none
-    local config_options=""
-    if [[ $OSTYPE != darwin* ]]; then
-      local config_options+=" -Dvulkan-registry=$mingw_w64_x86_64_prefix/share/vulkan/registry/vk.xml" 
-    fi		
-    local meson_options="setup -Ddemos=false -Dbench=false -Dfuzz=false -Dvulkan=enabled -Dvk-proc-addr=disabled -Dshaderc=enabled -Dglslang=disabled -Dc_link_args=-static -Dcpp_link_args=-static $config_options . build" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined 
-   if [[ $compiler_flavors != "native" ]]; then
-      # get_local_meson_cross_with_propeties 
-      meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
-      do_meson "$meson_options"      
-    else
-      generic_meson "$meson_options"
-    fi
-    do_ninja_and_ninja_install
-    sed -i.bak 's/-lplacebo.*$/-lplacebo -lm -lshlwapi -lunwind -lxxhash -lversion -lstdc++/' "$PKG_CONFIG_PATH/libplacebo.pc"
-  deactivate
-  change_dir ..
+  if [[ $OSTYPE != darwin* ]]; then
+    build_vulkan_loader
+    do_git_checkout_and_make_install https://github.com/ImageMagick/lcms.git 
+    build_libunwind  
+    build_libxxhash 
+    build_spirv-cross
+    build_libdovi
+    build_shaderc
+    do_git_checkout https://code.videolan.org/videolan/libplacebo.git libplacebo_git 515da9548ad734d923c7d0988398053f87b454d5
+    activate_meson
+    change_dir libplacebo_git
+      git submodule update --init --recursive --depth=1 --filter=blob:none
+      local config_options=""
+      if [[ $OSTYPE != darwin* ]]; then
+        local config_options+=" -Dvulkan-registry=$mingw_w64_x86_64_prefix/share/vulkan/registry/vk.xml" 
+      fi		
+      local meson_options="setup -Ddemos=false -Dbench=false -Dfuzz=false -Dvulkan=enabled -Dvk-proc-addr=disabled -Dshaderc=enabled -Dglslang=disabled -Dc_link_args=-static -Dcpp_link_args=-static $config_options . build" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined 
+    if [[ $compiler_flavors != "native" ]]; then
+        # get_local_meson_cross_with_propeties 
+        meson_options+=" --cross-file=${BASEDIR}/meson-cross.mingw.txt"
+        do_meson "$meson_options"      
+      else
+        generic_meson "$meson_options"
+      fi
+      do_ninja_and_ninja_install
+      sed -i.bak 's/-lplacebo.*$/-lplacebo -lm -lshlwapi -lunwind -lxxhash -lversion -lstdc++/' "$PKG_CONFIG_PATH/libplacebo.pc"
+    deactivate
+    change_dir ..
+  fi
 }
 
 build_libaribb24() {
@@ -4550,37 +4582,43 @@ build_libaribb24() {
 }
 
 build_libaribcaption() {
-  do_git_checkout https://github.com/xqq/libaribcaption
-  mkdir libaribcaption/build
-  change_dir libaribcaption/build
-    do_cmake_from_build_dir .. "-DCMAKE_BUILD_TYPE=Release"
-    do_make_and_make_install
-  change_dir ../..
+  if [[ $ffmpeg_git_checkout_version != *"n6.0"* ]] && [[ $ffmpeg_git_checkout_version != *"n5"* ]] && [[ $ffmpeg_git_checkout_version != *"n4"* ]] && [[ $ffmpeg_git_checkout_version != *"n3"* ]] && [[ $ffmpeg_git_checkout_version != *"n2"* ]]; then 
+    do_git_checkout https://github.com/xqq/libaribcaption
+    mkdir libaribcaption/build
+    change_dir libaribcaption/build
+      do_cmake_from_build_dir .. "-DCMAKE_BUILD_TYPE=Release"
+      do_make_and_make_install
+    change_dir ../..
+  fi
 }
 
 build_libxavs() {
-  do_git_checkout https://github.com/Distrotech/xavs.git xavs_git
-  change_dir xavs_git
-    if [[ ! -f Makefile.bak ]]; then
-      sed -i.bak "s/O4/O2/" configure # Change CFLAGS.
-    fi
-    apply_patch "https://patch-diff.githubusercontent.com/raw/Distrotech/xavs/pull/1.patch" -p1
-    do_configure "--host=$host_target --prefix=$mingw_w64_x86_64_prefix --cross-prefix=$cross_prefix" # see https://github.com/rdp/ffmpeg-windows-build-helpers/issues/3
-    do_make_and_make_install "$compiler_flags"
-    remove_path -f NUL # cygwin causes windows explorer to not be able to delete this folder if it has this oddly named file in it...
-  change_dir ..
+  if [[ $compiler_flavors != "native" ]]; then # build some stuff that don't build native...
+    do_git_checkout https://github.com/Distrotech/xavs.git xavs_git
+    change_dir xavs_git
+      if [[ ! -f Makefile.bak ]]; then
+        sed -i.bak "s/O4/O2/" configure # Change CFLAGS.
+      fi
+      apply_patch "https://patch-diff.githubusercontent.com/raw/Distrotech/xavs/pull/1.patch" -p1
+      do_configure "--host=$host_target --prefix=$mingw_w64_x86_64_prefix --cross-prefix=$cross_prefix" # see https://github.com/rdp/ffmpeg-windows-build-helpers/issues/3
+      do_make_and_make_install "$compiler_flags"
+      remove_path -f NUL # cygwin causes windows explorer to not be able to delete this folder if it has this oddly named file in it...
+    change_dir ..
+  fi
 }
 
 build_libxavs2() {
-  do_git_checkout https://github.com/pkuvcl/xavs2.git xavs2_git
-  change_dir xavs2_git
-  if [ ! -e $PWD/build/linux/already_configured* ]; then
-    curl "https://github.com/pkuvcl/xavs2/compare/master...1480c1:xavs2:gcc14/pointerconversion.patch" | git apply -v
+  if [[ $host_target != 'i686-w64-mingw32' ]]; then
+    do_git_checkout https://github.com/pkuvcl/xavs2.git xavs2_git
+    change_dir xavs2_git
+    if [ ! -e $PWD/build/linux/already_configured* ]; then
+      curl "https://github.com/pkuvcl/xavs2/compare/master...1480c1:xavs2:gcc14/pointerconversion.patch" | git apply -v
+    fi
+    change_dir build/linux 
+      do_configure "--cross-prefix=$cross_prefix --host=$host_target --prefix=$mingw_w64_x86_64_prefix --enable-strip" # --enable-pic
+      do_make_and_make_install 
+    change_dir ../../..
   fi
-  change_dir build/linux 
-    do_configure "--cross-prefix=$cross_prefix --host=$host_target --prefix=$mingw_w64_x86_64_prefix --enable-strip" # --enable-pic
-    do_make_and_make_install 
-  change_dir ../../..
 }
 
 build_libdavs2() {
@@ -5251,3 +5289,50 @@ EOF
   change_dir ..
 }
 
+require_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "This script must be run with sudo"
+        echo "Usage: sudo $0 [OPTIONS]"
+        exit 1
+    fi
+    
+    if [ -z "$SUDO_USER" ]; then
+        echo "Warning: Running as root directly (not via sudo)"
+    else
+        echo "Running with sudo privileges (user: $SUDO_USER)"
+    fi
+}
+
+is_integer() {
+    local str="$1"
+    # Check if string consists only of digits, optionally with leading + or -
+    if [[ "$str" =~ ^[-+]?[0-9]+$ ]]; then
+        return 0  # Is integer
+    else
+        return 1  # Not integer
+    fi
+}
+
+is_alpha() {
+    local str="$1"
+    if [[ "$str" =~ ^[a-zA-Z]+$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+array_index_of() {
+    local search_string="$1"
+    shift
+    local array=("$@")
+    
+    for i in "${!array[@]}"; do
+        if [[ "${array[i]}" == *"$search_string" ]]; then
+            echo "$i"  # Return the index
+            return 0
+        fi
+    done
+    echo "-1"  # Not found
+    return 1
+}

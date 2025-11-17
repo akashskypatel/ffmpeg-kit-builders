@@ -72,7 +72,10 @@ EOL
 }
 
 pick_compiler_flavors() {
-  while [[ "$compiler_flavors" != [1-5] ]]; do
+  if [[ ! -z $1 ]]; then
+    compiler_flavors=$1
+  fi
+  while [[ ! "$compiler_flavors" =~ ^([1-4]|multi|win32|win64)$ ]]; do
     if [[ -n "${unknown_opts[@]}" ]]; then
       echo -e -n 'Unknown option(s)'
       for unknown_opt in "${unknown_opts[@]}"; do
@@ -81,37 +84,48 @@ pick_compiler_flavors() {
       echo -e ', ignored.'; echo
     fi
     cat <<'EOF'
-What version of MinGW-w64 would you like to build or update?
+What version of MinGW-w64 would you like to build, update, or clean?
   1. Both Win32 and Win64
   2. Win32 (32-bit only)
   3. Win64 (64-bit only)
-  4. Local native
-  5. Exit
+  4. Exit
 EOF
-    echo -e -n 'Input your choice [1-5]: '
+    echo -e -n 'Input your choice [1-4]: '
     read -r compiler_flavors
   done
   case "$compiler_flavors" in
   1 ) compiler_flavors=multi ;;
   2 ) compiler_flavors=win32 ;;
   3 ) compiler_flavors=win64 ;;
-  4 ) compiler_flavors=native ;;
-  5 ) echo -e "exiting"; exit 0 ;;
-  * ) clear;  echo -e 'Your choice was not valid, please try again.'; echo ;;
+  multi ) compiler_flavors=multi ;;
+  win32 ) compiler_flavors=win32 ;;
+  win64 ) compiler_flavors=win64 ;;
+  4 ) echo -e "exiting"; exit 0 ;;
+  * ) echo -e 'Your choice was not valid, please try again.'; echo ;;
   esac
 }
+
+for arg in "$@"; do
+  if [[ "$arg" == "--clean-builds" ]]; then
+    clean_ffmpeg_builds
+    exit 0
+  fi
+done
 
 reset_cflags # also overrides any "native" CFLAGS, which we may need if there are some 'linux only' settings in there
 reset_cppflags # Ensure CPPFLAGS are cleared and set to what is configured
 check_missing_packages # do this first since it's annoying to go through prompts then be rejected
 intro # remember to always run the intro, since it adjust pwd
-install_cross_compiler 1>>$LOG_FILE 2>&1
+install_cross_compiler
 
-if [[ -n "$build_only_index" ]]; then
-  # Setup the environment based on the globally set compiler_flavors
-  
+if [[ -n "$build_only" ]]; then
+  if [[ $(is_integer "$build_only") == 0 ]]; then
+    index=$(array_index_of "$build_only" "${BUILD_STEPS[@]}")
+  else
+    index=$build_only
+  fi
   # Now, call the single requested build function by its index
-  step_name="${BUILD_STEPS[$build_only_index]}"
+  step_name="${BUILD_STEPS[$index]}"
   echo -e "--- Executing single build step: $step_name ---"
   build_ffmpeg_dependency_only "$step_name" 1>>$LOG_FILE 2>&1
   echo -e "--- Done building single build step: $step_name ---"
@@ -151,19 +165,12 @@ else
       exit 0
     else
       echo -e "INFO: Building all..."
-      #build_all_ffmpeg_dependencies #1>>$LOG_FILE 2>&1
-      #download_ffmpeg #1>>$LOG_FILE 2>&1
+      build_all_ffmpeg_dependencies #1>>$LOG_FILE 2>&1
+      download_ffmpeg #1>>$LOG_FILE 2>&1
       install_ffmpeg #1>>$LOG_FILE 2>&1
-      #configure_ffmpeg_kit #1>>$LOG_FILE 2>&1
-      #install_ffmpeg_kit
-      #create_windows_bundle
+      configure_ffmpeg_kit #1>>$LOG_FILE 2>&1
+      install_ffmpeg_kit #1>>$LOG_FILE 2>&1
+      create_windows_bundle #1>>$LOG_FILE 2>&1
       exit 0
     fi
-
-  # if [[ $build_dependencies_only == "n" || $build_dependencies_only == "no" || $build_dependencies_only == "0" ]]; then
-  #   echo -e "searching for all local exe's (some may not have been built this round, NB)..."
-  #   for file in $(find_all_build_exes); do
-  #     echo -e "built $file"
-  #   done
-  # fi
 fi
