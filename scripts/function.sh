@@ -1,9 +1,14 @@
 #!/bin/bash
 
+# shellcheck disable=SC2317
+# shellcheck disable=SC1091
+# shellcheck disable=SC2120
+
 #echo -e ${SCRIPTDIR}/source.sh
 #echo -e "${SCRIPTDIR}/variable.sh"
 
-source ${SCRIPTDIR}/source.sh
+
+source "${SCRIPTDIR}/source.sh"
 
 error_exit() {
 	local error_msg="$1"
@@ -37,7 +42,7 @@ execute() {
 create_dir() {
 	local path="$1"
 
-	echo -e "DEBUG: creating path ${path}" 1>>$LOG_FILE 2>&1
+	echo -e "DEBUG: creating path ${path}" 1>>"$LOG_FILE" 2>&1
 
 	if [ -z "$path" ]; then
 		error_exit "ERROR: path argument is required"
@@ -47,7 +52,7 @@ create_dir() {
 		execute "INFO: creating path: '$path'" "ERROR: unable to create directory '$path'" "true" \
 			sudo mkdir "-pv" "$path"
 	else
-		echo -e "DEBUG: directory already exists, skipping creation." 1>>$LOG_FILE 2>&1
+		echo -e "DEBUG: directory already exists, skipping creation." 1>>"$LOG_FILE" 2>&1
 	fi
 	execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
 		sudo chown -R "$USER":"$USER" "$path"
@@ -75,7 +80,7 @@ remove_path() {
 			execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
 				sudo chmod -R 755 "$path"
 			execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" "true" \
-				rm $options "$path"
+				rm "$options" "$path"
 		else
 			echo -e "INFO: path ${path} does not exist" 1>>"$LOG_FILE" 2>&1
 		fi
@@ -90,14 +95,14 @@ change_dir() {
 	fi
 
 	if [[ -e "$path" ]]; then
-		execute "INFO: changing to path: '$path'" "ERROR: unable to cd to directory '$path'" "false" \
+		execute "INFO: changing to path: '$path'" "ERROR: unable to cd to directory '$path'" "true" \
 			cd "$path"
 		if [[ ! -r "$path" ]] || [[ ! -w "$path" ]] || [[ ! -x "$path" ]]; then
 			execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "false" \
 				sudo chmod -R 755 "$path"
 		fi
 	else
-		echo -e "INFO: path ${path} does not exist" 1>>$LOG_FILE 2>&1
+		echo -e "INFO: path ${path} does not exist" 1>>"$LOG_FILE" 2>&1
 	fi
 }
 
@@ -135,7 +140,7 @@ copy_path() {
 	# Perform the copy operation
 	if [ -n "$options" ]; then
 		execute "INFO: copying path: '$source_path' to '$destination_path' with options '$options'" "ERROR: unable to copy '$source_path' to '$destination_path'" "false" \
-			cp $options "$source_path" "$destination_path"
+			cp "$options" "$source_path" "$destination_path"
 	else
 		execute "INFO: copying path: '$source_path' to '$destination_path'" "ERROR: unable to copy '$source_path' to '$destination_path'" "false" \
 			cp -r "$source_path" "$destination_path"
@@ -538,7 +543,7 @@ is_library_supported_on_platform() {
 is_arch_supported_on_platform() {
 	local arch_index=$(from_arch_name "$1")
 	case ${arch_index} in
-	$ARCH_X86_64)
+	"$ARCH_X86_64")
 		echo -e 1
 		;;
 	esac
@@ -583,7 +588,7 @@ get_meson_target_host_family() {
 }
 
 get_meson_target_cpu_family() {
-	case ${ARCH} in
+	case "$ARCH" in
 	arm*)
 		echo -e "arm"
 		;;
@@ -704,7 +709,7 @@ get_host() {
 # 2. value
 #
 generate_custom_library_environment_variables() {
-	CUSTOM_KEY=$(echo -e "CUSTOM_$1" | sed "s/\-/\_/g" | tr '[a-z]' '[A-Z]')
+	CUSTOM_KEY=$(echo -e "CUSTOM_$1" | sed "s/\-/\_/g" | tr '[:lower:]' '[:upper:]')
 	CUSTOM_VALUE="$2"
 
 	export "${CUSTOM_KEY}"="${CUSTOM_VALUE}"
@@ -1022,7 +1027,7 @@ display_help_custom_libraries() {
 	echo -e "  --enable-custom-library-[n]-package-config-file-name=value\tpackage config file installed by the build script []"
 	echo -e "  --enable-custom-library-[n]-ffmpeg-enable-flag=value\tlibrary name used in ffmpeg configure script to enable the library []"
 	echo -e "  --enable-custom-library-[n]-license-file=value\t\tlicence file path relative to the library source folder []"
-	if [ ${FFMPEG_KIT_BUILD_TYPE} == "android" ]; then
+	if [ "$FFMPEG_KIT_BUILD_TYPE" == "android" ]; then
 		echo -e "  --enable-custom-library-[n]-uses-cpp\t\t\t\tflag to specify that the library uses libc++ []\n"
 	else
 		echo -e ""
@@ -1051,19 +1056,19 @@ reconf_library() {
 	local library_supported=0
 
 	for library in {0..49}; do
-		library_name=$(get_library_name ${library})
+		library_name=$(get_library_name "$library")
 		local library_supported_on_platform=$(is_library_supported_on_platform "${library_name}")
 
 		if [[ $1 != "ffmpeg" ]] && [[ ${library_name} == "$1" ]] && [[ ${library_supported_on_platform} -eq 0 ]]; then
-			export ${RECONF_VARIABLE}=1
-			RECONF_LIBRARIES+=($1)
+			export "$RECONF_VARIABLE"=1
+			RECONF_LIBRARIES+=("$1")
 			library_supported=1
 		fi
 	done
 
 	if [[ ${library_supported} -ne 1 ]]; then
-		export ${RECONF_VARIABLE}=1
-		RECONF_LIBRARIES+=($1)
+		export "$RECONF_VARIABLE"=1
+		RECONF_LIBRARIES+=("$1")
 		echo -e "INFO: --reconf flag detected for custom library $1.\n" 1>>"${BASEDIR}"/build.log 2>&1
 	else
 		echo -e "INFO: --reconf flag detected for library $1.\n" 1>>"${BASEDIR}"/build.log 2>&1
@@ -1078,19 +1083,19 @@ rebuild_library() {
 	local library_supported=0
 
 	for library in {0..49}; do
-		library_name=$(get_library_name ${library})
+		library_name=$(get_library_name "$library")
 		local library_supported_on_platform=$(is_library_supported_on_platform "${library_name}")
 
 		if [[ $1 != "ffmpeg" ]] && [[ ${library_name} == "$1" ]] && [[ ${library_supported_on_platform} -eq 0 ]]; then
-			export ${REBUILD_VARIABLE}=1
-			REBUILD_LIBRARIES+=($1)
+			export "$REBUILD_VARIABLE"=1
+			REBUILD_LIBRARIES+=("$1")
 			library_supported=1
 		fi
 	done
 
 	if [[ ${library_supported} -ne 1 ]]; then
-		export ${REBUILD_VARIABLE}=1
-		REBUILD_LIBRARIES+=($1)
+		export "$REBUILD_VARIABLE"=1
+		REBUILD_LIBRARIES+=("$1")
 		echo -e "INFO: --rebuild flag detected for custom library $1.\n" 1>>"${BASEDIR}"/build.log 2>&1
 	else
 		echo -e "INFO: --rebuild flag detected for library $1.\n" 1>>"${BASEDIR}"/build.log 2>&1
@@ -1105,25 +1110,25 @@ redownload_library() {
 	local library_supported=0
 
 	for library in {0..49}; do
-		library_name=$(get_library_name ${library})
+		library_name=$(get_library_name "$library")
 		local library_supported_on_platform=$(is_library_supported_on_platform "${library_name}")
 
 		if [[ ${library_name} == "$1" ]] && [[ ${library_supported_on_platform} -eq 0 ]]; then
-			export ${REDOWNLOAD_VARIABLE}=1
-			REDOWNLOAD_LIBRARIES+=($1)
+			export "$REDOWNLOAD_VARIABLE"=1
+			REDOWNLOAD_LIBRARIES+=("$1")
 			library_supported=1
 		fi
 	done
 
-	if [[ "ffmpeg" == $1 ]]; then
-		export ${REDOWNLOAD_VARIABLE}=1
-		REDOWNLOAD_LIBRARIES+=($1)
+	if [[ "ffmpeg" == "$1" ]]; then
+		export "$REDOWNLOAD_VARIABLE"=1
+		REDOWNLOAD_LIBRARIES+=("$1")
 		library_supported=1
 	fi
 
 	if [[ ${library_supported} -ne 1 ]]; then
-		export ${REDOWNLOAD_VARIABLE}=1
-		REDOWNLOAD_LIBRARIES+=($1)
+		export "$REDOWNLOAD_VARIABLE"=1
+		REDOWNLOAD_LIBRARIES+=("$1")
 		echo -e "INFO: --redownload flag detected for custom library $1.\n" 1>>"${BASEDIR}"/build.log 2>&1
 	else
 		echo -e "INFO: --redownload flag detected for library $1.\n" 1>>"${BASEDIR}"/build.log 2>&1
@@ -1205,14 +1210,14 @@ set_library() {
 	fontconfig)
 		ENABLED_LIBRARIES[LIBRARY_FONTCONFIG]=$2
 		ENABLED_LIBRARIES[LIBRARY_EXPAT]=$2
-		set_virtual_library "libiconv" $2
-		set_virtual_library "libuuid" $2
-		set_library "freetype" $2
+		set_virtual_library "libiconv" "$2"
+		set_virtual_library "libuuid" "$2"
+		set_library "freetype" "$2"
 		;;
 	freetype)
-		ENABLED_LIBRARIES[LIBRARY_FREETYPE]=$2
-		set_virtual_library "zlib" $2
-		set_library "libpng" $2
+		ENABLED_LIBRARIES[LIBRARY_FREETYPE]="$2"
+		set_virtual_library "zlib" "$2"
+		set_library "libpng" "$2"
 		;;
 	fribidi)
 		ENABLED_LIBRARIES[LIBRARY_FRIBIDI]=$2
@@ -1222,21 +1227,21 @@ set_library() {
 		;;
 	gnutls)
 		ENABLED_LIBRARIES[LIBRARY_GNUTLS]=$2
-		set_virtual_library "zlib" $2
-		set_library "nettle" $2
-		set_library "gmp" $2
-		set_virtual_library "libiconv" $2
+		set_virtual_library "zlib" "$2"
+		set_library "nettle" "$2"
+		set_library "gmp" "$2"
+		set_virtual_library "libiconv" "$2"
 		;;
 	harfbuzz)
 		ENABLED_LIBRARIES[LIBRARY_HARFBUZZ]=$2
-		set_library "freetype" $2
+		set_library "freetype" "$2"
 		;;
 	kvazaar)
 		ENABLED_LIBRARIES[LIBRARY_KVAZAAR]=$2
 		;;
 	lame)
 		ENABLED_LIBRARIES[LIBRARY_LAME]=$2
-		set_virtual_library "libiconv" $2
+		set_virtual_library "libiconv" "$2"
 		;;
 	libaom)
 		ENABLED_LIBRARIES[LIBRARY_LIBAOM]=$2
@@ -1244,12 +1249,12 @@ set_library() {
 	libass)
 		ENABLED_LIBRARIES[LIBRARY_LIBASS]=$2
 		ENABLED_LIBRARIES[LIBRARY_EXPAT]=$2
-		set_virtual_library "libuuid" $2
-		set_library "freetype" $2
-		set_library "fribidi" $2
-		set_library "fontconfig" $2
-		set_library "harfbuzz" $2
-		set_virtual_library "libiconv" $2
+		set_virtual_library "libuuid" "$2"
+		set_library "freetype" "$2"
+		set_library "fribidi" "$2"
+		set_library "fontconfig" "$2"
+		set_library "harfbuzz" "$2"
+		set_virtual_library "libiconv" "$2"
 		;;
 	libiconv)
 		ENABLED_LIBRARIES[LIBRARY_LIBICONV]=$2
@@ -1259,12 +1264,12 @@ set_library() {
 		;;
 	libpng)
 		ENABLED_LIBRARIES[LIBRARY_LIBPNG]=$2
-		set_virtual_library "zlib" $2
+		set_virtual_library "zlib" "$2"
 		;;
 	libtheora)
 		ENABLED_LIBRARIES[LIBRARY_LIBTHEORA]=$2
 		ENABLED_LIBRARIES[LIBRARY_LIBOGG]=$2
-		set_library "libvorbis" $2
+		set_library "libvorbis" "$2"
 		;;
 	libuuid)
 		ENABLED_LIBRARIES[LIBRARY_LIBUUID]=$2
@@ -1283,12 +1288,12 @@ set_library() {
 		ENABLED_LIBRARIES[LIBRARY_LIBWEBP]=$2
 		ENABLED_LIBRARIES[LIBRARY_GIFLIB]=$2
 		ENABLED_LIBRARIES[LIBRARY_JPEG]=$2
-		set_library "tiff" $2
-		set_library "libpng" $2
+		set_library "tiff" "$2"
+		set_library "libpng" "$2"
 		;;
 	libxml2)
 		ENABLED_LIBRARIES[LIBRARY_LIBXML2]=$2
-		set_virtual_library "libiconv" $2
+		set_virtual_library "libiconv" "$2"
 		;;
 	opencore-amr)
 		ENABLED_LIBRARIES[LIBRARY_OPENCOREAMR]=$2
@@ -1315,7 +1320,7 @@ set_library() {
 		;;
 	snappy)
 		ENABLED_LIBRARIES[LIBRARY_SNAPPY]=$2
-		set_virtual_library "zlib" $2
+		set_virtual_library "zlib" "$2"
 		;;
 	soxr)
 		ENABLED_LIBRARIES[LIBRARY_SOXR]=$2
@@ -1325,7 +1330,7 @@ set_library() {
 		;;
 	srt)
 		ENABLED_LIBRARIES[LIBRARY_SRT]=$2
-		set_library "openssl" $2
+		set_library "openssl" "$2"
 		;;
 	tesseract)
 		ENABLED_LIBRARIES[LIBRARY_TESSERACT]=$2
@@ -1333,9 +1338,9 @@ set_library() {
 		ENABLED_LIBRARIES[LIBRARY_LIBWEBP]=$2
 		ENABLED_LIBRARIES[LIBRARY_GIFLIB]=$2
 		ENABLED_LIBRARIES[LIBRARY_JPEG]=$2
-		set_virtual_library "zlib" $2
-		set_library "tiff" $2
-		set_library "libpng" $2
+		set_virtual_library "zlib" "$2"
+		set_library "tiff" "$2"
+		set_library "libpng" "$2"
 		;;
 	twolame)
 		ENABLED_LIBRARIES[LIBRARY_TWOLAME]=$2
@@ -1361,7 +1366,7 @@ set_library() {
 		;;
 	nettle)
 		ENABLED_LIBRARIES[LIBRARY_NETTLE]=$2
-		set_library "gmp" $2
+		set_library "gmp" "$2"
 		;;
 	tiff)
 		ENABLED_LIBRARIES[LIBRARY_TIFF]=$2
@@ -1369,12 +1374,12 @@ set_library() {
 		;;
 	linux-fontconfig)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_FONTCONFIG]=$2
-		set_library "linux-libiconv" $2
-		set_library "linux-freetype" $2
+		set_library "linux-libiconv" "$2"
+		set_library "linux-freetype" "$2"
 		;;
 	linux-freetype)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_FREETYPE]=$2
-		set_virtual_library "zlib" $2
+		set_virtual_library "zlib" "$2"
 		;;
 	linux-fribidi)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_FRIBIDI]=$2
@@ -1384,27 +1389,27 @@ set_library() {
 		;;
 	linux-gnutls)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_GNUTLS]=$2
-		set_virtual_library "zlib" $2
-		set_library "linux-gmp" $2
-		set_library "linux-libiconv" $2
+		set_virtual_library "zlib" "$2"
+		set_library "linux-gmp" "$2"
+		set_library "linux-libiconv" "$2"
 		;;
 	linux-lame)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LAME]=$2
-		set_library "linux-libiconv" $2
+		set_library "linux-libiconv" "$2"
 		;;
 	linux-libass)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LIBASS]=$2
-		set_library "linux-freetype" $2
-		set_library "linux-fribidi" $2
-		set_library "linux-fontconfig" $2
-		set_library "linux-libiconv" $2
+		set_library "linux-freetype" "$2"
+		set_library "linux-fribidi" "$2"
+		set_library "linux-fontconfig" "$2"
+		set_library "linux-libiconv" "$2"
 		;;
 	linux-libiconv)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LIBICONV]=$2
 		;;
 	linux-libtheora)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LIBTHEORA]=$2
-		set_library "linux-libvorbis" $2
+		set_library "linux-libvorbis" "$2"
 		;;
 	linux-libvidstab)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LIBVIDSTAB]=$2
@@ -1417,11 +1422,11 @@ set_library() {
 		;;
 	linux-libwebp)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LIBWEBP]=$2
-		set_virtual_library "zlib" $2
+		set_virtual_library "zlib" "$2"
 		;;
 	linux-libxml2)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LIBXML2]=$2
-		set_library "linux-libiconv" $2
+		set_library "linux-libiconv" "$2"
 		;;
 	linux-vaapi)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_VAAPI]=$2
@@ -1446,7 +1451,7 @@ set_library() {
 		;;
 	linux-snappy)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_SNAPPY]=$2
-		set_virtual_library "zlib" $2
+		set_virtual_library "zlib" "$2"
 		;;
 	linux-soxr)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_SOXR]=$2
@@ -1457,7 +1462,7 @@ set_library() {
 	linux-tesseract)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_TESSERACT]=$2
 		ENABLED_LIBRARIES[LIBRARY_LINUX_LIBWEBP]=$2
-		set_virtual_library "zlib" $2
+		set_virtual_library "zlib" "$2"
 		;;
 	linux-twolame)
 		ENABLED_LIBRARIES[LIBRARY_LINUX_TWOLAME]=$2
@@ -1475,7 +1480,7 @@ set_library() {
 		ENABLED_LIBRARIES[LIBRARY_LINUX_XVIDCORE]=$2
 		;;
 	*)
-		print_unknown_library $1
+		print_unknown_library "$1"
 		;;
 	esac
 }
@@ -1506,7 +1511,7 @@ set_virtual_library() {
 		ENABLED_LIBRARIES[LIBRARY_SYSTEM_ZLIB]=$2
 		;;
 	*)
-		print_unknown_virtual_library $1
+		print_unknown_virtual_library "$1"
 		;;
 	esac
 }
@@ -1667,14 +1672,14 @@ set_dependency_rebuilt_flag() {
 print_enabled_architectures() {
 	echo -e -n "Architectures: "
 
-	let enabled=0
+	enabled=0
 	for print_arch in {0..12}; do
 		if [[ ${ENABLED_ARCHITECTURES[$print_arch]} -eq 1 ]]; then
 			if [[ ${enabled} -ge 1 ]]; then
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_arch_name "${print_arch}")"
-			enabled=$((${enabled} + 1))
+			(( enabled++ ))
 		fi
 	done
 
@@ -1688,14 +1693,14 @@ print_enabled_architectures() {
 print_enabled_architecture_variants() {
 	echo -e -n "Architecture variants: "
 
-	let enabled=0
+	enabled=0
 	for print_arch_var in {1..8}; do
 		if [[ ${ENABLED_ARCHITECTURE_VARIANTS[$print_arch_var]} -eq 1 ]]; then
 			if [[ ${enabled} -ge 1 ]]; then
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_apple_architecture_variant "${print_arch_var}")"
-			enabled=$((${enabled} + 1))
+			(( enabled++ ))
 		fi
 	done
 
@@ -1709,7 +1714,7 @@ print_enabled_architecture_variants() {
 print_enabled_libraries() {
 	echo -e -n "Libraries: "
 
-	let enabled=0
+	enabled=0
 
 	# SUPPLEMENTARY LIBRARIES NOT PRINTED
 	for library in {50..57} {59..91} {0..36}; do
@@ -1718,7 +1723,7 @@ print_enabled_libraries() {
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_library_name "${library}")"
-			enabled=$((${enabled} + 1))
+			(( enabled++ ))
 		fi
 	done
 
@@ -1732,7 +1737,7 @@ print_enabled_libraries() {
 print_enabled_xcframeworks() {
 	echo -e -n "xcframeworks: "
 
-	let enabled=0
+	enabled=0
 
 	# SUPPLEMENTARY LIBRARIES NOT PRINTED
 	for library in {0..49}; do
@@ -1741,7 +1746,7 @@ print_enabled_xcframeworks() {
 				echo -e -n ", "
 			fi
 			echo -e -n "$(get_library_name "${library}")"
-			enabled=$((${enabled} + 1))
+			(( enabled++ ))
 		fi
 	done
 
@@ -1768,7 +1773,7 @@ print_reconfigure_requested_libraries() {
 
 		echo -e -n "${RECONF_LIBRARY}"
 
-		counter=$((${counter} + 1))
+		(( counter++ ))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1788,7 +1793,7 @@ print_rebuild_requested_libraries() {
 
 		echo -e -n "${REBUILD_LIBRARY}"
 
-		counter=$((${counter} + 1))
+		(( counter++ ))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1808,7 +1813,7 @@ print_redownload_requested_libraries() {
 
 		echo -e -n "${REDOWNLOAD_LIBRARY}"
 
-		counter=$((${counter} + 1))
+		(( counter++ ))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1876,7 +1881,7 @@ print_custom_libraries() {
 
 		echo -e "INFO: Custom library options found for ${!LIBRARY_NAME}\n" 1>>"${BASEDIR}"/build.log 2>&1
 
-		counter=$((${counter} + 1))
+		(( counter++ ))
 	done
 
 	if [[ ${counter} -gt 0 ]]; then
@@ -1921,12 +1926,12 @@ copy_external_library_license() {
 # 1 - library index
 # 2 - output path
 copy_external_library_license_file() {
-	cp $(get_external_library_license_path "$1") "$2" 1>>"${BASEDIR}"/build.log 2>&1
-	if [[ $? -ne 0 ]]; then
-		echo -e 1
-		return
-	fi
-	echo -e 0
+  if cp "$(get_external_library_license_path "$1")" "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
+      echo 0
+  else
+      echo 1
+      return 1
+  fi
 }
 
 get_cmake_build_directory() {
@@ -2032,65 +2037,45 @@ autoreconf_library() {
 # 3. <commit id>
 #
 clone_git_repository_with_commit_id() {
-	local RC
+  local RC
 
-	(mkdir -p "$2" 1>>"${BASEDIR}"/build.log 2>&1)
+  if ! mkdir -p "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
+      echo -e "\nINFO: Failed to create local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
+      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+      echo 1
+      return 1
+  fi
 
-	RC=$?
+  echo -e "INFO: Cloning commit id $3 from repository $1 into local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
 
-	if [ ${RC} -ne 0 ]; then
-		echo -e "\nINFO: Failed to create local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
-		rm -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-		echo -e ${RC}
-		return
-	fi
+  if ! git clone "$1" "$2" --depth 1 1>>"${BASEDIR}"/build.log 2>&1; then
+      echo -e "\nINFO: Failed to clone $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+      echo 1
+      return 1
+  fi
 
-	echo -e "INFO: Cloning commit id $3 from repository $1 into local directory $2\n" 1>>"${BASEDIR}"/build.log 2>&1
+  if ! cd "$2" 1>>"${BASEDIR}"/build.log 2>&1; then
+      echo -e "\nINFO: Failed to cd into $2\n" 1>>"${BASEDIR}"/build.log 2>&1
+      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+      echo 1
+      return 1
+  fi
 
-	(git clone "$1" "$2" --depth 1 1>>"${BASEDIR}"/build.log 2>&1)
+  if ! git fetch --depth 1 origin "$3" 1>>"${BASEDIR}"/build.log 2>&1; then
+      echo -e "\nINFO: Failed to fetch commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+      remove_path -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
+      echo 1
+      return 1
+  fi
 
-	RC=$?
+  if ! git checkout "$3" 1>>"${BASEDIR}"/build.log 2>&1; then
+      echo -e "\nINFO: Failed to checkout commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
+      echo 1
+      return 1
+  fi
 
-	if [ ${RC} -ne 0 ]; then
-		echo -e "\nINFO: Failed to clone $1\n" 1>>"${BASEDIR}"/build.log 2>&1
-		rm -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-		echo -e ${RC}
-		return
-	fi
-
-	cd "$2" 1>>"${BASEDIR}"/build.log 2>&1
-
-	RC=$?
-
-	if [ ${RC} -ne 0 ]; then
-		echo -e "\nINFO: Failed to cd into $2\n" 1>>"${BASEDIR}"/build.log 2>&1
-		rm -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-		echo -e ${RC}
-		return
-	fi
-
-	(git fetch --depth 1 origin "$3" 1>>"${BASEDIR}"/build.log 2>&1)
-
-	RC=$?
-
-	if [ ${RC} -ne 0 ]; then
-		echo -e "\nINFO: Failed to fetch commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
-		rm -rf "$2" 1>>"${BASEDIR}"/build.log 2>&1
-		echo -e ${RC}
-		return
-	fi
-
-	(git checkout "$3" 1>>"${BASEDIR}"/build.log 2>&1)
-
-	RC=$?
-
-	if [ ${RC} -ne 0 ]; then
-		echo -e "\nINFO: Failed to checkout commit id $3 from $1\n" 1>>"${BASEDIR}"/build.log 2>&1
-		echo -e ${RC}
-		return
-	fi
-
-	echo -e ${RC}
+  echo 0
 }
 
 #
@@ -2232,7 +2217,7 @@ download_library_source() {
 
 	LIBRARY_RC=$(library_is_downloaded "${LIB_NAME}")
 
-	if [ ${LIBRARY_RC} -eq 0 ]; then
+	if [ "$LIBRARY_RC" -eq 0 ]; then
 		echo -e "INFO: $1 already downloaded. Source folder found at ${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
 		return
@@ -2258,9 +2243,9 @@ download_library_source() {
 		;;
 	esac
 
-	if [ ${DOWNLOAD_RC} -ne 0 ]; then
+	if [ "$DOWNLOAD_RC" -ne 0 ]; then
 		echo -e "INFO: Downloading library $1 failed. Can not get library from ${SOURCE_REPO_URL}\n" 1>>"${BASEDIR}"/build.log 2>&1
-		echo -e ${DOWNLOAD_RC}
+		echo -e "$DOWNLOAD_RC"
 	else
 		echo -e "\nINFO: $1 library downloaded" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
@@ -2370,7 +2355,7 @@ download_custom_library_source() {
 
 	LIBRARY_RC=$(library_is_downloaded "${LIB_NAME}")
 
-	if [ ${LIBRARY_RC} -eq 0 ]; then
+	if [ "$LIBRARY_RC" -eq 0 ]; then
 		echo -e "INFO: ${LIB_NAME} already downloaded. Source folder found at ${LIB_LOCAL_PATH}" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
 		return
@@ -2382,9 +2367,9 @@ download_custom_library_source() {
 		DOWNLOAD_RC=$(clone_git_repository_with_commit_id "${SOURCE_REPO_URL}" "${LIB_LOCAL_PATH}" "${SOURCE_ID}")
 	fi
 
-	if [ ${DOWNLOAD_RC} -ne 0 ]; then
+	if [ "$DOWNLOAD_RC" -ne 0 ]; then
 		echo -e "INFO: Downloading custom library ${LIB_NAME} failed. Can not get library from ${SOURCE_REPO_URL}\n" 1>>"${BASEDIR}"/build.log 2>&1
-		echo -e ${DOWNLOAD_RC}
+		echo -e "$DOWNLOAD_RC"
 	else
 		echo -e "\nINFO: ${LIB_NAME} custom library downloaded" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
@@ -2428,14 +2413,14 @@ download_gnu_config() {
 }
 
 is_gnu_config_files_up_to_date() {
-	echo -e $(grep aarch64-apple-darwin config.guess | wc -l 2>>"${BASEDIR}"/build.log)
+	echo -e "$(grep -c aarch64-apple-darwin config.guess 2>>"$BASEDIR"/build.log)"
 }
 
 get_cpu_count() {
 	if [ "$(uname)" == "Darwin" ]; then
-		echo -e $(sysctl -n hw.logicalcpu)
+		echo -e "$(sysctl -n hw.logicalcpu)"
 	else
-		echo -e $cpu_count
+		echo -e "$cpu_count"
 	fi
 }
 
@@ -2445,7 +2430,6 @@ get_cpu_count() {
 library_is_downloaded() {
 	local LOCAL_PATH
 	local LIB_NAME=$1
-	local FILE_COUNT
 	local REDOWNLOAD_VARIABLE
 	REDOWNLOAD_VARIABLE=$(echo -e "REDOWNLOAD_$1" | sed "s/\-/\_/g")
 
@@ -2459,9 +2443,9 @@ library_is_downloaded() {
 		return
 	fi
 
-	FILE_COUNT=$(ls -l "${LOCAL_PATH}" | wc -l)
+	files=("${LOCAL_PATH}"/*)
 
-	if [[ ${FILE_COUNT} -eq 0 ]]; then
+	if [[ ${#files[@]} -eq 1 && ! -e "${files[0]}" ]]; then
 		echo -e "INFO: No files found under ${LOCAL_PATH}\n" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 1
 		return
@@ -2503,16 +2487,15 @@ library_is_installed() {
 		return
 	fi
 
-	HEADER_COUNT=$(ls -l "${INSTALL_PATH}"/"${LIB_NAME}"/include | wc -l)
-	LIB_COUNT=$(ls -l ${INSTALL_PATH}/${LIB_NAME}/lib* | wc -l)
+	HEADER_COUNT=("${INSTALL_PATH}"/"${LIB_NAME}"/include/*)
+	LIB_COUNT=("${INSTALL_PATH}"/"${LIB_NAME}"/lib/*)
 
-	if [[ ${HEADER_COUNT} -eq 0 ]]; then
+  if [[ ${#HEADER_COUNT[@]} -eq 1 && ! -e "${HEADER_COUNT[0]}" ]]; then
 		echo -e "INFO: No headers found under ${INSTALL_PATH}/${LIB_NAME}/include\n" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
 		return
 	fi
-
-	if [[ ${LIB_COUNT} -eq 0 ]]; then
+  if [[ ${#LIB_COUNT[@]} -eq 1 && ! -e "${LIB_COUNT[0]}" ]]; then
 		echo -e "INFO: No libraries found under ${INSTALL_PATH}/${LIB_NAME}/lib{lib64}\n" 1>>"${BASEDIR}"/build.log 2>&1
 		echo -e 0
 		return
@@ -2531,7 +2514,7 @@ prepare_inline_sed() {
 }
 
 to_capital_case() {
-	echo -e "$(echo ${1:0:1} | tr '[a-z]' '[A-Z]')${1:1}"
+    echo "$(echo "${1:0:1}" | tr '[:lower:]' '[:upper:]')${1:1}"
 }
 
 #
@@ -2553,8 +2536,8 @@ create_file() {
 }
 
 compare_versions() {
-	VERSION_PARTS_1=($(echo -e $1 | tr "." " "))
-	VERSION_PARTS_2=($(echo -e $2 | tr "." " "))
+  VERSION_PARTS_1=("$(echo "$1" | tr "." " ")")
+  VERSION_PARTS_2=("$(echo "$2" | tr "." " ")")
 
 	for ((i = 0; (i < ${#VERSION_PARTS_1[@]}) && (i < ${#VERSION_PARTS_2[@]}); i++)); do
 
@@ -2587,7 +2570,7 @@ compare_versions() {
 #
 command_exists() {
 	local COMMAND=$1
-	if [[ -n "$(command -v $COMMAND)" ]]; then
+	if [[ -n "$(command -v "$COMMAND")" ]]; then
 		echo -e 0
 	else
 		echo -e 1
@@ -2598,17 +2581,13 @@ command_exists() {
 # 1. folder path
 #
 initialize_folder() {
-	remove_path -rf "$1" 1>>"${BASEDIR}"/build.log 2>&1
-	if [[ $? -ne 0 ]]; then
-		return 1
-	fi
+    if ! remove_path -rf "$1" 1>>"${BASEDIR}"/build.log 2>&1; then
+        return 1
+    fi
 
-	create_dir "$1" 1>>"${BASEDIR}"/build.log 2>&1
-	if [[ $? -ne 0 ]]; then
-		return 1
-	fi
-
-	return 0
+    if ! create_dir "$1" 1>>"${BASEDIR}"/build.log 2>&1; then
+        return 1
+    fi
 }
 
 #===============================================================================================
@@ -2636,10 +2615,10 @@ set_box_memory_size_bytes() {
 function sortable_version { echo -e "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
 
 at_least_required_version() { # params: required actual
-	local sortable_required=$(sortable_version $1)
-	sortable_required=$(echo -e $sortable_required | sed 's/^0*//') # remove preceding zeroes, which bash later interprets as octal or screwy
-	local sortable_actual=$(sortable_version $2)
-	sortable_actual=$(echo -e $sortable_actual | sed 's/^0*//')
+	local sortable_required=$(sortable_version "$1")
+	sortable_required=$(echo -e "$sortable_required" | sed 's/^0*//') # remove preceding zeroes, which bash later interprets as octal or screwy
+	local sortable_actual=$(sortable_version "$2")
+	sortable_actual=$(echo -e "$sortable_actual" | sed 's/^0*//')
 	[[ "$sortable_actual" -ge "$sortable_required" ]]
 }
 
@@ -2680,8 +2659,8 @@ check_missing_packages() {
 	if [ "${VENDOR}" = "redhat" ] || [ "${VENDOR}" = "centos" ]; then
 		if [ -n "$(hash cmake 2>&1)" ] && [ -n "$(hash cmake3 2>&1)" ]; then missing_packages=('cmake' "${missing_packages[@]}"); fi
 	fi
-	# shellcheck disable=SC2199
-	if [[ -n "${missing_packages[@]}" ]]; then
+	
+	if [[ ${#missing_packages[@]} -gt 0 ]]; then
 		clear
 		echo -e "Could not find the following execs (svn is actually package subversion, makeinfo is actually package texinfo if you're missing them): ${missing_packages[*]}"
 		echo -e 'Install the missing packages before running this script.'
@@ -2706,7 +2685,7 @@ check_missing_packages() {
 			fi
 			echo -e "$ sudo apt-get install $apt_pkgs -y"
 			if uname -a | grep -q -- "-microsoft"; then
-				echo -e NB if you use WSL Ubuntu 20.04 you need to do an extra step: https://github.com/rdp/ffmpeg-windows-build-helpers/issues/452
+				echo -e "NB if you use WSL Ubuntu 20.04 you need to do an extra step: https://github.com/rdp/ffmpeg-windows-build-helpers/issues/452"
 			fi
 			;;
 		debian)
@@ -2756,7 +2735,7 @@ check_missing_packages() {
 		# the version of cmake required move up to, say, 3.1.0 and the cmake3 package still only pulls in 3.0.0 flat, then the user having manually
 		# installed cmake at a higher version wouldn't be detected.
 		if hash "${cmake_binary}" &>/dev/null; then
-			cmake_version="$("${cmake_binary}" --version | sed -e "s#${cmake_binary}##g" | head -n 1 | tr -cd '[0-9.\n]')"
+			cmake_version="$("${cmake_binary}" --version | sed "s#${cmake_binary}##" | head -n 1 | tr -d '[:digit:].')"
 			if at_least_required_version "${REQUIRED_CMAKE_VERSION}" "${cmake_version}"; then
 				export cmake_command="${cmake_binary}"
 				break
@@ -2788,7 +2767,7 @@ check_missing_packages() {
 	# because of all the trailing lines of stuff
 	export REQUIRED_YASM_VERSION="1.2.0" # export ???
 	local yasm_binary=yasm
-	local yasm_version="$("${yasm_binary}" --version | sed -e "s#${yasm_binary}##g" | head -n 1 | tr -dc '[0-9.\n]')"
+	local yasm_version="$("${yasm_binary}" --version | sed "s#${yasm_binary}##" | head -n 1 | tr -d '[:digit:].')"
 	if ! at_least_required_version "${REQUIRED_YASM_VERSION}" "${yasm_version}"; then
 		echo -e "your yasm version is too old $yasm_version wanted ${REQUIRED_YASM_VERSION}"
 		exit 1
@@ -2817,7 +2796,7 @@ check_missing_packages() {
 			echo -e "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'
 		}
 
-		if [ $(version $KERNVER) -lt $(version $MINIMUM_KERNEL_VERSION) ]; then
+		if [ "$(version "$KERNVER")" -lt "$(version "$MINIMUM_KERNEL_VERSION")" ]; then
 			echo -e "Windows Subsystem for Linux (WSL) detected - kernel not at minumum version required: $MINIMUM_KERNEL_VERSION
       Please update via windows update then try again"
 			#exit 1
@@ -2834,7 +2813,7 @@ determine_distro() {
 	# If Linux, try to determine specific distribution
 	if [ "$UNAME" == "linux" ]; then
 		# If available, use LSB to identify distribution
-		if [ -f /etc/lsb-release -o -d /etc/lsb-release.d ]; then
+		if [ -f /etc/lsb-release ] || [ -d /etc/lsb-release.d ]; then
 			export DISTRO=$(lsb_release -i | cut -d: -f2 | sed s/'^\t'//)
 		# Otherwise, use release info file
 		else
@@ -2849,11 +2828,11 @@ determine_distro() {
 # made into a method so I don't/don't have to download this script every time if only doing just 32 or just6 64 bit builds...
 download_gcc_build_script() {
 	local zeranoe_script_name=$1
-	cp $WINPATCHDIR/$zeranoe_script_name $WINPATCHDIR/$zeranoe_script_name.bak
-	cp $WINPATCHDIR/$zeranoe_script_name $zeranoe_script_name
+	cp "$WINPATCHDIR"/"$zeranoe_script_name" "$WINPATCHDIR"/"$zeranoe_script_name".bak
+	cp "$WINPATCHDIR"/"$zeranoe_script_name" "$zeranoe_script_name"
 	#rm -f $WINPATCHDIR/$zeranoe_script_name || exit 1
 	#curl -4 https://raw.githubusercontent.com/Zeranoe/mingw-w64-build/refs/heads/master/mingw-w64-build -O --fail || exit 1
-	chmod u+x $zeranoe_script_name
+	chmod u+x "$zeranoe_script_name"
 }
 
 # helper methods for downloading and building projects that can take generic input
@@ -2862,16 +2841,16 @@ do_svn_checkout() {
 	repo_url="$1"
 	to_dir="$2"
 	desired_revision="$3"
-	if [ ! -d $to_dir ]; then
+	if [ ! -d "$to_dir" ]; then
 		echo -e "svn checking out to $to_dir"
 		if [[ -z "$desired_revision" ]]; then
-			svn checkout $repo_url $to_dir.tmp --non-interactive --trust-server-cert || exit 1
+			svn checkout "$repo_url" "$to_dir".tmp --non-interactive --trust-server-cert || exit 1
 		else
-			svn checkout -r $desired_revision $repo_url $to_dir.tmp || exit 1
+			svn checkout -r "$desired_revision" "$repo_url" "$to_dir".tmp || exit 1
 		fi
-		mv $to_dir.tmp $to_dir
+		mv "$to_dir".tmp "$to_dir"
 	else
-		change_dir $to_dir
+		change_dir "$to_dir"
 		echo -e "not svn Updating $to_dir since usually svn repo's aren't updated frequently enough..."
 		# XXX accomodate for desired revision here if I ever uncomment the next line...
 		# svn up
@@ -2888,15 +2867,15 @@ retry_git_or_die() { # originally from https://stackoverflow.com/a/76012343/3245
 	local desired_branch=$3
 	for i in $(seq 1 $RETRIES_NO); do
 		echo -e "Downloading (via git clone) $to_dir from $repo_url"
-		remove_path -rf $to_dir.tmp # just in case it was interrupted previously...not sure if necessary...
-		create_dir $to_dir
+		remove_path -rf "$to_dir".tmp # just in case it was interrupted previously...not sure if necessary...
+		create_dir "$to_dir"
 		git ls-remote --exit-code --heads "$repo_url" "$desired_branch" >/dev/null 2>&1
 		branch_exists=$?
 		if [[ $branch_exists == 0 ]]; then
 			git clone --depth 1 -b "$desired_branch" "$repo_url" "$to_dir" --recurse-submodules && break
 		else
 			echo -e "Failed to get branch $desired_branch for $repo_url. Getting master instead"
-			git clone --depth 1 -b "master" $repo_url $to_dir --recurse-submodules && break
+			git clone --depth 1 -b "master" "$repo_url" "$to_dir" --recurse-submodules && break
 		fi
 		# get here -> failure
 		[[ $i -eq $RETRIES_NO ]] && echo -e "Failed to execute git cmd $repo_url $to_dir after $RETRIES_NO retries" && exit 1
@@ -2912,14 +2891,14 @@ do_git_checkout() {
 	local repo_url="$1"
 	local to_dir="$2"
 	if [[ -z $to_dir ]]; then
-		to_dir=$(basename $repo_url | sed s/\.git/_git/) # http://y/abc.git -> abc_git
+		to_dir=$(basename "$repo_url" | sed s/\.git/_git/) # http://y/abc.git -> abc_git
 	fi
 	local desired_branch="$3"
-	if [ ! -d $to_dir ]; then
-		retry_git_or_die $repo_url $to_dir $desired_branch
-		change_dir $to_dir
+	if [ ! -d "$to_dir" ]; then
+		retry_git_or_die "$repo_url" "$to_dir" "$desired_branch"
+		change_dir "$to_dir"
 	else
-		change_dir $to_dir
+		change_dir "$to_dir"
 		if [[ $git_get_latest = "y" ]]; then
 			git fetch # want this for later...
 		else
@@ -2948,7 +2927,7 @@ git_hard_reset() {
 get_small_touchfile_name() { # have to call with assignment like a=$(get_small...)
 	local beginning="$1"
 	local extra_stuff="$2"
-	local touch_name="${beginning}_$(echo -e -- $extra_stuff $CFLAGS $LDFLAGS | /usr/bin/env md5sum)" # md5sum to make it smaller, cflags to force rebuild if changes
+	local touch_name="${beginning}_$(echo -e -- "$extra_stuff" "$CFLAGS" "$LDFLAGS" | /usr/bin/env md5sum)" # md5sum to make it smaller, cflags to force rebuild if changes
 	touch_name=$(echo -e "$touch_name" | sed "s/ //g")                                                # md5sum introduces spaces, remove them
 	echo -e "$touch_name"                                                                             # bash cruddy return system LOL
 }
@@ -2963,14 +2942,14 @@ do_configure() {
 		configure_name="./configure"
 	fi
 	local cur_dir2=$(pwd)
-	local english_name=$(basename $cur_dir2)
-	local touch_name=$(get_small_touchfile_name already_configured${touch_postfix} "$configure_options $configure_name")
+	local english_name=$(basename "$cur_dir2")
+	local touch_name=$(get_small_touchfile_name "already_configured$touch_postfix" "$configure_options $configure_name")
 	if [ ! -f "$touch_name" ]; then
 		# make uninstall # does weird things when run under ffmpeg src so disabled for now...
 
 		echo -e "configuring $english_name ($PWD) as $ PKG_CONFIG_PATH=$PKG_CONFIG_PATH PATH=$mingw_bin_path:\$PATH $configure_name $configure_options" # say it now in case bootstrap fails etc.
-		echo -e "all touch files" already_configured${touch_postfix}* touchname= "$touch_name"
-		echo -e "config options "$configure_options $configure_name""
+		echo -e "all touch files" "already_configured$touch_postfix*" touchname= "$touch_name"
+		echo -e "config options $configure_options $configure_name"
 		if [ -f bootstrap ]; then
 			./bootstrap # some need this to create ./configure :|
 		fi
@@ -2983,13 +2962,14 @@ do_configure() {
 		fi
 		remove_path -f already_*    # reset
 		chmod u+x "$configure_name" # In non-windows environments, with devcontainers, the configuration file doesn't have execution permissions
-		nice -n 5 "$configure_name" $configure_options || {
+		# shellcheck disable=SC2086
+		nice -n 5 $configure_name $configure_options || {
 			echo -e "failed configure $english_name"
 			exit 1
 		} # less nicey than make (since single thread, and what if you're running another ffmpeg nice build elsewhere?)
 		touch -- "$touch_name"
 		echo -e "doing preventative make clean"
-		nice make clean -j $(get_cpu_count) # sometimes useful when files change, etc.
+		nice make clean -j "$(get_cpu_count)" # sometimes useful when files change, etc.
 	#else
 	#  echo -e "already configured $(basename $cur_dir2)"
 	fi
@@ -3001,17 +2981,18 @@ do_make() {
 	local touch_postfix="_$2"
 	extra_make_options="$extra_make_options -j $(get_cpu_count)"
 	local cur_dir2=$(pwd)
-	local touch_name=$(get_small_touchfile_name already_ran_make${touch_postfix} "$extra_make_options")
+	local touch_name=$(get_small_touchfile_name "already_ran_make$touch_postfix" "$extra_make_options")
 
-	if [ ! -f $touch_name ]; then
+	if [ ! -f "$touch_name" ]; then
 		echo -e
 		echo -e "Making $cur_dir2 as $ PATH=$mingw_bin_path:\$PATH make $extra_make_options"
 		echo -e
 		if [ ! -f configure ]; then
-			nice make clean -j $(get_cpu_count) # just in case helpful if old junk left around and this is a 're make' and wasn't cleaned at reconfigure time
+			nice make clean -j "$(get_cpu_count)" # just in case helpful if old junk left around and this is a 're make' and wasn't cleaned at reconfigure time
 		fi
+		# shellcheck disable=SC2086
 		nice make $extra_make_options || exit 1
-		touch $touch_name || exit 1 # only touch if the build was OK
+		touch "$touch_name" || exit 1 # only touch if the build was OK
 	else
 		echo -e "Already made $(dirname "$cur_dir2") $(basename "$cur_dir2") ..."
 	fi
@@ -3038,11 +3019,12 @@ do_make_install() {
 	else
 		local make_install_options="$override_make_install_options $extra_make_install_options"
 	fi
-	local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_postfix} "$make_install_options")
-	if [ ! -f $touch_name ]; then
+	local touch_name=$(get_small_touchfile_name "already_ran_make_install$touch_postfix" "$make_install_options")
+	if [ ! -f "$touch_name" ]; then
 		echo -e "make installing $(pwd) as $ PATH=$mingw_bin_path:\$PATH make $make_install_options"
+		# shellcheck disable=SC2086
 		nice make $make_install_options || exit 1
-		touch $touch_name || exit 1
+		touch "$touch_name" || exit 1
 	fi
 }
 # 1. extra_args
@@ -3055,26 +3037,27 @@ do_cmake() {
 	if [[ -z $build_from_dir ]]; then
 		build_from_dir="."
 	fi
-	local touch_name=$(get_small_touchfile_name already_ran_cmake${touch_postfix} "$extra_args")
+	local touch_name=$(get_small_touchfile_name "already_ran_cmake$touch_postfix" "$extra_args")
 
-	if [ ! -f $touch_name ]; then
+	if [ ! -f "$touch_name" ]; then
 		remove_path -f already_* # reset so that make will run again if option just changed
 		local cur_dir2=$(pwd)
 		local config_options=""
-		if [ $bits_target = 32 ]; then
+		if [ "$bits_target" = 32 ]; then
 			local config_options+="-DCMAKE_SYSTEM_PROCESSOR=x86"
 		else
 			local config_options+="-DCMAKE_SYSTEM_PROCESSOR=AMD64"
 		fi
-		echo -e doing cmake in $cur_dir2 with PATH=$mingw_bin_path:\$PATH with extra_args=$extra_args like this:
+		echo -e "doing cmake in $cur_dir2 with PATH=$mingw_bin_path:\$PATH with extra_args=$extra_args like this:"
 		if [[ $compiler_flavors != "native" ]]; then
 			local command="${build_from_dir} -DENABLE_STATIC_RUNTIME=1 -DBUILD_SHARED_LIBS=0 -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_FIND_ROOT_PATH=$mingw_w64_x86_64_prefix -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_RANLIB=${cross_prefix}ranlib -DCMAKE_C_COMPILER=${cross_prefix}gcc -DCMAKE_CXX_COMPILER=${cross_prefix}g++ -DCMAKE_RC_COMPILER=${cross_prefix}windres -DCMAKE_INSTALL_PREFIX=$mingw_w64_x86_64_prefix $config_options $extra_args"
 		else
 			local command="${build_from_dir} -DENABLE_STATIC_RUNTIME=1 -DBUILD_SHARED_LIBS=0 -DCMAKE_INSTALL_PREFIX=$mingw_w64_x86_64_prefix $config_options $extra_args"
 		fi
 		echo -e "doing ${cmake_command}  -G\"Unix Makefiles\" $command"
-		nice -n 5 ${cmake_command} -G"Unix Makefiles" $command || exit 1
-		touch $touch_name || exit 1
+		# shellcheck disable=SC2086
+		nice -n 5 $cmake_command -G"Unix Makefiles" $command || exit 1
+		touch "$touch_name" || exit 1
 	fi
 }
 # 1. extra_args
@@ -3125,8 +3108,8 @@ do_meson() {
 		configure_name="meson"
 	fi
 	local cur_dir2=$(pwd)
-	local english_name=$(basename $cur_dir2)
-	local touch_name=$(get_small_touchfile_name already_built_meson${touch_postfix} "$configure_options $configure_name $LDFLAGS $CFLAGS")
+	local english_name=$(basename "$cur_dir2")
+	local touch_name=$(get_small_touchfile_name "already_built_meson$touch_postfix" "$configure_options $configure_name $LDFLAGS $CFLAGS")
 	if [ ! -f "$touch_name" ]; then
 		if [ "$configure_noclean" != "noclean" ]; then
 			make clean # just in case
@@ -3134,11 +3117,11 @@ do_meson() {
 		remove_path -f already_* # reset
 		echo -e "Using meson: $english_name ($PWD) as $ PATH=$PATH ${configure_env} $configure_name $configure_options"
 		#env
-		"$configure_name" $configure_options || exit 1
+		"$configure_name" "$configure_options" || exit 1
 		touch -- "$touch_name"
 		make clean # just in case
 	else
-		echo -e "Already used meson $(basename $cur_dir2)"
+		echo -e "Already used meson $(basename "$cur_dir2")"
 	fi
 }
 # 1. extra_args
@@ -3161,11 +3144,11 @@ do_ninja_and_ninja_install() {
 	local extra_ninja_options="$1"
 	local touch_postfix="_$2"
 	do_ninja "$extra_ninja_options" "$touch_postfix"
-	local touch_name=$(get_small_touchfile_name already_ran_make_install${touch_postfix} "$extra_ninja_options")
-	if [ ! -f $touch_name ]; then
+	local touch_name=$(get_small_touchfile_name "already_ran_make_install$touch_postfix" "$extra_ninja_options")
+	if [ ! -f "$touch_name" ]; then
 		echo -e "ninja installing $(pwd) as $PATH=$PATH ninja -C build install $extra_make_options"
 		ninja -C build install || exit 1
-		touch $touch_name || exit 1
+		touch "$touch_name" || exit 1
 	fi
 }
 
@@ -3174,14 +3157,14 @@ do_ninja() {
 	local touch_postfix="_$1"
 	local extra_make_options=" -j $(get_cpu_count)"
 	local cur_dir2=$(pwd)
-	local touch_name=$(get_small_touchfile_name already_ran_make${touch_postfix} "${extra_make_options}")
+	local touch_name=$(get_small_touchfile_name "already_ran_make$touch_postfix" "${extra_make_options}")
 
-	if [ ! -f $touch_name ]; then
+	if [ ! -f "$touch_name" ]; then
 		echo -e
-		echo -e "ninja-ing $cur_dir2 as $ PATH=$PATH ninja -C build "${extra_make_options}"
+		echo -e "ninja-ing $cur_dir2 as $ PATH=$PATH ninja -C build $extra_make_options"
     echo -e
-    ninja -C build "${extra_make_options} || exit 1
-		touch $touch_name || exit 1 # only touch if the build was OK
+    ninja -C build "$extra_make_options" || exit 1
+		touch "$touch_name" || exit 1 # only touch if the build was OK
 	else
 		echo -e "already did ninja $(basename "$cur_dir2")"
 	fi
@@ -3193,16 +3176,16 @@ apply_patch() {
 	if [[ -z $patch_type ]]; then
 		patch_type="-p0" # some are -p1 unfortunately, git's default
 	fi
-	local patch_name=$(basename $url)
+	local patch_name=$(basename "$url")
 	local patch_done_name="$patch_name.done"
 	if [[ ! -e $patch_done_name ]]; then
 		if [[ -f $patch_name ]]; then
-			remove_path -rf $patch_name || exit 1 # remove old version in case it has been since updated on the server...
+			remove_path -rf "$patch_name" || exit 1 # remove old version in case it has been since updated on the server...
 		fi
-		curl -4 --retry 5 $url -O --fail || echo -e_and_exit "unable to download patch file $url"
+		curl -4 --retry 5 "$url" -O --fail || echo -e_and_exit "unable to download patch file $url"
 		echo -e "applying patch $patch_name"
-		patch $patch_type <"$patch_name" || exit 1
-		touch $patch_done_name || exit 1
+		patch "$patch_type" <"$patch_name" || exit 1
+		touch "$patch_done_name" || exit 1
 		# too crazy, you can't do do_configure then apply a patch?
 		# rm -f already_ran* # if it's a new patch, reset everything too, in case it's really really really new
 	#else
@@ -3218,15 +3201,15 @@ echo_and_exit() {
 # takes a url, output_dir as params, output_dir optional
 download_and_unpack_file() {
 	url="$1"
-	output_name=$(basename $url)
+	output_name=$(basename "$url")
 	output_dir="$2"
 	if [[ -z $output_dir ]]; then
-		output_dir=$(basename $url | sed s/\.tar\.*//) # remove .tar.xx
+		output_dir=$(basename "$url" | sed s/\.tar\.*//) # remove .tar.xx
 	fi
 	if [ ! -f "$output_dir/unpacked.successfully" ]; then
 		echo -e "downloading $url" # redownload in case failed...
 		if [[ -f $output_name ]]; then
-			remove_path -rf $output_name || exit 1
+			remove_path -rf "$output_name" || exit 1
 		fi
 
 		#  From man curl
@@ -3256,34 +3239,28 @@ generic_download_and_make_and_install() {
 	local url="$1"
 	local english_name="$2"
 	if [[ -z $english_name ]]; then
-		english_name=$(basename $url | sed s/\.tar\.*//) # remove .tar.xx, take last part of url
+		english_name=$(basename "$url" | sed s/\.tar\.*//) # remove .tar.xx, take last part of url
 	fi
 	local extra_configure_options="$3"
-	download_and_unpack_file $url $english_name
-	change_dir $english_name || echo -e "unable to cd, may need to specify dir it will unpack to as parameter"
-	exit 1
+	download_and_unpack_file "$url" "$english_name"
+	change_dir "$english_name" || echo -e "unable to cd, may need to specify dir it will unpack to as parameter"; exit 1
 	generic_configure "$extra_configure_options"
 	do_make_and_make_install
 	change_dir ..
 }
 
-do_git_checkout_and_make_install() {
-	local url=$1
-	local git_checkout_name=$(basename $url | sed s/\.git/_git/) # http://y/abc.git -> abc_git
-	do_git_checkout $url $git_checkout_name
-	change_dir $git_checkout_name
-	generic_configure_make_install
-	change_dir ..
-}
-
 generic_configure_make_install() {
-	if [ $# -gt 0 ]; then
-		echo -e "cant pass parameters to this method today, they'd be a bit ambiguous"
-		#echo -e "The following arguments where passed: $@"
-		exit 1
-	fi
 	generic_configure # no parameters, force myself to break it up if needed
 	do_make_and_make_install
+}
+
+do_git_checkout_and_make_install() {
+	local url=$1
+	local git_checkout_name=$(basename "$url" | sed s/\.git/_git/) # http://y/abc.git -> abc_git
+	do_git_checkout "$url" "$git_checkout_name"
+	change_dir "$git_checkout_name"
+	generic_configure_make_install
+	change_dir ..
 }
 
 gen_ld_script() {
@@ -3291,8 +3268,8 @@ gen_ld_script() {
 	lib_s="$2"
 	if [[ ! -f $mingw_w64_x86_64_prefix/lib/lib$lib_s.a ]]; then
 		echo -e "Generating linker script $lib: $2 $3"
-		mv -f $lib $mingw_w64_x86_64_prefix/lib/lib$lib_s.a
-		echo -e "GROUP ( -l$lib_s $3 )" >$lib
+		mv -f "$lib" "$mingw_w64_x86_64_prefix"/lib/lib"$lib_s".a
+		echo -e "GROUP ( -l$lib_s $3 )" >"$lib"
 	fi
 }
 
@@ -3302,6 +3279,7 @@ gen_ld_script() {
 
 build_dlfcn() {
 	if [[ $compiler_flavors != "native" ]]; then # build some stuff that don't build native...
+    change_dir "$src_dir"
 		do_git_checkout https://github.com/dlfcn-win32/dlfcn-win32.git
 		change_dir dlfcn-win32_git
 		if [[ ! -f Makefile.bak ]]; then # Change CFLAGS.
@@ -3315,13 +3293,14 @@ build_dlfcn() {
 }
 
 build_bzip2() {
+  change_dir "$src_dir"
 	download_and_unpack_file https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
 	change_dir bzip2-1.0.8
-	apply_patch file://$WINPATCHDIR/bzip2-1.0.8_brokenstuff.diff
-	if [[ ! -f ./libbz2.a ]] || [[ -f $mingw_w64_x86_64_prefix/lib/libbz2.a && ! $(/usr/bin/env md5sum ./libbz2.a) = $(/usr/bin/env md5sum $mingw_w64_x86_64_prefix/lib/libbz2.a) ]]; then # Not built or different build installed
+	apply_patch "file://$WINPATCHDIR/bzip2-1.0.8_brokenstuff.diff"
+	if [[ ! -f ./libbz2.a ]] || [[ -f $mingw_w64_x86_64_prefix/lib/libbz2.a && ! $(/usr/bin/env md5sum ./libbz2.a) = $(/usr/bin/env md5sum "$mingw_w64_x86_64_prefix"/lib/libbz2.a) ]]; then # Not built or different build installed
 		do_make "$compiler_flags libbz2.a"
-		install -m644 bzlib.h $mingw_w64_x86_64_prefix/include/bzlib.h
-		install -m644 libbz2.a $mingw_w64_x86_64_prefix/lib/libbz2.a
+		install -m644 bzlib.h "$mingw_w64_x86_64_prefix"/include/bzlib.h
+		install -m644 libbz2.a "$mingw_w64_x86_64_prefix"/lib/libbz2.a
 	else
 		echo -e "Already made bzip2-1.0.8"
 	fi
@@ -3372,9 +3351,9 @@ build_brotli() {
 	generic_configure
 	sed -i.bak -e "s/\(allow_undefined=\)yes/\1no/" libtool
 	do_make_and_make_install
-	sed -i.bak 's/Libs.*$/Libs: -L${libdir} -lbrotlicommon/' $PKG_CONFIG_PATH/libbrotlicommon.pc # remove rpaths not possible in conf
-	sed -i.bak 's/Libs.*$/Libs: -L${libdir} -lbrotlidec/' $PKG_CONFIG_PATH/libbrotlidec.pc
-	sed -i.bak 's/Libs.*$/Libs: -L${libdir} -lbrotlienc/' $PKG_CONFIG_PATH/libbrotlienc.pc
+	sed -i.bak "s/Libs.*$/Libs: -L${libdir} -lbrotlicommon/" "$PKG_CONFIG_PATH/libbrotlicommon.pc" # remove rpaths not possible in conf
+	sed -i.bak "s/Libs.*$/Libs: -L${libdir} -lbrotlidec/" "$PKG_CONFIG_PATH/libbrotlidec.pc"
+	sed -i.bak "s/Libs.*$/Libs: -L${libdir} -lbrotlienc/" "$PKG_CONFIG_PATH/libbrotlienc.pc"
 	change_dir ..
 }
 
@@ -3389,7 +3368,7 @@ build_zstd() {
 build_sdl2() {
 	download_and_unpack_file https://www.libsdl.org/release/SDL2-2.32.10.tar.gz
 	change_dir SDL2-2.32.10
-	apply_patch file://$WINPATCHDIR/SDL2-2.32.10_lib-only.diff
+	apply_patch "file://$WINPATCHDIR/SDL2-2.32.10_lib-only.diff"
 	if [[ ! -f configure.bak ]]; then
 		sed -i.bak "s/ -mwindows//" configure # Allow ffmpeg to output anything to console.
 	fi
@@ -3473,8 +3452,8 @@ build_libvpl() {
 build_libleptonica() {
 	build_libjpeg_turbo
 	generic_download_and_make_and_install https://sourceforge.net/projects/giflib/files/giflib-5.1.4.tar.gz
-	do_git_checkout https://github.com/DanBloomberg/leptonica.git leptonica_git
-	change_dir leptonica_git
+	do_git_checkout "https://github.com/DanBloomberg/leptonica.git leptonica_git"
+	change_dir "leptonica_git"
 	export CPPFLAGS="-DOPJ_STATIC"
 	generic_configure_make_install
 	reset_cppflags
@@ -3484,17 +3463,17 @@ build_libleptonica() {
 build_libtiff() {
 	build_libjpeg_turbo # auto uses it?
 	generic_download_and_make_and_install http://download.osgeo.org/libtiff/tiff-4.7.1.tar.gz
-	sed -i.bak 's/-ltiff.*$/-ltiff -llzma -ljpeg -lz/' $PKG_CONFIG_PATH/libtiff-4.pc # static deps
+	sed -i.bak "s/-ltiff.*$/-ltiff -llzma -ljpeg -lz/" "$PKG_CONFIG_PATH/libtiff-4.pc" # static deps
 }
 
 build_libtensorflow() {
 	if [[ $compiler_flavors != "native" ]]; then
 		if [[ ! -e Tensorflow ]]; then
-			mkdir Tensorflow
-			change_dir Tensorflow
-			wget https://storage.googleapis.com/tensorflow/versions/2.18.1/libtensorflow-cpu-windows-x86_64.zip # tensorflow.dll required by ffmpeg to run
-			unzip -o libtensorflow-cpu-windows-x86_64.zip -d $mingw_w64_x86_64_prefix
-			remove_path -f libtensorflow-cpu-windows-x86_64.zip
+			create_dir "Tensorflow"
+			change_dir "Tensorflow"
+			wget "https://storage.googleapis.com/tensorflow/versions/2.18.1/libtensorflow-cpu-windows-x86_64.zip" # tensorflow.dll required by ffmpeg to run
+			unzip -o "libtensorflow-cpu-windows-x86_64.zip" -d "$mingw_w64_x86_64_prefix"
+			remove_path -f "libtensorflow-cpu-windows-x86_64.zip"
 			change_dir ..
 		else
 			echo -e "Tensorflow already installed"
@@ -3503,10 +3482,10 @@ build_libtensorflow() {
 }
 
 build_glib() {
-	generic_download_and_make_and_install https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz
-	download_and_unpack_file https://github.com/libffi/libffi/releases/download/v3.5.2/libffi-3.5.2.tar.gz # also dep
+	generic_download_and_make_and_install "https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz"
+	download_and_unpack_file "https://github.com/libffi/libffi/releases/download/v3.5.2/libffi-3.5.2.tar.gz" # also dep
 	change_dir libffi-3.5.2
-	apply_patch file://$WINPATCHDIR/libffi.patch -p1
+	apply_patch "file://$WINPATCHDIR/libffi.patch" -p1
 	generic_configure_make_install
 	change_dir ..
 
@@ -3523,9 +3502,9 @@ build_glib() {
 	fi
 	do_ninja_and_ninja_install
 	if [[ $compiler_flavors == "native" ]]; then
-		sed -i.bak 's/-lglib-2.0.*$/-lglib-2.0 -lm -liconv/' $PKG_CONFIG_PATH/glib-2.0.pc
+		sed -i.bak "s/-lglib-2.0.*$/-lglib-2.0 -lm -liconv/" "$PKG_CONFIG_PATH/glib-2.0.pc"
 	else
-		sed -i.bak 's/-lglib-2.0.*$/-lglib-2.0 -lintl -lws2_32 -lwinmm -lm -liconv -lole32/' $PKG_CONFIG_PATH/glib-2.0.pc
+		sed -i.bak "s/-lglib-2.0.*$/-lglib-2.0 -lintl -lws2_32 -lwinmm -lm -liconv -lole32/" "$PKG_CONFIG_PATH/glib-2.0.pc"
 	fi
 	deactivate
 	change_dir ..
@@ -3533,13 +3512,13 @@ build_glib() {
 
 build_lensfun() {
 	build_glib
-	do_git_checkout https://github.com/lensfun/lensfun.git lensfun_git
-	change_dir lensfun_git
+	do_git_checkout "https://github.com/lensfun/lensfun.git lensfun_git"
+	change_dir "lensfun_git"
 	export CPPFLAGS="$CPPFLAGS-DGLIB_STATIC_COMPILATION"
 	export CXXFLAGS="$CFLAGS -DGLIB_STATIC_COMPILATION"
 	do_cmake "-DBUILD_STATIC=on -DCMAKE_INSTALL_DATAROOTDIR=$mingw_w64_x86_64_prefix -DBUILD_TESTS=off -DBUILD_DOC=off -DINSTALL_HELPER_SCRIPTS=off -DINSTALL_PYTHON_MODULE=OFF"
 	do_make_and_make_install
-	sed -i.bak 's/-llensfun/-llensfun -lstdc++/' "$PKG_CONFIG_PATH/lensfun.pc"
+	sed -i.bak "s/-llensfun/-llensfun -lstdc++/" "$PKG_CONFIG_PATH/lensfun.pc"
 	reset_cppflags
 	unset CXXFLAGS
 	change_dir ..
@@ -3577,7 +3556,7 @@ build_openmpt() {
 	do_make_and_make_install "PREFIX=$mingw_w64_x86_64_prefix CONFIG=mingw64-win64 EXESUFFIX=.exe SOSUFFIX=.dll SOSUFFIXWINDOWS=1 DYNLINK=0 SHARED_LIB=0 STATIC_LIB=1 
       SHARED_SONAME=0 IS_CROSS=1 NO_ZLIB=0 NO_LTDL=0 NO_DL=0 NO_MPG123=0 NO_OGG=0 NO_VORBIS=0 NO_VORBISFILE=0 NO_PORTAUDIO=1 NO_PORTAUDIOCPP=1 NO_PULSEAUDIO=1 NO_SDL=0 
       NO_SDL2=0 NO_SNDFILE=0 NO_FLAC=0 EXAMPLES=0 OPENMPT123=0 TEST=0" # OPENMPT123=1 >>> fail
-	sed -i.bak 's/Libs.private.*/& -lrpcrt4/' $PKG_CONFIG_PATH/libopenmpt.pc
+	sed -i.bak "s/Libs.private.*/& -lrpcrt4/" "$PKG_CONFIG_PATH/libopenmpt.pc"
 	change_dir ..
 }
 
@@ -3587,7 +3566,7 @@ build_libpsl() {
 	change_dir libpsl-0.21.5
 	generic_configure "--disable-nls --disable-rpath --disable-gtk-doc-html --disable-man --disable-runtime"
 	do_make_and_make_install
-	sed -i.bak "s/Libs: .*/& -lidn2 -lunistring -lws2_32 -liconv/" $PKG_CONFIG_PATH/libpsl.pc
+	sed -i.bak "s/Libs: .*/& -lidn2 -lunistring -lws2_32 -liconv/" "$PKG_CONFIG_PATH/libpsl.pc"
 	reset_cflags
 	change_dir ..
 }
@@ -3634,11 +3613,11 @@ build_libtesseract() {
 	export CPPFLAGS="$CPPFLAGS -DCURL_STATICLIB"
 	generic_configure "--disable-openmp --with-archive --disable-graphics --disable-tessdata-prefix --with-curl LIBLEPT_HEADERSDIR=$mingw_w64_x86_64_prefix/include --datadir=$mingw_w64_x86_64_prefix/bin"
 	do_make_and_make_install
-	sed -i.bak 's/Requires.private.*/& lept libarchive liblzma libtiff-4 libcurl/' $PKG_CONFIG_PATH/tesseract.pc
-	sed -i 's/-ltesseract.*$/-ltesseract -lstdc++ -lws2_32 -lbz2 -lz -liconv -lpthread  -lgdi32 -lcrypt32/' $PKG_CONFIG_PATH/tesseract.pc
+	sed -i.bak "s/Requires.private.*/& lept libarchive liblzma libtiff-4 libcurl/" "$PKG_CONFIG_PATH/tesseract.pc"
+	sed -i "s/-ltesseract.*$/-ltesseract -lstdc++ -lws2_32 -lbz2 -lz -liconv -lpthread  -lgdi32 -lcrypt32/" "$PKG_CONFIG_PATH/tesseract.pc"
 	if [[ ! -f $mingw_w64_x86_64_prefix/bin/tessdata/tessdata/eng.traineddata ]]; then
-		create_dir $mingw_w64_x86_64_prefix/bin/tessdata
-		cp -f /usr/share/tesseract-ocr/**/tessdata/eng.traineddata $mingw_w64_x86_64_prefix/bin/tessdata/
+		create_dir "$mingw_w64_x86_64_prefix/bin/tessdata"
+		cp -f /usr/share/tesseract-ocr/**/tessdata/eng.traineddata "$mingw_w64_x86_64_prefix/bin/tessdata/"
 	fi
 	reset_cppflags
 	change_dir ..
@@ -3787,18 +3766,18 @@ build_librtmfp() {
 	change_dir ../../..
 	change_dir librtmfp_git
 	if [[ $compiler_flavors != "native" ]]; then
-		apply_patch file://$WINPATCHDIR/rtmfp.static.cross.patch -p1  # works e48efb4f
-		apply_patch file://$WINPATCHDIR/rtmfp_capitalization.diff -p1 # cross for windows needs it if on linux...
-		apply_patch file://$WINPATCHDIR/librtmfp_xp.diff.diff -p1     # cross for windows needs it if on linux...
+		apply_patch "file://$WINPATCHDIR/rtmfp.static.cross.patch" -p1  # works e48efb4f
+		apply_patch "file://$WINPATCHDIR/rtmfp_capitalization.diff" -p1 # cross for windows needs it if on linux...
+		apply_patch "file://$WINPATCHDIR/librtmfp_xp.diff.diff" -p1     # cross for windows needs it if on linux...
 	else
-		apply_patch file://$WINPATCHDIR/rtfmp.static.make.patch -p1
+		apply_patch "file://$WINPATCHDIR/rtfmp.static.make.patch" -p1
 	fi
 	do_make "$compiler_flags GPP=${cross_prefix}g++"
 	do_make_install "prefix=$mingw_w64_x86_64_prefix PKGCONFIGPATH=$PKG_CONFIG_PATH"
 	if [[ $compiler_flavors == "native" ]]; then
-		sed -i.bak 's/-lrtmfp.*/-lrtmfp -lstdc++/' "$PKG_CONFIG_PATH/librtmfp.pc"
+		sed -i.bak "s/-lrtmfp.*/-lrtmfp -lstdc++/" "$PKG_CONFIG_PATH/librtmfp.pc"
 	else
-		sed -i.bak 's/-lrtmfp.*/-lrtmfp -lstdc++ -lws2_32 -liphlpapi/' "$PKG_CONFIG_PATH/librtmfp.pc"
+		sed -i.bak "s/-lrtmfp.*/-lrtmfp -lstdc++ -lws2_32 -liphlpapi/" "$PKG_CONFIG_PATH/librtmfp.pc"
 	fi
 	change_dir ..
 }
@@ -3851,7 +3830,7 @@ build_gnutls() {
 build_openssl-1.0.2() {
 	download_and_unpack_file https://www.openssl.org/source/openssl-1.0.2p.tar.gz
 	change_dir openssl-1.0.2p
-	apply_patch file://$WINPATCHDIR/openssl-1.0.2l_lib-only.diff
+	apply_patch "file://$WINPATCHDIR/openssl-1.0.2l_lib-only.diff"
 	export CC="${cross_prefix}gcc"
 	export AR="${cross_prefix}ar"
 	export RANLIB="${cross_prefix}ranlib"
@@ -3875,14 +3854,14 @@ build_openssl-1.0.2() {
 	if [ "$1" = "dllonly" ]; then
 		do_make "build_libs"
 
-		create_dir $WORKDIR/redist # Strip and pack shared libraries.
+		create_dir "$WORKDIR/redist" # Strip and pack shared libraries.
 		archive="$WORKDIR/redist/openssl-${arch}-v1.0.2l.7z"
 		if [[ ! -f $archive ]]; then
 			for sharedlib in *.dll; do
-				${cross_prefix}strip $sharedlib
+				"${cross_prefix}strip" "$sharedlib"
 			done
 			sed "s/$/\r/" LICENSE >LICENSE.txt
-			7z a -mx=9 $archive *.dll LICENSE.txt && remove_path -f LICENSE.txt
+			7z a -mx=9 "$archive" "*.dll" LICENSE.txt && remove_path -f LICENSE.txt
 		fi
 	else
 		do_make_and_make_install
@@ -3893,7 +3872,6 @@ build_openssl-1.0.2() {
 	change_dir ..
 }
 
-# shellcheck disable=SC2120
 build_openssl_1_1_1() {
 	download_and_unpack_file https://www.openssl.org/source/openssl-1.1.1.tar.gz
 	change_dir openssl-1.1.1
@@ -3906,7 +3884,7 @@ build_openssl_1_1_1() {
 	else
 		config_options+="no-shared no-dso no-engine "
 	fi
-	if [[ $(uname) =~ "5.1" ]] || [[ $(uname) =~ "6.0" ]]; then
+	if [[ $(uname) =~ 5.1 ]] || [[ $(uname) =~ 6.0 ]]; then
 		config_options+="no-async " # "Note: on older OSes, like CentOS 5, BSD 5, and Windows XP or Vista, you will need to configure with no-async when building OpenSSL 1.1.0 and above. The configuration system does not detect lack of the Posix feature on the platforms." (https://wiki.openssl.org/index.php/Compilation_and_Installation)
 	fi
 	if [[ $compiler_flavors == "native" ]]; then
@@ -3929,14 +3907,14 @@ build_openssl_1_1_1() {
 	fi
 	do_make "build_libs"
 	if [ "$1" = "dllonly" ]; then
-		create_dir $WORKDIR/redist # Strip and pack shared libraries.
+		create_dir "$WORKDIR/redist" # Strip and pack shared libraries.
 		archive="$WORKDIR/redist/openssl-${arch}-v1.1.0f.7z"
 		if [[ ! -f $archive ]]; then
 			for sharedlib in *.dll; do
-				${cross_prefix}strip $sharedlib
+				"${cross_prefix}strip" "$sharedlib"
 			done
 			sed "s/$/\r/" LICENSE >LICENSE.txt
-			7z a -mx=9 $archive *.dll LICENSE.txt && remove_path -f LICENSE.txt
+			7z a -mx=9 "$archive" "*.dll" LICENSE.txt && remove_path -f LICENSE.txt
 		fi
 	else
 		do_make_install "" "install_dev"
@@ -4001,8 +3979,8 @@ build_libsndfile() {
 	generic_configure "--disable-sqlite --disable-external-libs --disable-full-suite"
 	do_make_and_make_install
 	if [[ ! -f $mingw_w64_x86_64_prefix/lib/libgsm.a ]]; then
-		install -m644 src/GSM610/gsm.h $mingw_w64_x86_64_prefix/include/gsm.h || exit 1
-		install -m644 src/GSM610/.libs/libgsm.a $mingw_w64_x86_64_prefix/lib/libgsm.a || exit 1
+		install -m644 src/GSM610/gsm.h "$mingw_w64_x86_64_prefix/include/gsm.h" || exit 1
+		install -m644 src/GSM610/.libs/libgsm.a "$mingw_w64_x86_64_prefix/lib/libgsm.a" || exit 1
 	else
 		echo -e "already installed GSM 6.10 ..."
 	fi
@@ -4101,7 +4079,7 @@ build_libgme() {
 build_mingw_std_threads() {
 	do_git_checkout https://github.com/meganz/mingw-std-threads.git # it needs std::mutex too :|
 	change_dir mingw-std-threads_git
-	cp *.h "$mingw_w64_x86_64_prefix/include"
+	cp "*.h" "$mingw_w64_x86_64_prefix/include"
 	change_dir ..
 }
 
@@ -4111,14 +4089,14 @@ build_opencv() {
 	download_and_unpack_file https://github.com/opencv/opencv/archive/3.4.5.zip opencv-3.4.5
 	create_dir opencv-3.4.5/build
 	change_dir opencv-3.4.5
-	apply_patch file://$WINPATCHDIR/opencv.detection_based.patch
+	apply_patch "file://$WINPATCHDIR/opencv.detection_based.patch"
 	change_dir ..
 	change_dir opencv-3.4.5/build
 	# could do more here, it seems to think it needs its own internal libwebp etc...
 	cpu_count=1
 	do_cmake_from_build_dir .. "-DWITH_FFMPEG=0 -DOPENCV_GENERATE_PKGCONFIG=1 -DHAVE_DSHOW=0" # https://stackoverflow.com/q/40262928/32453, no pkg config by default on "windows", who cares ffmpeg
 	do_make_and_make_install
-	cp unix-install/opencv.pc $PKG_CONFIG_PATH
+	cp unix-install/opencv.pc "$PKG_CONFIG_PATH"
 	cpu_count=$original_cpu_count
 	change_dir ../..
 }
@@ -4127,7 +4105,7 @@ build_facebooktransform360() {
 	build_opencv
 	do_git_checkout https://github.com/facebook/transform360.git
 	change_dir transform360_git
-	apply_patch file://$WINPATCHDIR/transform360.pi.diff -p1
+	apply_patch "file://$WINPATCHDIR/transform360.pi.diff" -p1
 	change_dir ..
 	change_dir transform360_git/Transform360
 	do_cmake ""
@@ -4150,7 +4128,7 @@ build_libbluray() {
 		generic_meson "$meson_options"
 	fi
 	do_ninja_and_ninja_install # "CPPFLAGS=\"-Ddec_init=libbr_dec_init\""
-	sed -i.bak 's/-lbluray.*/-lbluray -lstdc++ -lssp -lgdi32/' "$PKG_CONFIG_PATH/libbluray.pc"
+	sed -i.bak "s/-lbluray.*/-lbluray -lstdc++ -lssp -lgdi32/" "$PKG_CONFIG_PATH/libbluray.pc"
 	deactivate
 	change_dir ..
 }
@@ -4158,7 +4136,7 @@ build_libbluray() {
 build_libbs2b() {
 	download_and_unpack_file https://downloads.sourceforge.net/project/bs2b/libbs2b/3.1.0/libbs2b-3.1.0.tar.gz
 	change_dir libbs2b-3.1.0
-	apply_patch file://$WINPATCHDIR/libbs2b.patch
+	apply_patch "file://$WINPATCHDIR/libbs2b.patch"
 	sed -i.bak "s/AC_FUNC_MALLOC//" configure.ac # #270
 	export LIBS=-lm                              # avoid pow failure linux native
 	generic_configure_make_install
@@ -4176,15 +4154,15 @@ build_libsoxr() {
 build_libflite() {
 	do_git_checkout https://github.com/festvox/flite.git flite_git
 	change_dir flite_git
-	apply_patch file://$WINPATCHDIR/flite-2.1.0_mingw-w64-fixes.patch
+	apply_patch "file://$WINPATCHDIR/flite-2.1.0_mingw-w64-fixes.patch"
 	if [[ ! -f main/Makefile.bak ]]; then
 		sed -i.bak "s/cp -pd/cp -p/" main/Makefile # friendlier cp for OS X
 	fi
 	generic_configure "--bindir=$mingw_w64_x86_64_prefix/bin --with-audio=none"
 	do_make
 	if [[ ! -f $mingw_w64_x86_64_prefix/lib/libflite.a ]]; then
-		cp -rf ./build/x86_64-mingw32/lib/libflite* $mingw_w64_x86_64_prefix/lib/
-		cp -rf include $mingw_w64_x86_64_prefix/include/flite
+		cp -rf ./build/x86_64-mingw32/lib/libflite* "$mingw_w64_x86_64_prefix/lib/"
+		cp -rf include "$mingw_w64_x86_64_prefix/include/flite"
 		# cp -rf ./bin/*.exe $mingw_w64_x86_64_prefix/bin # if want .exe's uncomment
 	fi
 	change_dir ..
@@ -4194,7 +4172,7 @@ build_libsnappy() {
 	do_git_checkout https://github.com/google/snappy.git snappy_git # got weird failure once 1.1.8
 	change_dir snappy_git
 	do_cmake_and_install "-DBUILD_BINARY=OFF -DCMAKE_BUILD_TYPE=Release -DSNAPPY_BUILD_TESTS=OFF -DSNAPPY_BUILD_BENCHMARKS=OFF" # extra params from deadsix27 and from new cMakeLists.txt content
-	remove_path -f $mingw_w64_x86_64_prefix/lib/libsnappy.dll.a                                                                 # unintall shared :|
+	remove_path -f "$mingw_w64_x86_64_prefix/lib/libsnappy.dll.a"                                                                 # unintall shared :|
 	change_dir ..
 }
 
@@ -4203,7 +4181,7 @@ build_vamp_plugin() {
 	download_and_unpack_file https://github.com/vamp-plugins/vamp-plugin-sdk/archive/refs/tags/vamp-plugin-sdk-v2.10.zip vamp-plugin-sdk-vamp-plugin-sdk-v2.10
 	#cd vamp-plugin-sdk-2.10.0
 	change_dir vamp-plugin-sdk-vamp-plugin-sdk-v2.10
-	apply_patch file://$WINPATCHDIR/vamp-plugin-sdk-2.10_static-lib.diff
+	apply_patch "file://$WINPATCHDIR/vamp-plugin-sdk-2.10_static-lib.diff"
 	if [[ $compiler_flavors != "native" && ! -f src/vamp-sdk/PluginAdapter.cpp.bak ]]; then
 		sed -i.bak "s/#include <mutex>/#include <mingw.mutex.h>/" src/vamp-sdk/PluginAdapter.cpp
 	fi
@@ -4234,10 +4212,10 @@ build_libsamplerate() {
 build_librubberband() {
 	do_git_checkout https://github.com/breakfastquay/rubberband.git rubberband_git 18c06ab8c431854056407c467f4755f761e36a8e
 	change_dir rubberband_git
-	apply_patch file://$WINPATCHDIR/rubberband_git_static-lib.diff # create install-static target
+	apply_patch "file://$WINPATCHDIR/rubberband_git_static-lib.diff" # create install-static target
 	do_configure "--host=$host_target --prefix=$mingw_w64_x86_64_prefix --disable-ladspa"
 	do_make "install-static AR=${cross_prefix}ar" # No need for 'do_make_install', because 'install-static' already has install-instructions.
-	sed -i.bak 's/-lrubberband.*$/-lrubberband -lfftw3 -lsamplerate -lstdc++/' $PKG_CONFIG_PATH/rubberband.pc
+	sed -i.bak "s/-lrubberband.*$/-lrubberband -lfftw3 -lsamplerate -lstdc++/" "$PKG_CONFIG_PATH/rubberband.pc"
 	change_dir ..
 }
 
@@ -4249,21 +4227,21 @@ build_frei0r() {
 	sed -i.bak 's/-arch i386//' CMakeLists.txt # OS X https://github.com/dyne/frei0r/issues/64
 	do_cmake_and_install "-DWITHOUT_OPENCV=1"  # XXX could look at this more...
 
-	create_dir $WORKDIR/redist # Strip and pack shared libraries.
-	if [ $bits_target = 32 ]; then
+	create_dir "$WORKDIR/redist" # Strip and pack shared libraries.
+	if [ "$bits_target" = 32 ]; then
 		local arch=x86
 	else
 		local arch=x86_64
 	fi
 	archive="$WORKDIR/redist/frei0r-plugins-${arch}-$(git describe --tags).7z"
 	if [[ ! -f "$archive.done" ]]; then
-		for sharedlib in $mingw_w64_x86_64_prefix/lib/frei0r-1/*.dll; do
-			${cross_prefix}strip $sharedlib
+		for sharedlib in "$mingw_w64_x86_64_prefix"/lib/frei0r-1/*.dll; do
+			"${cross_prefix}strip" "$sharedlib"
 		done
 		for doc in AUTHORS ChangeLog COPYING README.md; do
-			sed "s/$/\r/" $doc >$mingw_w64_x86_64_prefix/lib/frei0r-1/$doc.txt
+			sed "s/$/\r/" $doc >"$mingw_w64_x86_64_prefix/lib/frei0r-1/$doc.txt"
 		done
-		7z a -mx=9 $archive $mingw_w64_x86_64_prefix/lib/frei0r-1 && remove_path -f $mingw_w64_x86_64_prefix/lib/frei0r-1/*.txt
+		7z a -mx=9 "$archive $mingw_w64_x86_64_prefix/lib/frei0r-1" && remove_path -f "$mingw_w64_x86_64_prefix/lib/frei0r-1/*.txt"
 		touch "$archive.done" # for those with no 7z so it won't restrip every time
 	fi
 	change_dir ..
@@ -4326,15 +4304,15 @@ build_libmysofa() {
 build_libcaca() {
 	do_git_checkout https://github.com/cacalabs/libcaca.git libcaca_git 813baea7a7bc28986e474541dd1080898fac14d7
 	change_dir libcaca_git
-	apply_patch file://$WINPATCHDIR/libcaca_git_stdio-cruft.diff -p1 # Fix WinXP incompatibility.
+	apply_patch "file://$WINPATCHDIR/libcaca_git_stdio-cruft.diff" -p1 # Fix WinXP incompatibility.
 	change_dir caca
-	sed -i.bak "s/__declspec(dllexport)//g" *.h # get rid of the declspec lines otherwise the build will fail for undefined symbols
-	sed -i.bak "s/__declspec(dllimport)//g" *.h
+	sed -i.bak "s/__declspec(dllexport)//g" "*.h" # get rid of the declspec lines otherwise the build will fail for undefined symbols
+	sed -i.bak "s/__declspec(dllimport)//g" "*.h"
 	change_dir ..
 	generic_configure "--libdir=$mingw_w64_x86_64_prefix/lib --disable-csharp --disable-java --disable-cxx --disable-python --disable-ruby --disable-doc --disable-cocoa --disable-ncurses"
 	do_make_and_make_install
 	if [[ $compiler_flavors == "native" ]]; then
-		sed -i.bak "s/-lcaca.*/-lcaca -lX11/" $PKG_CONFIG_PATH/caca.pc
+		sed -i.bak "s/-lcaca.*/-lcaca -lX11/" "$PKG_CONFIG_PATH/caca.pc"
 	fi
 	change_dir ..
 }
@@ -4343,7 +4321,7 @@ build_libdecklink() {
 	if [[ $compiler_flavors != "native" ]]; then
 		do_git_checkout https://gitlab.com/m-ab-s/decklink-headers.git decklink-headers_git 47d84f8d272ca6872b5440eae57609e36014f3b6
 		change_dir decklink-headers_git
-		do_make_install PREFIX=$mingw_w64_x86_64_prefix
+		do_make_install "PREFIX=$mingw_w64_x86_64_prefix"
 		change_dir ..
 	fi
 }
@@ -4369,7 +4347,7 @@ build_libsrt() {
 	download_and_unpack_file https://github.com/Haivision/srt/archive/v1.5.4.tar.gz srt-1.5.4
 	change_dir srt-1.5.4
 	if [[ $compiler_flavors != "native" ]]; then
-		apply_patch file://$WINPATCHDIR/srt.app.patch -p1
+		apply_patch "file://$WINPATCHDIR/srt.app.patch" -p1
 	fi
 	# CMake Warning at CMakeLists.txt:893 (message):
 	#   On MinGW, some C++11 apps are blocked due to lacking proper C++11 headers
@@ -4422,7 +4400,7 @@ build_spirv-cross() {
 	change_dir SPIRV-Cross_git
 	do_cmake "-B build -GNinja -DSPIRV_CROSS_STATIC=ON -DSPIRV_CROSS_SHARED=OFF -DCMAKE_BUILD_TYPE=Release -DSPIRV_CROSS_CLI=OFF -DSPIRV_CROSS_ENABLE_TESTS=OFF -DSPIRV_CROSS_FORCE_PIC=ON -DSPIRV_CROSS_ENABLE_CPP=OFF"
 	do_ninja_and_ninja_install
-	mv $PKG_CONFIG_PATH/spirv-cross-c.pc $PKG_CONFIG_PATH/spirv-cross-c-shared.pc
+	mv "$PKG_CONFIG_PATH/spirv-cross-c.pc" "$PKG_CONFIG_PATH/spirv-cross-c-shared.pc"
 	change_dir ..
 }
 
@@ -4433,23 +4411,23 @@ build_libdovi() {
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env" && rustup update && rustup target add x86_64-pc-windows-gnu # rustup self uninstall
 		if [[ $compiler_flavors != "native" ]]; then
 			wget https://github.com/quietvoid/dovi_tool/releases/download/2.3.1/dovi_tool-2.3.1-x86_64-pc-windows-msvc.zip
-			unzip -o dovi_tool-2.3.1-x86_64-pc-windows-msvc.zip -d $mingw_w64_x86_64_prefix/bin
+			unzip -o dovi_tool-2.3.1-x86_64-pc-windows-msvc.zip -d "$mingw_w64_x86_64_prefix/bin"
 			remove_path -f dovi_tool-2.3.1-x86_64-pc-windows-msvc.zip
 		fi
 
 		unset PKG_CONFIG_PATH
 		if [[ $compiler_flavors == "native" ]]; then
-			cargo build --release --no-default-features --features internal-font && cp /target/release//dovi_tool $mingw_w64_x86_64_prefix/bin
+			cargo build --release --no-default-features --features internal-font && cp /target/release//dovi_tool "$mingw_w64_x86_64_prefix/bin"
 		fi
 		change_dir dolby_vision
 		cargo install cargo-c --features=vendored-openssl
 		if [[ $compiler_flavors == "native" ]]; then
-			cargo cinstall --release --prefix=$mingw_w64_x86_64_prefix --libdir=$mingw_w64_x86_64_prefix/lib --library-type=staticlib
+			cargo cinstall --release --prefix="$mingw_w64_x86_64_prefix" --libdir="$mingw_w64_x86_64_prefix/lib" --library-type=staticlib
 		fi
 
 		export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
 		if [[ $compiler_flavors != "native" ]]; then
-			cargo cinstall --release --prefix=$mingw_w64_x86_64_prefix --libdir=$mingw_w64_x86_64_prefix/lib --library-type=staticlib --target x86_64-pc-windows-gnu
+			cargo cinstall --release --prefix="$mingw_w64_x86_64_prefix" --libdir="$mingw_w64_x86_64_prefix/lib" --library-type=staticlib --target x86_64-pc-windows-gnu
 		fi
 		change_dir ..
 	else
@@ -4464,7 +4442,7 @@ build_shaderc() {
 	./utils/git-sync-deps
 	do_cmake "-B build -DCMAKE_BUILD_TYPE=release -GNinja -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_TESTS=ON -DSPIRV_SKIP_TESTS=ON -DSHADERC_SKIP_COPYRIGHT_CHECK=ON -DENABLE_EXCEPTIONS=ON -DENABLE_GLSLANG_BINARIES=OFF -DSPIRV_SKIP_EXECUTABLES=ON -DSPIRV_TOOLS_BUILD_STATIC=ON -DBUILD_SHARED_LIBS=OFF"
 	do_ninja_and_ninja_install
-	cp build/libshaderc_util/libshaderc_util.a $mingw_w64_x86_64_prefix/lib
+	cp build/libshaderc_util/libshaderc_util.a "$mingw_w64_x86_64_prefix/lib"
 	sed -i.bak "s/Libs: .*/& -lstdc++/" "$PKG_CONFIG_PATH/shaderc_combined.pc"
 	sed -i.bak "s/Libs: .*/& -lstdc++/" "$PKG_CONFIG_PATH/shaderc_static.pc"
 	change_dir ..
@@ -4551,7 +4529,7 @@ build_libxavs2() {
 build_libdavs2() {
 	do_git_checkout https://github.com/pkuvcl/davs2.git
 	change_dir davs2_git/build/linux
-	if [[ $host_target == 'i686-w64-mingw32' ]]; then
+	if [[ $host_target == "i686-w64-mingw32" ]]; then
 		do_configure "--cross-prefix=$cross_prefix --host=$host_target --prefix=$mingw_w64_x86_64_prefix --enable-pic --disable-asm"
 	else
 		do_configure "--cross-prefix=$cross_prefix --host=$host_target --prefix=$mingw_w64_x86_64_prefix --enable-pic"
@@ -4563,7 +4541,7 @@ build_libdavs2() {
 build_libxvid() {
 	download_and_unpack_file https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz xvidcore
 	change_dir xvidcore/build/generic
-	apply_patch file://$WINPATCHDIR/xvidcore-1.3.7_static-lib.patch
+	apply_patch "file://$WINPATCHDIR/xvidcore-1.3.7_static-lib.patch"
 	do_configure "--host=$host_target --prefix=$mingw_w64_x86_64_prefix" # no static option...
 	do_make_and_make_install
 	change_dir ../../..
@@ -4599,7 +4577,7 @@ build_libaom() {
 	fi
 	create_dir aom_git/aom_build
 	change_dir aom_git/aom_build
-	do_cmake_from_build_dir .. $config_options
+	do_cmake_from_build_dir .. "$config_options"
 	do_make_and_make_install
 	change_dir ../..
 }
@@ -4609,7 +4587,7 @@ build_dav1d() {
 	activate_meson
 	change_dir libdav1d
 	if [[ $bits_target == 32 || $bits_target == 64 ]]; then # XXX why 64???
-		apply_patch file://$WINPATCHDIR/david_no_asm.patch -p1 # XXX report
+		apply_patch "file://$WINPATCHDIR/david_no_asm.patch" -p1 # XXX report
 	fi
 	cpu_count=1 # XXX report :|
 	local meson_options="setup -Denable_tests=false -Denable_examples=false . build"
@@ -4621,7 +4599,7 @@ build_dav1d() {
 		generic_meson "$meson_options"
 	fi
 	do_ninja_and_ninja_install
-	cp build/src/libdav1d.a $mingw_w64_x86_64_prefix/lib || exit 1 # avoid 'run ranlib' weird failure, possibly older meson's https://github.com/mesonbuild/meson/issues/4138 :|
+	cp build/src/libdav1d.a "$mingw_w64_x86_64_prefix/lib" || exit 1 # avoid 'run ranlib' weird failure, possibly older meson's https://github.com/mesonbuild/meson/issues/4138 :|
 	cpu_count=$original_cpu_count
 	deactivate
 	change_dir ..
@@ -4657,17 +4635,17 @@ build_libx265() {
 	local remote="https://bitbucket.org/multicoreware/x265_git"
 	if [[ ! -z $x265_git_checkout_version ]]; then
 		checkout_dir+="_$x265_git_checkout_version"
-		do_git_checkout "$remote" $checkout_dir "$x265_git_checkout_version"
+		do_git_checkout "$remote" "$checkout_dir" "$x265_git_checkout_version"
 	else
 		if [[ $prefer_stable = "n" ]]; then
 			checkout_dir+="_unstable"
-			do_git_checkout "$remote" $checkout_dir "origin/master"
+			do_git_checkout "$remote" "$checkout_dir" "origin/master"
 		fi
 		if [[ $prefer_stable = "y" ]]; then
-			do_git_checkout "$remote" $checkout_dir "origin/stable"
+			do_git_checkout "$remote" "$checkout_dir" "origin/stable"
 		fi
 	fi
-	change_dir $checkout_dir
+	change_dir "$checkout_dir"
 
 	local cmake_params="-DENABLE_SHARED=0" # build x265.exe
 
@@ -4715,7 +4693,7 @@ build_libx265() {
 	if [[ $compiler_flavors == "native" && $OSTYPE == darwin* ]]; then
 		libtool -static -o libx265.a libx265_main.a libx265_main10.a libx265_main12.a 2>/dev/null
 	else
-		${cross_prefix}ar -M <<EOF
+		"${cross_prefix}ar" -M <<EOF
 CREATE libx265.a
 ADDLIB libx265_main.a
 ADDLIB libx265_main10.a
@@ -4874,7 +4852,7 @@ build_lua() {
 	do_make "CC=${cross_prefix}gcc RANLIB=${cross_prefix}ranlib generic" # generic == "generic target" and seems to result in a static build, no .exe's blah blah the mingw option doesn't even build liblua.a
 	unset AR
 	do_make_install "INSTALL_TOP=$mingw_w64_x86_64_prefix" "generic install"
-	cp etc/lua.pc $PKG_CONFIG_PATH
+	cp etc/lua.pc "$PKG_CONFIG_PATH"
 	change_dir ..
 }
 
@@ -4882,17 +4860,17 @@ build_libhdhomerun() {
 	exit 1 # still broken unfortunately, for cross compile :|
 	download_and_unpack_file https://download.silicondust.com/hdhomerun/libhdhomerun_20150826.tgz libhdhomerun
 	change_dir libhdhomerun
-	do_make CROSS_COMPILE=$cross_prefix OS=Windows_NT
+	do_make "CROSS_COMPILE=$cross_prefix OS=Windows_NT"
 	change_dir ..
 }
 
 build_meson_cross_jsoncpp() {
 	local cpu_family="x86_64"
-	if [ $bits_target = 32 ]; then
+	if [ "$bits_target" = 32 ]; then
 		cpu_family="x86"
 	fi
-	remove_path -fv ${work_dir}/jsoncpp/meson-cross-jsoncpp.mingw.txt
-	cat >>${work_dir}/jsoncpp/meson-cross-jsoncpp.mingw.txt <<EOF
+	remove_path -fv "${work_dir}/jsoncpp/meson-cross-jsoncpp.mingw.txt"
+	cat >>"${work_dir}/jsoncpp/meson-cross-jsoncpp.mingw.txt" <<EOF
 [built-in options]
 buildtype = 'release'
 wrap_mode = 'nofallback'  
@@ -4972,20 +4950,20 @@ build_qt() {
 	# download_and_unpack_file http://download.qt-project.org/official_releases/qt/5.1/5.1.1/submodules/qtbase-opensource-src-5.1.1.tar.xz qtbase-opensource-src-5.1.1 # not officially supported seems...so didn't try it
 	download_and_unpack_file http://pkgs.fedoraproject.org/repo/pkgs/qt/qt-everywhere-opensource-src-4.8.5.tar.gz/1864987bdbb2f58f8ae8b350dfdbe133/qt-everywhere-opensource-src-4.8.5.tar.gz
 	change_dir qt-everywhere-opensource-src-4.8.5
-	apply_patch file://$WINPATCHDIR/imageformats.patch
-	apply_patch file://$WINPATCHDIR/qt-win64.patch
+	apply_patch "file://$WINPATCHDIR/imageformats.patch"
+	apply_patch "file://$WINPATCHDIR/qt-win64.patch"
 	# vlc's configure options...mostly
 	do_configure "-static -release -fast -no-exceptions -no-stl -no-sql-sqlite -no-qt3support -no-gif -no-libmng -qt-libjpeg -no-libtiff -no-qdbus -no-openssl -no-webkit -sse -no-script -no-multimedia -no-phonon -opensource -no-scripttools -no-opengl -no-script -no-scripttools -no-declarative -no-declarative-debug -opensource -no-s60 -host-little-endian -confirm-license -xplatform win32-g++ -device-option CROSS_COMPILE=$cross_prefix -prefix $mingw_w64_x86_64_prefix -prefix-install -nomake examples"
 	if [ ! -f 'already_qt_maked_k' ]; then
-		make sub-src -j $(get_cpu_count)
+		make sub-src -j "$(get_cpu_count)"
 		make install sub-src                                                                    # let it fail, baby, it still installs a lot of good stuff before dying on mng...? huh wuh?
-		cp ./plugins/imageformats/libqjpeg.a $mingw_w64_x86_64_prefix/lib || exit 1             # I think vlc's install is just broken to need this [?]
-		cp ./plugins/accessible/libqtaccessiblewidgets.a $mingw_w64_x86_64_prefix/lib || exit 1 # this feels wrong...
+		cp ./plugins/imageformats/libqjpeg.a "$mingw_w64_x86_64_prefix/lib" || exit 1             # I think vlc's install is just broken to need this [?]
+		cp ./plugins/accessible/libqtaccessiblewidgets.a "$mingw_w64_x86_64_prefix/lib" || exit 1 # this feels wrong...
 		# do_make_and_make_install "sub-src" # sub-src might make the build faster? # complains on mng? huh?
 		touch 'already_qt_maked_k'
 	fi
 	# vlc needs an adjust .pc file? huh wuh?
-	sed -i.bak 's/Libs: -L${libdir} -lQtGui/Libs: -L${libdir} -lcomctl32 -lqjpeg -lqtaccessiblewidgets -lQtGui/' "$PKG_CONFIG_PATH/QtGui.pc" # sniff
+	sed -i.bak "s/Libs: -L${libdir} -lQtGui/Libs: -L${libdir} -lcomctl32 -lqjpeg -lqtaccessiblewidgets -lQtGui/" "$PKG_CONFIG_PATH/QtGui.pc" # sniff
 	change_dir ..
 	reset_cflags
 }
@@ -5018,7 +4996,7 @@ build_vlc() {
 	fi
 	export DVDREAD_LIBS='-ldvdread -ldvdcss -lpsapi'
 	do_configure "--disable-libgcrypt --disable-a52 --host=$host_target --disable-lua --disable-mad --enable-qt --disable-sdl --disable-mod" # don't have lua mingw yet, etc. [vlc has --disable-sdl [?]] x265 disabled until we care enough... Looks like the bluray problem was related to the BLURAY_LIBS definition. [not sure what's wrong with libmod]
-	remove_path -f $(find . -name *.exe)                                                                                                     # try to force a rebuild...though there are tons of .a files we aren't rebuilding as well FWIW...:|
+	remove_path -f "$(find . -name "*.exe")"                                                                                                     # try to force a rebuild...though there are tons of .a files we aren't rebuilding as well FWIW...:|
 	remove_path -f already_ran_make*                                                                                                         # try to force re-link just in case...
 	do_make
 	# do some gymnastics to avoid building the mozilla plugin for now [couldn't quite get it to work]
@@ -5052,7 +5030,7 @@ reset_ldflags() {
 
 build_meson_cross() {
 	local cpu_family="x86_64"
-	if [ $bits_target = 32 ]; then
+	if [ "$bits_target" = 32 ]; then
 		cpu_family="x86"
 	fi
 	remove_path -fv meson-cross.mingw.txt
@@ -5098,7 +5076,7 @@ get_local_meson_cross_with_propeties() {
 	if [[ -z $local_dir ]]; then
 		local_dir="."
 	fi
-	cp ${BASEDIR}/meson-cross.mingw.txt "$local_dir"
+	cp "$BASEDIR/meson-cross.mingw.txt" "$local_dir"
 	cat >>meson-cross.mingw.txt <<EOF
 EOF
 }
@@ -5121,11 +5099,11 @@ build_mplayer() {
 	sed -i.bak "s/HAVE_PTHREAD_CANCEL 0/HAVE_PTHREAD_CANCEL 1/g" config.h # mplayer doesn't set this up right?
 	touch -t 201203101513 config.h                                        # the above line change the modify time for config.h--forcing a full rebuild *every time* yikes!
 	# try to force re-link just in case...
-	remove_path -f *.exe
+	remove_path -f "*.exe"
 	remove_path -f already_ran_make* # try to force re-link just in case...
 	do_make
 	cp mplayer.exe mplayer_debug.exe
-	${cross_prefix}strip mplayer.exe
+	"${cross_prefix}strip" mplayer.exe
 	echo -e "built ${PWD}/{mplayer,mencoder,mplayer_debug}.exe"
 	change_dir ..
 }
@@ -5160,7 +5138,7 @@ build_mp4box() { # like build_gpac
 build_libMXF() {
 	download_and_unpack_file https://sourceforge.net/projects/ingex/files/1.0.0/libMXF/libMXF-src-1.0.0.tgz "libMXF-src-1.0.0"
 	change_dir libMXF-src-1.0.0
-	apply_patch file://$WINPATCHDIR/libMXF.diff
+	apply_patch "file://$WINPATCHDIR/libMXF.diff"
 	do_make "MINGW_CC_PREFIX=$cross_prefix"
 	#
 	# Manual equivalent of make install. Enable it if desired. We shouldn't need it in theory since we never use libMXF.a file and can just hand pluck out the *.exe files already...
@@ -5192,7 +5170,7 @@ build_lsw() {
 }
 
 build_chromaprint() {
-	echo -e $mingw_w64_x86_64_prefix
+	echo -e "$mingw_w64_x86_64_prefix"
 	build_fftw
 	do_git_checkout https://github.com/acoustid/chromaprint.git chromaprint
 	change_dir chromaprint
