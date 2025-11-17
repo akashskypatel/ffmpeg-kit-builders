@@ -20,6 +20,7 @@
 import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_platform_interface/ffmpeg_kit_flutter_platform_interface.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../arch_detect.dart';
@@ -41,8 +42,9 @@ import 'ffmpeg_kit_factory.dart';
 
 class FFmpegKitInitializer {
   static FFmpegKitPlatform _platform = FFmpegKitPlatform.instance;
-  static const EventChannel _eventChannel =
-      const EventChannel('flutter.arthenica.com/ffmpeg_kit_event');
+  static const EventChannel _eventChannel = const EventChannel(
+    'flutter.arthenica.com/ffmpeg_kit_event',
+  );
 
   static FFmpegKitInitializer _instance = new FFmpegKitInitializer();
 
@@ -285,7 +287,8 @@ class FFmpegKitInitializer {
             try {
               // NOTIFY GLOBAL CALLBACK DEFINED
               globalMediaInformationSessionCompleteCallback(
-                  mediaInformationSession);
+                mediaInformationSession,
+              );
             } on Exception catch (e, stack) {
               print("Exception thrown inside global complete callback. $e");
               print(stack);
@@ -298,6 +301,10 @@ class FFmpegKitInitializer {
 
   Future<int?> _getLogLevel() async {
     try {
+      // const MethodChannel _channel =
+      // const MethodChannel('flutter.arthenica.com/ffmpeg_kit');
+      // return await _channel.invokeMethod<int>('getLogLevel');
+
       return _platform.ffmpegKitFlutterInitializerGetLogLevel();
     } on PlatformException catch (e, stack) {
       print("Plugin _getLogLevel error: ${e.message}");
@@ -306,7 +313,7 @@ class FFmpegKitInitializer {
   }
 
   Future<void> _initialize() async {
-    print("Loading ffmpeg-kit-flutter.");
+    debugPrint("Loading ffmpeg-kit-flutter.");
 
     _eventChannel.receiveBroadcastStream().listen(_onEvent, onError: _onError);
 
@@ -314,6 +321,7 @@ class FFmpegKitInitializer {
     if (logLevel != null) {
       FFmpegKitConfig.setLogLevel(logLevel);
     }
+
     final version = FFmpegKitFactory.getVersion();
     final platform = await FFmpegKitConfig.getPlatform();
     final arch = await ArchDetect.getArch();
