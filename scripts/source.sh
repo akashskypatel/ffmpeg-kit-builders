@@ -113,6 +113,11 @@ get_library_source() {
     SOURCE_ID="v3.0.4"
     SOURCE_TYPE="TAG"
     ;;
+  libjsoncpp)
+    SOURCE_REPO_URL="https://github.com/open-source-parsers/jsoncpp"
+    SOURCE_ID="1.9.6"
+    SOURCE_TYPE="TAG"
+    ;;
   libogg)
     SOURCE_REPO_URL="https://github.com/arthenica/ogg"
     SOURCE_ID="v1.3.5"

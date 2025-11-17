@@ -67,7 +67,7 @@ libraries are created under the prebuilt folder.\n"
   echo -e "  --enable-libaom\t\tbuild with libaom [no]"
   echo -e "  --enable-libilbc\t\tbuild with libilbc [no]"
   echo -e "  --enable-openh264\t\tbuild with openh264 [no]"
-  #echo -e "  --enable-openssl\t\tbuild with openssl [no]"
+  echo -e "  --enable-openssl\t\tbuild with openssl [no]"
   echo -e "  --enable-srt\t\t\tbuild with srt [no]"
   echo -e "  --enable-zimg\t\t\tbuild with zimg [no]\n"
 
@@ -181,7 +181,7 @@ create_linux_bundle() {
 
     destination_license_path="${LICENSE_BASEDIR}/license_${!library_name}.txt"
 
-    cp "${BASEDIR}/prebuilt/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
+    cp "${BASEDIR}/src/${!library_name}/${!relative_license_path}" "${destination_license_path}" 1>>"${BASEDIR}"/build.log 2>&1
 
     RC=$?
 
@@ -208,7 +208,7 @@ create_linux_bundle() {
 
 get_cmake_system_processor() {
   case ${ARCH} in
-  x86-64| x86_64)
+  x86-64)
     echo "x86_64"
     ;;
   esac
@@ -216,7 +216,7 @@ get_cmake_system_processor() {
 
 get_target_cpu() {
   case ${ARCH} in
-  x86-64 | x86_64)
+  x86-64)
     echo "x86_64"
     ;;
   esac
@@ -236,8 +236,8 @@ get_common_cflags() {
 
 get_arch_specific_cflags() {
   case ${ARCH} in
-  x86-64 | x86_64)
-    echo "-target $(get_target) -DFFMPEG_KIT_X86_64"
+  x86-64)
+    echo "-target $(get_target) -march=x86-64 -msse4.2 -mpopcnt -m64 -DFFMPEG_KIT_X86_64"
     ;;
   esac
 }
@@ -251,7 +251,7 @@ get_size_optimization_cflags() {
 
   local ARCH_OPTIMIZATION=""
   case ${ARCH} in
-  x86-64 | x86_64)
+  x86-64)
     case $1 in
     ffmpeg)
       ARCH_OPTIMIZATION="${LINK_TIME_OPTIMIZATION_FLAGS} -Os -ffunction-sections -fdata-sections"
@@ -283,7 +283,7 @@ get_app_specific_cflags() {
   openh264)
     APP_FLAGS="-std=gnu99 -Wno-unused-function -fstack-protector-all"
     ;;
-  srt)
+  openssl | srt)
     APP_FLAGS="-Wno-unused-function"
     ;;
   *)
@@ -494,7 +494,7 @@ Version: ${SRT_VERSION}
 Libs: -L\${libdir} -lsrt
 Libs.private: -lc -lm -ldl -lstdc++
 Cflags: -I\${includedir} -I\${includedir}/srt
-Requires: libcrypto
+Requires: openssl libcrypto
 EOF
 }
 
