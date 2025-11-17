@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# shellcheck disable=SC2317
+# shellcheck disable=SC1091
+# shellcheck disable=SC2120
+
 #echo -e "${SCRIPTDIR}/variable.sh"
 #echo -e "${SCRIPTDIR}/function.sh"
 
@@ -38,6 +42,7 @@ build_all_ffmpeg_dependencies() {
 	local current_step=0
 
 	for step_name in "${BUILD_STEPS[@]}"; do
+		change_dir "$src_dir"
 		if [[ -z "${step_name// /}" ]]; then
 			continue
 		fi
@@ -59,6 +64,7 @@ build_all_ffmpeg_dependencies() {
 build_ffmpeg_dependency_only() {
 	step=$1
 	if [[ -n "$step" ]]; then
+		change_dir "$src_dir"
 		if declare -F "$step" >/dev/null; then
 			echo -e "Executing step: $step"
 			"$step" # Execute the function
@@ -108,7 +114,8 @@ setup_build_environment() {
 	if [[ $flavor == "win32" ]]; then
 		export ARCH=$(get_arch_name "$(from_arch_name "$flavor")")
 		export FULL_ARCH="i686"
-		export work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH")"
+		export target_name="$FFMPEG_KIT_BUILD_TYPE-$FULL_ARCH"
+		export work_dir="$(realpath "$WORKDIR"/"$target_name")"
 		export host_target='i686-w64-mingw32'
 		export mingw_w64_x86_64_prefix="$(realpath "$work_dir"/cross_compilers/mingw-w64-i686/$host_target)"
 		export mingw_bin_path="$(realpath "$work_dir"/cross_compilers/mingw-w64-i686/bin)"
@@ -120,7 +127,7 @@ setup_build_environment() {
 	elif [[ $flavor == "win64" ]]; then
 		export ARCH=$(get_arch_name "$(from_arch_name "$flavor")")
 		export FULL_ARCH="x86_64"
-		export work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH")"
+		export work_dir="$(realpath "$WORKDIR"/"$target_name")"
 		export host_target='x86_64-w64-mingw32'
 		export mingw_w64_x86_64_prefix="$(realpath "$work_dir"/cross_compilers/mingw-w64-x86_64/$host_target)"
 		export mingw_bin_path="$(realpath "$work_dir"/cross_compilers/mingw-w64-x86_64/bin)"
@@ -142,7 +149,7 @@ setup_build_environment() {
 --ld=$(realpath "${cross_prefix}"ld) \
 --strip=$(realpath "${cross_prefix}"strip) \
 --cxx=$(realpath "${cross_prefix}"g++)"
-	export src_dir="${work_dir}/src"
+	export src_dir="${work_dir}/$target_name/src"
 	export LIB_INSTALL_BASE="$work_dir"
 	export INSTALL_PKG_CONFIG_DIR="${work_dir}/pkgconfig"
 	export ffmpeg_source_dir="${work_dir}/ffmpeg"
@@ -220,7 +227,7 @@ get_cxxflags() {
 		local OPTIMIZATION_FLAGS="${FFMPEG_KIT_DEBUG}"
 	fi
 
-	local BUILD_DATE="-DFFMPEG_KIT_BUILD_DATE=$(date +%Y%m%d 2>>$LOG_FILE)"
+	local BUILD_DATE="-DFFMPEG_KIT_BUILD_DATE=$(date +%Y%m%d 2>>"$LOG_FILE")"
 	local COMMON_FLAGS="-stdlib=libstdc++ -std=c++11 ${OPTIMIZATION_FLAGS} ${BUILD_DATE} $(get_arch_specific_cflags)"
 
 	case $1 in
@@ -397,18 +404,17 @@ install_pkg_config_file() {
 	local DESTINATION="${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}/${FILE_NAME}"
 
 	# DELETE OLD FILE
-	remove_path -rf "$DESTINATION" 2>>"$LOG_FILE"
-	if [[ $? -ne 0 ]]; then
-		echo -e "failed\n\nSee $LOG_FILE for details\n"
-		exit 1
+	if ! remove_path -rf "$DESTINATION" 2>>"$LOG_FILE"; then
+			echo -e "failed\n\nSee $LOG_FILE for details\n"
+			exit 1
 	fi
 
 	# INSTALL THE NEW FILE
-	copy_path "$SOURCE" "$DESTINATION" 2>>"$LOG_FILE"
-	if [[ $? -ne 0 ]]; then
-		echo -e "failed\n\nSee $LOG_FILE for details\n"
-		exit 1
+	if ! copy_path "$SOURCE" "$DESTINATION" 2>>"$LOG_FILE"; then
+			echo -e "failed\n\nSee $LOG_FILE for details\n"
+			exit 1
 	fi
+
 	prepare_inline_sed
 	# UPDATE PATHS
 	${SED_INLINE} "s|${ffmpeg_kit_install}|${ffmpeg_kit_bundle}|g" "$DESTINATION" 1>>"$LOG_FILE" 2>&1 || return 1
@@ -442,9 +448,9 @@ download_ffmpeg() {
 
 install_cross_compiler() {
 	echo -e "INFO: Building (or already built) MinGW-w64 cross-compiler(s)..." | tee -a "$LOG_FILE"
-	echo -e $(date) | tee -a "$LOG_FILE"
-	local win32_gcc="cross_compilers/mingw-w64-i686/bin/i686-w64-mingw32-gcc"
-	local win64_gcc="cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-gcc"
+	echo -e "$(date)" | tee -a "$LOG_FILE"
+	local win32_gcc="$work_dir/cross_compilers/mingw-w64-i686/bin/i686-w64-mingw32-gcc"
+	local win64_gcc="$work_dir/cross_compilers/mingw-w64-x86_64/bin/x86_64-w64-mingw32-gcc"
 	if [[ -f $win32_gcc && -f $win64_gcc ]]; then
 		echo -e "MinGW-w64 compilers both already installed, not re-installing..." | tee -a "$LOG_FILE"
 		if [[ -z $compiler_flavors ]]; then
@@ -458,8 +464,8 @@ install_cross_compiler() {
 		pick_compiler_flavors
 	fi
 	setup_build_environment "$compiler_flavors"
-	create_dir cross_compilers
-	change_dir cross_compilers
+	create_dir "$work_dir"/cross_compilers
+	change_dir "$work_dir"/cross_compilers
 
 	unset CFLAGS # don't want these "windows target" settings used the compiler itself since it creates executables to run on the local box (we have a parameter allowing them to set them for the script "all builds" basically)
 	# pthreads version to avoid having to use cvs for it
@@ -505,7 +511,7 @@ install_cross_compiler() {
 	reset_cflags
 	change_dir ..
 	echo -e "INFO: Done building (or already built) MinGW-w64 cross-compiler(s) successfully..." | tee -a "$LOG_FILE"
-	echo -e $(date) | tee -a "$LOG_FILE" # so they can see how long it took :)
+	echo -e "$(date)" | tee -a "$LOG_FILE" # so they can see how long it took :)
 }
 
 check_builds() {
@@ -569,12 +575,14 @@ install_ffmpeg() {
 
 	echo -e "INFO: Moving all binaries" | tee -a "$LOG_FILE"
 
-	mv "*/*.a" "${install_prefix}/bin" 1>>"$LOG_FILE"2 >&1
-	mv "*/*.dylib" "${install_prefix}/bin" 1>>"$LOG_FILE"2 >&1
-	mv "*/*.lib" "${install_prefix}/bin" 1>>"$LOG_FILE"2 >&1
-	mv "*/*.dll" "${install_prefix}/bin" 1>>"$LOG_FILE"2 >&1
-	mv "*.exe" "${install_prefix}/bin" 1>>"$LOG_FILE"2 >&1
-	mv "*.so" "${install_prefix}/bin" 1>>"$LOG_FILE"2 >&1
+	{
+		mv "*/*.a" "${install_prefix}/bin" 
+		mv "*/*.dylib" "${install_prefix}/bin"
+		mv "*/*.lib" "${install_prefix}/bin"
+		mv "*/*.dll" "${install_prefix}/bin"
+		mv "*.exe" "${install_prefix}/bin"
+		mv "*.so" "${install_prefix}/bin"
+	} 1>>"$LOG_FILE"2 >&1
 
 	echo -e "INFO: Done installing ffmpeg\n" | tee -a "$LOG_FILE"
 
@@ -611,32 +619,34 @@ install_ffmpeg_pkg() {
 	overwrite_file "${install_prefix}"/lib/pkgconfig/libavutil.pc "${INSTALL_PKG_CONFIG_DIR}/libavutil.pc" || return 1
 
 	# # MANUALLY ADD REQUIRED HEADERS
-	mkdir -p "${install_prefix}"/include/libavutil/x86 1>>"$LOG_FILE"2 >&1
-	mkdir -p "${install_prefix}"/include/libavutil/arm 1>>"$LOG_FILE"2 >&1
-	mkdir -p "${install_prefix}"/include/libavutil/aarch64 1>>"$LOG_FILE"2 >&1
-	mkdir -p "${install_prefix}"/include/libavcodec/x86 1>>"$LOG_FILE"2 >&1
-	mkdir -p "${install_prefix}"/include/libavcodec/arm 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/config.h "${install_prefix}"/include/config.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavcodec/mathops.h "${install_prefix}"/include/libavcodec/mathops.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavcodec/x86/mathops.h "${install_prefix}"/include/libavcodec/x86/mathops.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavcodec/arm/mathops.h "${install_prefix}"/include/libavcodec/arm/mathops.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavformat/network.h "${install_prefix}"/include/libavformat/network.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavformat/os_support.h "${install_prefix}"/include/libavformat/os_support.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavformat/url.h "${install_prefix}"/include/libavformat/url.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/attributes_internal.h "${install_prefix}"/include/libavutil/attributes_internal.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/bprint.h "${install_prefix}"/include/libavutil/bprint.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/getenv_utf8.h "${install_prefix}"/include/libavutil/getenv_utf8.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/internal.h "${install_prefix}"/include/libavutil/internal.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/libm.h "${install_prefix}"/include/libavutil/libm.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/reverse.h "${install_prefix}"/include/libavutil/reverse.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/thread.h "${install_prefix}"/include/libavutil/thread.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/timer.h "${install_prefix}"/include/libavutil/timer.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/asm.h "${install_prefix}"/include/libavutil/x86/asm.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/timer.h "${install_prefix}"/include/libavutil/x86/timer.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/arm/timer.h "${install_prefix}"/include/libavutil/arm/timer.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/aarch64/timer.h "${install_prefix}"/include/libavutil/aarch64/timer.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/compat/w32pthreads.h "${install_prefix}"/include/libavutil/compat/w32pthreads.h 1>>"$LOG_FILE"2 >&1
-	overwrite_file "${ffmpeg_source_dir}"/libavutil/wchar_filename.h "${install_prefix}"/include/libavutil/wchar_filename.h 1>>"$LOG_FILE"2 >&1
+	{
+		mkdir -p "${install_prefix}"/include/libavutil/x86 
+		mkdir -p "${install_prefix}"/include/libavutil/arm 
+		mkdir -p "${install_prefix}"/include/libavutil/aarch64 
+		mkdir -p "${install_prefix}"/include/libavcodec/x86 
+		mkdir -p "${install_prefix}"/include/libavcodec/arm 
+		overwrite_file "${ffmpeg_source_dir}"/config.h "${install_prefix}"/include/config.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavcodec/mathops.h "${install_prefix}"/include/libavcodec/mathops.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavcodec/x86/mathops.h "${install_prefix}"/include/libavcodec/x86/mathops.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavcodec/arm/mathops.h "${install_prefix}"/include/libavcodec/arm/mathops.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavformat/network.h "${install_prefix}"/include/libavformat/network.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavformat/os_support.h "${install_prefix}"/include/libavformat/os_support.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavformat/url.h "${install_prefix}"/include/libavformat/url.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/attributes_internal.h "${install_prefix}"/include/libavutil/attributes_internal.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/bprint.h "${install_prefix}"/include/libavutil/bprint.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/getenv_utf8.h "${install_prefix}"/include/libavutil/getenv_utf8.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/internal.h "${install_prefix}"/include/libavutil/internal.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/libm.h "${install_prefix}"/include/libavutil/libm.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/reverse.h "${install_prefix}"/include/libavutil/reverse.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/thread.h "${install_prefix}"/include/libavutil/thread.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/timer.h "${install_prefix}"/include/libavutil/timer.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/asm.h "${install_prefix}"/include/libavutil/x86/asm.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/x86/timer.h "${install_prefix}"/include/libavutil/x86/timer.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/arm/timer.h "${install_prefix}"/include/libavutil/arm/timer.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/aarch64/timer.h "${install_prefix}"/include/libavutil/aarch64/timer.h 
+		overwrite_file "${ffmpeg_source_dir}"/compat/w32pthreads.h "${install_prefix}"/include/libavutil/compat/w32pthreads.h 
+		overwrite_file "${ffmpeg_source_dir}"/libavutil/wchar_filename.h "${install_prefix}"/include/libavutil/wchar_filename.h 
+	} 1>>"$LOG_FILE"2 >&1
 
 	echo -e "INFO: Done installing ffmpeg pkg-config\n" | tee -a "$LOG_FILE"
 }
@@ -648,7 +658,7 @@ configure_ffmpeg() {
 	change_dir "$ffmpeg_source_dir" 1>>"$LOG_FILE" 2>&1 || return 1
 
 	if [[ $BUILD_FORCE == "1" ]]; then
-		remove_path -f "${ffmpeg_source_dir}/already_configured"_$(get_build_type)*
+		remove_path -f "${ffmpeg_source_dir}/already_configured_$(get_build_type)*"
 	fi
 
 	# SET DEBUG OPTIONS
@@ -702,7 +712,7 @@ configure_ffmpeg() {
 			config_options+=" --disable-libv4l2"
 		fi
 	fi
-	if [[ $(uname) =~ "5.1" ]]; then
+	if [[ $(uname) =~ 5.1 ]]; then
 		init_options+=" --disable-schannel"
 		# Fix WinXP incompatibility by disabling Microsoft's Secure Channel, because Windows XP doesn't support TLS 1.1 and 1.2, but with GnuTLS or OpenSSL it does.  XP compat!
 	fi
@@ -972,7 +982,7 @@ install_ffmpeg_kit() {
 	echo -e "INFO: Installing ffmpeg kit to ${ffmpeg_kit_install}\n" | tee -a "$LOG_FILE"
 
 	change_dir "${BASEDIR}/windows"
-	do_make_and_make_install "" "" "$(get_build_type)" 1>>$LOG_FILE 2>&1
+	do_make_and_make_install "" "" "$(get_build_type)" 1>>"$LOG_FILE" 2>&1
 
 	create_ffmpegkit_package_config "$(get_ffmpeg_kit_version)" 1>>"$LOG_FILE"2 >&1 || return 1
 
@@ -1009,18 +1019,19 @@ create_windows_bundle() {
 		create_dir "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}"
 		create_dir "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}"
 		create_dir "${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}"
+		{
+			# COPY HEADERS
+			copy_path "${ffmpeg_kit_install}/include/*" "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P"
+			copy_path "${install_prefix}/include/*" "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P"
 
-		# COPY HEADERS
-		copy_path "${ffmpeg_kit_install}/include/*" "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P" 2>>"$LOG_FILE"
-		copy_path "${install_prefix}/include/*" "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P" 2>>"$LOG_FILE"
+			# COPY LIBS
+			copy_path "${ffmpeg_kit_install}/lib/*" "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P"
+			copy_path "${install_prefix}/lib/*" "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P"
 
-		# COPY LIBS
-		copy_path "${ffmpeg_kit_install}/lib/*" "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P" 2>>"$LOG_FILE"
-		copy_path "${install_prefix}/lib/*" "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P" 2>>"$LOG_FILE"
-
-		# COPY BINARIES
-		copy_path "${ffmpeg_kit_install}/bin/*" "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P" 2>>"$LOG_FILE"
-		copy_path "${install_prefix}/bin/*" "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P" 2>>"$LOG_FILE"
+			# COPY BINARIES
+			copy_path "${ffmpeg_kit_install}/bin/*" "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P"
+			copy_path "${install_prefix}/bin/*" "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P"
+		} 1>>"$LOG_FILE"2 >&1
 
 		install_pkg_config_file "libavformat.pc"
 		install_pkg_config_file "libswresample.pc"

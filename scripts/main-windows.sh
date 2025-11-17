@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# shellcheck disable=SC2317
+# shellcheck disable=SC1091
+# shellcheck disable=SC2120
+
 #echo -e "${SCRIPTDIR}/variable.sh"
 #echo -e "${SCRIPTDIR}/function.sh"
 #echo -e "${SCRIPTDIR}/function-windows.sh"
@@ -128,25 +132,9 @@ if [[ -n "$build_only" ]]; then
   # Now, call the single requested build function by its index
   step_name="${BUILD_STEPS[$index]}"
   echo -e "--- Executing single build step: $step_name ---"
-  build_ffmpeg_dependency_only "$step_name" 1>>$LOG_FILE 2>&1
+  build_ffmpeg_dependency_only "$step_name" 1>>"$LOG_FILE" 2>&1
   echo -e "--- Done building single build step: $step_name ---"
 else
-
-  if [[ $OSTYPE == darwin* ]]; then
-    # mac add some helper scripts
-    create_dir mac_helper_scripts
-    change_dir mac_helper_scripts || exit
-      if [[ ! -x readlink ]]; then
-        # make some scripts behave like linux...
-        curl -4 file://"$WINPATCHDIR"/md5sum.mac --fail > md5sum  || exit 1
-        chmod u+x ./md5sum
-        curl -4 file://"$WINPATCHDIR"/readlink.mac --fail > readlink  || exit 1
-        chmod u+x ./readlink
-      fi
-      export PATH=$(pwd):$PATH
-    change_dir ..
-  fi
-
   change_dir "$work_dir" || exit
   
     if [[ $build_dependencies_only == "y" || $build_dependencies_only == "yes" || $build_dependencies_only == "1" ]]; then

@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2317
+# shellcheck disable=SC1091
+# shellcheck disable=SC2120
+
 # ffmpeg windows cross compile helper/download script, see github repo README
 # Copyright (C) 2012 Roger Pack, the script is under the GPLv3, but output FFmpeg's executables aren't
 # set -x
 
-export BASEDIR="$(pwd)"
-export FFMPEG_KIT_BUILD_TYPE="windows"
-export SCRIPTDIR="${BASEDIR}/scripts"
-export LOG_FILE="${BASEDIR}/build.log"
+BASEDIR="$(pwd)"
+export BASEDIR
+FFMPEG_KIT_BUILD_TYPE="windows"
+export FFMPEG_KIT_BUILD_TYPE
+SCRIPTDIR="${BASEDIR}/scripts"
+export SCRIPTDIR
+LOG_FILE="${BASEDIR}/build.log"
+export LOG_FILE
+
 source "${SCRIPTDIR}/variable.sh"
 source "${SCRIPTDIR}/function.sh"
 
@@ -17,7 +26,7 @@ chown -R "$USER":"$USER" "$LOG_FILE"
 
 remove_path -f "$LOG_FILE"
 
-echo -e "INFO: Build options: $*\n" 1>> $LOG_FILE 2>&1
+echo -e "INFO: Build options: $*\n" 1>> "$LOG_FILE" 2>&1
 
 display_windows_help() {
   echo -e "available option=default_value:
@@ -29,7 +38,7 @@ display_windows_help() {
       Licensing options:
       --enable-gpl\t\t\t                                            allow building GPL libraries, created libs will be licensed under the GPLv3.0 [no]\n
       Build Options:
-      --ffmpeg-git-checkout-version=["release/8.0"]                 if you want to build a particular version of FFmpeg, ex: n3.1.1 or a specific git hash
+      --ffmpeg-git-checkout-version=[release/8.0]                 if you want to build a particular version of FFmpeg, ex: n3.1.1 or a specific git hash
       --ffmpeg-git-checkout=[https://github.com/FFmpeg/FFmpeg.git]  if you want to clone FFmpeg from other repositories
       --ffmpeg-source-dir=[default empty]                           specifiy the directory of ffmpeg source code. When specified, git will not be used.
       --compiler-flavors=[multi|win32|win64]                        multi is both win32 and win64
@@ -90,7 +99,8 @@ while true; do
     -f | --force) export BUILD_FORCE="1"; shift ;;
     --no-output-redirection) no_output_redirection; shift ;;
     --no-workspace-cleanup-*)
-      export NO_WORKSPACE_CLEANUP_LIBRARY=$(echo -e $1 | sed -e 's/^--[A-Za-z]*-[A-Za-z]*-[A-Za-z]*-//g')
+      NO_WORKSPACE_CLEANUP_LIBRARY=$(echo -e "$1" | sed -e 's/^--[A-Za-z]*-[A-Za-z]*-[A-Za-z]*-//g')
+			export NO_WORKSPACE_CLEANUP_LIBRARY
       no_workspace_cleanup_library "${NO_WORKSPACE_CLEANUP_LIBRARY}"; shift ;;
     --no-link-time-optimization) no_link_time_optimization; shift ;;
     --ffmpeg-git-checkout-version=* ) export ffmpeg_git_checkout_version="${1#*=}"; shift ;;
@@ -109,7 +119,7 @@ while true; do
     --compiler-flavors=*) export compiler_flavors="${1#*=}"; shift ;;
     --enable-static|--static) export build_ffmpeg_static=y; export build_ffmpeg_shared=n; shift ;;
     --enable-shared|--shared) export build_ffmpeg_static=n; export build_ffmpeg_shared=y; shift ;;
-    --get-total-steps|--get-all-steps|--get-step-name=*) exit 0; shift ;; # Handled above, just consume and ignore here
+    --get-total-steps|--get-all-steps|--get-step-name=*) exit 0 ;; # Handled above, just consume and ignore here
     --clean-builds) export clean_builds=y; break ;;
     -- ) shift; break ;;
     -* ) echo -e "Error, unknown option: '$1'."; exit 1 ;;
