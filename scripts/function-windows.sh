@@ -106,50 +106,42 @@ setup_build_environment() {
   echo -e
   echo -e "************** Setting up environment for $flavor build... **************"
   if [[ $flavor == "win32" ]]; then
-    export ARCH=$(get_arch_name $(from_arch_name $flavor))
+    export ARCH=$(get_arch_name "$(from_arch_name "$flavor")")
     export FULL_ARCH="i686"
     export work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH")"
     export host_target='i686-w64-mingw32'
-    export mingw_w64_x86_64_prefix="$(realpath $work_dir/cross_compilers/mingw-w64-i686/$host_target)"
-    export mingw_bin_path="$(realpath $work_dir/cross_compilers/mingw-w64-i686/bin)"
+    export mingw_w64_x86_64_prefix="$(realpath "$work_dir"/cross_compilers/mingw-w64-i686/$host_target)"
+    export mingw_bin_path="$(realpath "$work_dir"/cross_compilers/mingw-w64-i686/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     export bits_target=32
     export cross_prefix="$mingw_bin_path/i686-w64-mingw32-"
-    export compiler_flags="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
-    export make_prefix_options="--cc=${cross_prefix}gcc \
---ar=$(realpath ${cross_prefix}ar) \
---as=$(realpath ${cross_prefix}as) \
---nm=$(realpath ${cross_prefix}nm) \
---ranlib=$(realpath ${cross_prefix}ranlib) \
---ld=$(realpath ${cross_prefix}ld) \
---strip=$(realpath ${cross_prefix}strip) \
---cxx=$(realpath ${cross_prefix}g++)"
+    export compiler_flags="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"    
   elif [[ $flavor == "win64" ]]; then
-    export ARCH=$(get_arch_name $(from_arch_name $flavor))
+    export ARCH=$(get_arch_name "$(from_arch_name "$flavor")")
     export FULL_ARCH="x86_64"
     export work_dir="$(realpath "$WORKDIR"/"$FFMPEG_KIT_BUILD_TYPE"-"$FULL_ARCH")"
     export host_target='x86_64-w64-mingw32'
-    export mingw_w64_x86_64_prefix="$(realpath $work_dir/cross_compilers/mingw-w64-x86_64/$host_target)"
-    export mingw_bin_path="$(realpath $work_dir/cross_compilers/mingw-w64-x86_64/bin)"
+    export mingw_w64_x86_64_prefix="$(realpath "$work_dir"/cross_compilers/mingw-w64-x86_64/$host_target)"
+    export mingw_bin_path="$(realpath "$work_dir"/cross_compilers/mingw-w64-x86_64/bin)"
     export PKG_CONFIG_PATH="$mingw_w64_x86_64_prefix/lib/pkgconfig"
     export PATH="$mingw_bin_path:$original_path"
     export bits_target=64
     export cross_prefix="$mingw_bin_path/x86_64-w64-mingw32-"
     export compiler_flags="CC=${cross_prefix}gcc AR=${cross_prefix}ar PREFIX=$mingw_w64_x86_64_prefix RANLIB=${cross_prefix}ranlib LD=${cross_prefix}ld STRIP=${cross_prefix}strip CXX=${cross_prefix}g++"
-    export make_prefix_options="--cc=${cross_prefix}gcc \
---ar=$(realpath ${cross_prefix}ar) \
---as=$(realpath ${cross_prefix}as) \
---nm=$(realpath ${cross_prefix}nm) \
---ranlib=$(realpath ${cross_prefix}ranlib) \
---ld=$(realpath ${cross_prefix}ld) \
---strip=$(realpath ${cross_prefix}strip) \
---cxx=$(realpath ${cross_prefix}g++)"
     export LIB_INSTALL_BASE=$work_dir
   else
     echo -e "Error: Unknown compiler flavor '$flavor'"
     exit 1
   fi
+  export make_prefix_options="--cc=${cross_prefix}gcc \
+--ar=$(realpath "${cross_prefix}"ar) \
+--as=$(realpath "${cross_prefix}"as) \
+--nm=$(realpath "${cross_prefix}"nm) \
+--ranlib=$(realpath "${cross_prefix}"ranlib) \
+--ld=$(realpath "${cross_prefix}"ld) \
+--strip=$(realpath "${cross_prefix}"strip) \
+--cxx=$(realpath "${cross_prefix}"g++)"
   export src_dir="${work_dir}/src"
   export LIB_INSTALL_BASE="$work_dir"
   export INSTALL_PKG_CONFIG_DIR="${work_dir}/pkgconfig"
@@ -480,7 +472,7 @@ install_cross_compiler() {
   if [[ ($compiler_flavors == "win32" || $compiler_flavors == "multi") && ! -f ../$win32_gcc ]]; then
     echo -e "Building win32 cross compiler..." 1>> $LOG_FILE 2>&1
     download_gcc_build_script $zeranoe_script_name
-    if [[ `uname` =~ "5.1" ]]; then # Avoid using secure API functions for compatibility with msvcrt.dll on Windows XP.
+    if [[ "$(uname)" =~ (5.1) ]]; then # Avoid using secure API functions for compatibility with msvcrt.dll on Windows XP.
       sed -i "s/ --enable-secure-api//" $zeranoe_script_name
     fi
     CFLAGS='-O2 -pipe' CXXFLAGS='-O2 -pipe' nice ./$zeranoe_script_name $zeranoe_script_options i686 || exit 1 # i586 option needs work to implement
@@ -645,16 +637,14 @@ install_ffmpeg_pkg() {
   echo -e "INFO: Done installing ffmpeg pkg-config\n" | tee -a "$LOG_FILE"
 }
 
+# shellcheck disable=SC2120
 configure_ffmpeg() {
   echo -e "INFO: Configuring ffmpeg\n" | tee -a "$LOG_FILE"
   
-  # PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
-  LIB_NAME="ffmpeg"
-
-  change_dir "$ffmpeg_source_dir" 1>>$LOG_FILE 2>&1 || return 1
+  change_dir "$ffmpeg_source_dir" 1>>"$LOG_FILE" 2>&1 || return 1
 
   if [[ $BUILD_FORCE == "1" ]]; then
-    remove_path -f ${ffmpeg_source_dir}/already_configured_$(get_build_type)*
+    remove_path -f "${ffmpeg_source_dir}/already_configured"_$(get_build_type)*
   fi
 
   # SET DEBUG OPTIONS
@@ -893,7 +883,7 @@ configure_ffmpeg() {
     fi
     config_options+=" $extra_postpend_configure_options"
 
-    do_configure "$config_options" "./configure" "$(get_build_type)" 1>> $LOG_FILE 2>&1
+    do_configure "$config_options" "./configure" "$(get_build_type)" 1>> "$LOG_FILE" 2>&1
 
   echo -e "INFO: Done configuering ffmpeg\n" | tee -a "$LOG_FILE"
 }
@@ -1057,6 +1047,7 @@ create_windows_bundle() {
 
 pick_clean_type() {
   while [[ ! "$clean_type" =~ ^([1-5]|"all"|"ffmpeg"|"ffmpeg-kit"|"ffmpeg-kit-bundle")$ ]]; do
+    # shellcheck disable=SC2199
     if [[ -n "${unknown_opts[@]}" ]]; then
       echo -e -n 'Unknown option(s)'
       for unknown_opt in "${unknown_opts[@]}"; do

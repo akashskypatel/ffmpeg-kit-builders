@@ -29,6 +29,7 @@ execute() {
 	if [[ $no_exit != "true" ]]; then
 		"$@" >>"$LOG_FILE" 2>&1 || error_exit "$error_msg, check $LOG_FILE for details"
 	else
+		echo -e "${info_msg}" 1>>"$LOG_FILE" 2>&1
 		"$@" >>"$LOG_FILE" 2>&1
 	fi
 }
@@ -58,7 +59,7 @@ remove_path() {
 	local options=$1
 	shift 1 # Remove options, leaving only paths
 
-	echo -e "DEBUG: removing paths: $@" 1>>"$LOG_FILE" 2>&1
+	echo -e "DEBUG: removing paths: $*" 1>>"$LOG_FILE" 2>&1
 
 	if [ $# -eq 0 ]; then
 		echo -e "ERROR: at least one path argument is required" 1>>"$LOG_FILE" 2>&1
@@ -3779,7 +3780,7 @@ build_gmp() {
 build_librtmfp() {
 	# needs some version of openssl...
 	# build_openssl-1.0.2 # fails OS X
-	build_openssl-1.1.1 # fails WSL
+	build_openssl_1_1_1 # fails WSL
 	do_git_checkout https://github.com/MonaSolutions/librtmfp.git
 	change_dir librtmfp_git/include/Base
 	do_git_checkout https://github.com/meganz/mingw-std-threads.git mingw-std-threads # our g++ apparently doesn't have std::mutex baked in...weird...this replaces it...
@@ -3892,7 +3893,8 @@ build_openssl-1.0.2() {
 	change_dir ..
 }
 
-build_openssl-1.1.1() {
+# shellcheck disable=SC2120
+build_openssl_1_1_1() {
 	download_and_unpack_file https://www.openssl.org/source/openssl-1.1.1.tar.gz
 	change_dir openssl-1.1.1
 	export CC="${cross_prefix}gcc"

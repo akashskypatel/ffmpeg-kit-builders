@@ -1,4 +1,4 @@
-# #!/bin/bash
+#!/bin/bash
 
 #echo -e "${SCRIPTDIR}/variable.sh"
 #echo -e "${SCRIPTDIR}/function.sh"
@@ -76,6 +76,7 @@ pick_compiler_flavors() {
     compiler_flavors=$1
   fi
   while [[ ! "$compiler_flavors" =~ ^([1-4]|multi|win32|win64)$ ]]; do
+    # shellcheck disable=SC2199
     if [[ -n "${unknown_opts[@]}" ]]; then
       echo -e -n 'Unknown option(s)'
       for unknown_opt in "${unknown_opts[@]}"; do
