@@ -5,3 +5,4 @@
 docs/
 ffmpeg_kit_flutter
 *.shellcheckrc
+meson-cross.mingw.txt
