@@ -8,3 +8,5 @@ ffmpeg_kit_flutter
 meson-cross.mingw.txt
 windows/src/Makefile.in
 windows/aclocal.m4
+linux/aclocal.m4
+linux/src/Makefile.in
