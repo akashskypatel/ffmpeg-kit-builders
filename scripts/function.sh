@@ -3,6 +3,7 @@
 # shellcheck disable=SC2317
 # shellcheck disable=SC1091
 # shellcheck disable=SC2120
+# shellcheck disable=SC2035
 
 #echo -e ${SCRIPTDIR}/source.sh
 #echo -e "${SCRIPTDIR}/variable.sh"
@@ -3000,7 +3001,7 @@ do_configure() {
 	local configure_options="$1"
 	local configure_name="$2"
 	local touch_postfix=""
-	[[ ! -z $3 ]] && touch_postfix="_$3"
+	[[ -n $3 ]] && touch_postfix="_$3"
 	if [[ "$configure_name" = "" ]]; then
 		configure_name="./configure"
 	fi
@@ -3042,7 +3043,7 @@ do_configure() {
 do_make() {
 	local extra_make_options="$1"
 	local touch_postfix=""
-	[[ ! -z $2 ]] && touch_postfix="_$2"
+	[[ -n $2 ]] && touch_postfix="_$2"
 	extra_make_options="$extra_make_options -j $(get_cpu_count)"
 	local cur_dir2=$(pwd)
 	local touch_name=$(get_small_touchfile_name "already_ran_make$touch_postfix" "$extra_make_options")
@@ -3078,7 +3079,7 @@ do_make_install() {
 	local extra_make_install_options="$1"
 	local override_make_install_options="$2" # startingly, some need/use something different than just 'make install'
 	local touch_postfix=""
-	[[ ! -z $3 ]] && touch_postfix="_$3"
+	[[ -n $3 ]] && touch_postfix="_$3"
 	if [[ -z $override_make_install_options ]]; then
 		local make_install_options="install $extra_make_install_options"
 	else
@@ -3099,7 +3100,7 @@ do_cmake() {
 	extra_args="$1"
 	local build_from_dir="$2"
 	local touch_postfix=""
-	[[ ! -z $3 ]] && touch_postfix="_$3"
+	[[ -n $3 ]] && touch_postfix="_$3"
 	if [[ -z $build_from_dir ]]; then
 		build_from_dir="."
 	fi
@@ -3169,7 +3170,7 @@ do_meson() {
 	local configure_name="$2"
 	local configure_env="$3"
 	local touch_postfix=""
-	[[ ! -z $4 ]] && touch_postfix="_$4"
+	[[ -n $4 ]] && touch_postfix="_$4"
 	local configure_noclean=""
 	if [[ "$configure_name" = "" ]]; then
 		configure_name="meson"
@@ -3210,7 +3211,7 @@ generic_meson_ninja_install() {
 do_ninja_and_ninja_install() {
 	local extra_ninja_options="$1"
 	local touch_postfix=""
-	[[ ! -z $2 ]] && touch_postfix="_$2"
+	[[ -n $2 ]] && touch_postfix="_$2"
 	do_ninja "$extra_ninja_options" "$touch_postfix"
 	local touch_name=$(get_small_touchfile_name "already_ran_make_install$touch_postfix" "$extra_ninja_options")
 	if [ ! -f "$touch_name" ]; then
@@ -3223,7 +3224,7 @@ do_ninja_and_ninja_install() {
 # 1. touch_postfix
 do_ninja() {
 	local touch_postfix=""
-	[[ ! -z $1 ]] && touch_postfix="_$1"
+	[[ -n $1 ]] && touch_postfix="_$1"
 	local extra_make_options=" -j $(get_cpu_count)"
 	local cur_dir2=$(pwd)
 	local touch_name=$(get_small_touchfile_name "already_ran_make$touch_postfix" "${extra_make_options}")
@@ -3996,7 +3997,7 @@ build_openssl_1_0_2() {
 				"${cross_prefix}strip" "$sharedlib"
 			done
 			sed "s/$/\r/" LICENSE >LICENSE.txt
-			7z a -mx=9 "$archive" "*.dll" LICENSE.txt && remove_path -f LICENSE.txt
+			7z a -mx=9 "$archive" *.dll LICENSE.txt && remove_path -f LICENSE.txt
 		fi
 	else
 		do_make_and_make_install
@@ -4050,7 +4051,7 @@ build_openssl_1_1_1() {
 				"${cross_prefix}strip" "$sharedlib"
 			done
 			sed "s/$/\r/" LICENSE >LICENSE.txt
-			7z a -mx=9 "$archive" "*.dll" LICENSE.txt && remove_path -f LICENSE.txt
+			7z a -mx=9 "$archive" *.dll LICENSE.txt && remove_path -f LICENSE.txt
 		fi
 	else
 		do_make_install "" "install_dev"
@@ -4164,7 +4165,7 @@ build_twolame() {
 
 # build_fdk-aac() {
 # local checkout_dir=fdk-aac_git
-#     if [[ ! -z $fdk_aac_git_checkout_version ]]; then
+#     if [[ -n $fdk_aac_git_checkout_version ]]; then
 #       checkout_dir+="_$fdk_aac_git_checkout_version"
 #       do_git_checkout "https://github.com/mstorsjo/fdk-aac.git" $checkout_dir "refs/tags/$fdk_aac_git_checkout_version"
 #     else
@@ -4233,7 +4234,7 @@ build_mingw_std_threads() {
 	change_dir "$src_dir"
 	do_git_checkout https://github.com/meganz/mingw-std-threads.git # it needs std::mutex too :|
 	change_dir "$src_dir/mingw-std-threads_git"
-	cp "*.h" "$mingw_w64_x86_64_prefix/include"
+	cp *.h "$mingw_w64_x86_64_prefix/include"
 	change_dir "$src_dir"
 }
 
@@ -4483,8 +4484,8 @@ build_libcaca() {
 	change_dir "$src_dir/libcaca_git"
 	apply_patch "file://$WINPATCHDIR/libcaca_git_stdio-cruft.diff" -p1 # Fix WinXP incompatibility.
 	change_dir "$src_dir/libcaca_git/caca"
-	sed -i.bak "s/__declspec(dllexport)//g" "*.h" # get rid of the declspec lines otherwise the build will fail for undefined symbols
-	sed -i.bak "s/__declspec(dllimport)//g" "*.h"
+	sed -i.bak "s/__declspec(dllexport)//g" *.h # get rid of the declspec lines otherwise the build will fail for undefined symbols
+	sed -i.bak "s/__declspec(dllimport)//g" *.h
 	change_dir "$src_dir"
 	generic_configure "--libdir=$mingw_w64_x86_64_prefix/lib --disable-csharp --disable-java --disable-cxx --disable-python --disable-ruby --disable-doc --disable-cocoa --disable-ncurses"
 	do_make_and_make_install
@@ -4838,7 +4839,7 @@ build_libx265() {
 	change_dir "$src_dir"
 	local checkout_dir=x265
 	local remote="https://bitbucket.org/multicoreware/x265_git"
-	if [[ ! -z $x265_git_checkout_version ]]; then
+	if [[ -n $x265_git_checkout_version ]]; then
 		checkout_dir+="_$x265_git_checkout_version"
 		do_git_checkout "$remote" "$checkout_dir" "$x265_git_checkout_version"
 	else
@@ -5317,7 +5318,7 @@ build_mplayer() {
 	sed -i.bak "s/HAVE_PTHREAD_CANCEL 0/HAVE_PTHREAD_CANCEL 1/g" config.h # mplayer doesn't set this up right?
 	touch -t 201203101513 config.h                                        # the above line change the modify time for config.h--forcing a full rebuild *every time* yikes!
 	# try to force re-link just in case...
-	remove_path -f "*.exe"
+	remove_path -f *.exe
 	remove_path -f already_ran_make* # try to force re-link just in case...
 	do_make
 	cp mplayer.exe mplayer_debug.exe

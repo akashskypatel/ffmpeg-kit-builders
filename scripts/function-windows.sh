@@ -559,7 +559,7 @@ check_builds() {
 			echo -e "INFO: Static build does not exist or force requested. (Re-)configuring Ffmpeg for static build." | tee -a "$LOG_FILE"
 			# shellcheck disable=SC2129
 			remove_path -rf "${ffmpeg_source_dir}/build_$(get_build_type)" 1>>"$LOG_FILE"2 >&1
-			remove_path -f "${ffmpeg_source_dir}/already_*" 1>>"$LOG_FILE"2 >&1
+			remove_path -f "${ffmpeg_source_dir}/already_"* 1>>"$LOG_FILE"2 >&1
 			configure_ffmpeg 1>>"$LOG_FILE"2 >&1
 		fi
 	elif [[ ${build_ffmpeg_shared,,} =~ ^(y|yes|1|true|on)$ ]]; then
@@ -568,7 +568,7 @@ check_builds() {
 			echo -e "INFO: Shared build does not exist or force requested. (Re-)configuring Ffmpeg for shared build." | tee -a "$LOG_FILE"
 			# shellcheck disable=SC2129
 			remove_path -rf "${ffmpeg_source_dir}/build_$(get_build_type)" 1>>"$LOG_FILE"2 >&1
-			remove_path -f "${ffmpeg_source_dir}/already_*" 1>>"$LOG_FILE"2 >&1
+			remove_path -f "${ffmpeg_source_dir}/already_"* 1>>"$LOG_FILE"2 >&1
 			configure_ffmpeg 1>>"$LOG_FILE"2 >&1
 		fi
 	fi
@@ -588,12 +588,13 @@ install_ffmpeg() {
 	echo -e "INFO: Moving all binaries" | tee -a "$LOG_FILE"
 
 	{
-		mv "*/*.a" "${install_prefix}/bin"
-		mv "*/*.dylib" "${install_prefix}/bin"
-		mv "*/*.lib" "${install_prefix}/bin"
-		mv "*/*.dll" "${install_prefix}/bin"
-		mv "*.exe" "${install_prefix}/bin"
-		mv "*.so" "${install_prefix}/bin"
+		shopt -s nullglob
+		mv */*.a "${install_prefix}/bin" 2>/dev/null || true
+		mv */*.dylib "${install_prefix}/bin" 2>/dev/null || true
+		mv */*.lib "${install_prefix}/bin" 2>/dev/null || true  
+		mv */*.dll "${install_prefix}/bin" 2>/dev/null || true
+		mv *.exe "${install_prefix}/bin" 2>/dev/null || true
+		mv *.so "${install_prefix}/bin" 2>/dev/null || true
 	} 1>>"$LOG_FILE"2 >&1
 
 	echo -e "INFO: Done installing ffmpeg\n" | tee -a "$LOG_FILE"
@@ -670,7 +671,7 @@ configure_ffmpeg() {
 	change_dir "$ffmpeg_source_dir" 1>>"$LOG_FILE" 2>&1 || return 1
 
 	if [[ $BUILD_FORCE == "1" ]]; then
-		remove_path -f "${ffmpeg_source_dir}/already_configured_$(get_build_type)*"
+		remove_path -f "${ffmpeg_source_dir}/already_configured_$(get_build_type)"*
 	fi
 
 	# SET DEBUG OPTIONS
@@ -939,7 +940,7 @@ configure_ffmpeg_kit() {
 
 	local touch_name=$(get_small_touchfile_name "already_autoreconf_${TYPE_POSTFIX}" "$FFMPEG_KIT_VERSION $local_cflags $local_cxxfalgs")
 	if [ ! -f "$touch_name" ]; then
-		remove_path -f "${BASEDIR}/windows/already_autoreconf_${TYPE_POSTFIX}*"
+		remove_path -f "${BASEDIR}/windows/already_autoreconf_${TYPE_POSTFIX}"*
 		change_dir "${BASEDIR}/windows"
 		autoreconf_library "ffmpeg-kit" 1>>"$LOG_FILE"2 >&1 || return 1
 		touch -- "$touch_name"
@@ -1016,7 +1017,7 @@ create_windows_bundle() {
 	local FFMPEG_KIT_VERSION=$(get_ffmpeg_kit_version)
 
 	if [[ $BUILD_FORCE == "1" ]]; then
-		remove_path -rf "${BASEDIR}/windows/already_bundled_${TYPE_POSTFIX}*"
+		remove_path -rf "${BASEDIR}/windows/already_bundled_${TYPE_POSTFIX}"*
 	fi
 
 	local touch_name=$(get_small_touchfile_name "already_bundled_${TYPE_POSTFIX}" "$FFMPEG_KIT_VERSION $ffmpeg_kit_bundle")
@@ -1033,16 +1034,16 @@ create_windows_bundle() {
 		create_dir "${FFMPEG_KIT_BUNDLE_PKG_CONFIG_DIRECTORY}"
 		{
 			# COPY HEADERS
-			copy_path "${ffmpeg_kit_install}/include/*" "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P"
-			copy_path "${install_prefix}/include/*" "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P"
+			copy_path "${ffmpeg_kit_install}/include/"* "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P"
+			copy_path "${install_prefix}/include/"* "${FFMPEG_KIT_BUNDLE_INCLUDE_DIRECTORY}" "-r -P"
 
 			# COPY LIBS
-			copy_path "${ffmpeg_kit_install}/lib/*" "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P"
-			copy_path "${install_prefix}/lib/*" "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P"
+			copy_path "${ffmpeg_kit_install}/lib/"* "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P"
+			copy_path "${install_prefix}/lib/"* "${FFMPEG_KIT_BUNDLE_LIB_DIRECTORY}" "-r -P"
 
 			# COPY BINARIES
-			copy_path "${ffmpeg_kit_install}/bin/*" "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P"
-			copy_path "${install_prefix}/bin/*" "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P"
+			copy_path "${ffmpeg_kit_install}/bin/"* "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P"
+			copy_path "${install_prefix}/bin/"* "${FFMPEG_KIT_BUNDLE_BIN_DIRECTORY}" "-r -P"
 		} 1>>"$LOG_FILE"2 >&1
 
 		install_pkg_config_file "libavformat.pc"
