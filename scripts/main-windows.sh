@@ -14,21 +14,21 @@ source "${SCRIPTDIR}/function-windows.sh"
 if [ -z "$(get_cpu_count)" ]; then
 	cpu_count=$(sysctl -n hw.ncpu | tr -d '\n') # OS X cpu count
 	if [ -z "$(get_cpu_count)" ]; then
-		echo -e "warning, unable to determine cpu count, defaulting to 1"
+		echo -e "warning, unable to determine cpu count, defaulting to 1" | tee -a "$LOG_FILE"
 		cpu_count=1 # else default to just 1, instead of blank, which means infinite
 	fi
 fi
 
 set_box_memory_size_bytes
 if [[ $box_memory_size_bytes -lt 600000000 ]]; then
-	echo -e "your box only has $box_memory_size_bytes, 512MB (only) boxes crash when building cross compiler gcc, please add some swap" # 1G worked OK however...
+	echo -e "your box only has $box_memory_size_bytes, 512MB (only) boxes crash when building cross compiler gcc, please add some swap" | tee -a "$LOG_FILE" # 1G worked OK however...
 	exit 1
 fi
 
 if [[ $box_memory_size_bytes -gt 2000000000 ]]; then
 	gcc_cpu_count=$(get_cpu_count) # they can handle it seemingly...
 else
-	echo -e "low RAM detected so using only one cpu for gcc compilation"
+	echo -e "low RAM detected so using only one cpu for gcc compilation" | tee -a "$LOG_FILE"
 	gcc_cpu_count=1 # compatible low RAM...
 fi
 
@@ -65,15 +65,15 @@ intro() {
   the $sandbox directory, since it will have some hard coded paths in there.
   You can, of course, rebuild ffmpeg from within it, etc.
 EOL
-	echo -e "$(date)" # for timestamping super long builds LOL
+	echo -e "$(date)" | tee -a "$LOG_FILE" # for timestamping super long builds LOL
 	if [[ $sandbox_ok != 'y' && ! -d prebuilt ]]; then
 		echo -e
-		echo -e "Building in $PWD/$sandbox, will use ~ 285GB space!"
+		echo -e "Building in $PWD/$sandbox, will use ~ 285GB space!" | tee -a "$LOG_FILE"
 		echo -e
 	fi
 	create_dir "$WORKDIR"
 	change_dir "$WORKDIR" || exit
-	echo -e "sit back, this may take awhile..."
+	echo -e "sit back, this may take awhile..." | tee -a "$LOG_FILE"
 }
 
 pick_compiler_flavors() {
@@ -129,7 +129,7 @@ reset_cflags           # also overrides any "native" CFLAGS, which we may need i
 reset_cppflags         # Ensure CPPFLAGS are cleared and set to what is configured
 check_missing_packages # do this first since it's annoying to go through prompts then be rejected
 intro                  # remember to always run the intro, since it adjust pwd
-install_cross_compiler
+check_cross_compiler
 
 if [[ -n "$build_only" ]]; then
 	if [[ $(is_integer "$build_only") == 0 ]]; then
@@ -139,29 +139,29 @@ if [[ -n "$build_only" ]]; then
 	fi
 	# Now, call the single requested build function by its index
 	step_name="${BUILD_STEPS[$index]}"
-	echo -e "--- Executing single build step: $step_name ---"
+	echo -e "--- Executing single build step: $step_name ---" | tee -a "$LOG_FILE"
 	build_ffmpeg_dependency_only "$step_name" 1>>"$LOG_FILE" 2>&1
-	echo -e "--- Done building single build step: $step_name ---"
+	echo -e "--- Done building single build step: $step_name ---" | tee -a "$LOG_FILE"
 else
 	change_dir "$work_dir" || exit
 
 	if [[ $build_dependencies_only == "y" || $build_dependencies_only == "yes" || $build_dependencies_only == "1" ]]; then
-		echo -e "INFO: Building dependencies only..."
+	echo -e "INFO: Building dependencies only..." | tee -a "$LOG_FILE"
 		build_all_ffmpeg_dependencies #1>>$LOG_FILE 2>&1
 		exit 0
 	elif [[ $build_ffmpeg_only == "y" || $build_ffmpeg_only == "yes" || $build_ffmpeg_only == "1" ]]; then
-		echo -e "INFO: Building ffmpeg only..."
+		echo -e "INFO: Building ffmpeg only..." | tee -a "$LOG_FILE"
 		download_ffmpeg #1>>$LOG_FILE 2>&1
 		install_ffmpeg  #1>>$LOG_FILE 2>&1
 		exit 0
 	elif [[ $build_ffmpeg_kit_only == "y" || $build_ffmpeg_kit_only == "yes" || $build_ffmpeg_kit_only == "1" ]]; then
-		echo -e "INFO: Building ffmpeg-kit only..."
+		echo -e "INFO: Building ffmpeg-kit only..." | tee -a "$LOG_FILE"
 		configure_ffmpeg_kit #1>>$LOG_FILE 2>&1
 		install_ffmpeg_kit
 		create_windows_bundle
 		exit 0
 	else
-		echo -e "INFO: Building all..."
+		echo -e "INFO: Building all..." | tee -a "$LOG_FILE"
 		build_all_ffmpeg_dependencies #1>>$LOG_FILE 2>&1
 		download_ffmpeg               #1>>$LOG_FILE 2>&1
 		install_ffmpeg                #1>>$LOG_FILE 2>&1

@@ -113,19 +113,37 @@ create_dir()
         sudo chown -R "$USER":"$USER" "$path"
 }
 
-remove_path()
-{
-    local path="$1"
-    
-    if [ -z "$path" ]; then
-        error_exit "ERROR: path argument is required"
-    fi
+# 1. options
+# @. paths
+remove_path() {
+	local options=$1
+	shift 1 # Remove options, leaving only paths
 
-    execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" \
-        sudo chown -R "$USER":"$USER" "$SRC_PATH"
+	echo -e "DEBUG: removing paths: $*" 1>>"$LOG_FILE" 2>&1
 
-    execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" \
-        rm -fr "$path"
+	if [ $# -eq 0 ]; then
+		echo -e "ERROR: at least one path argument is required" 1>>"$LOG_FILE" 2>&1
+		return 1
+	fi
+
+	for path in "$@"; do
+		echo -e "DEBUG: processing path: $path" 1>>"$LOG_FILE" 2>&1
+
+		if [[ -e "$path" ]]; then
+			if [ -z "$path" ]; then
+				echo -e "ERROR: path argument is required" 1>>"$LOG_FILE" 2>&1
+				continue
+			fi
+			execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
+				chown -R "$USER":"$USER" "$path"
+			execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
+				sudo chmod -R 755 "$path"
+			execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" "true" \
+				rm "$options" "$path"
+		else
+			echo -e "INFO: path ${path} does not exist" 1>>"$LOG_FILE" 2>&1
+		fi
+	done
 }
 
 change_dir()
@@ -150,7 +168,7 @@ download_sources()
         local current_mingw_branch=$(cd "$SRC_PATH/mingw-w64" && git branch --show-current 2>/dev/null || echo "")
         if [ "$current_mingw_branch" != "$MINGW_W64_BRANCH" ]; then
             echo "MinGW-w64 branch mismatch: found '$current_mingw_branch', need '$MINGW_W64_BRANCH' - re-downloading"
-            remove_path "$SRC_PATH/mingw-w64"
+            remove_path -rf "$SRC_PATH/mingw-w64"
             execute "downloading MinGW-w64 source" "" \
                 git clone --depth 1 -b "$MINGW_W64_BRANCH" \
                     https://github.com/mingw-w64/mingw-w64 mingw-w64
@@ -171,7 +189,7 @@ download_sources()
         local current_binutils_branch=$(cd "$SRC_PATH/binutils" && git branch --show-current 2>/dev/null || echo "")
         if [ "$current_binutils_branch" != "$BINUTILS_BRANCH" ]; then
             echo "Binutils branch mismatch: found '$current_binutils_branch', need '$BINUTILS_BRANCH' - re-downloading"
-            remove_path "$SRC_PATH/binutils"
+            remove_path -rf "$SRC_PATH/binutils"
             execute "downloading Binutils source" "" \
                 git clone --depth 1 -b "$BINUTILS_BRANCH" \
                     https://github.com/bminor/binutils-gdb binutils
@@ -192,7 +210,7 @@ download_sources()
         local current_gcc_branch=$(cd "$SRC_PATH/gcc" && git branch --show-current 2>/dev/null || echo "")
         if [ "$current_gcc_branch" != "$GCC_BRANCH" ]; then
             echo "GCC branch mismatch: found '$current_gcc_branch', need '$GCC_BRANCH' - re-downloading"
-            remove_path "$SRC_PATH/gcc"
+            remove_path -rf "$SRC_PATH/gcc"
             execute "downloading GCC source" "" \
                 git clone --depth 1 -b "$GCC_BRANCH" \
                     https://gcc.gnu.org/git/gcc.git gcc
@@ -229,10 +247,10 @@ build()
 
     export PATH="$prefix/bin:$PATH"
 
-    remove_path "$bld_path"
+    remove_path -rf "$bld_path"
     # don't remove a user defined prefix (could be /usr/local)
     if [ ! "$PREFIX" ]; then
-        remove_path "$prefix"
+        remove_path -rf "$prefix"
     fi
 
     if [ "$arch" = "i586" ] || [ "$arch" = "i686" ]; then
@@ -568,9 +586,9 @@ if [ "$BUILD_X86_64" ]; then
 fi
 
 if [ ! "$KEEP_ARTIFACTS" ]; then
-    remove_path "$SRC_PATH"
-    remove_path "$BLD_PATH"
-    remove_path "$LOG_FILE"
+    remove_path -rf "$SRC_PATH"
+    remove_path -rf "$BLD_PATH"
+    remove_path -rf "$LOG_FILE"
 fi
 
 echo "complete, to use MinGW-w64 everywhere add these to your \$PATH:"

@@ -8,21 +8,17 @@
 # Copyright (C) 2012 Roger Pack, the script is under the GPLv3, but output FFmpeg's executables aren't
 # set -x
 
-BASEDIR="$(pwd)"
-export BASEDIR
-FFMPEG_KIT_BUILD_TYPE="windows"
-export FFMPEG_KIT_BUILD_TYPE
-SCRIPTDIR="${BASEDIR}/scripts"
-export SCRIPTDIR
-LOG_FILE="${BASEDIR}/build.log"
-export LOG_FILE
+export BASEDIR="$(pwd)"
+export FFMPEG_KIT_BUILD_TYPE="windows"
+export SCRIPTDIR="${BASEDIR}/scripts"
+export LOG_FILE="${BASEDIR}/build.log"
 
 source "${SCRIPTDIR}/variable.sh"
 source "${SCRIPTDIR}/function.sh"
 
 require_sudo
 
-chown -R "$USER":"$USER" "$LOG_FILE"
+chown -R 777 "$LOG_FILE"
 
 remove_path -f "$LOG_FILE"
 
@@ -30,33 +26,33 @@ echo -e "INFO: Build options: $*\n" 1>>"$LOG_FILE" 2>&1
 
 display_windows_help() {
 	echo -e "available option=default_value:
-      General Options:
-      -h, --help\t\t\t                                              display this help and exit
-      -d, --debug\t\t\t                                             build with debug information
-      -s, --speed\t\t\t                                             optimize for speed instead of size
-      -f, --force\t\t\t                                             ignore warnings
-      Licensing options:
-      --enable-gpl\t\t\t                                            allow building GPL libraries, created libs will be licensed under the GPLv3.0 [no]\n
-      Build Options:
-      --ffmpeg-git-checkout-version=[release/8.0]                 if you want to build a particular version of FFmpeg, ex: n3.1.1 or a specific git hash
-      --ffmpeg-git-checkout=[https://github.com/FFmpeg/FFmpeg.git]  if you want to clone FFmpeg from other repositories
-      --ffmpeg-source-dir=[default empty]                           specifiy the directory of ffmpeg source code. When specified, git will not be used.
-      --compiler-flavors=[multi|win32|win64]                        multi is both win32 and win64
-      --cflags=$original_cflags                                     [default works on any cpu, see README for options]
-      --git-get-latest=y                                            [do a git pull for latest code from repositories like FFmpeg--can force a rebuild if changes are detected]
-      --prefer-stable=y                                             build a few libraries from releases instead of git master
-      --debug                                                       Make this script  print out each line as it executes
-      --enable-gpl=[y]                                              set to n to do an lgpl build
-      --get-total-steps|--get-step-name=                            get dependency steps and step name by index
-      --build-only={0..} OR step/library name from [get-all-steps]  [run get-total-steps|--get-step-name|get-all-steps for more info] build only specific dependency
-      --build-dependencies=y                                        [builds the ffmpeg dependencies. Disable it when the dependencies was built once and can greatly reduce build time. ]
-      --build-dependencies-only=n                                   Only build dependency binaries. Will not build app binaries.
-      --build-ffmpeg-only=n                                         build ffmpeg binaries only
-      --build-ffmpeg-kit-only=n                                     build ffmpeg-kit binaries and bundle only
-      --enable-static|--static                                      build static ffmpeg and ffmpeg-kit binaries
-      --enable-shared|--shared[default]                             build shared ffmpeg and ffmpeg-kit binaries
-      --clean-builds                                                clean ffmpeg and ffmpeg-kit builds based on [--enable-static|--enable-shared(default)]
-       "
+General Options:
+	-h, --help\t\t\t                                              display this help and exit
+	-d, --debug\t\t\t                                             build with debug information
+	-s, --speed\t\t\t                                             optimize for speed instead of size
+	-f, --force\t\t\t                                             ignore warnings
+Licensing options:
+	--enable-gpl\t\t\t                                            allow building GPL libraries, created libs will be licensed under the GPLv3.0 [no]\n
+Build Options:
+	--ffmpeg-git-checkout-version=[release/8.0]                   if you want to build a particular version of FFmpeg, ex: n3.1.1 or a specific git hash
+	--ffmpeg-git-checkout=[https://github.com/FFmpeg/FFmpeg.git]  if you want to clone FFmpeg from other repositories
+	--ffmpeg-source-dir=[default empty]                           specifiy the directory of ffmpeg source code. When specified, git will not be used.
+	--compiler-flavors=[multi|win32|win64]                        multi is both win32 and win64
+	--cflags=$original_cflags                                     [default works on any cpu, see README for options]
+	--git-get-latest=y                                            [do a git pull for latest code from repositories like FFmpeg--can force a rebuild if changes are detected]
+	--prefer-stable=y                                             build a few libraries from releases instead of git master
+	--debug                                                       Make this script  print out each line as it executes
+	--enable-gpl=[y]                                              set to n to do an lgpl build
+	--get-total-steps|--get-step-name=                            get dependency steps and step name by index
+	--build-only={0..} OR step/library name from [get-all-steps]  [run get-total-steps|--get-step-name|get-all-steps for more info] build only specific dependency
+	--build-dependencies=y                                        [builds the ffmpeg dependencies. Disable it when the dependencies was built once and can greatly reduce build time. ]
+	--build-dependencies-only=n                                   Only build dependency binaries. Will not build app binaries.
+	--build-ffmpeg-only=n                                         build ffmpeg binaries only
+	--build-ffmpeg-kit-only=n                                     build ffmpeg-kit binaries and bundle only
+	--enable-static|--static                                      build static ffmpeg and ffmpeg-kit binaries
+	--enable-shared|--shared[default]                             build shared ffmpeg and ffmpeg-kit binaries
+	--clean-builds                                                clean ffmpeg and ffmpeg-kit builds based on [--enable-static|--enable-shared(default)]
+"
 }
 
 # If --get-all-steps is passed, just print the array and exit.
