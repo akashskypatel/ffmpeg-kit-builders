@@ -4,3 +4,4 @@
 *.lo
 /.libs/
 *.la
+Makefile.in

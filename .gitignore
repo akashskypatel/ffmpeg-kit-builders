@@ -6,3 +6,5 @@ docs/
 ffmpeg_kit_flutter
 *.shellcheckrc
 meson-cross.mingw.txt
+windows/src/Makefile.in
+windows/aclocal.m4
