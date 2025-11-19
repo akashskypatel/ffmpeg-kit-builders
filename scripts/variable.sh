@@ -208,14 +208,13 @@ export cpu_count=$(nproc)
 export original_cpu_count=$(nproc) # save it away for some that revert it temporarily
 
 export PKG_CONFIG_LIBDIR= # disable pkg-config from finding [and using] normal linux system installed libs [yikes]
-export original_path="$PATH"
+export original_path=$PATH
 
 export BUILD_STEPS=(
 	"build_dlfcn"
 	"build_libxavs"
 	"build_libdavs2"
 	"build_libxavs2"
-	"build_meson_cross"
 	"build_mingw_std_threads"
 	"build_zlib"
 	"build_libcaca"

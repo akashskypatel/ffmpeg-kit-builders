@@ -132,8 +132,8 @@ intro                  # remember to always run the intro, since it adjust pwd
 check_cross_compiler
 
 if [[ -n "$build_only" ]]; then
-	if [[ $(is_integer "$build_only") == 0 ]]; then
-		index=$(array_index_of "$build_only" "${BUILD_STEPS[@]}")
+	if [[ $(is_integer "$build_only") != 0 ]]; then
+    index=$(array_index_of "$build_only" "${BUILD_STEPS[@]}")
 	else
 		index=$build_only
 	fi
@@ -142,12 +142,23 @@ if [[ -n "$build_only" ]]; then
 	echo -e "--- Executing single build step: $step_name ---" | tee -a "$LOG_FILE"
 	build_ffmpeg_dependency_only "$step_name" 1>>"$LOG_FILE" 2>&1
 	echo -e "--- Done building single build step: $step_name ---" | tee -a "$LOG_FILE"
+elif [[ -n "$build_from" ]]; then
+	if [[ $(is_integer "$build_from") != 0 ]]; then
+    index=$(array_index_of "$build_from" "${BUILD_STEPS[@]}")
+	else
+		index=$build_from
+	fi
+	# Now, call the single requested build function by its index
+	step_name="${BUILD_STEPS[$index]}"
+	echo -e "--- Building dependencies from step: $step_name ---" | tee -a "$LOG_FILE"
+	build_all_ffmpeg_dependencies "$step_name"
+	echo -e "--- Done building dependencies from step: $step_name ---" | tee -a "$LOG_FILE"
 else
-	change_dir "$work_dir" || exit
+	change_dir "$work_dir" || exit 1
 
 	if [[ $build_dependencies_only == "y" || $build_dependencies_only == "yes" || $build_dependencies_only == "1" ]]; then
 	echo -e "INFO: Building dependencies only..." | tee -a "$LOG_FILE"
-		build_all_ffmpeg_dependencies #1>>$LOG_FILE 2>&1
+		build_all_ffmpeg_dependencies
 		exit 0
 	elif [[ $build_ffmpeg_only == "y" || $build_ffmpeg_only == "yes" || $build_ffmpeg_only == "1" ]]; then
 		echo -e "INFO: Building ffmpeg only..." | tee -a "$LOG_FILE"

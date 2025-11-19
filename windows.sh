@@ -45,6 +45,7 @@ Build Options:
 	--enable-gpl=[y]                                              set to n to do an lgpl build
 	--get-total-steps|--get-step-name=                            get dependency steps and step name by index
 	--build-only={0..} OR step/library name from [get-all-steps]  [run get-total-steps|--get-step-name|get-all-steps for more info] build only specific dependency
+	--build-from={0..} OR step/library name from [get-all-steps]  start building dependencies from given step
 	--build-dependencies=y                                        [builds the ffmpeg dependencies. Disable it when the dependencies was built once and can greatly reduce build time. ]
 	--build-dependencies-only=n                                   Only build dependency binaries. Will not build app binaries.
 	--build-ffmpeg-only=n                                         build ffmpeg binaries only
@@ -55,13 +56,17 @@ Build Options:
 "
 }
 
+print_build_steps() {
+	echo -e "Avaliable build steps: ${#BUILD_STEPS[@]}"
+	for i in "${!BUILD_STEPS[@]}"; do
+		echo "Index $i: ${BUILD_STEPS[i]}"
+	done
+}
+
 # If --get-all-steps is passed, just print the array and exit.
 for arg in "$@"; do
 	if [[ "$arg" == "--get-all-steps" ]]; then
-		echo -e "Avaliable libraries: ${#BUILD_STEPS[@]}"
-		for i in "${!BUILD_STEPS[@]}"; do
-			echo "Index $i: ${BUILD_STEPS[i]}"
-		done
+		print_build_steps
 		exit 0
 	fi
 done
@@ -158,6 +163,10 @@ while true; do
 		;;
 	--build-only=*)
 		export build_only="${1#*=}"
+		shift
+		;;
+	--build-from=*)
+		export build_from="${1#*=}"
 		shift
 		;;
 	--build-dependencies-only=*)

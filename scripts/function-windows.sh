@@ -26,35 +26,73 @@ find_all_build_exes() {
 check_audiotoolbox() {
 	# if [[ "$non_free" = "y" ]]; then
 	#   build_fdk-aac # Uses dlfcn.
-	# if [[ $OSTYPE != darwin* ]]; then
-	#     build_AudioToolboxWrapper # This wrapper library enables FFmpeg to use AudioToolbox codecs on Windows, with DLLs shipped with iTunes.
-	# fi
-	if [[ $compiler_flavors != "native" ]]; then
-		build_libdecklink # Error finding rpc.h in native builds even if it's available
-	fi
+	#   build_AudioToolboxWrapper # This wrapper library enables FFmpeg to use AudioToolbox codecs on Windows, with DLLs shipped with iTunes.
+	build_libdecklink # Error finding rpc.h in native builds even if it's available
 	#fi
 }
 
+print_progress() {
+	local current_step=$1
+	local steps=$2
+	local step_name=$3
+	percent=$((current_step * 100 / steps))
+	bars=$((percent * 40 / 100))
+
+	bar_str=""
+	for ((j = 0; j < bars; j++)); do bar_str="${bar_str}█"; done
+	for ((j = bars; j < 40; j++)); do bar_str="${bar_str} "; done
+
+	printf "\r\033[K[%s] %3d%% (%2d/%2d) | %s" "$bar_str" "$percent" "$current_step" "$steps" "$step_name"
+}
+
 build_all_ffmpeg_dependencies() {
+	local start_from=$1
+	local skip_mode=false
 	# Create a clean array without empty elements
 	local steps=${#BUILD_STEPS[@]}
 	local current_step=0
+
+	# Count non-empty steps first
+	for step_name in "${BUILD_STEPS[@]}"; do
+		if [[ -n "${step_name// /}" ]]; then
+			((steps++))
+		fi
+	done
+
+	# If start_from is empty, start from beginning
+	if [[ -z "$start_from" ]]; then
+		skip_mode=false
+	else
+		echo "Starting from step: $start_from"
+		skip_mode=true
+	fi
 
 	for step_name in "${BUILD_STEPS[@]}"; do
 		if [[ -z "${step_name// /}" ]]; then
 			continue
 		fi
+		# Handle skip mode
+		if [[ "$skip_mode" == true ]]; then
+			if [[ "$step_name" == "$start_from" ]]; then
+				skip_mode=false
+				echo "INFO: Building dependencies from: $step_name"
+			else
+				((current_step++))
+				continue
+			fi
+		fi
 		((current_step++))
-		percent=$((current_step * 100 / steps))
-		bars=$((percent * 40 / 100))
+		print_progress "$current_step" "$steps" "$step_name"
+		# percent=$((current_step * 100 / steps))
+		# bars=$((percent * 40 / 100))
 
-		bar_str=""
-		for ((j = 0; j < bars; j++)); do bar_str="${bar_str}█"; done
-		for ((j = bars; j < 40; j++)); do bar_str="${bar_str} "; done
+		# bar_str=""
+		# for ((j = 0; j < bars; j++)); do bar_str="${bar_str}█"; done
+		# for ((j = bars; j < 40; j++)); do bar_str="${bar_str} "; done
 
-		printf "\r\033[K[%s] %3d%% (%2d/%2d) | %s" "$bar_str" "$percent" "$current_step" "$steps" "$step_name"
+		# printf "\r\033[K[%s] %3d%% (%2d/%2d) | %s" "$bar_str" "$percent" "$current_step" "$steps" "$step_name"
 
-		build_ffmpeg_dependency_only "$step_name" 1>>"$LOG_FILE" 2>&1
+		build_ffmpeg_dependency_only "$step_name" 1>>"$LOG_FILE" 2>&1 || echo
 	done
 	printf "\r\033[KAll dependencies built successfully!\n"
 }
@@ -439,7 +477,7 @@ build_ffmpeg_kit() {
 }
 
 download_ffmpeg() {
-	local output_dir="$work_dir/ffmpeg"
+	local output_dir="$src_dir/ffmpeg"
 	local desired_version="$ffmpeg_git_checkout_version"
 
 	if [[ -z $desired_version ]]; then
@@ -708,23 +746,17 @@ configure_ffmpeg() {
 	init_options+=" --pkg-config-flags=--static"
 	init_options+=" --enable-version3"
 	init_options+=" --disable-debug"
+	init_options+=" --arch=$arch"
+	init_options+=" --target-os=mingw32"
+	init_options+=" --cross-prefix=$cross_prefix"
 
-	if [[ $compiler_flavors != "native" ]]; then
-		init_options+=" --arch=$arch"
-		init_options+=" --target-os=mingw32"
-		init_options+=" --cross-prefix=$cross_prefix"
-	else
-		if [[ $OSTYPE != darwin* ]]; then
-			unset PKG_CONFIG_LIBDIR # just use locally packages for all the xcb stuff for now, you need to install them locally first...
-			init_options+=" --enable-libv4l2"
-			init_options+=" --enable-libxcb"
-			init_options+=" --enable-libxcb-shm"
-			init_options+=" --enable-libxcb-xfixes"
-			init_options+=" --enable-libxcb-shape "
-		else
-			config_options+=" --disable-libv4l2"
-		fi
-	fi
+	unset PKG_CONFIG_LIBDIR # just use locally packages for all the xcb stuff for now, you need to install them locally first...
+	init_options+=" --enable-libv4l2"
+	init_options+=" --enable-libxcb"
+	init_options+=" --enable-libxcb-shm"
+	init_options+=" --enable-libxcb-xfixes"
+	init_options+=" --enable-libxcb-shape "
+
 	if [[ $(uname) =~ 5.1 ]]; then
 		init_options+=" --disable-schannel"
 		# Fix WinXP incompatibility by disabling Microsoft's Secure Channel, because Windows XP doesn't support TLS 1.1 and 1.2, but with GnuTLS or OpenSSL it does.  XP compat!
@@ -850,11 +882,7 @@ configure_ffmpeg() {
 		config_options+=" --enable-amf"
 	fi
 
-	if [[ $compiler_flavors != "native" ]]; then
-		config_options+=" --enable-libvpl"
-	else
-		config_options+=" --disable-libvpl"
-	fi
+	config_options+=" --enable-libvpl"
 
 	if [[ $ffmpeg_git_checkout_version != *"n6.0"* ]] && [[ $ffmpeg_git_checkout_version != *"n5"* ]] && [[ $ffmpeg_git_checkout_version != *"n4"* ]] && [[ $ffmpeg_git_checkout_version != *"n3"* ]] && [[ $ffmpeg_git_checkout_version != *"n2"* ]]; then
 		config_options+=" --enable-libaribcaption"
@@ -866,9 +894,7 @@ configure_ffmpeg() {
 		if [[ $host_target != 'i686-w64-mingw32' ]]; then
 			config_options+=" --enable-libxavs2"
 		fi
-		if [[ $compiler_flavors != "native" ]]; then
-			config_options+=" --enable-libxavs"
-		fi
+		config_options+=" --enable-libxavs"
 	fi
 
 	# Extra libs and flags
@@ -876,13 +902,9 @@ configure_ffmpeg() {
 	config_options+=" --extra-libs=-lpng"
 	config_options+=" --extra-libs=-lm"
 	config_options+=" --extra-libs=-lfreetype"
-
-	if [[ $compiler_flavors != "native" ]]; then
-		config_options+=" --extra-libs=-lshlwapi"
-	fi
+	config_options+=" --extra-libs=-lshlwapi"
 	config_options+=" --extra-libs=-lmpg123"
 	config_options+=" --extra-libs=-lpthread"
-
 	config_options+=" --extra-cflags=-DLIBTWOLAME_STATIC --extra-cflags=-DMODPLUG_STATIC --extra-cflags=-DCACA_STATIC"
 	config_options+=" --extra-cflags=-DWIN32_ANSI_API --extra-cflags=-DHAVE_WCHAR_FILENAME_H=0"
 	config_options+=" --extra-ldflags=-lole32 --extra-ldflags=-lshlwapi"
@@ -895,12 +917,8 @@ configure_ffmpeg() {
 
 	# if [[ "$non_free" = "y" ]]; then
 	#   config_options+=" --enable-nonfree --enable-libfdk-aac"
-	#   if [[ $OSTYPE != darwin* ]]; then
-	#     config_options+=" --enable-audiotoolbox --disable-outdev=audiotoolbox --extra-libs=-lAudioToolboxWrapper" && apply_patch file://"$WINPATCHDIR"/AudioToolBox.patch -p1
-	#   fi
-	#   if [[ $compiler_flavors != "native" ]]; then
-	#     config_options+=" --enable-decklink"
-	#   fi
+	#   config_options+=" --enable-audiotoolbox --disable-outdev=audiotoolbox --extra-libs=-lAudioToolboxWrapper" && apply_patch file://"$WINPATCHDIR"/AudioToolBox.patch -p1
+	#   config_options+=" --enable-decklink"
 	# fi
 
 	do_debug_build=n
