@@ -1,0 +1,12 @@
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -235,8 +235,8 @@
+ 
+ if host_machine.system() == 'windows'
+   windows = import('windows')
+   sources += windows.compile_resources(libplacebo_rc, depends: version_h,
+-                                       include_directories: meson.project_source_root()/'win32')
++                                       include_directories: '../win32')
+ endif
+ 
+ if fs.is_dir('../3rdparty/fast_float/include')

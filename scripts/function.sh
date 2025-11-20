@@ -63,7 +63,7 @@ create_dir() {
 	execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
 		sudo chown -R "$USER":"$USER" "$path"
 	execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
-		sudo chmod -R 755 "$path"
+		sudo chmod -R 777 "$path"
 }
 
 # 1. options
@@ -90,7 +90,7 @@ remove_path() {
 			execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
 				chown -R "$USER":"$USER" "$path"
 			execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
-				sudo chmod -R 755 "$path"
+				sudo chmod -R 777 "$path"
 			execute "INFO: removing path: '$path'" "ERROR: unable to remove path '$path'" "true" \
 				rm "$options" "$path"
 		else
@@ -112,7 +112,7 @@ change_dir() {
 			cd "$path"
 		if [[ ! -r "$path" ]] || [[ ! -w "$path" ]] || [[ ! -x "$path" ]]; then
 			execute "INFO: updating path permissions: '$(pwd)'" "ERROR: unable to update permissions on '$(pwd)'" "false" \
-				sudo chmod -R 755 "$(pwd)"
+				sudo chmod -R 777 "$(pwd)"
 		fi
 	else
 		echo -e "INFO: path '$path' does not exist" 1>>"$LOG_FILE" 2>&1
@@ -163,7 +163,7 @@ copy_path() {
 	execute "INFO: updating permissions on copied path: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "false" \
 		sudo chown -R "$USER":"$USER" "$destination_path"
 	execute "INFO: updating path permissions: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "false" \
-		sudo chmod -R 755 "$destination_path"
+		sudo chmod -R 777 "$destination_path"
 }
 
 check_files_exist() {
@@ -3245,8 +3245,8 @@ do_cmake() {
 		touch "$touch_name" || exit 1
 	fi
 }
-# 1. extra_args
-# 2. source_dir
+# 1. source_dir
+# 2. extra_args
 # 3. touch_postfix
 do_cmake_from_build_dir() { # some sources don't allow it, weird XXX combine with the above :)
 	source_dir="$1"
@@ -3294,12 +3294,18 @@ do_meson() {
 	local touch_postfix=""
 	[[ -n $4 ]] && touch_postfix="_$4"
 	local configure_noclean=""
+	local configure_command
+	if [[ -e "$src_dir/meson_git/meson.py" ]]; then
+    configure_command=(python "$src_dir/meson_git/meson.py")
+	else
+		configure_command=(meson)
+	fi
 	if [[ "$configure_name" = "" ]]; then
 		configure_name="meson"
 	fi
 	local cur_dir2=$(pwd)
 	local english_name=$(basename "$cur_dir2")
-	local touch_name=$(get_small_touchfile_name "already_built_meson$touch_postfix" "$configure_options $configure_name $LDFLAGS $CFLAGS")
+	local touch_name=$(get_small_touchfile_name "already_built_meson$touch_postfix" "$configure_options ${configure_command[*]} $LDFLAGS $CFLAGS")
 	if [[ $BUILD_FORCE == "1" ]]; then
 		remove_path -f "already_built_meson$touch_postfix"*
 	fi
@@ -3308,18 +3314,25 @@ do_meson() {
 			make clean --silent # just in case
 		fi
 		remove_path -f already_* # reset
-		if [[ $configure_name == "meson" ]]; then
-			"$configure_name" setup --wipe "$(pwd)/build"
+		# if [[ -n "${configure_command[*]}" && -d "$(pwd)/build" ]]; then
+		# 	echo -e "INFO: Using meson: \"${configure_command[*]}\" setup --wipe \"$(pwd)/build\""
+		# 	"${configure_command[@]}" setup --wipe "$(pwd)/build"
+		# fi
+		if [[ -n "${configure_command[*]}" && -d "$(pwd)/build" ]]; then
+			echo -e "INFO: Adding --reconfigure to meson config because there is an existing previous build"
+			configure_options+=" --reconfigure"
 		fi
-		echo -e "Using meson: $english_name ($PWD) as PATH=$PATH ${configure_env} $configure_name $configure_options"
+		echo -e "INFO: Using meson: $english_name ($PWD) as PATH=$PATH ${configure_env} ${configure_command[*]} $configure_options"
 		#env
+		export MESON_BUILD_ROOT="$(pwd)/build"
+		export MESON_SOURCE_ROOT="$(pwd)"
 		# shellcheck disable=SC2086
 		# shellcheck disable=SC1078
-		"$configure_name" $configure_options || exit 1
+		"${configure_command[@]}" $configure_options || exit 1
 		touch -- "$touch_name"
 		make clean --silent # just in case
 	else
-		echo -e "Already used meson $(basename "$cur_dir2")"
+		echo -e "INFO: Already used meson $(basename "$cur_dir2")"
 	fi
 }
 # 1. extra_args
@@ -3329,7 +3342,7 @@ generic_meson() {
 	local touch_postfix="$2"
 	create_dir build
 	# TODO: Allow shared library build
-	do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" "$touch_postfix" # --cross-file=$(get_meson_cross_file)
+	do_meson "--prefix=${mingw_w64_x86_64_prefix} --libdir=${mingw_w64_x86_64_prefix}/lib --buildtype=release --default-library=static $extra_configure_options" "" "$touch_postfix" # --cross-file=$(get_meson_cross_file)
 }
 # 1. extra_args
 # 2. touch_postfix
@@ -3367,14 +3380,14 @@ do_ninja() {
 	fi
 	if [ ! -f "$touch_name" ]; then
 		echo -e
-		echo -e "ninja-ing $cur_dir2 as PATH=$PATH ninja -C build $extra_make_options"
+		echo -e "INFO: ninja-ing $cur_dir2 as PATH=$PATH ninja -C build $extra_make_options"
 		echo -e
 		echo -e "INFO: do_ninja() ninja running: \"build $extra_make_options\""
 		# shellcheck disable=SC2086
 		ninja -C build ${extra_make_options} --quiet || exit 1
 		touch "$touch_name" || exit 1 # only touch if the build was OK
 	else
-		echo -e "already did ninja $(basename "$cur_dir2")"
+		echo -e "INFO: already did ninja $(basename "$cur_dir2")"
 	fi
 }
 
@@ -3392,7 +3405,7 @@ apply_patch() {
 			remove_path -rf "$patch_name" || exit 1 # remove old version in case it has been since updated on the server...
 		fi
 		curl -4 --retry 5 "$url" -O --fail || echo_and_exit "unable to download patch file $url"
-		echo -e "applying patch $patch_name"
+		echo -e "INFO: applying patch $patch_name"
 		patch "$patch_type" <"$patch_name" || exit 1
 		touch "$patch_done_name" || exit 1
 		# too crazy, you can't do do_configure then apply a patch?
@@ -4073,8 +4086,8 @@ build_openssl_1_0_2() {
 	if [ "$1" = "dllonly" ]; then
 		do_make "build_libs"
 
-		create_dir "$WORKDIR/redist" # Strip and pack shared libraries.
-		archive="$WORKDIR/redist/openssl-${arch}-v1.0.2l.7z"
+		create_dir "$src_dir/redist" # Strip and pack shared libraries.
+		archive="$src_dir/redist/openssl-${arch}-v1.0.2l.7z"
 		if [[ ! -f $archive ]]; then
 			for sharedlib in *.dll; do
 				# shellcheck disable=SC2086
@@ -4121,8 +4134,8 @@ build_openssl_1_1_1() {
 	fi
 	do_make "build_libs"
 	if [ "$1" = "dllonly" ]; then
-		create_dir "$WORKDIR/redist" # Strip and pack shared libraries.
-		archive="$WORKDIR/redist/openssl-${arch}-v1.1.0f.7z"
+		create_dir "$src_dir/redist" # Strip and pack shared libraries.
+		archive="$src_dir/redist/openssl-${arch}-v1.1.0f.7z"
 		if [[ ! -f $archive ]]; then
 			for sharedlib in *.dll; do
 				# shellcheck disable=SC2086
@@ -4472,13 +4485,13 @@ build_frei0r() {
 	sed -i.bak 's/-arch i386//' CMakeLists.txt # OS X https://github.com/dyne/frei0r/issues/64
 	do_cmake_and_install "-DWITHOUT_OPENCV=1"  # XXX could look at this more...
 
-	create_dir "$WORKDIR/redist" # Strip and pack shared libraries.
+	create_dir "$src_dir/redist" # Strip and pack shared libraries.
 	if [ "$bits_target" = 32 ]; then
 		local arch=x86
 	else
 		local arch=x86_64
 	fi
-	archive="$WORKDIR/redist/frei0r-plugins-${arch}-$(git describe --tags).7z"
+	archive="$src_dir/redist/frei0r-plugins-${arch}-$(git describe --tags).7z"
 	if [[ ! -f "$archive.done" ]]; then
 		for sharedlib in "$mingw_w64_x86_64_prefix"/lib/frei0r-1/*.dll; do
 			# shellcheck disable=SC2086
@@ -4704,17 +4717,18 @@ build_lcms() {
 }
 
 build_libplacebo() {
-	build_vulkan_loader
-	build_lcms
-	build_libunwind
-	build_libxxhash
-	build_spirv-cross
-	build_libdovi
-	build_shaderc
+	#build_vulkan_loader
+	#build_lcms
+	#build_libunwind
+	#build_libxxhash
+	#build_spirv-cross
+	#build_libdovi
+	#build_shaderc
 	change_dir "$src_dir"
-	do_git_checkout https://code.videolan.org/videolan/libplacebo.git libplacebo_git 515da9548ad734d923c7d0988398053f87b454d5
+	do_git_checkout https://code.videolan.org/videolan/libplacebo.git libplacebo_git #515da9548ad734d923c7d0988398053f87b454d5
 	activate_meson
 	change_dir "$src_dir/libplacebo_git"
+	apply_patch "file://$WINPATCHDIR/fix_libplacebo_absolute_path.patch" -p1 # latest meson version wont work without patch
 	git submodule update --init --recursive --depth=1 --filter=blob:none
 	local config_options=""
 	local config_options+=" -Dvulkan-registry=$mingw_w64_x86_64_prefix/share/vulkan/registry/vk.xml"
@@ -5295,7 +5309,6 @@ buildtype = 'release'
 wrap_mode = 'nofallback'  
 default_library = 'static'  
 prefer_static = 'true'
-default_both_libraries = 'static'
 backend = 'ninja'
 prefix = '$mingw_w64_x86_64_prefix'
 libdir = '$mingw_w64_x86_64_prefix/lib'
@@ -5332,7 +5345,7 @@ get_local_meson_cross_with_propeties() {
 	if [[ -z $local_dir ]]; then
 		local_dir="."
 	fi
-	copy_path "$src_dir/meson-cross.mingw.txt" "$local_dir"
+	copy_path "$src_dir/$target_name-meson-cross.mingw.txt" "$local_dir"
 	cat >>meson-cross.mingw.txt <<EOF
 EOF
 }

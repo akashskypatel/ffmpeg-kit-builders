@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317
-# shellcheck disable=SC1091
-# shellcheck disable=SC2120
+# shellcheck disable=SC2317,SC1091,SC1090,SC2120
 
 # ffmpeg windows cross compile helper/download script, see github repo README
 # Copyright (C) 2012 Roger Pack, the script is under the GPLv3, but output FFmpeg's executables aren't

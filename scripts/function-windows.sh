@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2317
-# shellcheck disable=SC1091
-# shellcheck disable=SC2120
+# shellcheck disable=SC2317,SC1091,SC1090,SC2120
 
 #echo -e "${SCRIPTDIR}/variable.sh"
 #echo -e "${SCRIPTDIR}/function.sh"
@@ -49,7 +47,7 @@ build_all_ffmpeg_dependencies() {
 	local start_from=$1
 	local skip_mode=false
 	# Create a clean array without empty elements
-	local steps=${#BUILD_STEPS[@]}
+	local steps=0
 	local current_step=0
 
 	# Count non-empty steps first
@@ -102,14 +100,15 @@ build_ffmpeg_dependency_only() {
 	if [[ -n "$step" ]]; then
 		change_dir "$src_dir"
 		if declare -F "$step" >/dev/null; then
-			echo -e "Executing step: $step"
+			echo -e "INFO: --- Executing step: $step ---"
 			"$step" # Execute the function
+			echo -e "INFO: --- Finished executing step: $step ---"
 		else
-			echo -e "Error: Function '$step' not found."
+			echo -e "ERROR: Function '$step' not found."
 			return 1 # Indicate an error
 		fi
 	else
-		echo -e "Error: Step argument is missing."
+		echo -e "ERROR: Step argument is missing."
 		return 1 # Indicate an error
 	fi
 }
@@ -191,13 +190,14 @@ setup_build_environment() {
 --ld=$(realpath "${cross_prefix}"ld) \
 --strip=$(realpath "${cross_prefix}"strip) \
 --cxx=$(realpath "${cross_prefix}"g++)"
-	export src_dir="${work_dir}/src"
+	export src_dir="${WORKDIR}/src"
 	export LIB_INSTALL_BASE="$work_dir"
 	export INSTALL_PKG_CONFIG_DIR="${work_dir}/pkgconfig"
-	export ffmpeg_source_dir="${work_dir}/ffmpeg"
+	export ffmpeg_source_dir="${src_dir}/ffmpeg"
 	export install_prefix="$ffmpeg_source_dir/build_$(get_build_type)" # install them to their a separate dir
 	export ffmpeg_kit_install="${work_dir}/ffmpeg-kit_$(get_build_type)"
 	export ffmpeg_kit_bundle="${work_dir}/$(get_bundle_directory)"
+	export ffmpeg_kit_src_dir="${BASEDIR}/windows"
 	create_dir "$work_dir"
 	change_dir "$work_dir" || exit
 }
@@ -464,7 +464,7 @@ install_pkg_config_file() {
 }
 
 get_ffmpeg_kit_version() {
-	local FFMPEG_KIT_VERSION=$(grep -Eo 'FFmpegKitVersion = .*' "${BASEDIR}/windows/src/FFmpegKitConfig.h" 2>>"$LOG_FILE" | grep -Eo ' \".*' | tr -d '"; ')
+	local FFMPEG_KIT_VERSION=$(grep -Eo 'FFmpegKitVersion = .*' "$ffmpeg_kit_src_dir/src/FFmpegKitConfig.h" 2>>"$LOG_FILE" | grep -Eo ' \".*' | tr -d '"; ')
 
 	echo -e "${FFMPEG_KIT_VERSION}"
 }
@@ -625,15 +625,10 @@ install_ffmpeg() {
 
 	echo -e "INFO: Moving all binaries" | tee -a "$LOG_FILE"
 
-	{
-		shopt -s nullglob
-		mv */*.a "${install_prefix}/bin" 2>/dev/null || true
-		mv */*.dylib "${install_prefix}/bin" 2>/dev/null || true
-		mv */*.lib "${install_prefix}/bin" 2>/dev/null || true  
-		mv */*.dll "${install_prefix}/bin" 2>/dev/null || true
-		mv *.exe "${install_prefix}/bin" 2>/dev/null || true
-		mv *.so "${install_prefix}/bin" 2>/dev/null || true
-	} 1>>"$LOG_FILE"2 >&1
+	{	
+    shopt -s nullglob
+    mv -- */*.a */*.dylib */*.lib */*.dll *.exe *.so "${install_prefix}/bin" 2>/dev/null || true
+	} >> "$LOG_FILE" 2>&1
 
 	echo -e "INFO: Done installing ffmpeg\n" | tee -a "$LOG_FILE"
 
@@ -953,13 +948,13 @@ configure_ffmpeg_kit() {
 	local local_cflags="${CFLAGS} -I${install_prefix}/include -L${install_prefix}/bin -L${install_prefix}/lib -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat -DHAVE_W32PTHREADS_H=1"
 	local local_cxxfalgs="${CXXFLAGS} -I${install_prefix}/include -L${install_prefix}/bin -L${install_prefix}/lib -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat"
 
-	change_dir "${BASEDIR}/windows"
+	change_dir "${ffmpeg_kit_src_dir}"
 	make distclean 2>/dev/null 1>/dev/null
 
 	local touch_name=$(get_small_touchfile_name "already_autoreconf_${TYPE_POSTFIX}" "$FFMPEG_KIT_VERSION $local_cflags $local_cxxfalgs")
 	if [ ! -f "$touch_name" ]; then
 		remove_path -f "${BASEDIR}/windows/already_autoreconf_${TYPE_POSTFIX}"*
-		change_dir "${BASEDIR}/windows"
+		change_dir "${ffmpeg_kit_src_dir}"
 		autoreconf_library "ffmpeg-kit" 1>>"$LOG_FILE"2 >&1 || return 1
 		touch -- "$touch_name"
 		local BUILD_DATE="-DFFMPEG_KIT_BUILD_DATE=$(date +%Y%m%d 2>>"${BASEDIR}"/build.log)"
@@ -977,7 +972,7 @@ configure_ffmpeg_kit() {
 		config_options+=" --enable-shared"
 		config_options+=" --disable-static"
 	fi
-	change_dir "${BASEDIR}/windows"
+	change_dir "${ffmpeg_kit_src_dir}"
 	do_configure "${config_options}" "./configure" "${TYPE_POSTFIX}" 1>>"$LOG_FILE"2 >&1 || return 1
 
 	echo -e "INFO: Done configuring ffmpeg kit\n" | tee -a "$LOG_FILE"
@@ -1012,7 +1007,7 @@ EOF
 install_ffmpeg_kit() {
 	echo -e "INFO: Installing ffmpeg kit to ${ffmpeg_kit_install}\n" | tee -a "$LOG_FILE"
 
-	change_dir "${BASEDIR}/windows"
+	change_dir "${ffmpeg_kit_src_dir}"
 	do_make_and_make_install "" "" "$(get_build_type)" 1>>"$LOG_FILE" 2>&1
 
 	create_ffmpegkit_package_config "$(get_ffmpeg_kit_version)" 1>>"$LOG_FILE"2 >&1 || return 1
