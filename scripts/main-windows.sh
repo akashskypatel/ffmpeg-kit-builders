@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# shellcheck disable=SC2317
-# shellcheck disable=SC1091
-# shellcheck disable=SC2120
+# shellcheck disable=SC2317,SC1091,SC1090,SC2120
 
 #echo -e "${SCRIPTDIR}/variable.sh"
 #echo -e "${SCRIPTDIR}/function.sh"
@@ -140,6 +138,7 @@ if [[ -n "$build_only" ]]; then
 	# Now, call the single requested build function by its index
 	step_name="${BUILD_STEPS[$index]}"
 	echo -e "--- Executing single build step: $step_name ---" | tee -a "$LOG_FILE"
+	echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
 	build_ffmpeg_dependency_only "$step_name" 1>>"$LOG_FILE" 2>&1
 	echo -e "--- Done building single build step: $step_name ---" | tee -a "$LOG_FILE"
 elif [[ -n "$build_from" ]]; then
@@ -151,22 +150,26 @@ elif [[ -n "$build_from" ]]; then
 	# Now, call the single requested build function by its index
 	step_name="${BUILD_STEPS[$index]}"
 	echo -e "--- Building dependencies from step: $step_name ---" | tee -a "$LOG_FILE"
+	echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
 	build_all_ffmpeg_dependencies "$step_name"
 	echo -e "--- Done building dependencies from step: $step_name ---" | tee -a "$LOG_FILE"
 else
 	change_dir "$work_dir" || exit 1
 
 	if [[ $build_dependencies_only == "y" || $build_dependencies_only == "yes" || $build_dependencies_only == "1" ]]; then
-	echo -e "INFO: Building dependencies only..." | tee -a "$LOG_FILE"
+		echo -e "INFO: Building dependencies only..." | tee -a "$LOG_FILE"
+		echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
 		build_all_ffmpeg_dependencies
 		exit 0
 	elif [[ $build_ffmpeg_only == "y" || $build_ffmpeg_only == "yes" || $build_ffmpeg_only == "1" ]]; then
 		echo -e "INFO: Building ffmpeg only..." | tee -a "$LOG_FILE"
+		echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
 		download_ffmpeg #1>>$LOG_FILE 2>&1
 		install_ffmpeg  #1>>$LOG_FILE 2>&1
 		exit 0
 	elif [[ $build_ffmpeg_kit_only == "y" || $build_ffmpeg_kit_only == "yes" || $build_ffmpeg_kit_only == "1" ]]; then
 		echo -e "INFO: Building ffmpeg-kit only..." | tee -a "$LOG_FILE"
+		echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
 		configure_ffmpeg_kit #1>>$LOG_FILE 2>&1
 		install_ffmpeg_kit
 		create_windows_bundle
