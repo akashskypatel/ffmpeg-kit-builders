@@ -6161,7 +6161,7 @@ static_link_check() {
             cmd+=("-Wl,--version-script=$map_file" "-Wl,-Bsymbolic")
         fi
         if ismacos || isios; then
-            cmd+=("-undefined" "dynamic_lookup")
+            cmd+=("-Wl,-twolevel_namespace")
         else
             cmd+=("-Wl,--allow-multiple-definition" "-Wl,--unresolved-symbols=ignore-all")
         fi
