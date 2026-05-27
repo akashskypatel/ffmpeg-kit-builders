@@ -69,7 +69,6 @@ android {
             println("--> Directory Exists: ${jniDir.exists()}")
 
             jniLibs.srcDirs = [jniDir]
-            java.srcDirs = ['src/main/java']
         }
     }
 }
