@@ -717,7 +717,8 @@ elseif(APPLE)
         "-ld64"
         "-Wl,-w"
         "-Wl,-dead_strip"
-        "-Wl,-flat_namespace"
+        "-Wl,-twolevel_namespace"
+        # "-Wl,-flat_namespace"
         # "-Wl,-undefined,dynamic_lookup"
     )
 endif()
