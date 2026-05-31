@@ -329,32 +329,27 @@ create_xcframework() {
 
     # Pass 2: Fix rpath references in all copied dylibs
     for dylib in "${dest_dir}"/*.dylib; do
+      echo "Fixing rpath references in: $(basename "$dylib")"
       [[ -f "$dylib" ]] || continue
       local dylib_name="$(basename "$dylib")"
 
       local refs
       refs="$(otool -L "$dylib" 2>/dev/null | tail -n +2 | awk '{print $1}')"
       for ref_path in $refs; do
-        [[ "$ref_path" != /* ]] && continue
+        [[ "$ref_path" != /* && "$ref_path" != @rpath/* ]] && continue
         [[ "$ref_path" == */System/* ]] && continue
         [[ "$ref_path" == */usr/lib/* ]] && continue
         local ref_name
         ref_name="$(basename "$ref_path")"
-        if [[ -f "${dest_dir}/${ref_name}" ]]; then
-          [[ "$ref_path" == @rpath/* ]] && continue  # Already correct
-          install_name_tool -change "$ref_path" "@rpath/${ref_name}" "$dylib" 2>/dev/null || true
-          codesign --sign - --force "$dylib" 2>/dev/null || true
-        else
-          # Handle versioned -> unversioned mismatch (e.g. libtensorflow.2.dylib -> libtensorflow.dylib)
-          local base_name="${ref_name%.dylib}"
-          if [[ "$base_name" =~ ^(.+)\.([0-9]+)$ ]]; then
-            local unversioned_name="${BASH_REMATCH[1]}.dylib"
-            if [[ -f "${dest_dir}/${unversioned_name}" ]]; then
-              echo "  Fix (versioned): ${dylib_name} references ${ref_name} -> ${unversioned_name}"
-              install_name_tool -change "$ref_path" "@rpath/${unversioned_name}" "$dylib" 2>/dev/null || true
-              codesign --sign - --force "$dylib" 2>/dev/null || true
-            fi
+        local canonical_ref_name=""
+        canonical_ref_name="$(canonicalize_bundled_ref_name "${ref_name}" "${dest_dir}" || true)"
+        if [[ -n "${canonical_ref_name}" ]]; then
+          [[ "$ref_path" == "@rpath/${canonical_ref_name}" ]] && continue
+          if [[ "${canonical_ref_name}" != "${ref_name}" ]]; then
+            echo "  Fix (alias): ${dylib_name} references ${ref_name} -> ${canonical_ref_name}"
           fi
+          install_name_tool -change "$ref_path" "@rpath/${canonical_ref_name}" "$dylib" 2>/dev/null || true
+          codesign --sign - --force "$dylib" 2>/dev/null || true
         fi
       done
     done
@@ -412,6 +407,34 @@ create_xcframework() {
     done < <(otool -l "$dylib" 2>/dev/null | awk '/cmd LC_RPATH/{found=1} found && /path /{print $2; found=0}')
     install_name_tool -add_rpath "@loader_path" "$dylib" 2>/dev/null || true
     codesign --sign - --force "$dylib" 2>/dev/null || true
+  }
+
+  canonicalize_bundled_ref_name() {
+    local ref_name="$1"
+    local bundle_dir="$2"
+    local base_name="${ref_name%.dylib}"
+
+    if [[ "$base_name" =~ ^(.+)\.([0-9]+)$ ]]; then
+      local unversioned_name="${BASH_REMATCH[1]}.dylib"
+      if [[ -f "${bundle_dir}/${unversioned_name}" ]]; then
+        printf '%s\n' "${unversioned_name}"
+        return 0
+      fi
+    fi
+
+    if [[ "$base_name" == "libiomp5" || "$base_name" == "libomp5" || "$base_name" == "libomp" ]]; then
+      if [[ -f "${bundle_dir}/libomp.dylib" ]]; then
+        printf '%s\n' "libomp.dylib"
+        return 0
+      fi
+    fi
+
+    if [[ -f "${bundle_dir}/${ref_name}" ]]; then
+      printf '%s\n' "${ref_name}"
+      return 0
+    fi
+
+    return 1
   }
 
   IFS=',' read -ra arch_array <<< "$archs_for_platform"
@@ -526,6 +549,7 @@ create_xcframework() {
       # Pass 2: Fix rpath references in all dylibs
       echo "Fixing rpath references..."
       for dylib in "${temp_framework_dir}"/*.dylib; do
+        echo "Fixing rpath references in: $(basename "$dylib")"
         [[ -f "$dylib" ]] || continue
         local dylib_name="$(basename "$dylib")"
 
@@ -533,31 +557,23 @@ create_xcframework() {
         local refs
         refs="$(otool -L "$dylib" 2>/dev/null | tail -n +2 | awk '{print $1}')"
         for ref_path in $refs; do
-          [[ "$ref_path" != /* ]] && continue  # Skip non-absolute paths
+          [[ "$ref_path" != /* && "$ref_path" != @rpath/* ]] && continue  # Skip non-bundled paths
           [[ "$ref_path" == */System/* ]] && continue  # Skip system frameworks
           [[ "$ref_path" == */usr/lib/* ]] && continue  # Skip system libs
           [[ "$ref_path" == */lib/libSystem* ]] && continue  # Skip libSystem
           local ref_name
           ref_name="$(basename "$ref_path")"
-          # Check if this is one of our bundled dylibs
-          if [[ -f "${temp_framework_dir}/${ref_name}" ]]; then
-            [[ "$ref_path" == @rpath/* ]] && continue  # Already correct
-            echo "  Fix: ${dylib_name} references ${ref_name}"
-            install_name_tool -change "$ref_path" "@rpath/${ref_name}" "$dylib" 2>/dev/null || true
-            codesign --sign - --force "$dylib" 2>/dev/null || true
-          else
-            # Handle versioned vs unversioned dylib name mismatch
-            # e.g. libtensorflow.2.dylib -> libtensorflow.dylib
-            local base_name="${ref_name%.dylib}"
-            # Check if it's versioned (contains a number before the extension)
-            if [[ "$base_name" =~ ^(.+)\.([0-9]+)$ ]]; then
-              local unversioned_name="${BASH_REMATCH[1]}.dylib"
-              if [[ -f "${temp_framework_dir}/${unversioned_name}" ]]; then
-                echo "  Fix (versioned): ${dylib_name} references ${ref_name} -> ${unversioned_name}"
-                install_name_tool -change "$ref_path" "@rpath/${unversioned_name}" "$dylib" 2>/dev/null || true
-                codesign --sign - --force "$dylib" 2>/dev/null || true
-              fi
+          local canonical_ref_name=""
+          canonical_ref_name="$(canonicalize_bundled_ref_name "${ref_name}" "${temp_framework_dir}" || true)"
+          if [[ -n "${canonical_ref_name}" ]]; then
+            [[ "$ref_path" == "@rpath/${canonical_ref_name}" ]] && continue
+            if [[ "${canonical_ref_name}" == "${ref_name}" ]]; then
+              echo "  Fix: ${dylib_name} references ${ref_name}"
+            else
+              echo "  Fix (alias): ${dylib_name} references ${ref_name} -> ${canonical_ref_name}"
             fi
+            install_name_tool -change "$ref_path" "@rpath/${canonical_ref_name}" "$dylib" 2>/dev/null || true
+            codesign --sign - --force "$dylib" 2>/dev/null || true
           fi
         done
       done
@@ -629,6 +645,7 @@ create_xcframework() {
           done
           # Pass 2: Fix versioned -> unversioned rpath references in the slice
           for slice_dylib in "${xc_slice}"/*.dylib; do
+            echo "Fixing rpath references in: $(basename "$slice_dylib")"
             [[ -f "$slice_dylib" ]] || continue
             local sdname
             sdname="$(basename "$slice_dylib")"
@@ -638,17 +655,12 @@ create_xcframework() {
               [[ "$sref" == @rpath/* ]] || continue
               local sref_name
               sref_name="$(basename "$sref")"
-              # If the referenced dylib doesn't exist, try unversioned variant
-              if [[ ! -f "${xc_slice}/${sref_name}" ]]; then
-                local sbase="${sref_name%.dylib}"
-                if [[ "$sbase" =~ ^(.+)\.([0-9]+)$ ]]; then
-                  local sunversioned="${BASH_REMATCH[1]}.dylib"
-                  if [[ -f "${xc_slice}/${sunversioned}" ]]; then
-                    echo "  Fix (versioned->unversioned): ${sdname} references ${sref_name} -> ${sunversioned}"
-                    install_name_tool -change "@rpath/${sref_name}" "@rpath/${sunversioned}" "$slice_dylib" 2>/dev/null || true
-                    codesign --sign - --force "$slice_dylib" 2>/dev/null || true
-                  fi
-                fi
+              local canonical_ref_name=""
+              canonical_ref_name="$(canonicalize_bundled_ref_name "${sref_name}" "${xc_slice}" || true)"
+              if [[ -n "${canonical_ref_name}" && "${canonical_ref_name}" != "${sref_name}" ]]; then
+                echo "  Fix (alias): ${sdname} references ${sref_name} -> ${canonical_ref_name}"
+                install_name_tool -change "@rpath/${sref_name}" "@rpath/${canonical_ref_name}" "$slice_dylib" 2>/dev/null || true
+                codesign --sign - --force "$slice_dylib" 2>/dev/null || true
               fi
             done
           done

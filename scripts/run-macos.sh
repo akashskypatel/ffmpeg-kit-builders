@@ -2747,6 +2747,8 @@ build_libtorch() {
       find "$src_dir/$lib/lib" -type f -name "libbenchmark*" -exec rm -f {} +
       find "$src_dir/$lib/lib" -type f -name "libhwy*" -exec rm -f {} +
       find "$src_dir/$lib/lib" -type f -name "libclog*" -exec rm -f {} +
+      find "$src_dir/$lib/lib" -type f -name "libiomp*" -exec rm -f {} +
+      find "$src_dir/$lib/lib" -type f -name "libomp*" -exec rm -f {} +
       install_prebuilt_binary \
           -n="$base_lib" -v="$repo_ver" \
           -s="$src_dir/$lib" \
@@ -2761,10 +2763,6 @@ build_libtorch() {
   sed -i '.bak' -e ':a' -e 'N' -e '$!ba' -e 's/\n-l/ -l/g' "$install_pkgconfig_dir/$base_lib.pc"
   sed -i '.bak' -E 's/\.a//g' "$install_pkgconfig_dir/$base_lib.pc"
   sed -i'.bak' -E 's/-lunbox_ /-lunbox_lib /g' "$install_pkgconfig_dir/$base_lib.pc" # unbox_lib becomes unbox_ for some reason
-  if [[ $host_arch == "arm64" ]]; then
-    # libomp needs a .pc file
-    generate_pkg_config -l="-lomp" -o="$install_pkgconfig_dir/libomp.pc" -i="$dependency_install_prefix" -n="libomp"
-  fi
 }
 # build_libtensorflow     # config_options+= --enable-libtensorflow       # enable TensorFlow as a DNN module backend for DNN based filters like sr [no]
 build_libtensorflow() {
@@ -4090,14 +4088,14 @@ build_omp() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/openmp"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
--DBUILD_SHARED_LIBS=OFF \
+-DBUILD_SHARED_LIBS=ON \
 -DLIBOMP_INSTALL_ALIASES=OFF \
--DLIBOMP_ENABLE_SHARED=OFF \
+-DLIBOMP_ENABLE_SHARED=ON \
 -DOPENMP_ENABLE_LIBOMPTARGET=OFF"
   generic_cmake "$cmake_params"
   disable_nonessential "$src_dir/$lib/openmp"
   do_make_and_make_install
-  # [ -f "$dependency_install_prefix/lib/libomp.dylib" ] && rm -f "$dependency_install_prefix/lib/libomp.dylib"
+  generate_pkg_config -l="-lomp" -v="5.0.0" -o="$install_pkgconfig_dir/libomp.pc" -i="$dependency_install_prefix" -n="libomp"
   change_dir "$src_dir"
 }
 # build_whisper           # config_options+= --enable-whisper             # enable whisper filter [no]
