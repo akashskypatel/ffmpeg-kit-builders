@@ -7,7 +7,7 @@
 
 # FFmpeg-Kit Extended
 
-FFmpeg-Kit Extended is a native library that allows programatic access to executing FFmpeg, FFprobe, and FFplay commands for Android, Windows, and Linux. It provides a simple C and C++ API to execute these commands with callbacks for logs, statistics, session completion, media information parsing and more. The pure C API makes it easy to integrate with any language.
+FFmpeg-Kit Extended is a native library that allows programatic access to executing FFmpeg, FFprobe, and FFplay commands for iOS, macOS, Android, Windows, and Linux. It provides a simple C and C++ API to execute these commands with callbacks for logs, statistics, session completion, media information parsing and more. The pure C API makes it easy to integrate with any language.
 
 # FFmpeg-Kit Builders
 
