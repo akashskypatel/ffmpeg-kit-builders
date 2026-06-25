@@ -1596,9 +1596,8 @@ check_missing_packages() {
   # xutils-dev python3-numpy cython3
 	# zeranoe's build scripts use wget, though we don't here...
 	local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
-'yasm' 'cvs' 'flex' 'bison' 'g++' 'ed' 'pax' 'unzip' 'patch' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
-'bzip2' 'realpath' 'clang' 'python3' 'bc' 'autopoint' 'ld')
-	
+'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
+'bzip2' 'python3' 'bc')
   # autoconf-archive is just for leptonica FWIW
 	# I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
 	# that being said, if it where set I would imagine it would be set to centos... And this contition will satisfy the "Is not initially set"
@@ -1611,9 +1610,9 @@ check_missing_packages() {
     check_packages+=('zstd' 'cython3' 'xutils-dev' 'python3-venv' 'python3-numpy')
   elif [ "${VENDOR}" == "macos" ]; then
     # also needs 'python@3.10' 'python@3.12' 'python@3.14'
-    check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'glibtool' 'gsed')
+    check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'gsed' 'coreutils')
   else
-    check_packages+=('libtoolize') # the rest of the world
+    check_packages+=('libtoolize' 'g++' 'patch' 'realpath' 'clang' 'autopoint' 'ld') # the rest of the world
 	fi
 
   if [ "${VENDOR}" != "macos" ]; then
@@ -1632,7 +1631,7 @@ check_missing_packages() {
 		echo -e "Could not find the following execs (svn is actually package subversion, makeinfo is actually package texinfo if you're missing them): ${missing_packages[*]}" | tee -a "$LOG_FILE"
 		echo -e 'Install the missing packages before running this script.' | tee -a "$LOG_FILE"
 		
-		apt_pkgs='autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake coreutils curl cvs ed ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm p7zip-full patch pax pkg-config python3 python3-setuptools ragel subversion unzip wget xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin'
+		apt_pkgs='autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake coreutils curl cvs ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm p7zip-full patch pax pkg-config python3 python3-setuptools ragel subversion unzip wget xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin'
 
 		[[ $DISTRO == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
 		case "$DISTRO" in
