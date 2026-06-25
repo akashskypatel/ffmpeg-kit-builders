@@ -966,7 +966,7 @@ run_workflows() {
   for step in "${OPTIMIZED_BUILD_STEPS[@]}"; do
     if [[ "$step" != "$build_only" ]]; then
       echo "INFO: Running workflow for step: $step" | tee -a "$LOG_FILE"
-      GITHUB_WORKFLOW="$step" ./scripts/workflow-get-deps.sh "$host_platform" "$host_arch"
+      ./scripts/workflow-get-deps.sh "$host_platform" "$host_arch" "$step"
       if [[ $? -ne 0 ]]; then
         run_valid_function "$step"
       fi
