@@ -49,116 +49,13 @@ jobs:
         shell: bash
         run: chmod +x runner.sh scripts/*.sh
 
-      - name: Write release upload helper
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cat > upload-deps-release.sh <<'BASH'
-          #!/usr/bin/env bash
-          set -euo pipefail
-
-          platform="$1"
-          arch="$2"
-          dep="${GITHUB_WORKFLOW#build_}"
-          archive_name="${platform}-${arch}-${dep}.zip"
-          release_tag="${platform}-${arch}-deps"
-          release_name="${platform}-${arch}-dependencies"
-          libraries_dir="${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
-
-          if [[ ! -d "$libraries_dir" ]]; then
-            echo "Missing libraries directory: $libraries_dir" >&2
-            exit 1
-          fi
-
-          rm -f "${GITHUB_WORKSPACE}/${archive_name}"
-          (cd "$libraries_dir" && zip -qry "${GITHUB_WORKSPACE}/${archive_name}" .)
-
-          python3 - "$GITHUB_REPOSITORY" "$release_tag" "$release_name" "${GITHUB_WORKSPACE}/${archive_name}" <<'PY'
-          import json
-          import mimetypes
-          import os
-          import pathlib
-          import sys
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-
-          repo, tag, release_name, asset_path = sys.argv[1:]
-          token = os.environ["GH_TOKEN"]
-          api = "https://api.github.com"
-          headers = {
-              "Authorization": f"Bearer {token}",
-              "Accept": "application/vnd.github+json",
-              "X-GitHub-Api-Version": "2022-11-28",
-          }
-
-          def request(method, url, data=None, extra_headers=None, allow_404=False):
-              body = None
-              request_headers = dict(headers)
-              if extra_headers:
-                  request_headers.update(extra_headers)
-              if data is not None:
-                  body = data if isinstance(data, bytes) else json.dumps(data).encode()
-                  request_headers.setdefault("Content-Type", "application/json")
-              req = urllib.request.Request(url, data=body, headers=request_headers, method=method)
-              try:
-                  with urllib.request.urlopen(req) as response:
-                      content = response.read()
-                      return response.status, json.loads(content) if content else None
-              except urllib.error.HTTPError as exc:
-                  if allow_404 and exc.code == 404:
-                      return exc.code, None
-                  raise
-
-          status, release = request(
-              "GET",
-              f"{api}/repos/{repo}/releases/tags/{urllib.parse.quote(tag, safe='')}",
-              allow_404=True,
-          )
-          if status == 404:
-              _, release = request("POST", f"{api}/repos/{repo}/releases", {
-                  "tag_name": tag,
-                  "name": release_name,
-                  "draft": False,
-                  "prerelease": False,
-              })
-
-          asset_name = pathlib.Path(asset_path).name
-          page = 1
-          while True:
-              _, assets = request("GET", f"{release['assets_url']}?per_page=100&page={page}")
-              if not assets:
-                  break
-              for asset in assets:
-                  if asset["name"] == asset_name:
-                      request("DELETE", asset["url"])
-                      page = None
-                      break
-              if page is None or len(assets) < 100:
-                  break
-              page += 1
-
-          upload_url = release["upload_url"].split("{", 1)[0]
-          content_type = mimetypes.guess_type(asset_name)[0] or "application/octet-stream"
-          with open(asset_path, "rb") as asset_file:
-              request(
-                  "POST",
-                  f"{upload_url}?name={urllib.parse.quote(asset_name)}",
-                  asset_file.read(),
-                  {"Content-Type": content_type},
-              )
-          PY
-          BASH
-          chmod +x upload-deps-release.sh
-
       - name: Build Linux
         shell: bash
         run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
 
       - name: Upload Linux dependencies
         shell: bash
-        run: ./upload-deps-release.sh linux x86_64
+        run: ./scripts/upload-deps-release.sh linux x86_64
 
       - name: Build Windows
         shell: bash
@@ -166,7 +63,7 @@ jobs:
 
       - name: Upload Windows dependencies
         shell: bash
-        run: ./upload-deps-release.sh windows x86_64
+        run: ./scripts/upload-deps-release.sh windows x86_64
 
       - name: Build Android x86_64
         shell: bash
@@ -174,7 +71,7 @@ jobs:
 
       - name: Upload Android x86_64 dependencies
         shell: bash
-        run: ./upload-deps-release.sh android x86_64
+        run: ./scripts/upload-deps-release.sh android x86_64
 
       - name: Build Android arm64
         shell: bash
@@ -182,7 +79,7 @@ jobs:
 
       - name: Upload Android arm64 dependencies
         shell: bash
-        run: ./upload-deps-release.sh android aarch64
+        run: ./scripts/upload-deps-release.sh android aarch64
 
       - name: Build Android armv7a
         shell: bash
@@ -190,7 +87,7 @@ jobs:
 
       - name: Upload Android armv7a dependencies
         shell: bash
-        run: ./upload-deps-release.sh android armv7a
+        run: ./scripts/upload-deps-release.sh android armv7a
 
   macos:
     name: macOS
@@ -213,116 +110,13 @@ jobs:
         shell: bash
         run: sudo xcodebuild -license accept
 
-      - name: Write release upload helper
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cat > upload-deps-release.sh <<'BASH'
-          #!/usr/bin/env bash
-          set -euo pipefail
-
-          platform="$1"
-          arch="$2"
-          dep="${GITHUB_WORKFLOW#build_}"
-          archive_name="${platform}-${arch}-${dep}.zip"
-          release_tag="${platform}-${arch}-deps"
-          release_name="${platform}-${arch}-dependencies"
-          libraries_dir="${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
-
-          if [[ ! -d "$libraries_dir" ]]; then
-            echo "Missing libraries directory: $libraries_dir" >&2
-            exit 1
-          fi
-
-          rm -f "${GITHUB_WORKSPACE}/${archive_name}"
-          (cd "$libraries_dir" && zip -qry "${GITHUB_WORKSPACE}/${archive_name}" .)
-
-          python3 - "$GITHUB_REPOSITORY" "$release_tag" "$release_name" "${GITHUB_WORKSPACE}/${archive_name}" <<'PY'
-          import json
-          import mimetypes
-          import os
-          import pathlib
-          import sys
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-
-          repo, tag, release_name, asset_path = sys.argv[1:]
-          token = os.environ["GH_TOKEN"]
-          api = "https://api.github.com"
-          headers = {
-              "Authorization": f"Bearer {token}",
-              "Accept": "application/vnd.github+json",
-              "X-GitHub-Api-Version": "2022-11-28",
-          }
-
-          def request(method, url, data=None, extra_headers=None, allow_404=False):
-              body = None
-              request_headers = dict(headers)
-              if extra_headers:
-                  request_headers.update(extra_headers)
-              if data is not None:
-                  body = data if isinstance(data, bytes) else json.dumps(data).encode()
-                  request_headers.setdefault("Content-Type", "application/json")
-              req = urllib.request.Request(url, data=body, headers=request_headers, method=method)
-              try:
-                  with urllib.request.urlopen(req) as response:
-                      content = response.read()
-                      return response.status, json.loads(content) if content else None
-              except urllib.error.HTTPError as exc:
-                  if allow_404 and exc.code == 404:
-                      return exc.code, None
-                  raise
-
-          status, release = request(
-              "GET",
-              f"{api}/repos/{repo}/releases/tags/{urllib.parse.quote(tag, safe='')}",
-              allow_404=True,
-          )
-          if status == 404:
-              _, release = request("POST", f"{api}/repos/{repo}/releases", {
-                  "tag_name": tag,
-                  "name": release_name,
-                  "draft": False,
-                  "prerelease": False,
-              })
-
-          asset_name = pathlib.Path(asset_path).name
-          page = 1
-          while True:
-              _, assets = request("GET", f"{release['assets_url']}?per_page=100&page={page}")
-              if not assets:
-                  break
-              for asset in assets:
-                  if asset["name"] == asset_name:
-                      request("DELETE", asset["url"])
-                      page = None
-                      break
-              if page is None or len(assets) < 100:
-                  break
-              page += 1
-
-          upload_url = release["upload_url"].split("{", 1)[0]
-          content_type = mimetypes.guess_type(asset_name)[0] or "application/octet-stream"
-          with open(asset_path, "rb") as asset_file:
-              request(
-                  "POST",
-                  f"{upload_url}?name={urllib.parse.quote(asset_name)}",
-                  asset_file.read(),
-                  {"Content-Type": content_type},
-              )
-          PY
-          BASH
-          chmod +x upload-deps-release.sh
-
       - name: Build iOS
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
 
       - name: Upload iOS dependencies
         shell: bash
-        run: ./upload-deps-release.sh ios aarch64
+        run: ./scripts/upload-deps-release.sh ios aarch64
 
       - name: Build iPhone Simulator
         shell: bash
@@ -330,7 +124,7 @@ jobs:
 
       - name: Upload iPhone Simulator dependencies
         shell: bash
-        run: ./upload-deps-release.sh iphonesimulator aarch64
+        run: ./scripts/upload-deps-release.sh iphonesimulator aarch64
 
       - name: Build macOS x86_64
         shell: bash
@@ -338,7 +132,7 @@ jobs:
 
       - name: Upload macOS x86_64 dependencies
         shell: bash
-        run: ./upload-deps-release.sh macos x86_64
+        run: ./scripts/upload-deps-release.sh macos x86_64
 
       - name: Build macOS arm64
         shell: bash
@@ -346,7 +140,7 @@ jobs:
 
       - name: Upload macOS arm64 dependencies
         shell: bash
-        run: ./upload-deps-release.sh macos aarch64
+        run: ./scripts/upload-deps-release.sh macos aarch64
 YAML
 	} > "$tmp_file"
 
