@@ -1588,6 +1588,9 @@ get_missing_packages() {
 }
 
 check_missing_packages() {
+  if truthy "$skip_pkg_check"; then
+    return 0
+  fi
   determine_distro
   # apt install autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake 
   # coreutils curl cvs ed ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm
@@ -1635,6 +1638,9 @@ check_missing_packages() {
 
 		[[ ${DISTRO,,} == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
 		case "${DISTRO,,}" in
+    *almalinux*)
+      echo "AlmaLinux detected"
+      ;;
 		*ubuntu*)
 			echo -e "for ubuntu:" | tee -a "$LOG_FILE"
 			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
@@ -1681,7 +1687,7 @@ check_missing_packages() {
       xcodebuild -license
       ;;
 		*)
-			exit_message 1 "check_missing_packages: Build platform: ${DISTRO,,} not supported. Please use a container with Ubuntu >= 24.04 (noble)"
+			echo "check_missing_packages: Build platform: ${DISTRO,,} not supported. The build script may not run correctly on unsupported platforms. Please use a container with Ubuntu >= 24.04 (noble)"
 			;;
 		esac
 		exit_message 1 "check_missing_packages: couldnt check missing packages"
