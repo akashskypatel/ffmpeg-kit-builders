@@ -18,7 +18,14 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        shell: bash
+        run: |
+          git init "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git -c http.extraheader="AUTHORIZATION: bearer $GITHUB_TOKEN" fetch --no-tags --prune --depth=1 origin "$GITHUB_SHA"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Prepare scripts
         shell: bash
@@ -49,24 +56,37 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        shell: bash
+        run: |
+          git init "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git -c http.extraheader="AUTHORIZATION: bearer $GITHUB_TOKEN" fetch --no-tags --prune --depth=1 origin "$GITHUB_SHA"
+          git checkout --force FETCH_HEAD
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Prepare scripts
         shell: bash
         run: chmod +x runner.sh scripts/*.sh
 
+      - name: Install Bash
+        shell: bash
+        run: |
+          brew list bash >/dev/null 2>&1 || brew install bash
+          echo "HOMEBREW_BASH=$(brew --prefix)/bin/bash" >> "$GITHUB_ENV"
+
       - name: Build iOS
         shell: bash
-        run: sudo ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
 
       - name: Build iPhone Simulator
         shell: bash
-        run: sudo ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
 
       - name: Build macOS x86_64
         shell: bash
-        run: sudo ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
 
       - name: Build macOS arm64
         shell: bash
-        run: sudo ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
