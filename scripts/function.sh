@@ -1635,7 +1635,7 @@ check_missing_packages() {
 
 		[[ ${DISTRO,,} == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
 		case "${DISTRO,,}" in
-		ubuntu)
+		*ubuntu*)
 			echo -e "for ubuntu:" | tee -a "$LOG_FILE"
 			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
 			ubuntu_ver="$(lsb_release -rs)"
@@ -1647,7 +1647,7 @@ check_missing_packages() {
 			fi
 			echo -e "$ sudo $INSTALL_COMMAND install $apt_pkgs -y" | tee -a "$LOG_FILE"
 			;;
-		debian)
+		*debian*)
 			echo -e "for debian:" | tee -a "$LOG_FILE"
 			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
 			# Debian version is always encoded in the /etc/debian_version
@@ -1675,7 +1675,7 @@ check_missing_packages() {
 			apt_missing="$(apt_not_installed "$apt_pkgs")"
 			echo -e "$ sudo $INSTALL_COMMAND install $apt_missing -y" | tee -a "$LOG_FILE"
 			;;
-    macos)
+    *macos*)
       xcode-select -s /Library/Developer/CommandLineTools > >(redirect_output) 2>&1
       xcode-select -s /Applications/Xcode.app/Contents/Developer > >(redirect_output) 2>&1
       xcodebuild -license
@@ -1769,11 +1769,14 @@ determine_distro() {
     . /etc/os-release
     os_id="$ID"
     os_id_like="$ID_LIKE"
+    DISTRO="$NAME"
   elif [ -f /etc/lsb-release ]; then
     . /etc/lsb-release
     os_id="$DISTRIB_ID"
+    DISTRO="$NAME"
   else
     os_id=$(uname -s | tr '[:upper:]' '[:lower:]')
+    DISTRO=$os_id
   fi
   export BUILD_ARCH=$(uname -m)
   # shellcheck disable=2222,2221
