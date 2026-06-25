@@ -1,5 +1,10 @@
 # FFmpegKit Changelog
 
+## Version 0.10.4
+
+- Updated FFmpeg to v8.1.2
+  - Fixes critical FFmpeg vulnerability CVE-2026-8461
+
 ## Version 0.10.3
 
 - Fixed FFmpeg statistics callbacks only firing at session completion during transcoding.

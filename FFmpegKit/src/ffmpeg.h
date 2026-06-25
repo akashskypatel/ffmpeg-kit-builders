@@ -470,8 +470,8 @@ typedef struct Decoder {
 
     enum AVMediaType type;
 
-    const uint8_t   *subtitle_header;
-    int              subtitle_header_size;
+    uint8_t   *subtitle_header;
+    int        subtitle_header_size;
 
     // number of frames/samples retrieved from the decoder
     uint64_t         frames_decoded;

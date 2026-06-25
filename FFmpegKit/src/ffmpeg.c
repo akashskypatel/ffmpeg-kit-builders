@@ -269,7 +269,6 @@ void term_init(void)
 /* read a key without blocking */
 static int read_key(void)
 {
-    unsigned char ch;
 #if HAVE_TERMIOS_H
     int n = 1;
     struct timeval tv;
@@ -281,6 +280,7 @@ static int read_key(void)
     tv.tv_usec = 0;
     n = select(1, &rfds, NULL, NULL, &tv);
     if (n > 0) {
+        unsigned char ch;
         n = read(0, &ch, 1);
         if (n == 1)
             return ch;
@@ -288,7 +288,7 @@ static int read_key(void)
         return n;
     }
 #elif HAVE_KBHIT
-#    if HAVE_PEEKNAMEDPIPE && HAVE_GETSTDHANDLE
+#if HAVE_PEEKNAMEDPIPE && HAVE_GETSTDHANDLE
     static int is_pipe;
     static HANDLE input_handle;
     DWORD dw, nchars;
@@ -304,7 +304,8 @@ static int read_key(void)
             return -1;
         }
         //Read it
-        if(nchars != 0) {
+        if (nchars != 0) {
+            unsigned char ch;
             if (read(0, &ch, 1) == 1)
                 return ch;
             return 0;
@@ -312,7 +313,7 @@ static int read_key(void)
             return -1;
         }
     }
-#    endif
+#endif
     if(kbhit())
         return(getch());
 #endif

@@ -15,6 +15,7 @@ Cross-platform build system for FFmpeg and FFmpegKit supporting Windows, Linux, 
 
 ## Features
 
+- **Latest FFmpeg API** - [Uses the latest FFmpeg API v8.1.2](https://www.ffmpeg.org/download.html#release_8.1).
 - **Both C++ and Pure C API** - Provides both C++ and pure C api to make it easy to use in any language.
 - **FFmpeg, FFprobe, and FFplay** - Full FFmpeg, FFprobe, and FFplay support.
 - **Asynchronous Execution** - Run long-running tasks without blocking the main thread.
@@ -256,7 +257,7 @@ prebuilt/
 
 | Option                                                          | Default                                     | Description                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--ffmpeg-git-checkout-version=`                                | `release/8.0`                               | Build a particular version of FFmpeg (e.g., n3.1.1 or a specific git hash)                                                                                                                                                                      |
+| `--ffmpeg-git-checkout-version=`                                | `release/8.1`                               | Build a particular version of FFmpeg (e.g., n3.1.1 or a specific git hash)                                                                                                                                                                      |
 | `--ffmpeg-git-checkout=`                                        | `https://github.com/FFmpeg/FFmpeg.git`      | Clone FFmpeg from other repositories                                                                                                                                                                                                            |
 | `--ffmpeg-source-dir=`                                          | `[empty]`                                   | Specify the directory of ffmpeg source code. When specified, git will not be used                                                                                                                                                               |
 | `--cflags=`                                                     | `-mtune=generic -O3 -pipe`                  | Compiler flags (default works on any CPU)                                                                                                                                                                                                       |

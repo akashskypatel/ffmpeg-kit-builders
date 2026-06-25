@@ -66,6 +66,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     xorg-x11-util-macros \
     xz \
     yasm \
+    zip \
     zlib-devel
 
 # override installed older tools with bundled existing newer tools
@@ -105,23 +106,19 @@ RUN echo 'export RUSTUP_HOME=/usr/local/rustup' >> /etc/profile.d/rust.sh && \
     echo 'export CARGO_HOME=/usr/local/cargo' >> /etc/profile.d/rust.sh && \
     echo 'export PATH=/usr/local/cargo/bin:$PATH' >> /etc/profile.d/rust.sh && \
     chmod +x /etc/profile.d/rust.sh && \
-    /usr/local/cargo/bin/rustup default stable && \
-    ln -s /usr/local/cargo/bin/rustup /usr/bin/rustup && \
-    ln -s /usr/local/cargo/bin/cargo /usr/bin/cargo && \
-    cargo --version && \
-    rustup target add x86_64-pc-windows-gnu
-
-RUN echo 'source /etc/profile.d/rust.sh' >> /home/vscode/.bashrc || true
-
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path && \
     . /usr/local/cargo/env && \
+    rustup default stable && \
+    ln -sf /usr/local/cargo/bin/rustup /usr/bin/rustup && \
+    ln -sf /usr/local/cargo/bin/cargo /usr/bin/cargo && \
+    cargo --version && \
     rustup target add x86_64-pc-windows-gnu && \
-    # Download and install cargo-c binary instead of compiling from source
-    # This avoids the OpenSSL 3.0 requirement during compilation
     curl -L https://github.com/lu-zero/cargo-c/releases/download/v0.10.20/cargo-c-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/bin && \
     rustc --version && \
     cargo --version && \
     dnf clean all
+
+RUN echo 'source /etc/profile.d/rust.sh' >> /home/vscode/.bashrc || true
 
 # Allow 'vscode' user to use Cargo
 RUN chmod -R a+w /usr/local/cargo /usr/local/rustup

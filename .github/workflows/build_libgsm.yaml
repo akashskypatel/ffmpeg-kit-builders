@@ -1,0 +1,72 @@
+name: build_libgsm
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare scripts
+        shell: bash
+        run: chmod +x runner.sh scripts/*.sh
+
+      - name: Build Linux
+        shell: bash
+        run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+      - name: Build Windows
+        shell: bash
+        run: sudo ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+      - name: Build Android x86_64
+        shell: bash
+        run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+      - name: Build Android arm64
+        shell: bash
+        run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+      - name: Build Android armv7a
+        shell: bash
+        run: sudo ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+  macos:
+    name: macOS
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare scripts
+        shell: bash
+        run: chmod +x runner.sh scripts/*.sh
+
+      - name: Build iOS
+        shell: bash
+        run: sudo ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+      - name: Build iPhone Simulator
+        shell: bash
+        run: sudo ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+      - name: Build macOS x86_64
+        shell: bash
+        run: sudo ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
+
+      - name: Build macOS arm64
+        shell: bash
+        run: sudo ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --build-only=${{ github.workflow }}
