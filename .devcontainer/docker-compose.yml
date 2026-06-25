@@ -1,0 +1,20 @@
+services:
+  ffmpeg-kit-builders:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      tags:
+        - ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+    image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+    container_name: ffmpeg-kit-builders-dev
+    working_dir: /workspaces/ffmpeg-kit-builders
+    command: sleep infinity
+    stdin_open: true
+    tty: true
+    user: vscode
+    environment:
+      RUSTUP_HOME: /usr/local/rustup
+      CARGO_HOME: /usr/local/cargo
+      ANDROID_HOME: /usr/local/android-sdk
+    volumes:
+      - ..:/workspaces/ffmpeg-kit-builders:cached
