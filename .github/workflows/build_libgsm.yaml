@@ -14,8 +14,8 @@ jobs:
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
-        username: ${{ github.actor }}
-        password: ${{ github.token }}
+        username: akashskypatel
+        password: ${{ secrets.GHCR_PAT || github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,8 +58,12 @@ jobs:
       - name: Install Bash
         shell: bash
         run: |
-          brew list bash >/dev/null 2>&1 || brew install bash
+          brew install bash autoconf autoconf-archive autogen automake bc binutils bison cmake cvs flex gettext glib gnu-sed gpatch gperf libtool llvm lld nasm pipx pkgconf ragel subversion texinfo wget xz yasm
           echo "HOMEBREW_BASH=$(brew --prefix)/bin/bash" >> "$GITHUB_ENV"
+
+      - name: Accept Xcode license
+        shell: bash
+        run: sudo xcodebuild -license accept
 
       - name: Build iOS
         shell: bash
