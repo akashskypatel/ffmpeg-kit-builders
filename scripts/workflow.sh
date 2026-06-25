@@ -57,7 +57,7 @@ jobs:
 
       - name: Build Linux
         shell: bash
-        run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload Linux dependencies
         shell: bash
@@ -65,7 +65,7 @@ jobs:
 
       - name: Build Windows
         shell: bash
-        run: sudo ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload Windows dependencies
         shell: bash
@@ -73,7 +73,7 @@ jobs:
 
       - name: Build Android x86_64
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload Android x86_64 dependencies
         shell: bash
@@ -81,7 +81,7 @@ jobs:
 
       - name: Build Android arm64
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload Android arm64 dependencies
         shell: bash
@@ -89,7 +89,7 @@ jobs:
 
       - name: Build Android armv7a
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload Android armv7a dependencies
         shell: bash
@@ -120,7 +120,7 @@ jobs:
 
       - name: Build iOS
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload iOS dependencies
         shell: bash
@@ -128,7 +128,7 @@ jobs:
 
       - name: Build iPhone Simulator
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload iPhone Simulator dependencies
         shell: bash
@@ -136,7 +136,7 @@ jobs:
 
       - name: Build macOS x86_64
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload macOS x86_64 dependencies
         shell: bash
@@ -144,7 +144,7 @@ jobs:
 
       - name: Build macOS arm64
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload macOS arm64 dependencies
         shell: bash
