@@ -465,11 +465,12 @@ if(ENABLE_LIBTORCH)
                 message(STATUS "Found Python 3.11 library: ${PYTHON311_LIB}")
             endif()
         endif()
-        # need libomp.dylib even if libomp is statically linked
-        pkg_check_modules(LIBOMP REQUIRED IMPORTED_TARGET libomp)
-        configure_shared_linking(LIBOMP ON)
-        target_link_libraries(ffmpegkit PRIVATE PkgConfig::LIBOMP)
-        if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+        if(APPLE)
+            # need libomp.dylib even if libomp is statically linked
+            pkg_check_modules(LIBOMP REQUIRED IMPORTED_TARGET libomp)
+            configure_shared_linking(LIBOMP ON)
+            target_link_libraries(ffmpegkit PRIVATE PkgConfig::LIBOMP)
+        elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
             find_library(LLVM17_LIB
                 NAMES LLVM-17 LLVM libLLVM-17
                 PATHS /usr/lib64/llvm17/lib /usr/lib64 /usr/lib
