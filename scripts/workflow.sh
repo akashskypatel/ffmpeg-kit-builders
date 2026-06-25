@@ -35,6 +35,8 @@ jobs:
   linux:
     name: Linux
     runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
@@ -92,6 +94,8 @@ jobs:
   macos:
     name: macOS
     runs-on: macos-14
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

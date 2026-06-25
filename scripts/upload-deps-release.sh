@@ -28,7 +28,9 @@ import urllib.parse
 import urllib.request
 
 repo, tag, release_name, asset_path = sys.argv[1:]
-token = os.environ["GH_TOKEN"]
+token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+if not token:
+    raise SystemExit("GH_TOKEN or GITHUB_TOKEN must be set for release upload")
 api = "https://api.github.com"
 headers = {
     "Authorization": f"Bearer {token}",
