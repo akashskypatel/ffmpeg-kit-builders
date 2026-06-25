@@ -142,14 +142,32 @@ RUN dnf makecache --refresh && \
 # 8. Install Android SDK
 # (Note: We already installed java-17-openjdk-devel in step 2)
 ENV ANDROID_HOME=/usr/local/android-sdk
-ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools"
+ENV ANDROID_SDK_ROOT=${ANDROID_HOME}
+ENV ANDROID_NDK_VERSION=29.0.14206865
+ENV ANDROID_NDK_ROOT=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}
+ENV ANDROID_NDK_HOME=${ANDROID_NDK_ROOT}
+ENV NDK_HOME=${ANDROID_NDK_ROOT}
+ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin"
 
 RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
     curl -o /tmp/cmdline-tools.zip -L https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip && \
     unzip -q /tmp/cmdline-tools.zip -d ${ANDROID_HOME}/cmdline-tools && \
     mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest && \
     rm /tmp/cmdline-tools.zip && \
-    sdkmanager "ndk;29.0.14206865" && \
+    yes | sdkmanager --licenses && \
+    sdkmanager \
+        "platform-tools" \
+        "platforms;android-34" \
+        "build-tools;34.0.0" \
+        "ndk;${ANDROID_NDK_VERSION}" && \
+    ln -sfn "${ANDROID_NDK_ROOT}" "${ANDROID_HOME}/ndk-bundle" && \
+    toolchain_bin="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin" && \
+    ln -sf "${toolchain_bin}/x86_64-linux-android26-clang" "${toolchain_bin}/x86_64-linux-android-gcc" && \
+    ln -sf "${toolchain_bin}/x86_64-linux-android26-clang++" "${toolchain_bin}/x86_64-linux-android-g++" && \
+    ln -sf "${toolchain_bin}/aarch64-linux-android26-clang" "${toolchain_bin}/aarch64-linux-android-gcc" && \
+    ln -sf "${toolchain_bin}/aarch64-linux-android26-clang++" "${toolchain_bin}/aarch64-linux-android-g++" && \
+    ln -sf "${toolchain_bin}/armv7a-linux-androideabi26-clang" "${toolchain_bin}/armv7a-linux-androideabi-gcc" && \
+    ln -sf "${toolchain_bin}/armv7a-linux-androideabi26-clang++" "${toolchain_bin}/armv7a-linux-androideabi-g++" && \
     rustup target add x86_64-linux-android i686-linux-android aarch64-linux-android armv7-linux-androideabi
 
 SHELL ["/bin/bash", "-c"]
@@ -185,12 +203,6 @@ RUN curl -Lo /tmp/arm-toolchain.tar.xz "https://developer.arm.com/-/media/Files/
     for tool in gcc g++ ar as ld nm objcopy objdump ranlib strip; do \
     ln -sf ${ARM_TOOLCHAIN_PATH}/bin/aarch64-none-linux-gnu-$tool ${ARM_TOOLCHAIN_PATH}/sys-bin/aarch64-linux-gnu-$tool; \
     done
-
-# Accept Licenses & Install Basics
-USER vscode
-RUN yes | sdkmanager --licenses && \
-    sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-USER root
 
 # download gh cli
 RUN dnf install 'dnf-command(config-manager)' -y
