@@ -557,6 +557,10 @@ while [ $# -gt 0 ]; do
     export create_bundle=n
     shift
     ;;
+  --workflow)
+    export workflow=y
+    shift
+    ;;
 	--enable-*)
     lib_name="${1#--enable-}"
     explicit_enabled+=( "$lib_name" )
@@ -957,6 +961,21 @@ main() {
   fi
 }
 
+run_workflows() {
+  optimize_dependencies
+  for step in "${OPTIMIZED_BUILD_STEPS[@]}"; do
+    if [[ "$step" != "$build_only" ]]; then
+      echo "INFO: Running workflow for step: $step" | tee -a "$LOG_FILE"
+      GITHUB_WORKFLOW="$step" ./scripts/workflow-get-deps.sh "$host_platform" "$host_arch"
+      if [[ $? -ne 0 ]]; then
+        run_valid_function "$step"
+      fi
+    else
+      run_valid_function "$step"
+    fi
+  done
+}
+
 for arg; do
   case "$arg" in
     --reset-and-clean=*)
@@ -973,7 +992,11 @@ for arg; do
   esac
 done
 
-main
+if truthy "$workflow"; then
+  run_workflows
+else
+  main
+fi
 
 [[ -f "$BUILT_STATE_FILE" ]] && rm -f "$BUILT_STATE_FILE"
 

@@ -55,10 +55,6 @@ jobs:
         shell: bash
         run: chmod +x runner.sh scripts/*.sh
 
-      - name: Fetch Linux dependencies
-        shell: bash
-        run: ./scripts/workflow-get-deps.sh linux x86_64
-
       - name: Build Linux
         shell: bash
         run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -66,10 +62,6 @@ jobs:
       - name: Upload Linux dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh linux x86_64
-
-      - name: Fetch Windows dependencies
-        shell: bash
-        run: ./scripts/workflow-get-deps.sh windows x86_64
 
       - name: Build Windows
         shell: bash
@@ -79,10 +71,6 @@ jobs:
         shell: bash
         run: ./scripts/upload-deps-release.sh windows x86_64
 
-      - name: Fetch Android x86_64 dependencies
-        shell: bash
-        run: ./scripts/workflow-get-deps.sh android x86_64
-
       - name: Build Android x86_64
         shell: bash
         run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -91,10 +79,6 @@ jobs:
         shell: bash
         run: ./scripts/upload-deps-release.sh android x86_64
 
-      - name: Fetch Android arm64 dependencies
-        shell: bash
-        run: ./scripts/workflow-get-deps.sh android aarch64
-
       - name: Build Android arm64
         shell: bash
         run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -102,10 +86,6 @@ jobs:
       - name: Upload Android arm64 dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh android aarch64
-
-      - name: Fetch Android armv7a dependencies
-        shell: bash
-        run: ./scripts/workflow-get-deps.sh android armv7a
 
       - name: Build Android armv7a
         shell: bash
@@ -138,10 +118,6 @@ jobs:
         shell: bash
         run: sudo xcodebuild -license accept
 
-      - name: Fetch iOS dependencies
-        shell: bash
-        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh ios aarch64
-
       - name: Build iOS
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -149,10 +125,6 @@ jobs:
       - name: Upload iOS dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh ios aarch64
-
-      - name: Fetch iPhone Simulator dependencies
-        shell: bash
-        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh iphonesimulator aarch64
 
       - name: Build iPhone Simulator
         shell: bash
@@ -162,10 +134,6 @@ jobs:
         shell: bash
         run: ./scripts/upload-deps-release.sh iphonesimulator aarch64
 
-      - name: Fetch macOS x86_64 dependencies
-        shell: bash
-        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh macos x86_64
-
       - name: Build macOS x86_64
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -173,10 +141,6 @@ jobs:
       - name: Upload macOS x86_64 dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh macos x86_64
-
-      - name: Fetch macOS arm64 dependencies
-        shell: bash
-        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh macos aarch64
 
       - name: Build macOS arm64
         shell: bash

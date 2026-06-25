@@ -192,6 +192,11 @@ RUN yes | sdkmanager --licenses && \
     sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 USER root
 
+# download gh cli
+RUN dnf install 'dnf-command(config-manager)' -y
+RUN dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+RUN dnf install gh -y
+
 # Finalize
 RUN git config --global --add safe.directory '*'
 

@@ -31,7 +31,6 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     gcc-toolset-14-libasan-devel \
     gcc-toolset-14-libubsan-devel \
     gcc-toolset-14-libtsan-devel \
-    git \
     gettext \
     gettext-devel \
     glib2-devel \
@@ -192,6 +191,11 @@ USER vscode
 RUN yes | sdkmanager --licenses && \
     sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 USER root
+
+# download gh cli
+RUN dnf install 'dnf-command(config-manager)' -y
+RUN dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+RUN dnf install gh -y
 
 # Finalize
 RUN git config --global --add safe.directory '*'

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-	echo "Usage: $0 <platform> <arch>" >&2
+if [[ $# -ne 3 ]]; then
+	echo "Usage: $0 <platform> <arch> <workflow_name>" >&2
 	exit 2
 fi
 
 platform="$1"
 arch="$2"
-workflow_name="${GITHUB_WORKFLOW:?GITHUB_WORKFLOW must be set}"
+workflow_name="$3"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
