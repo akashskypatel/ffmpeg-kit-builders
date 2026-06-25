@@ -15,17 +15,10 @@ jobs:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ github.token }}
     steps:
       - name: Checkout
-        shell: bash
-        run: |
-          git init "$GITHUB_WORKSPACE"
-          cd "$GITHUB_WORKSPACE"
-          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-          git -c http.extraheader="AUTHORIZATION: bearer $GITHUB_TOKEN" fetch --no-tags --prune --depth=1 origin "$GITHUB_SHA"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        uses: actions/checkout@v4
 
       - name: Prepare scripts
         shell: bash
@@ -56,14 +49,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout
-        shell: bash
-        run: |
-          git init "$GITHUB_WORKSPACE"
-          cd "$GITHUB_WORKSPACE"
-          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-          git -c http.extraheader="AUTHORIZATION: bearer $GITHUB_TOKEN" fetch --no-tags --prune --depth=1 origin "$GITHUB_SHA"
-          git checkout --force FETCH_HEAD
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        uses: actions/checkout@v4
 
       - name: Prepare scripts
         shell: bash
