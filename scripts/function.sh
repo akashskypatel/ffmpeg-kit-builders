@@ -1633,9 +1633,9 @@ check_missing_packages() {
 		
 		apt_pkgs='autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake coreutils curl cvs ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm p7zip-full patch pax pkg-config python3 python3-setuptools ragel subversion unzip wget xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin'
 
-		[[ $DISTRO == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
-		case "$DISTRO" in
-		Ubuntu)
+		[[ ${DISTRO,,} == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
+		case "${DISTRO,,}" in
+		ubuntu)
 			echo -e "for ubuntu:" | tee -a "$LOG_FILE"
 			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
 			ubuntu_ver="$(lsb_release -rs)"
@@ -1681,7 +1681,7 @@ check_missing_packages() {
       xcodebuild -license
       ;;
 		*)
-			exit_message 1 "check_missing_packages: Build platform not supported. Please use a container with Ubuntu >= 24.04 (noble)"
+			exit_message 1 "check_missing_packages: Build platform: ${DISTRO,,} not supported. Please use a container with Ubuntu >= 24.04 (noble)"
 			;;
 		esac
 		exit_message 1 "check_missing_packages: couldnt check missing packages"

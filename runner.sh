@@ -15,8 +15,6 @@ source "${SCRIPTDIR}/function.sh"
 
 require_sudo
 
-check_missing_packages # do this first since it's annoying to go through prompts then be rejected
-
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 
 echo -e "INFO: Build options: ${RUN_ARGS[*]}\n" 1>>"$LOG_FILE" 2>&1
@@ -591,6 +589,12 @@ while [ $# -gt 0 ]; do
 	esac
 done
 }
+
+if truthy "$skip_pkg_check"; then
+  echo "Skipping package check"
+else
+  check_missing_packages # do this first since it's annoying to go through prompts then be rejected
+fi
 
 export RUN_STATE_FILE="$BASEDIR/~run.state"
 export BUILT_STATE_FILE="$BASEDIR/~built.state"
