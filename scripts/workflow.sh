@@ -5,25 +5,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKFLOW_DIR="$(dirname "$SCRIPT_DIR")/.github/workflows"
 
 if [[ ! -d "$WORKFLOW_DIR" ]]; then
-	echo "Workflow directory not found: $WORKFLOW_DIR" >&2
+	mkdir -p "$WORKFLOW_DIR"
+fi
+
+# Check if build argument is provided
+if [[ $# -eq 0 ]]; then
+	echo "Usage: $0 <build_name>" >&2
 	exit 1
 fi
 
-shopt -s nullglob
-workflow_files=("$WORKFLOW_DIR"/*.yaml)
+BUILD_NAME="$1"
 
-if [[ ${#workflow_files[@]} -eq 0 ]]; then
-	echo "No workflow files found in $WORKFLOW_DIR" >&2
-	exit 1
+if [[ ! -f "$WORKFLOW_DIR/$BUILD_NAME.yaml" ]]; then
+	echo "" > "$WORKFLOW_DIR/$BUILD_NAME.yaml"
 fi
 
-for file in "${workflow_files[@]}"; do
-	workflow_name="$(basename "$file" .yaml)"
-	tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
+file="$WORKFLOW_DIR/$BUILD_NAME.yaml"
 
-	{
-		printf 'name: %s\n\n' "$workflow_name"
-		cat <<'YAML'
+workflow_name="$(basename "$file" .yaml)"
+tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
+
+{
+printf 'name: %s\n\n' "$workflow_name"
+cat <<'YAML'
 on:
   workflow_dispatch:
 
@@ -51,6 +55,10 @@ jobs:
         shell: bash
         run: chmod +x runner.sh scripts/*.sh
 
+      - name: Fetch Linux dependencies
+        shell: bash
+        run: ./scripts/workflow-get-deps.sh linux x86_64
+
       - name: Build Linux
         shell: bash
         run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -58,6 +66,10 @@ jobs:
       - name: Upload Linux dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh linux x86_64
+
+      - name: Fetch Windows dependencies
+        shell: bash
+        run: ./scripts/workflow-get-deps.sh windows x86_64
 
       - name: Build Windows
         shell: bash
@@ -67,6 +79,10 @@ jobs:
         shell: bash
         run: ./scripts/upload-deps-release.sh windows x86_64
 
+      - name: Fetch Android x86_64 dependencies
+        shell: bash
+        run: ./scripts/workflow-get-deps.sh android x86_64
+
       - name: Build Android x86_64
         shell: bash
         run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -75,6 +91,10 @@ jobs:
         shell: bash
         run: ./scripts/upload-deps-release.sh android x86_64
 
+      - name: Fetch Android arm64 dependencies
+        shell: bash
+        run: ./scripts/workflow-get-deps.sh android aarch64
+
       - name: Build Android arm64
         shell: bash
         run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -82,6 +102,10 @@ jobs:
       - name: Upload Android arm64 dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh android aarch64
+
+      - name: Fetch Android armv7a dependencies
+        shell: bash
+        run: ./scripts/workflow-get-deps.sh android armv7a
 
       - name: Build Android armv7a
         shell: bash
@@ -114,6 +138,10 @@ jobs:
         shell: bash
         run: sudo xcodebuild -license accept
 
+      - name: Fetch iOS dependencies
+        shell: bash
+        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh ios aarch64
+
       - name: Build iOS
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -121,6 +149,10 @@ jobs:
       - name: Upload iOS dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh ios aarch64
+
+      - name: Fetch iPhone Simulator dependencies
+        shell: bash
+        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh iphonesimulator aarch64
 
       - name: Build iPhone Simulator
         shell: bash
@@ -130,6 +162,10 @@ jobs:
         shell: bash
         run: ./scripts/upload-deps-release.sh iphonesimulator aarch64
 
+      - name: Fetch macOS x86_64 dependencies
+        shell: bash
+        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh macos x86_64
+
       - name: Build macOS x86_64
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
@@ -137,6 +173,10 @@ jobs:
       - name: Upload macOS x86_64 dependencies
         shell: bash
         run: ./scripts/upload-deps-release.sh macos x86_64
+
+      - name: Fetch macOS arm64 dependencies
+        shell: bash
+        run: sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh macos aarch64
 
       - name: Build macOS arm64
         shell: bash
@@ -146,9 +186,8 @@ jobs:
         shell: bash
         run: ./scripts/upload-deps-release.sh macos aarch64
 YAML
-	} > "$tmp_file"
+} > "$tmp_file"
 
-	chmod 0644 "$tmp_file"
-	mv "$tmp_file" "$file"
-	echo "Wrote $file"
-done
+chmod 0644 "$tmp_file"
+mv "$tmp_file" "$file"
+echo "Wrote $file"
