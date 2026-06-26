@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 3 ]]; then
-	echo "Usage: $0 <platform> <arch> <workflow_name>" >&2
+if [[ $# -lt 3 || $# -gt 4 ]]; then
+	echo "Usage: $0 <platform> <arch> <workflow_name> [--self]" >&2
 	exit 2
 fi
 
 platform="$1"
 arch="$2"
 workflow_name="$3"
+mode="${4:-}"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
@@ -38,7 +39,12 @@ fi
 # shellcheck source=/dev/null
 source "$deps_file"
 
-dependencies="${SUB_DEPENDENCIES[$workflow_name]-}"
+if [[ "$mode" == "--self" ]]; then
+	dependencies="$workflow_name"
+else
+	dependencies="${SUB_DEPENDENCIES[$workflow_name]-}"
+fi
+
 if [[ -z "$dependencies" ]]; then
 	echo "No release dependencies declared for ${workflow_name} on ${platform}-${arch}"
 	exit 0
@@ -56,7 +62,7 @@ for dependency in $dependencies; do
 
 	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
 
-	python3 - "$repo" "$release_tag" "$release_name" "$asset_name" "$archive_path" <<'PY'
+	if ! python3 - "$repo" "$release_tag" "$release_name" "$asset_name" "$archive_path" <<'PY'
 import json
 import os
 import sys
@@ -119,6 +125,10 @@ req = urllib.request.Request(asset["url"], headers=download_headers, method="GET
 with urllib.request.urlopen(req) as response, open(archive_path, "wb") as output:
     output.write(response.read())
 PY
+	then
+		echo "Missing dependency artifact: ${asset_name}" >&2
+		exit 3
+	fi
 
 	unzip -oq "$archive_path" -d "$libraries_dir"
 	rm -f "$archive_path"

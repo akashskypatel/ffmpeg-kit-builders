@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,1090
 
-export BASEDIR="$(pwd)"
+export BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPTDIR="${BASEDIR}/scripts"
 export LOG_FILE="${BASEDIR}/build.log"
 export sandbox="prebuilt"
@@ -959,14 +959,21 @@ main() {
 run_workflows() {
   optimize_dependencies
   for step in "${OPTIMIZED_BUILD_STEPS[@]}"; do
+    echo "INFO: Running workflow build step: $step" | tee -a "$LOG_FILE"
     if [[ "$step" != "$build_only" ]]; then
       echo "INFO: Running workflow for step: $step" | tee -a "$LOG_FILE"
-      ./scripts/workflow-get-deps.sh "$host_platform" "$host_arch" "$step"
-      if [[ $? -ne 0 ]]; then
+      if "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step" --self; then
+        echo "INFO: Restored released dependency artifacts for step: $step" | tee -a "$LOG_FILE"
+      else
+        echo "INFO: Released dependency artifacts missing for step: $step. Building locally." | tee -a "$LOG_FILE"
+        "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step"
         run_valid_function "$step"
+        "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$host_arch" "${step#build_}"
       fi
     else
+      "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step"
       run_valid_function "$step"
+      "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$host_arch" "${step#build_}"
     fi
   done
 }

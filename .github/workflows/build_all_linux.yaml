@@ -1,0 +1,49 @@
+name: build_all_linux
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build:
+    name: linux ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        arch: [x86_64]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    container:
+      image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+      credentials:
+        username: akashskypatel
+        password: ${{ secrets.GHCR_PAT || github.token }}
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare scripts
+        shell: bash
+        run: chmod +x runner.sh scripts/*.sh
+
+      - name: Build linux dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          platform="linux"
+          arch="${{ matrix.arch }}"
+          WORKFLOW_BUILD_STEPS="$(sudo ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+          echo "WORKFLOW_BUILD_STEPS: $WORKFLOW_BUILD_STEPS"
+
+          for build in $WORKFLOW_BUILD_STEPS; do
+            echo "Running $build for ${platform}-${arch}"
+            sudo ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="$build"
+            sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
+          done

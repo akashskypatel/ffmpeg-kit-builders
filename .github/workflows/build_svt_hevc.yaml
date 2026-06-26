@@ -1,15 +1,46 @@
 name: build_svt_hevc
 
+run-name: ${{ github.workflow }} ${{ inputs.platform || 'all' }}-${{ inputs.arch || 'all' }} ${{ inputs.orchestrator_run_id || github.run_id }}
+
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: all
+        options:
+          - all
+          - linux
+          - windows
+          - android
+          - ios
+          - iphonesimulator
+          - macos
+          - apple
+      arch:
+        description: Architecture to build
+        type: choice
+        default: all
+        options:
+          - all
+          - x86_64
+          - aarch64
+          - armv7a
+      orchestrator_run_id:
+        description: Optional parent workflow run id
+        required: false
+        default: manual
 
 permissions:
   contents: write
   packages: read
+  actions: read
 
 jobs:
   linux:
     name: Linux
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == 'windows' || inputs.platform == 'android' }}
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
@@ -28,47 +59,33 @@ jobs:
         run: chmod +x runner.sh scripts/*.sh
 
       - name: Build Linux
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
         run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Linux dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh linux x86_64
-
       - name: Build Windows
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'windows') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
         run: sudo ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Windows dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh windows x86_64
-
       - name: Build Android x86_64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
         run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Android x86_64 dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh android x86_64
-
       - name: Build Android arm64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
         run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Android arm64 dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh android aarch64
-
       - name: Build Android armv7a
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'armv7a') }}
         shell: bash
         run: sudo ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Android armv7a dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh android armv7a
-
   macos:
     name: macOS
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'ios' || inputs.platform == 'iphonesimulator' || inputs.platform == 'macos' }}
     runs-on: macos-14
     env:
       GH_TOKEN: ${{ github.token }}
@@ -91,33 +108,21 @@ jobs:
         run: sudo xcodebuild -license accept
 
       - name: Build iOS
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'ios') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload iOS dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh ios aarch64
-
       - name: Build iPhone Simulator
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'iphonesimulator') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload iPhone Simulator dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh iphonesimulator aarch64
-
       - name: Build macOS x86_64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload macOS x86_64 dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh macos x86_64
-
       - name: Build macOS arm64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
-
-      - name: Upload macOS arm64 dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh macos aarch64

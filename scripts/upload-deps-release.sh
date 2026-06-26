@@ -3,21 +3,22 @@ set -euo pipefail
 
 platform="$1"
 arch="$2"
-dep="${GITHUB_WORKFLOW#build_}"
+dep="${3:-${GITHUB_WORKFLOW#build_}}"
+workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 archive_name="${platform}-${arch}-${dep}.zip"
 release_tag="${platform}-${arch}-deps"
 release_name="${platform}-${arch}-dependencies"
-libraries_dir="${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
+libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
 
 if [[ ! -d "$libraries_dir" ]]; then
   echo "Missing libraries directory: $libraries_dir" >&2
   exit 1
 fi
 
-rm -f "${GITHUB_WORKSPACE}/${archive_name}"
-(cd "$libraries_dir" && zip -qry "${GITHUB_WORKSPACE}/${archive_name}" .)
+rm -f "${workspace}/${archive_name}"
+(cd "$libraries_dir" && zip -qry "${workspace}/${archive_name}" .)
 
-python3 - "$GITHUB_REPOSITORY" "$release_tag" "$release_name" "${GITHUB_WORKSPACE}/${archive_name}" <<'PY'
+python3 - "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set for release upload}" "$release_tag" "$release_name" "${workspace}/${archive_name}" <<'PY'
 import json
 import mimetypes
 import os

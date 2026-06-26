@@ -5389,6 +5389,7 @@ print_build_steps() {
 	for i in "${!OPTIMIZED_BUILD_STEPS[@]}"; do
 		echo "Index $i: ${OPTIMIZED_BUILD_STEPS[i]}"
 	done
+  printf 'WORKFLOW_BUILD_STEPS=%s\n' "${OPTIMIZED_BUILD_STEPS[*]}"
 }
 
 check_and_resolve() {
