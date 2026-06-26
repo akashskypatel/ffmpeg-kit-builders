@@ -3940,7 +3940,6 @@ build_omp() {
   generic_cmake "$cmake_params"
   disable_nonessential "$src_dir/$lib/openmp"
   do_make_and_make_install
-  [ -f "$dependency_install_prefix/lib/libomp.dylib" ] && rm -f "$dependency_install_prefix/lib/libomp.dylib"
   change_dir "$src_dir"
 }
 # build_whisper           # config_options+= --enable-whisper             # enable whisper filter [no]
