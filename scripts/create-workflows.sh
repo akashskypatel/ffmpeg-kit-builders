@@ -66,6 +66,14 @@ jobs:
             sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
             sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
           done
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-\${{ github.workflow }}-\${{ github.job }}-\${{ matrix.arch }}
+          path: build.log
+          if-no-files-found: ignore
 YAML
 
 	chmod 0644 "$tmp_file"
@@ -134,6 +142,14 @@ jobs:
             sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
             sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
           done
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-\${{ github.workflow }}-\${{ github.job }}-\${{ matrix.arch }}
+          path: build.log
+          if-no-files-found: ignore
 YAML
 
 	chmod 0644 "$tmp_file"

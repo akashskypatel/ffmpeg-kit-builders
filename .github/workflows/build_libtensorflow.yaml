@@ -79,6 +79,14 @@ jobs:
         shell: bash
         run: sudo -E ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.workflow }}-${{ github.job }}
+          path: build.log
+          if-no-files-found: ignore
+
   macos:
     name: macOS
     if: ${{ inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'ios' || inputs.platform == 'iphonesimulator' || inputs.platform == 'macos' }}
@@ -122,3 +130,11 @@ jobs:
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.workflow }}-${{ github.job }}
+          path: build.log
+          if-no-files-found: ignore
