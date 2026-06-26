@@ -187,17 +187,17 @@ while [ $# -gt 0 ]; do
   --resume)
     shift
     ;;
+  --skip)
+    export skip_validation=y
+    export skip_package_check=y
+    shift
+    ;;
   --skip-pkg-check|--skip-pkg)
-    export skip_pkg_check=y
+    export skip_package_check=y
     shift
     ;;
   --skip-validation|--skip-val)
     export skip_validation=y
-    shift
-    ;;
-  --skip)
-    export skip_validation=y
-    export skip_pkg_check=y
     shift
     ;;
   --release=*)
@@ -594,12 +594,6 @@ while [ $# -gt 0 ]; do
 done
 }
 
-if truthy "$skip_pkg_check"; then
-  echo "Skipping package check"
-else
-  check_missing_packages # do this first since it's annoying to go through prompts then be rejected
-fi
-
 export RUN_STATE_FILE="$BASEDIR/~run.state"
 export BUILT_STATE_FILE="$BASEDIR/~built.state"
 
@@ -906,6 +900,11 @@ done
 
 
 main() {
+  if truthy "$skip_package_check"; then
+    echo "Skipping package check"
+  else
+    check_missing_packages # do this first since it's annoying to go through prompts then be rejected
+  fi
   if [[ -n $run_only ]]; then
     echo -e "INFO: --- Executing single function: $run_only ---" | tee -a "$LOG_FILE"
     if [[ "$run_only" == build_* ]]; then

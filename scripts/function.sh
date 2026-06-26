@@ -1588,7 +1588,7 @@ get_missing_packages() {
 }
 
 check_missing_packages() {
-  if truthy "$skip_pkg_check"; then
+  if truthy "$skip_package_check"; then
     return 0
   fi
   determine_distro
@@ -1622,7 +1622,7 @@ check_missing_packages() {
     check_packages+=('makeinfo' 'glib-mkenums' 'ld.lld')
   fi
 	# Use hash to check if the packages exist or not. Type is a bash builtin which I'm told behaves differently between different versions of bash.
-	! truthy "$skip_pkg_check" && mapfile -t missing_packages < <(get_missing_packages "${check_packages[@]}")
+	! truthy "$skip_package_check" && mapfile -t missing_packages < <(get_missing_packages "${check_packages[@]}")
 
 	if [ "${VENDOR}" = "redhat" ] || [ "${VENDOR}" = "centos" ]; then
 		if [ -n "$(hash cmake 2>&1)" ] && [ -n "$(hash cmake3 2>&1)" ]; then missing_packages=('cmake' "${missing_packages[@]}"); fi
