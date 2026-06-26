@@ -42,3 +42,5 @@ QWEN.md
 .DS_Store
 .aider*
 .codex
+_prebuilt/
+.prebuilt/

@@ -317,6 +317,13 @@ build_gettext() {
 --disable-doc \
 CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\" \
 LIBS=\"$LIBS\""
+  export aclocal="/usr/local/bin/aclocal"
+  export automake="/usr/local/bin/automake"
+  export ACLOCAL="$aclocal"
+  export AUTOMAKE="$automake"
+  find "$src_dir/$lib" -type f -name configure -exec sed -i \
+    -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
+    -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "$config"
   find . -name "Makefile*" -exec sed -i -E '/=/s/[^ ]+\.res(\.lo)?//g' {} + # otherwise causes issues with static linking
   disable_nonessential "$src_dir/$lib"

@@ -1500,7 +1500,9 @@ build_gettext() {
 --disable-libasprintf \
 --disable-openmp \
 --disable-doc"
-  find "$src_dir/$lib" -type f -name configure -exec sed -i 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' {} +
+  find "$src_dir/$lib" -type f -name configure -exec sed -i \
+    -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
+    -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "$config \
 CFLAGS=\"$cflags\" \
 LIBS=\"$LIBS\""
