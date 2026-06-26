@@ -2951,6 +2951,7 @@ do_cmake() {
 	local source_dir="$2"
 	local touch_postfix=""
   local cur_dir2=$(pwd)
+  local cmake_command="${cmake_command:-cmake}"
 	[[ -n $3 ]] && touch_postfix="_${3}_" || touch_postfix="_"
 	if [[ -z $source_dir ]]; then
 		source_dir="$cur_dir2"
@@ -2982,7 +2983,7 @@ do_cmake() {
 		command+=" $extra_args"
 		echo -e "INFO: do_cmake() nice running:\n  DIR=$cur_dir2\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cmake_command} -G\"Unix Makefiles\" $command\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
 		# shellcheck disable=SC2086
-		eval "nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command" > >(redirect_output) 2>&1 || exit_message 1 "do_cmake: could not run nice: \"${cmake_command} -G\"Unix Makefiles\" $command\""
+		eval "nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command" > >(redirect_output) 2>&1 || exit_message 1 "do_cmake: could not run nice: \"nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command\""
 		create_touch_file 0 "$touch_name"
     add_src_dir "$(pwd)" "$source_dir"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files

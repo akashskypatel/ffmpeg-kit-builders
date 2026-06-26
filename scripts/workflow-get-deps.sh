@@ -10,7 +10,6 @@ platform="$1"
 arch="$2"
 workflow_name="$3"
 mode="${4:-}"
-repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
@@ -20,6 +19,14 @@ if [[ -z "$token" ]]; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="${GITHUB_REPOSITORY:-}"
+if [[ -z "$repo" ]]; then
+	repo="$(git -C "$script_dir/.." config --get remote.origin.url 2>/dev/null | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
+fi
+if [[ -z "$repo" ]]; then
+	echo "GITHUB_REPOSITORY must be set or remote.origin.url must point to GitHub" >&2
+	exit 1
+fi
 
 case "$platform" in
 	iphonesimulator)
