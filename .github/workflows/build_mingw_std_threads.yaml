@@ -57,27 +57,27 @@ jobs:
       - name: Build Linux
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Windows
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'windows') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Android x86_64
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Android arm64
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Android armv7a
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'armv7a') }}
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
   macos:
     name: macOS

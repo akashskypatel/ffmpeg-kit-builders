@@ -39,11 +39,11 @@ jobs:
 
           platform="android"
           arch="${{ matrix.arch }}"
-          WORKFLOW_BUILD_STEPS="$(sudo ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+          WORKFLOW_BUILD_STEPS="$(sudo -E ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
           echo "WORKFLOW_BUILD_STEPS: $WORKFLOW_BUILD_STEPS"
 
           for build in $WORKFLOW_BUILD_STEPS; do
             echo "Running $build for ${platform}-${arch}"
-            sudo ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="$build"
+            sudo -E ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="$build"
             sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
           done
