@@ -956,28 +956,6 @@ main() {
   fi
 }
 
-run_workflows() {
-  optimize_dependencies
-  for step in "${OPTIMIZED_BUILD_STEPS[@]}"; do
-    echo "INFO: Running workflow build step: $step" | tee -a "$LOG_FILE"
-    if [[ "$step" != "$build_only" ]]; then
-      echo "INFO: Running workflow for step: $step" | tee -a "$LOG_FILE"
-      if "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step" --self; then
-        echo "INFO: Restored released dependency artifacts for step: $step" | tee -a "$LOG_FILE"
-      else
-        echo "INFO: Released dependency artifacts missing for step: $step. Building locally." | tee -a "$LOG_FILE"
-        "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step"
-        run_valid_function "$step"
-        "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$host_arch" "${step#build_}"
-      fi
-    else
-      "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step"
-      run_valid_function "$step"
-      "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$host_arch" "${step#build_}"
-    fi
-  done
-}
-
 for arg; do
   case "$arg" in
     --reset-and-clean=*)
@@ -994,11 +972,7 @@ for arg; do
   esac
 done
 
-if truthy "$workflow"; then
-  run_workflows
-else
-  main
-fi
+main
 
 [[ -f "$BUILT_STATE_FILE" ]] && rm -f "$BUILT_STATE_FILE"
 

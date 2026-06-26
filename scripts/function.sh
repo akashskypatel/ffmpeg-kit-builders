@@ -3709,9 +3709,12 @@ run_valid_build_functions() {
         continue
       fi
     fi
+    if truthy "$workflow"; then
+      "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step_name"
+    fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
-    run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step.\n See $LOG_FILE for details"
+    run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See $LOG_FILE for details"
   done
   printf "\r\033[KAll dependencies built successfully!\n"
   static_link_check "$install_pkgconfig_dir"

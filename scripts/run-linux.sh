@@ -1743,7 +1743,7 @@ EOF
 }
 build_gettext() {
   local lib="gettext"
-  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz"
+  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" 
   change_dir "$src_dir/$lib/gettext-runtime"
@@ -1761,6 +1761,7 @@ build_gettext() {
 --disable-libasprintf \
 --disable-openmp \
 --disable-doc"
+  find "$src_dir/$lib" -type f -name configure -exec sed -i 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' {} +
   generic_configure "$config \
 CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
 LIBS=\"$LIBS\""
