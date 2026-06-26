@@ -900,11 +900,7 @@ done
 
 
 main() {
-  if truthy "$skip_package_check"; then
-    echo "Skipping package check"
-  else
-    check_missing_packages # do this first since it's annoying to go through prompts then be rejected
-  fi
+  check_missing_packages
   if [[ -n $run_only ]]; then
     echo -e "INFO: --- Executing single function: $run_only ---" | tee -a "$LOG_FILE"
     if [[ "$run_only" == build_* ]]; then

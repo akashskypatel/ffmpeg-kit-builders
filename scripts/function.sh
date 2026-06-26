@@ -1588,111 +1588,109 @@ get_missing_packages() {
 }
 
 check_missing_packages() {
-  if truthy "$skip_package_check"; then
-    return 0
-  fi
   determine_distro
-  # apt install autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake 
-  # coreutils curl cvs ed ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm
-  # p7zip-full patch pax pkg-config python3 python3-setuptools python3-venv ragel subversion unzip wget
-  # xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin sudo apt install binutils llvm lld
-  # xutils-dev python3-numpy cython3
-	# zeranoe's build scripts use wget, though we don't here...
-	local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
-'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
-'bzip2' 'python3' 'bc')
-  # autoconf-archive is just for leptonica FWIW
-	# I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
-	# that being said, if it where set I would imagine it would be set to centos... And this contition will satisfy the "Is not initially set"
-	# case because the above code will assign "redhat" all the time.
-	if [ -z "${VENDOR}" ] || [ "${VENDOR}" != "redhat" ] && [ "${VENDOR}" != "centos" ]; then
-		check_packages+=('cmake')
-  elif [ "${VENDOR}" == "redhat" ]; then
-    check_packages+=('libzstd-devel')
-  elif [ "${VENDOR}" == "canonical" ]; then
-    check_packages+=('zstd' 'cython3' 'xutils-dev' 'python3-venv' 'python3-numpy')
-  elif [ "${VENDOR}" == "macos" ]; then
-    # also needs 'python@3.10' 'python@3.12' 'python@3.14'
-    check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'gsed' 'coreutils')
-  else
-    check_packages+=('libtoolize' 'g++' 'patch' 'realpath' 'clang' 'autopoint' 'ld') # the rest of the world
-	fi
+  if ! truthy "$skip_package_check"; then
+    # apt install autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake 
+    # coreutils curl cvs ed ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm
+    # p7zip-full patch pax pkg-config python3 python3-setuptools python3-venv ragel subversion unzip wget
+    # xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin sudo apt install binutils llvm lld
+    # xutils-dev python3-numpy cython3
+    # zeranoe's build scripts use wget, though we don't here...
+    local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
+  'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
+  'bzip2' 'python3' 'bc')
+    # autoconf-archive is just for leptonica FWIW
+    # I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
+    # that being said, if it where set I would imagine it would be set to centos... And this contition will satisfy the "Is not initially set"
+    # case because the above code will assign "redhat" all the time.
+    if [ -z "${VENDOR}" ] || [ "${VENDOR}" != "redhat" ] && [ "${VENDOR}" != "centos" ]; then
+      check_packages+=('cmake')
+    elif [ "${VENDOR}" == "redhat" ]; then
+      check_packages+=('libzstd-devel')
+    elif [ "${VENDOR}" == "canonical" ]; then
+      check_packages+=('zstd' 'cython3' 'xutils-dev' 'python3-venv' 'python3-numpy')
+    elif [ "${VENDOR}" == "macos" ]; then
+      # also needs 'python@3.10' 'python@3.12' 'python@3.14'
+      check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'gsed' 'coreutils')
+    else
+      check_packages+=('libtoolize' 'g++' 'patch' 'realpath' 'clang' 'autopoint' 'ld') # the rest of the world
+    fi
 
-  if [ "${VENDOR}" != "macos" ]; then
-    check_packages+=('makeinfo' 'glib-mkenums' 'ld.lld')
+    if [ "${VENDOR}" != "macos" ]; then
+      check_packages+=('makeinfo' 'glib-mkenums' 'ld.lld')
+    fi
+    # Use hash to check if the packages exist or not. Type is a bash builtin which I'm told behaves differently between different versions of bash.
+    ! truthy "$skip_package_check" && mapfile -t missing_packages < <(get_missing_packages "${check_packages[@]}")
+
+    if [ "${VENDOR}" = "redhat" ] || [ "${VENDOR}" = "centos" ]; then
+      if [ -n "$(hash cmake 2>&1)" ] && [ -n "$(hash cmake3 2>&1)" ]; then missing_packages=('cmake' "${missing_packages[@]}"); fi
+    fi
+
+    if [[ ${#missing_packages[@]} -gt 0 ]]; then
+      clear
+      echo -e "DEBUG:" | tee -a "$LOG_FILE"
+      echo -e "Could not find the following execs (svn is actually package subversion, makeinfo is actually package texinfo if you're missing them): ${missing_packages[*]}" | tee -a "$LOG_FILE"
+      echo -e 'Install the missing packages before running this script.' | tee -a "$LOG_FILE"
+      
+      apt_pkgs='autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake coreutils curl cvs ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm p7zip-full patch pax pkg-config python3 python3-setuptools ragel subversion unzip wget xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin'
+
+      [[ ${DISTRO,,} == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
+      case "${DISTRO,,}" in
+      *almalinux*)
+        echo "AlmaLinux detected"
+        ;;
+      *ubuntu*)
+        echo -e "for ubuntu:" | tee -a "$LOG_FILE"
+        echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
+        ubuntu_ver="$(lsb_release -rs)"
+        if [ "$(sortable_version "$ubuntu_ver")" -lt "$(sortable_version "24.04")" ]; then
+          echo "Ubuntu < 24.04 not supported."
+        fi
+        if at_least_required_version "22.04" "$ubuntu_ver"; then
+          apt_pkgs="$apt_pkgs ninja-build" # needed
+        fi
+        echo -e "$ sudo $INSTALL_COMMAND install $apt_pkgs -y" | tee -a "$LOG_FILE"
+        ;;
+      *debian*)
+        echo -e "for debian:" | tee -a "$LOG_FILE"
+        echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
+        # Debian version is always encoded in the /etc/debian_version
+        # This file is deployed via the base-files package which is the essential one - deployed in all installations.
+        # See their content for individual debian releases - https://sources.debian.org/src/base-files/
+        # Stable releases contain a version number.
+        # Testing/Unstable releases contain a textual codename description (e.g. bullseye/sid)
+        #
+        deb_ver="$(cat /etc/debian_version)"
+        # Upcoming codenames taken from https://en.wikipedia.org/wiki/Debian_version_history
+        #
+        if [[ $deb_ver =~ bullseye ]]; then
+          deb_ver="11"
+        elif [[ $deb_ver =~ bookworm ]]; then
+          deb_ver="12"
+        elif [[ $deb_ver =~ trixie ]]; then
+          deb_ver="13"
+        fi
+        if at_least_required_version "10" "$deb_ver"; then
+          apt_pkgs="$apt_pkgs python3-distutils" # guess it's no longer built-in, lensfun requires it...
+        fi
+        if at_least_required_version "11" "$deb_ver"; then
+          apt_pkgs="$apt_pkgs python-is-python3" # needed
+        fi
+        apt_missing="$(apt_not_installed "$apt_pkgs")"
+        echo -e "$ sudo $INSTALL_COMMAND install $apt_missing -y" | tee -a "$LOG_FILE"
+        ;;
+      *macos*)
+        xcode-select -s /Library/Developer/CommandLineTools > >(redirect_output) 2>&1
+        xcode-select -s /Applications/Xcode.app/Contents/Developer > >(redirect_output) 2>&1
+        xcodebuild -license
+        ;;
+      *)
+        echo "check_missing_packages: Build platform: ${DISTRO,,} not supported. The build script may not run correctly on unsupported platforms. Please use a container with Ubuntu >= 24.04 (noble)"
+        ;;
+      esac
+      exit_message 1 "check_missing_packages: couldnt check missing packages"
+    fi
   fi
-	# Use hash to check if the packages exist or not. Type is a bash builtin which I'm told behaves differently between different versions of bash.
-	! truthy "$skip_package_check" && mapfile -t missing_packages < <(get_missing_packages "${check_packages[@]}")
-
-	if [ "${VENDOR}" = "redhat" ] || [ "${VENDOR}" = "centos" ]; then
-		if [ -n "$(hash cmake 2>&1)" ] && [ -n "$(hash cmake3 2>&1)" ]; then missing_packages=('cmake' "${missing_packages[@]}"); fi
-	fi
-
-	if [[ ${#missing_packages[@]} -gt 0 ]]; then
-		clear
-		echo -e "DEBUG:" | tee -a "$LOG_FILE"
-		echo -e "Could not find the following execs (svn is actually package subversion, makeinfo is actually package texinfo if you're missing them): ${missing_packages[*]}" | tee -a "$LOG_FILE"
-		echo -e 'Install the missing packages before running this script.' | tee -a "$LOG_FILE"
-		
-		apt_pkgs='autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake coreutils curl cvs ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm p7zip-full patch pax pkg-config python3 python3-setuptools ragel subversion unzip wget xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin'
-
-		[[ ${DISTRO,,} == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
-		case "${DISTRO,,}" in
-    *almalinux*)
-      echo "AlmaLinux detected"
-      ;;
-		*ubuntu*)
-			echo -e "for ubuntu:" | tee -a "$LOG_FILE"
-			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
-			ubuntu_ver="$(lsb_release -rs)"
-			if [ "$(sortable_version "$ubuntu_ver")" -lt "$(sortable_version "24.04")" ]; then
-        echo "Ubuntu < 24.04 not supported."
-      fi
-			if at_least_required_version "22.04" "$ubuntu_ver"; then
-				apt_pkgs="$apt_pkgs ninja-build" # needed
-			fi
-			echo -e "$ sudo $INSTALL_COMMAND install $apt_pkgs -y" | tee -a "$LOG_FILE"
-			;;
-		*debian*)
-			echo -e "for debian:" | tee -a "$LOG_FILE"
-			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
-			# Debian version is always encoded in the /etc/debian_version
-			# This file is deployed via the base-files package which is the essential one - deployed in all installations.
-			# See their content for individual debian releases - https://sources.debian.org/src/base-files/
-			# Stable releases contain a version number.
-			# Testing/Unstable releases contain a textual codename description (e.g. bullseye/sid)
-			#
-			deb_ver="$(cat /etc/debian_version)"
-			# Upcoming codenames taken from https://en.wikipedia.org/wiki/Debian_version_history
-			#
-			if [[ $deb_ver =~ bullseye ]]; then
-				deb_ver="11"
-			elif [[ $deb_ver =~ bookworm ]]; then
-				deb_ver="12"
-			elif [[ $deb_ver =~ trixie ]]; then
-				deb_ver="13"
-			fi
-			if at_least_required_version "10" "$deb_ver"; then
-				apt_pkgs="$apt_pkgs python3-distutils" # guess it's no longer built-in, lensfun requires it...
-			fi
-			if at_least_required_version "11" "$deb_ver"; then
-				apt_pkgs="$apt_pkgs python-is-python3" # needed
-			fi
-			apt_missing="$(apt_not_installed "$apt_pkgs")"
-			echo -e "$ sudo $INSTALL_COMMAND install $apt_missing -y" | tee -a "$LOG_FILE"
-			;;
-    *macos*)
-      xcode-select -s /Library/Developer/CommandLineTools > >(redirect_output) 2>&1
-      xcode-select -s /Applications/Xcode.app/Contents/Developer > >(redirect_output) 2>&1
-      xcodebuild -license
-      ;;
-		*)
-			echo "check_missing_packages: Build platform: ${DISTRO,,} not supported. The build script may not run correctly on unsupported platforms. Please use a container with Ubuntu >= 24.04 (noble)"
-			;;
-		esac
-		exit_message 1 "check_missing_packages: couldnt check missing packages"
-	fi
-
 	export REQUIRED_CMAKE_VERSION="3.0.0"
 	for cmake_binary in 'cmake' 'cmake3'; do
 		# We need to check both binaries the same way because the check for installed packages will work if *only* cmake3 is installed or
