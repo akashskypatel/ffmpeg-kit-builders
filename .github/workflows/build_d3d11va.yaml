@@ -27,10 +27,6 @@ on:
           - x86_64
           - aarch64
           - armv7a
-      orchestrator_run_id:
-        description: Optional parent workflow run id
-        required: false
-        default: manual
 
 permissions:
   contents: write
