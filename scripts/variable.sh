@@ -8,7 +8,6 @@ export FFMPEG_KIT_TMPDIR="${BASEDIR}/.tmp"
 export MINGW_W64_BRANCH="master"
 export BINUTILS_BRANCH="binutils-2_44-branch"
 export GCC_BRANCH="releases/gcc-14"
-export LOG_FILE="${BASEDIR}"/build.log
 
 # variables with their defaults
 export build_cross_compile=n
