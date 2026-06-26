@@ -898,9 +898,9 @@ for lib in "${explicit_disabled[@]}"; do
   disable_library "$lib"
 done
 
+check_missing_packages
 
 main() {
-  check_missing_packages
   if [[ -n $run_only ]]; then
     echo -e "INFO: --- Executing single function: $run_only ---" | tee -a "$LOG_FILE"
     if [[ "$run_only" == build_* ]]; then
