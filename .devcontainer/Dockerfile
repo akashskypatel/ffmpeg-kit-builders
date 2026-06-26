@@ -18,6 +18,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     bison \
     bzip2 \
     clang \
+    cmake \
     compiler-rt \
     coreutils \
     clang-tools-extra \
@@ -25,6 +26,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     cvs \
     ed \
     flex \
+    git \
     gcc \
     gcc-c++ \
     gcc-gfortran \
