@@ -107,12 +107,14 @@ jobs:
         shell: bash
         run: sudo -E ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload build log
+      - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ github.workflow }}-${{ github.job }}
-          path: build.log
+          name: failure-artifacts-${{ github.workflow }}-${{ github.job }}
+          path: |
+            build.log
+            prebuilt
           if-no-files-found: ignore
 
   macos:
@@ -159,12 +161,14 @@ jobs:
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload build log
+      - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ github.workflow }}-${{ github.job }}
-          path: build.log
+          name: failure-artifacts-${{ github.workflow }}-${{ github.job }}
+          path: |
+            build.log
+            prebuilt
           if-no-files-found: ignore
 YAML
 } > "$tmp_file"
