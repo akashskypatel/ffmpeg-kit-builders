@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Run from ffmpeg-kit-builders project root
 TARGET_DIR="FFmpegKit/src"

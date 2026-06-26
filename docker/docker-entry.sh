@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # # docker actually runs this as a script after having copied it in as part of the "big initial copy" making the image...
 

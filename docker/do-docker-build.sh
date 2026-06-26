@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # STARTTIME=`date +'%Y%m%dT%H%M%S'`
 # OUTPUTDIR=./output_$STARTTIME
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,SC2269
 
@@ -4199,7 +4199,7 @@ configure_ffmpeg() {
   truthy "$enable_whisper" && { config_options+=" --enable-whisper" \
   && add_extra_libs "-lwhisper -lggml -lggml-cpu -lggml-base"; }                      # enable whisper filter [no]
   truthy "$enable_whisper" && ! isandroid && ! ismacos && ! isios && add_extra_libs "-lgomp"
-  truthy "$enable_whisper" && { ismacos || isios; } && add_extra_libs "$dependency_install_prefix/lib/libomp.a -lresolv"
+  truthy "$enable_whisper" && { ismacos || isios; } && add_extra_libs "-lomp -lresolv"
 
   # ------------------------------ windows features -------------------------------     
   if iswindows; then
