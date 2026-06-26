@@ -2662,6 +2662,8 @@ do_configure() {
   if [[ $(uname -s | tr '[:upper:]' '[:lower:]') == "darwin" ]]; then
       echo "INFO: Setting up libtoolize for macOS" >> "$LOG_FILE"
       LIBTOOLIZE="glibtoolize"
+  else
+      LIBTOOLIZE="libtoolize"
   fi
 	local cur_dir2=$(pwd)
 	local english_name=$(basename "$cur_dir2")
