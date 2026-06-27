@@ -1478,10 +1478,12 @@ autoreconf_library() {
 	EXTRACT_RC=$?
 	if [[ ${EXTRACT_RC} -eq 0 ]]; then
 		echo -e "\nDEBUG: autoreconf completed successfully for $1\n" >>"$LOG_FILE"
+    create_touch_file 0 "$touch_name"
+		return
 	else
 		echo -e "\nDEBUG: Default autoreconf with include for $1 failed\n" >>"$LOG_FILE"
 	fi
-  create_touch_file 0 "$touch_name"
+  return "${EXTRACT_RC}"
 }
 
 clean_ffmpeg_builds() {
@@ -2595,6 +2597,8 @@ needs_autoreconf() {
     if [ -f "$src_dir/ltmain.sh" ]; then
         # ltmain.sh is the most reliable source for the version
         src_ver=$(grep -E '^VERSION=' "$src_dir/ltmain.sh" | cut -d= -f2 | tr -d '"')
+    elif [ -f "$src_dir/build-aux/ltmain.sh" ]; then
+        src_ver=$(grep -E '^VERSION=' "$src_dir/build-aux/ltmain.sh" | cut -d= -f2 | tr -d '"')
     elif [ -f "$src_dir/aclocal.m4" ]; then
         # Fallback to aclocal.m4 with a more flexible search
         src_ver=$(grep -E "LT_PACKAGE_VERSION|macro_version" "$src_dir/aclocal.m4" | sed -e 's/.*([2-9]\.[0-9]+\.[0-9]+).*/\1/' | head -n1)
@@ -2692,23 +2696,25 @@ do_configure() {
 		if [[ ! -f $configure_name && -f bootstrap.sh ]]; then # fftw wants to only run this if no configure :|
 			(./bootstrap.sh) > >(redirect_output) 2>&1
 		fi
-    if [[ ! -f config.rpath && ! -f /build-aux/config.rpath ]] || \
-      [[ ! -f ltmain.sh && ! -f /build-aux/ltmain.sh ]] || \
-      [[ ! -f config.guess && ! -f /build-aux/config.guess ]] || \
-      [[ ! -f config.sub && ! -f /build-aux/config.sub ]] || \
-      [[ ! -f install-sh && ! -f /build-aux/install-sh ]]; then
+    if [[ ! -f config.rpath && ! -f build-aux/config.rpath ]] || \
+      [[ ! -f ltmain.sh && ! -f build-aux/ltmain.sh ]] || \
+      [[ ! -f config.guess && ! -f build-aux/config.guess ]] || \
+      [[ ! -f config.sub && ! -f build-aux/config.sub ]] || \
+      [[ ! -f install-sh && ! -f build-aux/install-sh ]] || \
+      [[ ! -f compile && ! -f build-aux/compile ]] || \
+      [[ ! -f missing && ! -f build-aux/missing ]]; then
       if [[ ! -f "no.autoreconf" ]]; then
         echo "INFO: Required build-aux files not found. running libtoolize..." >>"$LOG_FILE"
         "$LIBTOOLIZE" --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize"
       fi
     fi
-    if [[ ! -f Makefile.in && ! -f Makefile && -f Makefile.am ]]; then
-      echo -e "INFO: Makefile and Makefile.in not found. running autoreconf and automake..." >>"$LOG_FILE"
-      automake --force-missing --add-missing > >(redirect_output) 2>&1
+    if [[ -f Makefile.am ]] && { [[ ! -f Makefile.in && ! -f Makefile ]] || [[ ! -f compile && ! -f build-aux/compile ]] || [[ ! -f missing && ! -f build-aux/missing ]]; }; then
+      echo -e "INFO: Makefile/build-aux files not found. running automake..." >>"$LOG_FILE"
+      automake --copy --force-missing --add-missing > >(redirect_output) 2>&1 || exit_message 1 "Failed to run automake for $english_name"
     fi
     if [[ ! -f $configure_name && -f configure.ac ]] || needs_autoreconf > >(redirect_output) 2>&1 ; then
       echo -e "INFO: Configure not found. Running autoreconf with existing configure.ac..." >>"$LOG_FILE"
-			autoreconf_library # a handful of them require this to create ./configure :|
+			autoreconf_library || exit_message 1 "Failed to autoreconf $english_name"
     fi
 		if [[ ! -f $configure_name ]]; then
       if [[ -f gitsub.sh ]]; then
