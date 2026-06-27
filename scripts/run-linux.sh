@@ -1786,8 +1786,6 @@ Libs: -L\${libdir} -lintl -liconv
 Cflags: -I\${includedir} -Dlibintl_STATIC
 EOF
   change_dir "$src_dir/$lib/libtextstyle"
-  libtoolize --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize for libtextstyle"
-  automake --copy --force-missing --add-missing > >(redirect_output) 2>&1 || exit_message 1 "Failed to run automake for libtextstyle"
   touch "no.autoreconf"
   generic_configure "$config \
 CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \

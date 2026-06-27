@@ -2619,6 +2619,66 @@ needs_autoreconf() {
     return 1
 }
 
+needs_libtoolize() {
+    local src_dir="${1:-"$(pwd)"}"
+    local sys_ver
+    sys_ver=$("$LIBTOOLIZE" --version 2>/dev/null | head -n1 | awk '{print $NF}')
+
+    local touch_prefix="${host_name}${touch_postfix}already"
+    local touch_name
+    touch_name=$(get_small_touchfile_name "${touch_prefix}_libtoolize" "libtoolize: $sys_ver")
+
+    echo "INFO: Checking if libtoolize is needed..."
+    if [[ -f "$touch_name" ]]; then
+      echo "INFO: libtoolize touch file found in directory. Skipping libtoolize."
+      return 1
+    fi
+
+    if [[ ! -f "$src_dir/config.rpath" && ! -f "$src_dir/build-aux/config.rpath" ]] || \
+      [[ ! -f "$src_dir/ltmain.sh" && ! -f "$src_dir/build-aux/ltmain.sh" ]] || \
+      [[ ! -f "$src_dir/config.guess" && ! -f "$src_dir/build-aux/config.guess" ]] || \
+      [[ ! -f "$src_dir/config.sub" && ! -f "$src_dir/build-aux/config.sub" ]] || \
+      [[ ! -f "$src_dir/install-sh" && ! -f "$src_dir/build-aux/install-sh" ]]; then
+      echo "INFO: libtoolize is needed because libtool build-aux files are missing." >>"$LOG_FILE"
+      return 0
+    fi
+
+    echo "INFO: libtoolize is not needed." >>"$LOG_FILE"
+    return 1
+}
+
+needs_automake_missing() {
+    local src_dir="${1:-"$(pwd)"}"
+    local auto_ver
+    auto_ver=$(automake --version 2>/dev/null | head -n1 | awk '{print $NF}')
+
+    local touch_prefix="${host_name}${touch_postfix}already"
+    local touch_name
+    touch_name=$(get_small_touchfile_name "${touch_prefix}_automake_missing" "automake: $auto_ver")
+
+    echo "INFO: Checking if automake --add-missing is needed..."
+    if [[ -f "$touch_name" ]]; then
+      echo "INFO: automake --add-missing touch file found in directory. Skipping automake."
+      return 1
+    fi
+
+    if [[ ! -f "$src_dir/Makefile.am" ]]; then
+      echo "INFO: automake --add-missing is not needed because Makefile.am is missing." >>"$LOG_FILE"
+      return 1
+    fi
+
+    if [[ ! -f "$src_dir/Makefile.in" && ! -f "$src_dir/Makefile" ]] || \
+      [[ ! -f "$src_dir/compile" && ! -f "$src_dir/build-aux/compile" ]] || \
+      [[ ! -f "$src_dir/missing" && ! -f "$src_dir/build-aux/missing" ]] || \
+      [[ ! -f "$src_dir/depcomp" && ! -f "$src_dir/build-aux/depcomp" ]]; then
+      echo "INFO: automake --add-missing is needed because automake generated files are missing." >>"$LOG_FILE"
+      return 0
+    fi
+
+    echo "INFO: automake --add-missing is not needed." >>"$LOG_FILE"
+    return 1
+}
+
 get_config_sub() {
   local dest="$1"
   if [[ -d "$dest" ]]; then
@@ -2696,22 +2756,22 @@ do_configure() {
 		if [[ ! -f $configure_name && -f bootstrap.sh ]]; then # fftw wants to only run this if no configure :|
 			(./bootstrap.sh) > >(redirect_output) 2>&1
 		fi
-    if [[ ! -f config.rpath && ! -f build-aux/config.rpath ]] || \
-      [[ ! -f ltmain.sh && ! -f build-aux/ltmain.sh ]] || \
-      [[ ! -f config.guess && ! -f build-aux/config.guess ]] || \
-      [[ ! -f config.sub && ! -f build-aux/config.sub ]] || \
-      [[ ! -f install-sh && ! -f build-aux/install-sh ]] || \
-      [[ ! -f compile && ! -f build-aux/compile ]] || \
-      [[ ! -f missing && ! -f build-aux/missing ]]; then
-      if [[ ! -f "no.autoreconf" ]]; then
-        echo "INFO: Required build-aux files not found. running libtoolize..." >>"$LOG_FILE"
-        "$LIBTOOLIZE" --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize"
-      fi
+    if needs_libtoolize "$cur_dir2" > >(redirect_output) 2>&1; then
+      echo "INFO: Required libtool build-aux files not found. running libtoolize..." >>"$LOG_FILE"
+      "$LIBTOOLIZE" --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize for $english_name"
+      local libtoolize_ver
+      libtoolize_ver=$("$LIBTOOLIZE" --version 2>/dev/null | head -n1 | awk '{print $NF}')
+      create_touch_file 0 "$(get_small_touchfile_name "${touch_prefix}_libtoolize" "libtoolize: $libtoolize_ver")"
     fi
-    if [[ -f Makefile.am ]] && { [[ ! -f Makefile.in && ! -f Makefile ]] || [[ ! -f compile && ! -f build-aux/compile ]] || [[ ! -f missing && ! -f build-aux/missing ]]; }; then
+
+    if needs_automake_missing "$cur_dir2" > >(redirect_output) 2>&1; then
       echo -e "INFO: Makefile/build-aux files not found. running automake..." >>"$LOG_FILE"
       automake --copy --force-missing --add-missing > >(redirect_output) 2>&1 || exit_message 1 "Failed to run automake for $english_name"
+      local automake_ver
+      automake_ver=$(automake --version 2>/dev/null | head -n1 | awk '{print $NF}')
+      create_touch_file 0 "$(get_small_touchfile_name "${touch_prefix}_automake_missing" "automake: $automake_ver")"
     fi
+
     if [[ ! -f $configure_name && -f configure.ac ]] || needs_autoreconf > >(redirect_output) 2>&1 ; then
       echo -e "INFO: Configure not found. Running autoreconf with existing configure.ac..." >>"$LOG_FILE"
 			autoreconf_library || exit_message 1 "Failed to autoreconf $english_name"
@@ -3723,6 +3783,9 @@ run_valid_build_functions() {
     run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See $LOG_FILE for details"
   done
   printf "\r\033[KAll dependencies built successfully!\n"
+  if truthy "$workflow"; then
+    "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$host_arch" "${step_name#build_}"
+  fi
   static_link_check "$install_pkgconfig_dir"
   reset_ldflags
 }
