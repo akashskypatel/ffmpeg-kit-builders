@@ -2634,11 +2634,11 @@ needs_libtoolize() {
       return 1
     fi
 
-    if [[ ! -f "$src_dir/config.rpath" && ! -f "$src_dir/build-aux/config.rpath" ]] || \
-      [[ ! -f "$src_dir/ltmain.sh" && ! -f "$src_dir/build-aux/ltmain.sh" ]] || \
-      [[ ! -f "$src_dir/config.guess" && ! -f "$src_dir/build-aux/config.guess" ]] || \
-      [[ ! -f "$src_dir/config.sub" && ! -f "$src_dir/build-aux/config.sub" ]] || \
-      [[ ! -f "$src_dir/install-sh" && ! -f "$src_dir/build-aux/install-sh" ]]; then
+    if [[ ! -f "$src_dir/config.rpath" && ! -f "$src_dir/build-aux/config.rpath" && ! -f "$src_dir/../build-aux/config.rpath" && ! -f "$src_dir/../../build-aux/config.rpath" ]] || \
+      [[ ! -f "$src_dir/ltmain.sh" && ! -f "$src_dir/build-aux/ltmain.sh" && ! -f "$src_dir/../build-aux/ltmain.sh" && ! -f "$src_dir/../../build-aux/ltmain.sh" ]] || \
+      [[ ! -f "$src_dir/config.guess" && ! -f "$src_dir/build-aux/config.guess" && ! -f "$src_dir/../build-aux/config.guess" && ! -f "$src_dir/../../build-aux/config.guess" ]] || \
+      [[ ! -f "$src_dir/config.sub" && ! -f "$src_dir/build-aux/config.sub" && ! -f "$src_dir/../build-aux/config.sub" && ! -f "$src_dir/../../build-aux/config.sub" ]] || \
+      [[ ! -f "$src_dir/install-sh" && ! -f "$src_dir/build-aux/install-sh" && ! -f "$src_dir/../build-aux/install-sh" && ! -f "$src_dir/../../build-aux/install-sh" ]]; then
       echo "INFO: libtoolize is needed because libtool build-aux files are missing." >>"$LOG_FILE"
       return 0
     fi
@@ -2668,9 +2668,9 @@ needs_automake_missing() {
     fi
 
     if [[ ! -f "$src_dir/Makefile.in" && ! -f "$src_dir/Makefile" ]] || \
-      [[ ! -f "$src_dir/compile" && ! -f "$src_dir/build-aux/compile" ]] || \
-      [[ ! -f "$src_dir/missing" && ! -f "$src_dir/build-aux/missing" ]] || \
-      [[ ! -f "$src_dir/depcomp" && ! -f "$src_dir/build-aux/depcomp" ]]; then
+      [[ ! -f "$src_dir/compile" && ! -f "$src_dir/build-aux/compile" && ! -f "$src_dir/../build-aux/compile" && ! -f "$src_dir/../../build-aux/compile" ]] || \
+      [[ ! -f "$src_dir/missing" && ! -f "$src_dir/build-aux/missing" && ! -f "$src_dir/../build-aux/missing" && ! -f "$src_dir/../../build-aux/missing" ]] || \
+      [[ ! -f "$src_dir/depcomp" && ! -f "$src_dir/build-aux/depcomp" && ! -f "$src_dir/../build-aux/depcomp" && ! -f "$src_dir/../../build-aux/depcomp" ]]; then
       echo "INFO: automake --add-missing is needed because automake generated files are missing." >>"$LOG_FILE"
       return 0
     fi
