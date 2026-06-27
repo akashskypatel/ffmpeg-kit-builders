@@ -11,6 +11,8 @@
 
 FFmpeg-Kit Extended is a native library that allows programmatic access to executing FFmpeg, FFprobe, and FFplay commands for iOS, macOS, Android, Windows, and Linux. It provides a simple C and C++ API to execute these commands with callbacks for logs, statistics, session completion, media information parsing and more. The pure C API makes it easy to integrate with any language.
 
+If you like the project and are using it in your app give it a ⭐ on GitHub and a 👍 on [pub.dev](https://pub.dev/packages/ffmpeg_kit_extended_flutter). It helps a lot 🙏! Happy coding 🚀!
+
 # FFmpeg-Kit Builders
 
 Cross-platform build system for FFmpeg and FFmpegKit supporting Windows, Linux, MacOS, iOS, and Android platforms.
