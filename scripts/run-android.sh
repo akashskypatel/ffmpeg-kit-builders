@@ -1891,6 +1891,7 @@ Libs: -L\${libdir} -lintl -liconv
 Cflags: -I\${includedir} -Dlibintl_STATIC
 EOF
   change_dir "$src_dir/$lib/libtextstyle"
+  touch "no.autoreconf"
   generic_configure "$config \
 CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
 LIBS=\"$LIBS\""

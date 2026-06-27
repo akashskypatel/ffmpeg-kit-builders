@@ -4764,6 +4764,7 @@ LIBS=\"$LIBS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
+  touch "no.autoreconf"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LIBS=\"$LIBS\""

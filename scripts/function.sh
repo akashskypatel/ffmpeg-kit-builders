@@ -2766,7 +2766,12 @@ do_configure() {
 
     if needs_automake_missing "$cur_dir2" > >(redirect_output) 2>&1; then
       echo -e "INFO: Makefile/build-aux files not found. running automake..." >>"$LOG_FILE"
-      automake --copy --force-missing --add-missing > >(redirect_output) 2>&1 || exit_message 1 "Failed to run automake for $english_name"
+      if ! automake --copy --force-missing --add-missing > >(redirect_output) 2>&1; then
+        if needs_automake_missing "$cur_dir2" > >(redirect_output) 2>&1; then
+          exit_message 1 "Failed to run automake for $english_name"
+        fi
+        echo "WARN: automake returned non-zero for $english_name, but required missing files were installed. Continuing." >>"$LOG_FILE"
+      fi
       local automake_ver
       automake_ver=$(automake --version 2>/dev/null | head -n1 | awk '{print $NF}')
       create_touch_file 0 "$(get_small_touchfile_name "${touch_prefix}_automake_missing" "automake: $automake_ver")"
