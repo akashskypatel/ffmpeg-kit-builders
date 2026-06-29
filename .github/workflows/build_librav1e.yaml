@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: sudo -E ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Build Android arm64
+      - name: Build Android aarch64
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
         run: sudo -E ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
@@ -128,7 +128,7 @@ jobs:
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Build macOS arm64
+      - name: Build macOS aarch64
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
         run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
