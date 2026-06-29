@@ -18,6 +18,7 @@ linux/src/Makefile.in
 my_test_env
 ~*
 .agent/
+.agents/
 .ffmpeg-kit-build-state/*
 .ffmpeg-kit-build-aar-state/*
 gradlew

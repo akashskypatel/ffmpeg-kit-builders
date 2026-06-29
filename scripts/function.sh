@@ -433,6 +433,7 @@ setup_windows_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
             ;;
         # TODO: Add support for aarch64
         # "aarch64"|"arm64"|"arm64-v8a")
@@ -493,6 +494,7 @@ setup_linux_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
             ;;
         # TODO: Add support for aarch64
         # "aarch64"|"arm64"|"arm64-v8a")
@@ -559,6 +561,7 @@ setup_android_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
             export host_target="x86_64-linux-android"
             export rust_target="x86_64-linux-android"
             export clang_arch="x86_64"
@@ -567,6 +570,7 @@ setup_android_environment() {
         "aarch64"|"arm64"|"arm64-v8a")
             export host_arch="aarch64"
             export cmake_host_arch="aarch64"
+            export platform_arch="aarch64"
             export host_target="aarch64-linux-android"
             export rust_target="aarch64-linux-android"
             export clang_arch="aarch64"
@@ -575,6 +579,7 @@ setup_android_environment() {
         "armv7a"|"arm"|"armeabi-v7a")
             export host_arch="armv7a"
             export cmake_host_arch="armv7-a"
+            export platform_arch="armv7a"
             export host_target="armv7a-linux-androideabi"
             export rust_target="armv7-linux-androideabi"
             export clang_arch="arm"
@@ -653,6 +658,7 @@ setup_macos_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
             export build_cross_compile=y
             export PATH="$original_path"
             export host_target="x86_64-apple-darwin"
@@ -664,6 +670,7 @@ setup_macos_environment() {
             export host_arch="arm64"
             export cmake_host_arch="arm64"
             export meson_cpu_family="aarch64"
+            export platform_arch="aarch64"
             export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:$original_path"
             export host_target="arm64-apple-darwin"
             export rust_target="aarch64-apple-darwin"
@@ -721,6 +728,7 @@ setup_ios_environment() {
             export host_arch="arm64"
             export cmake_host_arch="arm64"
             export meson_cpu_family="aarch64"
+            export platform_arch="aarch64"
             export ios_arch="arm64"
             if [ "$toolchain_sys" = "iphonesimulator" ]; then
                 export host_target="arm64-apple-ios-simulator"
@@ -797,6 +805,7 @@ setup_tvos_environment() {
             export host_arch="arm64"
             export cmake_host_arch="arm64"
             export meson_cpu_family="aarch64"
+            export platform_arch="aarch64"
             export tvos_arch="arm64"
             if [ "$toolchain_sys" = "appletvsimulator" ]; then
                 export host_target="arm64-apple-tvos-simulator"
@@ -3782,7 +3791,7 @@ run_valid_build_functions() {
       fi
     fi
     if truthy "$workflow"; then
-      "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$step_name"
+      "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
     fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
@@ -3790,7 +3799,7 @@ run_valid_build_functions() {
   done
   printf "\r\033[KAll dependencies built successfully!\n"
   if truthy "$workflow"; then
-    "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$host_arch" "${step_name#build_}"
+    "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${step_name#build_}"
   fi
   static_link_check "$install_pkgconfig_dir"
   reset_ldflags
