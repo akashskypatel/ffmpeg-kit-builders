@@ -76,6 +76,11 @@ RUN for tool in autoconf automake aclocal autoheader autoreconf autom4te; do \
     ln -sf /usr/local/bin/$tool /usr/bin/$tool; \
     done
 
+RUN ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 \
+    && ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 \
+    && ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 \
+    && ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18
+
 ENV PATH="/opt/python/cp312-cp312/bin:${PATH}"
 
 RUN python3 --version && pip3 --version && \
