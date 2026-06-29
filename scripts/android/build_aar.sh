@@ -356,7 +356,7 @@ for arg; do
     *)  
       echo "Invalid argument: ${arg}"
       echo "Use --help for usage information"
-      exit 1;;
+      shift;;
   esac
 done
 
