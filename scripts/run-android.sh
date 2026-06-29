@@ -1852,7 +1852,7 @@ build_gettext() {
   change_dir "$src_dir/$lib/gettext-runtime"
   export LIBS="-liconv"
   export LDFLAGS="$LDFLAGS -liconv"
-  local gettext_cflags="$CFLAGS -Dlibintl_STATIC -Dalignof=_Alignof"
+  local gettext_cflags="$CFLAGS -Dlibintl_STATIC -Dalignof=_Alignof -Dnullptr=NULL"
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-libiconv-prefix=\"${dependency_install_prefix}\" \
