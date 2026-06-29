@@ -1500,6 +1500,9 @@ build_gettext() {
   local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib"
+  do_autogen --skip-gnulib
+  touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
   touch "no.autoreconf"
   export LIBS="-liconv"
@@ -1508,6 +1511,8 @@ build_gettext() {
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-libiconv-prefix=\"${dependency_install_prefix}\" \
+--with-included-libintl \
+--without-libintl-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
@@ -1524,6 +1529,9 @@ build_gettext() {
 CFLAGS=\"$cflags\" \
 LIBS=\"$LIBS\""
   # disable_nonessential "$src_dir/$lib"
+  change_dir "$src_dir/$lib/gettext-runtime/intl"
+  MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\"" "CFLAGS=\"$cflags\""
+  change_dir "$src_dir/$lib/gettext-runtime"
   MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\"" "CFLAGS=\"$cflags\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}

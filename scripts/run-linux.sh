@@ -1057,11 +1057,8 @@ build_libcdio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  if [ -f autogen.sh ]; then
-    echo "INFO: autogen.sh found. Running autogen.sh..."
-    (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
-    touch "no.autoreconf"
-  fi
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--disable-vcd-info --disable-cddb --disable-example-progs MAKEINFO=true"
   for prog in cd-drive cd-info cd-read iso-info iso-read mmc-tool; do
     touch src/"$prog".1
@@ -1075,11 +1072,8 @@ build_libcdio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  if [ -f autogen.sh ]; then
-    echo "INFO: autogen.sh found. Running autogen.sh..."
-    (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
-    touch "no.autoreconf"
-  fi
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--disable-example-progs MAKEINFO=true"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1761,13 +1755,17 @@ build_gettext() {
   local mirror="https://ftpmirror.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib"
+  do_autogen --skip-gnulib
+  touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
   export LIBS="-liconv"
   local clfags="CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-libiconv-prefix=\"${dependency_install_prefix}\" \
---with-included-gettext \
+--with-included-libintl \
+--without-libintl-prefix \
 --enable-static \
 --disable-shared \
 --disable-java \
@@ -1787,6 +1785,9 @@ build_gettext() {
 CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
 LIBS=\"$LIBS\""
   # disable_nonessential "$src_dir/$lib"
+  change_dir "$src_dir/$lib/gettext-runtime/intl"
+  do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
+  change_dir "$src_dir/$lib/gettext-runtime"
   do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}

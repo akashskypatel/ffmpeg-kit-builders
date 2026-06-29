@@ -2870,6 +2870,7 @@ generic_configure() {
 # 2. touch_postfix
 # shellcheck disable=SC2086
 do_autogen() {
+  [[ ! -f "autogen.sh" ]] && return 0
   local extra_build_args="$1"
 	local cur_dir2=$(pwd)
   [[ -n $2 ]] && touch_postfix="_${2}_" || touch_postfix="_"

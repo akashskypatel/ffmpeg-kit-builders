@@ -1864,6 +1864,9 @@ build_gettext() {
   local mirror="https://ftpmirror.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib"
+  do_autogen --skip-gnulib
+  touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
   export LIBS="-liconv"
   export LDFLAGS="$LDFLAGS -liconv"
@@ -1871,6 +1874,8 @@ build_gettext() {
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-libiconv-prefix=\"${dependency_install_prefix}\" \
+--with-included-libintl \
+--without-libintl-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
@@ -1892,6 +1897,9 @@ CFLAGS=\"$gettext_cflags\" \
 LIBS=\"$LIBS\" \
 LDFLAGS=\"${LDFLAGS} -liconv\""
   # disable_nonessential "$src_dir/$lib"
+  change_dir "$src_dir/$lib/gettext-runtime/intl"
+  do_make_and_make_install "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
+  change_dir "$src_dir/$lib/gettext-runtime"
   do_make_and_make_install "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}

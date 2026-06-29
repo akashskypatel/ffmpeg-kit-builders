@@ -303,11 +303,16 @@ build_gettext() {
   local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib"
+  do_autogen --skip-gnulib
+  touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime" 1
   export LIBS="-liconv"
 	local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-libiconv-prefix=\"${dependency_install_prefix}\" \
+--with-included-libintl \
+--without-libintl-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
@@ -329,6 +334,9 @@ LIBS=\"$LIBS\""
   generic_configure "$config"
   find . -name "Makefile*" -exec sed -i -E '/=/s/[^ ]+\.res(\.lo)?//g' {} + # otherwise causes issues with static linking
   disable_nonessential "$src_dir/$lib"
+  change_dir "$src_dir/$lib/gettext-runtime/intl"
+  do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\""
+  change_dir "$src_dir/$lib/gettext-runtime"
   do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
