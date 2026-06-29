@@ -2227,6 +2227,8 @@ build_libexpat() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/expat"
+  [[ -f buildconf.sh ]] && ./buildconf.sh > >(redirect_output) 2>&1
+  touch "no.autoreconf"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
