@@ -803,6 +803,11 @@ build_libcdio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  if [ -f autogen.sh ]; then
+    echo "INFO: autogen.sh found. Running autogen.sh..."
+    (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
+    touch "no.autoreconf"
+  fi
   generic_configure "--disable-vcd-info --disable-cddb --disable-example-progs MAKEINFO=true"
   for prog in cd-drive cd-info cd-read iso-info iso-read mmc-tool; do
     touch src/"$prog".1
@@ -816,6 +821,11 @@ build_libcdio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  if [ -f autogen.sh ]; then
+    echo "INFO: autogen.sh found. Running autogen.sh..."
+    (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
+    touch "no.autoreconf"
+  fi
   generic_configure "--disable-example-progs MAKEINFO=true"
   sed -i'.bak' 's/extern int getopt ();/\/\/ extern int getopt ();/' "$src_dir/$lib/src/getopt.h"
   sed -i'.bak' 's/extern char \*getenv ();/\/\/ extern char \*getenv ();/' "$src_dir/$lib/src/getopt.c"
