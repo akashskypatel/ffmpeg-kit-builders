@@ -298,7 +298,7 @@ CFLAGS=\"$CFLAGS\"" "" "minimal"
 build_gettext() {
   # run_valid_function "build_iconv_minimal"
 	local lib="gettext"
-  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz"
+  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib/gettext-runtime" 1
@@ -4741,7 +4741,7 @@ build_gettext_native() {
   # run_valid_function "build_iconv_minimal_native"
   clear_cross_vars
   local lib="gettext-native"
-  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz"
+  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" 
   change_dir "$src_dir/$lib/gettext-runtime"

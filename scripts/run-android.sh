@@ -1846,13 +1846,13 @@ EOF
 }
 build_gettext() {
   local lib="gettext"
-  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz"
+  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" 
   change_dir "$src_dir/$lib/gettext-runtime"
   export LIBS="-liconv"
   export LDFLAGS="$LDFLAGS -liconv"
-  local clfags="CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
+  local gettext_cflags="$CFLAGS -Dlibintl_STATIC -Dalignof=_Alignof"
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-libiconv-prefix=\"${dependency_install_prefix}\" \
@@ -1873,11 +1873,11 @@ build_gettext() {
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "$config \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
+CFLAGS=\"$gettext_cflags\" \
 LIBS=\"$LIBS\" \
 LDFLAGS=\"${LDFLAGS} -liconv\""
   # disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install "LIBS=\"$LIBS\" CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" LDFLAGS=\"${LDFLAGS}\"" "LIBS=\"$LIBS\" CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" LDFLAGS=\"${LDFLAGS}\""
+  do_make_and_make_install "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
 exec_prefix=\${prefix}
@@ -1886,14 +1886,14 @@ includedir=\${prefix}/include
 
 Name: intl
 Description: GNU gettext library
-Version: 0.26
+Version: 1.0
 Libs: -L\${libdir} -lintl -liconv
 Cflags: -I\${includedir} -Dlibintl_STATIC
 EOF
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
   generic_configure "$config \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
+CFLAGS=\"$gettext_cflags\" \
 LIBS=\"$LIBS\""
   do_make_and_make_install
   change_dir "$src_dir/$lib/gettext-tools"
@@ -1903,7 +1903,7 @@ LIBS=\"$LIBS\""
 --disable-libasprintf \
 --without-libtextstyle-prefix"
   generic_configure "$config \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
+CFLAGS=\"$gettext_cflags\" \
 LIBS=\"$LIBS\" \
 LDFLAGS=\"$LDFLAGS $LIBS\""
   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
