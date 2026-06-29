@@ -3412,7 +3412,7 @@ download_and_unpack_file() {
         if [[ -f "$filename" ]]; then
             rm -f "$filename"
         fi
-        if ! curl -v -4 "$download_url" --retry 5 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
+        if ! curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
             if [[ -n "$alt_url" ]]; then
                 echo "WARNING: download_and_unpack_file: unable to download $url, trying alternate $alt_url" >>"$LOG_FILE"
                 remove_path -f "$filename"
@@ -3421,7 +3421,7 @@ download_and_unpack_file() {
                 if [[ -f "$filename" ]]; then
                     rm -f "$filename"
                 fi
-                curl -v -4 "$download_url" --retry 5 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
+                curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
                     exit_message 1 "download_and_unpack_file: unable to download $url or alternate $alt_url"
                 }
             else
