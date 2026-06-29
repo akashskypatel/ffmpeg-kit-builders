@@ -18,9 +18,9 @@ build_libjsoncpp() {
 }
 
 
-#------------------------------------------------------------------------------     
-#region------------------------ android features ------------------------------     
-#------------------------------------------------------------------------------      
+#------------------------------------------------------------------------------
+#region------------------------ android features ------------------------------
+#------------------------------------------------------------------------------
 # build_jni               # config_options+= --disable-jni                # enable JNI support [no]
 build_jni() {
   echo "INFO: Only available on Android build" >>"$LOG_FILE"
@@ -36,17 +36,17 @@ build_mediacodec() {
   echo "INFO: Only available on Android build" >>"$LOG_FILE"
   echo "INFO: No mediacodec library to compile." >>"$LOG_FILE"
 }
-#endregion---------------------------------------------------------------------    
-#region----------------------- harmony features ------------------------------     
-#------------------------------------------------------------------------------    
+#endregion---------------------------------------------------------------------
+#region----------------------- harmony features ------------------------------
+#------------------------------------------------------------------------------
 # build_ohcodec           # config_options+= --disable-ohcodec            # enable OpenHarmony Codec support [no]
 build_ohcodec() {
   echo "INFO: Only available on Harmony build" >>"$LOG_FILE"
   echo "INFO: No ohcodec library to compile." >>"$LOG_FILE"
 }
-#endregion---------------------------------------------------------------------    
-#region---------------------- linux/unix features -----------------------------     
-#------------------------------------------------------------------------------    
+#endregion---------------------------------------------------------------------
+#region---------------------- linux/unix features -----------------------------
+#------------------------------------------------------------------------------
 # build_alsa              # config_options+= --disable-alsa               # disable ALSA support [autodetect]
 build_alsa() {
   echo "INFO: Only available on Linux build" >>"$LOG_FILE"
@@ -206,7 +206,7 @@ build_xlib() {
   echo "INFO: No xlib library to compile." >>"$LOG_FILE"
 }
 #endregion---------------------------------------------------------------------
-#region------------------------ hardware features ----------------------------- 
+#region------------------------ hardware features -----------------------------
 #------------------------------------------------------------------------------
 # build_amf               # config_options+= --disable-amf                # disable AMF video encoding code [autodetect]
 build_amf() {
@@ -291,7 +291,7 @@ build_avisynth() {
 }
 #endregion---------------------------------------------------------------------
 #region--------------------- cross-platform features --------------------------
-#------------------------------------------------------------------------------ 
+#------------------------------------------------------------------------------
 # build_bzlib             # config_options+= --disable-bzlib              # disable bzlib [autodetect]
 build_bzlib() {
   # https://gitlab.com/bzip2/bzip2
@@ -320,9 +320,9 @@ EOF
 }
 # build_lzma              # config_options+= --disable-lzma               # disable lzma [autodetect]
 build_lzma() {
-  echo "NOTE FROM LZMA DEV: Users of LZMA Utils should 
-  move to XZ Utils. XZ Utils support the legacy 
-  .lzma format used by LZMA Utils, and can also 
+  echo "NOTE FROM LZMA DEV: Users of LZMA Utils should
+  move to XZ Utils. XZ Utils support the legacy
+  .lzma format used by LZMA Utils, and can also
   emulate the command line tools of LZMA Utils." >>"$LOG_FILE"
   local lib="xz"
   local repo="https://sourceforge.net/projects/lzmautils/files/xz-5.8.1.tar.xz"
@@ -529,7 +529,7 @@ build_libnettle() {
   generic_configure "--disable-openssl --disable-documentation --libdir=$dependency_install_prefix/lib" # in case we have both gnutls and openssl, just use gnutls [except that gnutls uses this so...huh?
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  cp -rfv source/. destination/ 
+  cp -rfv source/. destination/
   change_dir "$src_dir"
 }
 build_brotli() {
@@ -1484,7 +1484,7 @@ build_gettext() {
   local lib="gettext"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib" 
+  download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib/gettext-runtime"
   touch "no.autoreconf"
   export LIBS="-liconv"
@@ -1509,7 +1509,7 @@ build_gettext() {
 CFLAGS=\"$cflags\" \
 LIBS=\"$LIBS\""
   # disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install "CFLAGS=\"$cflags\"" "CFLAGS=\"$cflags\""
+  MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\"" "CFLAGS=\"$cflags\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
 exec_prefix=\${prefix}
@@ -1527,7 +1527,7 @@ EOF
   generic_configure "$config \
 CFLAGS=\"$cflags\" \
 LIBS=\"$LIBS\""
-  do_make_and_make_install
+  MAKE_INSTALL_JOBS=1 do_make_and_make_install
   change_dir "$src_dir/$lib/gettext-tools"
   touch "no.autoreconf"
   config+=" --disable-curses \
@@ -1541,7 +1541,7 @@ LIBS=\"$LIBS\" \
 LDFLAGS=\"$LDFLAGS $LIBS\""
   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
   local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\" LIBS=\"$LIBS\""
-  do_make_and_make_install "$make_config" "$make_config"
+  MAKE_INSTALL_JOBS=1 do_make_and_make_install "$make_config" "$make_config"
   unset LIBS
   reset_allflags
 }
@@ -1549,7 +1549,7 @@ build_libffi() {
   local lib="libffi"
   local repo="https://github.com/libffi/libffi/releases/download/v3.5.2/libffi-3.5.2.tar.gz"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib" 
+  download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   generic_configure "--disable-multi-os-directory"
   disable_nonessential "$src_dir/$lib"
@@ -1665,7 +1665,7 @@ build_libmp3lame() {
   local repo="https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz/download"
   local repo_ver="r6525"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib" 
+  download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   get_config_sub "$src_dir/$lib"
@@ -1696,7 +1696,7 @@ build_libmysofa() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DBUILD_TESTS=0 -DCMAKE_POLICY_VERSION_MINIMUM=3.10 -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH"
-  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params" 
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -2195,7 +2195,7 @@ build_cairo() {
 build_libexpat() {
   local lib="libexpat"
   local repo="https://github.com/libexpat/libexpat"
-  local repo_ver="R_2_7_3" 
+  local repo_ver="R_2_7_3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/expat"
@@ -2207,7 +2207,7 @@ build_libexpat() {
 build_libdatrie() {
   local lib="libdatrie"
   local repo="https://github.com/tlwg/libdatrie/releases/download/v0.2.14/libdatrie-0.2.14.tar.xz"
-  local repo_ver="v0.2.14" 
+  local repo_ver="v0.2.14"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
@@ -2219,9 +2219,9 @@ build_libthai() {
   # run_valid_function "build_libdatrie"
   local lib="libthai"
   local repo="https://github.com/tlwg/libthai/releases/download/v0.1.29/libthai-0.1.29.tar.xz"
-  local repo_ver="v0.1.29" 
+  local repo_ver="v0.1.29"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib" 
+  download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   generic_configure "--enable-static --disable-shared --disable-doxygen-doc"
   disable_nonessential "$src_dir/$lib"
@@ -2415,7 +2415,7 @@ build_libshaderc() {
 build_libshine() {
   local lib="libshine"
   local repo="https://github.com/toots/shine"
-  local repo_ver="3.1.1" 
+  local repo_ver="3.1.1"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -2449,7 +2449,7 @@ build_libsmbclient() {
 build_libsnappy() {
   local lib="libsnappy"
   local repo="https://github.com/google/snappy"
-  local repo_ver="1.2.2" 
+  local repo_ver="1.2.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -2466,7 +2466,7 @@ build_libsnappy() {
 build_libsoxr() {
   local lib="libsoxr"
   local repo="https://github.com/chirlu/soxr"
-  local repo_ver="0.1.3" 
+  local repo_ver="0.1.3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -2484,7 +2484,7 @@ build_libsoxr() {
 build_libspeex() {
   local lib="libspeex"
   local repo="https://github.com/xiph/speex"
-  local repo_ver="Speex-1.2.1" 
+  local repo_ver="Speex-1.2.1"
   activate_meson
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
@@ -2499,7 +2499,7 @@ build_libspeexdsp() {
   # run_valid_function "build_libspeex"
   local lib="libspeexdsp"
   local repo="https://github.com/xiph/speexdsp"
-  local repo_ver="SpeexDSP-1.2.1" 
+  local repo_ver="SpeexDSP-1.2.1"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -2514,7 +2514,7 @@ build_libsrt() {
   local lib="libsrt"
   # do_git_checkout https://github.com/Haivision/srt # might be able to use these days...?
   local repo="https://github.com/Haivision/srt"
-  local repo_ver="v1.5.4" 
+  local repo_ver="v1.5.4"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -2540,7 +2540,7 @@ build_libssh() {
   local lib="libssh"
   # https://github.com/canonical/libssh
   local repo="https://github.com/canonical/libssh"
-  local repo_ver="libssh-0.11.1" 
+  local repo_ver="libssh-0.11.1"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
@@ -2632,7 +2632,7 @@ build_libtbb() {
   # run_valid_function "build_zlib" 1
   local lib="libtbb"
   local repo="https://github.com/uxlfoundation/oneTBB"
-  local repo_ver=" v2021.13.0" 
+  local repo_ver=" v2021.13.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
@@ -2667,14 +2667,14 @@ build_libopenvino() {
   fi
   # parse version from repo url
   local repo_ver=$(echo "$repo" | sed -E 's|.*openvino_toolkit_macos_12_6_([0-9]+\.[0-9]+\.[0-9]+).*|\1|')
-  
+
   local manifest="$work_dir/pkgconfig/${lib}_manifest"
   [[ ! -f "$manifest" ]] && touch "$manifest"
 
   change_dir "$src_dir"
-  
+
   local touch_name=$(get_small_touchfile_name "${host_name}_installed" "$repo")
-  
+
   truthy "$build_force" && remove_path -rf "$src_dir/$lib"
   if [[ -f "$manifest" && ! -f "$src_dir/$lib/$touch_name" ]]; then
       [[ -d "$src_dir/$lib" ]] && reset_touch "$src_dir/$lib" "${host_name}_installed*.touch"
@@ -2727,14 +2727,14 @@ build_libtorch() {
     repo="https://download.pytorch.org/libtorch/cpu/libtorch-macos-arm64-2.9.1.zip"
   fi
   local repo_ver=$(echo "$repo" | sed -E "s/.*libtorch-macos-$host_arch-([0-9]+\.[0-9]+\.[0-9]+).*/\1/")
-  
+
   local manifest="$work_dir/pkgconfig/${lib}_manifest"
   [[ ! -f "$manifest" ]] && touch "$manifest"
 
   change_dir "$src_dir"
-  
+
   local touch_name=$(get_small_touchfile_name "${host_name}_installed" "$repo")
-  
+
   truthy "$build_force" && remove_path -rf "$src_dir/$lib"
   if [[ -f "$manifest" && ! -f "$src_dir/$lib/$touch_name" ]]; then
       [[ -d "$src_dir/$lib" ]] && reset_touch "$src_dir/$lib" "${host_name}_installed*.touch"
@@ -2743,7 +2743,7 @@ build_libtorch() {
 
   if [ ! -f "$src_dir/$lib/$touch_name" ]; then
       download_and_unpack_file "$repo" "$lib"
-      
+
       find "$src_dir/$lib/lib" -type f -name "libcpuinfo*" -exec rm -f {} +
       find "$src_dir/$lib/lib" -type f -name "libgmock*" -exec rm -f {} +
       find "$src_dir/$lib/lib" -type f -name "libgtest*" -exec rm -f {} +
@@ -2786,9 +2786,9 @@ build_libtensorflow() {
   [[ ! -f "$manifest" ]] && touch "$manifest"
 
   change_dir "$src_dir"
-  
+
   local touch_name=$(get_small_touchfile_name "${host_name}_installed" "$repo")
-  
+
   truthy "$build_force" && remove_path -rf "$src_dir/$lib"
   if [[ -f "$manifest" && ! -f "$src_dir/$lib/$touch_name" ]]; then
       [[ -d "$src_dir/$lib" ]] && reset_touch "$src_dir/$lib" "${host_name}_installed*.touch"
@@ -3063,7 +3063,7 @@ build_libunistring() {
   do_make_and_make_install
   change_dir "$src_dir"
 }
-build_curl() {  
+build_curl() {
   # run_valid_function "build_libidn2"
   # run_valid_function "build_zstd"
   # run_valid_function "build_brotli"
@@ -3374,7 +3374,7 @@ build_libx265() {
 -DLINKED_12BIT=ON \
 -DEXTRA_LINK_FLAGS=-L. \
 -DEXTRA_LIB=\"../10bit/libx265.a;../12bit/libx265.a\""
-  do_cmake_from_build_dir "$src_dir/$lib/source" "$cmake_args $cmake_bit_args" 
+  do_cmake_from_build_dir "$src_dir/$lib/source" "$cmake_args $cmake_bit_args"
   change_dir "$src_dir/$lib/8bit"
   disable_nonessential "$src_dir/$lib/8bit"
   do_make
@@ -3474,7 +3474,7 @@ EOF
   if [[ "$host_arch" == "arm64" ]]; then
     # Use TRUE instead of ON to match: if("${ARM}" STREQUAL "TRUE")
     cmake_args+=" -DARM=TRUE -DSET_PROF=MAIN"
-    
+
     # Remove the -static linker flag that breaks macOS builds
     sed -i'.bak' 's/set(CMAKE_EXE_LINKER_FLAGS "-static")//g' "$src_dir/$lib/CMakeLists.txt"
   fi
@@ -3522,7 +3522,7 @@ EOF
   if [[ "$host_arch" == "arm64" ]]; then
     # Use TRUE instead of ON to match: if("${ARM}" STREQUAL "TRUE")
     cmake_args+=" -DARM=TRUE -DSET_PROF=MAIN"
-    
+
     # Remove the -static linker flag that breaks macOS builds
     sed -i'.bak' 's/set(CMAKE_EXE_LINKER_FLAGS "-static")//g' "$src_dir/$lib/CMakeLists.txt"
     wget https://raw.githubusercontent.com/DLTcollab/sse2neon/master/sse2neon.h -O "$src_dir/$lib/src_base/neon/sse2neon.h" > >(redirect_output) 2>&1
@@ -3912,7 +3912,7 @@ build_opengl() {
 # build_openssl           # config_options+= --enable-openssl             # enable openssl, needed for https support if gnutls, libtls or mbedtls is not used [no]
 build_openssl() {
   local lib="openssl"
-  # https://github.com/openssl/openssl 
+  # https://github.com/openssl/openssl
   local repo="https://github.com/openssl/openssl"
   local repo_ver="openssl-3.6.0"
   change_dir "$src_dir"
@@ -4130,7 +4130,7 @@ build_whisper() {
 }
 #endregion---------------------------------------------------------------------
 #region------------------------- non-gpl features -----------------------------
-#------------------------------------------------------------------------------ 
+#------------------------------------------------------------------------------
 # build_decklink          # config_options+= --enable-decklink            # enable Blackmagic DeckLink I/O support [no]
 build_decklink() {
   echo "WARNING: This is a non-gpl library. Binaries including this library are non-redistributable!" >>"$LOG_FILE"
@@ -4156,7 +4156,7 @@ build_libfdk_aac() {
   do_make_and_make_install
   change_dir "$src_dir"
 }
-#region-------------------- non-gpl hardware features ------------------------- 
+#region-------------------- non-gpl hardware features -------------------------
 # build_cuda_llvm         # config_options+= --disable-cuda-llvm          # disable CUDA compilation using clang [autodetect]
 build_cuda_llvm() {
   echo "INFO: Only available on Windows and Linux build" >>"$LOG_FILE"
@@ -4207,7 +4207,7 @@ build_libnpp() {
     disable_library "libnpp"
 }
 #endregion
-#region---------- non-gpl linux/unix (Raspberry Pi) features ------------------    
+#region---------- non-gpl linux/unix (Raspberry Pi) features ------------------
 # build_mmal              # config_options+= --disable-mmal               # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
 build_mmal() {
   echo "INFO: Only available on Linux build" >>"$LOG_FILE"
@@ -4224,7 +4224,7 @@ build_omx_rpi() {
   echo "INFO: No omx-rpi library to compile." >>"$LOG_FILE"
 }
 #endregion
-#region-------------------- non-gpl windows features -------------------------- 
+#region-------------------- non-gpl windows features --------------------------
 # build_d3d11va           # config_options+= --disable-d3d11va            # disable Microsoft Direct3D 11 video acceleration code [autodetect]
 build_d3d11va() {
   echo "INFO: Only available on Windows build" >>"$LOG_FILE"
@@ -4251,7 +4251,7 @@ build_mediafoundation() {
   echo "INFO: No mediafoundation library to compile." >>"$LOG_FILE"
 }
 #endregion
-#region--------------------- non-gpl apple features ---------------------------     
+#region--------------------- non-gpl apple features ---------------------------
 # build_avfoundation      # config_options+= --disable-avfoundation       # disable Apple AVFoundation framework [autodetect]
 build_avfoundation() {
   echo "INFO: Only available on Apple build" >>"$LOG_FILE"
@@ -4289,4 +4289,4 @@ build_videotoolbox() {
 }
 #endregion
 #endregion---------------------------------------------------------------------
-#------------------------------------------------------------------------------ 
+#------------------------------------------------------------------------------

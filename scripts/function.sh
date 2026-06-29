@@ -2968,6 +2968,7 @@ do_make_install() {
 	if [ ! -f "$touch_name" ]; then
     echo "INFO: (Re-)do_make_install() because $touch_name not found with \"make install $make_install_options\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_install"*
+    local make_install_jobs="${MAKE_INSTALL_JOBS:-$(get_concurrent_proc)}"
     if truthy "$build_cross_compile"; then
       [[ "$extra_make_options" != *"CC="* ]] && extra_make_options+=" CC=$CC"
       [[ "$extra_make_options" != *"AR="* ]] && extra_make_options+=" AR=$AR"
@@ -2980,8 +2981,8 @@ do_make_install() {
       [[ "$extra_make_options" != *"RC="* ]] && extra_make_options+=" RC=$RC"
       [[ "$extra_make_options" != *"CROSS_COMPILE="* ]] && extra_make_options+=" CROSS_COMPILE=$CROSS_COMPILE"
     fi
-		echo -e "INFO: do_make_install() with:\n  DIR=$(pwd)\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  nice running: \"make $make_install_options\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-		eval "nice make -j$(get_concurrent_proc) $make_install_options" > >(redirect_output) 2>&1 || exit_message 1 "do_make_install: could not make with $make_install_options"
+		echo -e "INFO: do_make_install() with:\n  DIR=$(pwd)\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  nice running: \"make -j$make_install_jobs $make_install_options\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+		eval "nice make -j$make_install_jobs $make_install_options" > >(redirect_output) 2>&1 || exit_message 1 "do_make_install: could not make with $make_install_options"
 		create_touch_file 0 "$touch_name"
     add_src_dir "$(pwd)"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files
