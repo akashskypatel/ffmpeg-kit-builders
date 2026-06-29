@@ -12,6 +12,17 @@ workflow_name="$3"
 mode="${4:-}"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+build_force="${WORKFLOW_FORCE_SELF:-false}"
+
+echo "==================================="
+echo "workflow-get-deps:"
+echo "platform: $platform"
+echo "arch: $arch"
+echo "workflow_name: $workflow_name"
+echo "mode: $mode"
+echo "workspace: $workspace"
+echo "build_force: $build_force"
+echo "==================================="
 
 if [[ -z "$token" ]]; then
 	echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
@@ -47,7 +58,7 @@ fi
 source "$deps_file"
 
 if [[ "$mode" == "--self" ]]; then
-	if [[ "${WORKFLOW_FORCE_SELF:-false}" == "true" || "${WORKFLOW_FORCE_SELF:-false}" == "1" || "${WORKFLOW_FORCE_SELF:-false}" == "y" || "${WORKFLOW_FORCE_SELF:-false}" == "yes" ]]; then
+	if truthy "$build_force"; then
 		echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
 		exit 4
 	fi

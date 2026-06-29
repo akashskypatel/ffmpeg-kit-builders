@@ -10,6 +10,18 @@ release_tag="${platform}-${arch}-deps"
 release_name="${platform}-${arch}-dependencies"
 libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
 
+echo "==================================="
+echo "upload-deps-release:"
+echo "platform: $platform"
+echo "arch: $arch"
+echo "dep: $dep"
+echo "workspace: $workspace"
+echo "archive_name: $archive_name"
+echo "release_tag: $release_tag"
+echo "release_name: $release_name"
+echo "libraries_dir: $libraries_dir"
+echo "==================================="
+
 if [[ ! -d "$libraries_dir" ]]; then
   echo "Missing libraries directory: $libraries_dir" >&2
   exit 1
