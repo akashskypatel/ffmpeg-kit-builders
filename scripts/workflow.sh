@@ -55,6 +55,11 @@ on:
           - x86_64
           - aarch64
           - armv7a
+      force:
+        description: "Force rebuild instead of using existing self release artifacts"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -68,6 +73,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
+      WORKFLOW_FORCE_SELF: \${{ inputs.force }}
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
@@ -123,6 +129,7 @@ jobs:
     runs-on: macos-14
     env:
       GH_TOKEN: ${{ github.token }}
+      WORKFLOW_FORCE_SELF: \${{ inputs.force }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
