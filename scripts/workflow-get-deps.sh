@@ -47,6 +47,10 @@ fi
 source "$deps_file"
 
 if [[ "$mode" == "--self" ]]; then
+	if [[ "${WORKFLOW_FORCE_SELF:-false}" == "true" || "${WORKFLOW_FORCE_SELF:-false}" == "1" || "${WORKFLOW_FORCE_SELF:-false}" == "y" || "${WORKFLOW_FORCE_SELF:-false}" == "yes" ]]; then
+		echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
+		exit 4
+	fi
 	dependencies="$workflow_name"
 else
 	dependencies="${SUB_DEPENDENCIES[$workflow_name]-}"

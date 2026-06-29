@@ -2,6 +2,12 @@ name: build_all_windows
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force rebuild instead of using existing self release artifacts"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -18,6 +24,7 @@ jobs:
         arch: [x86_64]
     env:
       GH_TOKEN: ${{ github.token }}
+      WORKFLOW_FORCE_SELF: ${{ inputs.force }}
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:

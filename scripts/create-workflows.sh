@@ -21,6 +21,12 @@ name: build_all_${platform}
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force rebuild instead of using existing self release artifacts"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -37,6 +43,7 @@ jobs:
         arch: [${arch_list}]
     env:
       GH_TOKEN: \${{ github.token }}
+      WORKFLOW_FORCE_SELF: \${{ inputs.force }}
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
@@ -95,6 +102,12 @@ name: build_all_${platform}
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force rebuild instead of using existing self release artifacts"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -111,6 +124,7 @@ jobs:
         arch: [${arch_list}]
     env:
       GH_TOKEN: \${{ github.token }}
+      WORKFLOW_FORCE_SELF: \${{ inputs.force }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
