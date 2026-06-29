@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "function.sh"
+source "${SCRIPTDIR}/function.sh"
 
 platform="$1"
 arch="$2"

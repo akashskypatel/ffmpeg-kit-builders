@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "function.sh"
+source "${SCRIPTDIR}/function.sh"
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
 	echo "Usage: $0 <platform> <arch> <workflow_name> [--self]" >&2
