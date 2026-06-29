@@ -869,6 +869,33 @@ if(BUILD_SHARED_LIBS)
     if(NOT APPLE)
         # --version-script is ELF/GNU ld only; macOS uses -exported_symbols_list instead.
         target_link_options(ffmpegkit PRIVATE "-Wl,--version-script=${LINKER_SCRIPT}")
+    else()
+        # Darwin does not support GNU ld version scripts. Use an exported
+        # symbols allow-list so statically merged dependency symbols remain
+        # private to the framework binary.
+        set(APPLE_EXPORTED_SYMBOLS "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit-exported-symbols.txt")
+        file(WRITE "${APPLE_EXPORTED_SYMBOLS}" "
+_ffmpeg_kit_*
+_ffmpeg*
+_ffprobe_kit_*
+_ffprobe*
+_ffplay_kit_*
+_ffplay*
+_media_information*
+_stream_information*
+_chapter*
+_session*
+_Java_*
+__ZN9ffmpegkit*
+__ZTIN9ffmpegkit*
+__ZTSN9ffmpegkit*
+__ZTVN9ffmpegkit*
+__ZN4Json*
+__ZTIN4Json*
+__ZTSN4Json*
+__ZTVN4Json*
+")
+        target_link_options(ffmpegkit PRIVATE "-Wl,-exported_symbols_list,${APPLE_EXPORTED_SYMBOLS}")
     endif()
 
     # set(CMAKE_MESSAGE_LOG_LEVEL VERBOSE)
