@@ -2225,14 +2225,29 @@ is_current_git_ref() {
 # 1. repo_url
 # 2. to_dir
 # 3. desired_branch
+# optional: --alt=<repo_url> alternate git URL used if the primary clone fails
 do_git_checkout() {
-	local repo_url="$1"
-	local to_dir="$2"
-	if [[ -n "$3" ]]; then
-		desired_branch="$3"
-	else
-		desired_branch="master"
+	local repo_url="${1:-}"
+  shift || true
+	local to_dir="${1:-}"
+  [[ $# -gt 0 ]] && shift
+  local desired_branch="master"
+	if [[ $# -gt 0 && "$1" != --* ]]; then
+		desired_branch="$1"
+    shift
 	fi
+  local alt_repo_url=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --alt=*)
+        alt_repo_url="${1#--alt=}"
+        ;;
+      *)
+        echo "WARNING: do_git_checkout: ignoring unknown argument '$1'" >>"$LOG_FILE"
+        ;;
+    esac
+    shift
+  done
   local touch_file="$host_touch"
 	echo -e "INFO: Starting git checkout $repo_url" >>"$LOG_FILE"
 	if [[ -z $to_dir ]]; then
@@ -2280,7 +2295,15 @@ do_git_checkout() {
       remove_path -rf "$to_dir"
     fi
 		echo -e "INFO: Downloading $repo_url $desired_branch into $to_dir" >>"$LOG_FILE"
-		retry_git_or_die "$repo_url" "$to_dir" "$desired_branch" || exit_message 1 "do_git_checkout: could not checkout $desired_branch from $repo_url"
+		if ! retry_git_or_die "$repo_url" "$to_dir" "$desired_branch"; then
+      if [[ -n "$alt_repo_url" ]]; then
+        echo "WARNING: do_git_checkout: could not checkout $desired_branch from $repo_url, trying alternate $alt_repo_url" >>"$LOG_FILE"
+        remove_path -rf "$to_dir.tmp"
+        retry_git_or_die "$alt_repo_url" "$to_dir" "$desired_branch" || exit_message 1 "do_git_checkout: could not checkout $desired_branch from $repo_url or alternate $alt_repo_url"
+      else
+        exit_message 1 "do_git_checkout: could not checkout $desired_branch from $repo_url"
+      fi
+    fi
     mv "$to_dir.tmp" "$to_dir" 2>>"$LOG_FILE"
 		chmod -R a+rwx "$to_dir" 2>>"$LOG_FILE"
     add_src_dir "$(validate_path "$to_dir")"
@@ -3349,11 +3372,26 @@ validate_path() {
   echo "$abs_path"
 }
 # takes a url, output_dir as params, output_dir optional
+# optional: --alt=<url> alternate download URL used if the primary URL fails
 download_and_unpack_file() {
     local url="$1"
     local dest_folder="$(validate_path "$2")"
+    local alt_url=""
+    shift 2
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --alt=*)
+                alt_url="${1#--alt=}"
+                ;;
+            *)
+                echo "WARNING: download_and_unpack_file: ignoring unknown argument '$1'" >>"$LOG_FILE"
+                ;;
+        esac
+        shift
+    done
+    local download_url="$url"
     local filename
-    filename=$(basename "$url")
+    filename=$(basename "$download_url")
     if [[ -n "$dest_folder" ]]; then
         if [ ! -d "$dest_folder" ]; then
             create_dir "$dest_folder" || exit_message 1 "download_and_unpack_file: could not create dir $dest_folder"
@@ -3374,9 +3412,22 @@ download_and_unpack_file() {
         if [[ -f "$filename" ]]; then
             rm -f "$filename"
         fi
-        curl -v -4 "$url" --retry 5 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
-            exit_message 1 "download_and_unpack_file: unable to download $url"
-        }
+        if ! curl -v -4 "$download_url" --retry 5 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
+            if [[ -n "$alt_url" ]]; then
+                echo "WARNING: download_and_unpack_file: unable to download $url, trying alternate $alt_url" >>"$LOG_FILE"
+                remove_path -f "$filename"
+                download_url="$alt_url"
+                filename=$(basename "$download_url")
+                if [[ -f "$filename" ]]; then
+                    rm -f "$filename"
+                fi
+                curl -v -4 "$download_url" --retry 5 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
+                    exit_message 1 "download_and_unpack_file: unable to download $url or alternate $alt_url"
+                }
+            else
+                exit_message 1 "download_and_unpack_file: unable to download $url"
+            fi
+        fi
         echo "INFO: Unzipping $filename inside $dest_folder ..." >>"$LOG_FILE"
         if [[ "${filename,,}" =~ \.(zip|whl|nupkg)$ ]]; then
             extract_zip "$filename" "$dest_folder" > >(redirect_output) 2>&1

@@ -267,9 +267,10 @@ build_lzma() {
 build_iconv_minimal() {
   local lib="libiconv-minimal"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
 	change_dir "$src_dir"
-	download_and_unpack_file "$repo" "$lib"
+	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
 	generic_configure "--enable-static \
@@ -299,8 +300,9 @@ build_gettext() {
   # run_valid_function "build_iconv_minimal"
 	local lib="gettext"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib/gettext-runtime" 1
   export LIBS="-liconv"
 	local config="--prefix=${dependency_install_prefix} \
@@ -351,9 +353,10 @@ build_iconv() {
   # run_valid_function "build_gettext"
 	local lib="libiconv"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   generic_configure "--prefix=${dependency_install_prefix} \
@@ -756,8 +759,9 @@ build_libfontconfig() {
 build_gmp() {
   local lib="gmp"
   local repo="https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
+  local mirror="https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz"
 	change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
 	export CC_FOR_BUILD=/usr/bin/gcc # WSL seems to need this..
 	export CPP_FOR_BUILD=usr/bin/cpp
@@ -771,8 +775,9 @@ build_gmp() {
 build_libnettle() {
   local lib="nettle"
   local repo="https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
 	change_dir "$src_dir"
-	download_and_unpack_file "$repo" "$lib"
+	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
 	change_dir "$src_dir/$lib"
 	local config_options="--disable-openssl --disable-documentation"
 	generic_configure "$config_options"
@@ -784,8 +789,9 @@ build_libnettle() {
 build_libunistring() {
   local lib="libunistring"
   local repo="https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
 	change_dir "$src_dir"
-	download_and_unpack_file "$repo" "$lib"
+	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   generic_configure
   sed -i -E 's/=[[:space:]]*libunistring\.res\.lo/=/g' "lib/Makefile"
@@ -798,10 +804,11 @@ build_libidn2() {
   # run_valid_function "build_libunistring"
   # run_valid_function "build_iconv"
   local repo="https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
   local lib="libidn2"
   local repo_ver="2.3.8"
 	change_dir "$src_dir"
-	download_and_unpack_file "$repo" "$lib"
+	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
 	change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   export LDFLAGS="$LDFLAGS -liconv"
@@ -4742,8 +4749,9 @@ build_gettext_native() {
   clear_cross_vars
   local lib="gettext-native"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib" 
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib/gettext-runtime"
   export LIBS="-liconv"
   export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib -Dlibintl_STATIC"
@@ -4789,9 +4797,10 @@ build_iconv_minimal_native() {
   clear_cross_vars
   local lib="libiconv-native"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   export CFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
