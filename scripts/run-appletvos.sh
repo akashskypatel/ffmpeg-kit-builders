@@ -2229,6 +2229,13 @@ build_libexpat() {
   change_dir "$src_dir/$lib/expat"
   [[ -f buildconf.sh ]] && ./buildconf.sh > >(redirect_output) 2>&1
   touch "no.autoreconf"
+  export aclocal="/usr/local/bin/aclocal"
+  export automake="/usr/local/bin/automake"
+  export ACLOCAL="$aclocal"
+  export AUTOMAKE="$automake"
+  find "$src_dir/$lib/expat" -type f -name configure -exec sed -i \
+    -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
+    -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
