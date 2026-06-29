@@ -3791,7 +3791,7 @@ run_valid_build_functions() {
       fi
     fi
     if truthy "$workflow"; then
-      GITHUB_WORKSPACE="$BASEDIR" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
+      sudo -E "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
     fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
@@ -3800,7 +3800,7 @@ run_valid_build_functions() {
   printf "\r\033[KAll dependencies built successfully!\n"
   change_dir "$BASEDIR"
   if truthy "$workflow"; then
-    GITHUB_WORKSPACE="$BASEDIR" "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${step_name#build_}"
+    sudo -E "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${step_name#build_}"
   fi
   static_link_check "$install_pkgconfig_dir"
   reset_ldflags
