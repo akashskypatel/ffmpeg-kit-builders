@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "function.sh"
+
 platform="$1"
 arch="$2"
 dep="${3:-${GITHUB_WORKFLOW#build_}}"
@@ -10,6 +12,7 @@ release_tag="${platform}-${arch}-deps"
 release_name="${platform}-${arch}-dependencies"
 libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
 
+echo ""
 echo "==================================="
 echo "upload-deps-release:"
 echo "platform: $platform"

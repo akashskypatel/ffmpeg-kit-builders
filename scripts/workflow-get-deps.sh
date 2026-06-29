@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "function.sh"
+
 if [[ $# -lt 3 || $# -gt 4 ]]; then
 	echo "Usage: $0 <platform> <arch> <workflow_name> [--self]" >&2
 	exit 2
@@ -14,6 +16,7 @@ workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 build_force="${WORKFLOW_FORCE_SELF:-false}"
 
+echo ""
 echo "==================================="
 echo "workflow-get-deps:"
 echo "platform: $platform"
