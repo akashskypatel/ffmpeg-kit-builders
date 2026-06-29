@@ -60,7 +60,11 @@ jobs:
       
       - name: Prepare tools
         shell: bash
-        run: { ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 || true } && { ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 || true } && { ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 || true } && { ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18 || true }
+        run: |
+          ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 || true
+          ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 || true
+          ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 || true
+          ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18 || true
 
       - name: Build ${platform} dependencies
         shell: bash
@@ -145,7 +149,10 @@ jobs:
       
       - name: Prepare tools
         shell: bash
-        run: { ln -sf \$HOMEBREW_BASH/bin/aclocal \$HOMEBREW_BASH/bin/aclocal-1.18 || true } && { ln -sf \$HOMEBREW_BASH/bin/automake \$HOMEBREW_BASH/bin/automake-1.18 || true }
+        run: |
+          tool_bin="\$(dirname "\$HOMEBREW_BASH")"
+          ln -sf "\$tool_bin/aclocal" "\$tool_bin/aclocal-1.18" || true
+          ln -sf "\$tool_bin/automake" "\$tool_bin/automake-1.18" || true
 
       - name: Accept Xcode license
         shell: bash

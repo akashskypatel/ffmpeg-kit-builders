@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
-      WORKFLOW_FORCE_SELF: \${{ inputs.force }}
+      WORKFLOW_FORCE_SELF: ${{ inputs.force }}
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
@@ -90,7 +90,11 @@ jobs:
       
       - name: Prepare tools
         shell: bash
-        run: { ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 || true } && { ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 || true } && { ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 || true } && { ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18 || true }
+        run: |
+          ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 || true
+          ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 || true
+          ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 || true
+          ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18 || true
 
       - name: Build Linux
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
@@ -133,7 +137,7 @@ jobs:
     runs-on: macos-14
     env:
       GH_TOKEN: ${{ github.token }}
-      WORKFLOW_FORCE_SELF: \${{ inputs.force }}
+      WORKFLOW_FORCE_SELF: ${{ inputs.force }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,7 +154,10 @@ jobs:
       
       - name: Prepare tools
         shell: bash
-        run: { ln -sf \$HOMEBREW_BASH/bin/aclocal \$HOMEBREW_BASH/bin/aclocal-1.18 || true } && { ln -sf \$HOMEBREW_BASH/bin/automake \$HOMEBREW_BASH/bin/automake-1.18 || true }
+        run: |
+          tool_bin="$(dirname "$HOMEBREW_BASH")"
+          ln -sf "$tool_bin/aclocal" "$tool_bin/aclocal-1.18" || true
+          ln -sf "$tool_bin/automake" "$tool_bin/automake-1.18" || true
 
       - name: Accept Xcode license
         shell: bash

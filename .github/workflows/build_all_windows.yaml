@@ -41,7 +41,11 @@ jobs:
       
       - name: Prepare tools
         shell: bash
-        run: { ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 || true } && { ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 || true } && { ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 || true } && { ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18 || true }
+        run: |
+          ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 || true
+          ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 || true
+          ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 || true
+          ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18 || true
 
       - name: Build windows dependencies
         shell: bash
