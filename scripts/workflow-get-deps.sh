@@ -15,6 +15,7 @@ mode="${4:-}"
 workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 build_force="${WORKFLOW_FORCE_SELF:-false}"
+requested_step="${WORKFLOW_REQUESTED_STEP:-}"
 
 echo ""
 echo "==================================="
@@ -25,6 +26,7 @@ echo "workflow_name: $workflow_name"
 echo "mode: $mode"
 echo "workspace: $workspace"
 echo "build_force: $build_force"
+echo "requested_step: $requested_step"
 echo "==================================="
 
 if [[ -z "$token" ]]; then
@@ -61,7 +63,7 @@ fi
 source "$deps_file"
 
 if [[ "$mode" == "--self" ]]; then
-	if truthy "$build_force"; then
+	if truthy "$build_force" && [[ -n "$requested_step" && "$workflow_name" == "$requested_step" ]]; then
 		echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
 		exit 4
 	fi

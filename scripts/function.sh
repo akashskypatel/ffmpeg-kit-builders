@@ -3813,6 +3813,7 @@ run_valid_build_functions() {
 	local steps=0
 	local current_step=0
   local last_built_step=""
+  local workflow_requested_step="${WORKFLOW_REQUESTED_STEP:-${build_only:-${start_from:-}}}"
   create_dir "$dependency_install_prefix/{lib/pkgconfig,include,bin}"
   # Count non-empty steps first
   for step_name in "${OPTIMIZED_BUILD_STEPS[@]}"; do
@@ -3846,12 +3847,12 @@ run_valid_build_functions() {
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
     if truthy "$workflow"; then
-      if sudo -E "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
+      if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
         echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
         mark_as_built "$step_name"
         continue
       fi
-      sudo -E "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
+      sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
     fi
     run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See $LOG_FILE for details"
     last_built_step="$step_name"
