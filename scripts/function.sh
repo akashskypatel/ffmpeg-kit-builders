@@ -315,7 +315,7 @@ concat_array() {
 truthy() {
   local value="$1"
   case "${value,,}" in
-    true|1|T|t|True|TRUE|y|Y|yes|Yes|YES|on|On|ON) return 0 ;;
+    true|1|T|t|True|TRUE|y|Y|yes|Yes|YES|on|On|ON|"\true") return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -325,7 +325,7 @@ truthy() {
 falsey() {
   local value="$1"
   case "${value,,}" in
-    false|0|F|f|False|FALSE|n|N|no|No|NO|off|Off|OFF) return 0 ;;
+    false|0|F|f|False|FALSE|n|N|no|No|NO|off|Off|OFF|"\false") return 0 ;;
     *) return 1 ;;
   esac
 }
