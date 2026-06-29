@@ -116,22 +116,22 @@ jobs:
       - name: Build iOS
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'ios') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build iPhone Simulator
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'iphonesimulator') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build macOS x86_64
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build macOS aarch64
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Upload failure artifacts
         if: failure()
