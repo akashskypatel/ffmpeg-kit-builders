@@ -4,7 +4,7 @@ set -euo pipefail
 platform="$1"
 arch="$2"
 dep="${3:-${GITHUB_WORKFLOW#build_}}"
-workspace="${4:-$(pwd)}"
+workspace="${4:-${GITHUB_WORKSPACE:-$(pwd)}}"
 archive_name="${platform}-${arch}-${dep}.zip"
 release_tag="${platform}-${arch}-deps"
 release_name="${platform}-${arch}-dependencies"
