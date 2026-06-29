@@ -1049,6 +1049,11 @@ build_libcdio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  if [ -f autogen.sh ]; then
+    echo "INFO: autogen.sh found. Running autogen.sh..."
+    (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
+    touch "no.autoreconf"
+  fi
   generic_configure "--disable-vcd-info \
 --disable-cddb \
 --without-cd-info \
@@ -1071,6 +1076,11 @@ ac_cv_func_glob=no"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  if [ -f autogen.sh ]; then
+    echo "INFO: autogen.sh found. Running autogen.sh..."
+    (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
+    touch "no.autoreconf"
+  fi
   generic_configure "--disable-example-progs MAKEINFO=true"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
