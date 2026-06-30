@@ -83,6 +83,7 @@ build_libusb() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  mv -f autogen.sh autogen.sh.disabled
   generic_configure "--disable-udev --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
