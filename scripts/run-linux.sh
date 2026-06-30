@@ -4307,6 +4307,12 @@ build_pocketsphinx() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$parent/$lib"
   [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
+  local automake_aux_dir
+  automake_aux_dir="$(automake --print-libdir)"
+  for automake_aux_file in compile config.guess config.sub depcomp install-sh missing ylwrap; do
+    [[ -f "Tools/config/$automake_aux_file" || ! -f "$automake_aux_dir/$automake_aux_file" ]] && continue
+    cp "$automake_aux_dir/$automake_aux_file" "Tools/config/$automake_aux_file"
+  done
   touch "no.autoreconf"
   do_configure "--prefix=$dependency_install_prefix \
 --libdir=$dependency_install_prefix/lib \
