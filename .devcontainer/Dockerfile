@@ -13,6 +13,7 @@ RUN dnf install -y epel-release && \
 RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     autoconf-archive \
     autogen \
+    asciidoc \
     bc \
     binutils \
     bison \

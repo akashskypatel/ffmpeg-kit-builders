@@ -3443,6 +3443,7 @@ build_libtwolame() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  install_missing_packages "asciidoc"
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
     sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
