@@ -3496,6 +3496,8 @@ build_libvorbis() {
   local repo_ver="v1.3.7"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--disable-docs --disable-examples --disable-oggtest --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
