@@ -655,8 +655,14 @@ build_sndio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export LDFLAGS="$LDFLAGS -lpthread -ldl"
-  do_configure "--prefix=$dependency_install_prefix --enable-static"
+  find . -maxdepth 2 \( -name "configure" -o -name "Makefile.in" \) -exec sed -i 's/\r$//' {} +
+  do_configure "--prefix=\"$dependency_install_prefix\" \
+--libdir=\"$dependency_install_prefix/lib\" \
+--pkgconfdir=\"$install_pkgconfig_dir\" \
+--enable-static \
+--enable-alsa \
+CFLAGS=\"$CFLAGS -I$dependency_install_prefix/include\" \
+LDFLAGS=\"$LDFLAGS -L$dependency_install_prefix/lib -lpthread -ldl\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
