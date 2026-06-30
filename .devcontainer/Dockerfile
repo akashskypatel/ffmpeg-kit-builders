@@ -25,6 +25,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     clang-tools-extra \
     curl \
     cvs \
+    doxygen \
     ed \
     flex \
     git \
