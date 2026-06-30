@@ -27,6 +27,11 @@ on:
         required: false
         default: false
         type: boolean
+      build_from:
+        description: "Start building from specified step instead of starting at the default starting point. Must be build_*"
+        required: false
+        default:
+        type: string
 
 permissions:
   contents: write
@@ -44,6 +49,7 @@ jobs:
     env:
       GH_TOKEN: \${{ github.token }}
       WORKFLOW_FORCE_SELF: \${{ inputs.force }}
+      BUILD_FROM: \${{ inputs.build_from }}
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
@@ -75,11 +81,15 @@ jobs:
           arch="\${{ matrix.arch }}"
           WORKFLOW_BUILD_STEPS="\$(sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
           echo "WORKFLOW_BUILD_STEPS: \$WORKFLOW_BUILD_STEPS"
-
+          start_building=false
+          [[ -n \${BUILD_FROM} ]] && start_building=true
           for build in \$WORKFLOW_BUILD_STEPS; do
-            echo "Running \$build for \${platform}-\${arch}"
-            sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
-            sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+            [[ "\${build}" == "\${BUILD_FROM}" ]] && start_building=true
+            if [[ \${start_building} == "true" ]]; then
+              echo "Running \$build for \${platform}-\${arch}"
+              sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
+              sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+            fi
           done
 
       - name: Upload failure artifacts
@@ -116,6 +126,11 @@ on:
         required: false
         default: false
         type: boolean
+      build_from:
+        description: "Start building from specified step instead of starting at the default starting point. Must be build_*"
+        required: false
+        default:
+        type: string
 
 permissions:
   contents: write
@@ -133,6 +148,7 @@ jobs:
     env:
       GH_TOKEN: \${{ github.token }}
       WORKFLOW_FORCE_SELF: \${{ inputs.force }}
+      BUILD_FROM: \${{ inputs.build_from }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -167,11 +183,15 @@ jobs:
           arch="\${{ matrix.arch }}"
           WORKFLOW_BUILD_STEPS="\$(sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
           echo "WORKFLOW_BUILD_STEPS: \$WORKFLOW_BUILD_STEPS"
-
+          start_building=false
+          [[ -n \${BUILD_FROM} ]] && start_building=true
           for build in \$WORKFLOW_BUILD_STEPS; do
-            echo "Running \$build for \${platform}-\${arch}"
-            sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
-            sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+            [[ "\${build}" == "\${BUILD_FROM}" ]] && start_building=true
+            if [[ \${start_building} == "true" ]]; then
+              echo "Running \$build for \${platform}-\${arch}"
+              sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
+              sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+            fi
           done
 
       - name: Upload failure artifacts

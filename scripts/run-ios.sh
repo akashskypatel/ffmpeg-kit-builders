@@ -3441,6 +3441,8 @@ build_libxml2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--with-ftp=no --with-http=no --with-python=no --with-iconv=$dependency_install_prefix" # using configure. meson doesnt work
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
