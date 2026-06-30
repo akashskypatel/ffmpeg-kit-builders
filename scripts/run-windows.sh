@@ -4783,6 +4783,8 @@ build_gettext_native() {
   local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib"
+  do_autogen --skip-gnulib
   change_dir "$src_dir/$lib/gettext-runtime"
   export LIBS="-liconv"
   export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib -Dlibintl_STATIC"
@@ -4792,11 +4794,13 @@ build_gettext_native() {
   export CC=gcc CXX=g++ AR=ar AS=as RANLIB=ranlib LD=ld STRIP=strip NASM=nasm
   local config="--prefix=/usr \
 --with-sysroot=\"/usr\" \
---with-libiconv-prefix=\"/usr\" \
+--with-included-libintl \
+--with-included-libiconv \
 --libdir=/usr/lib \
 --with-included-gettext \
 --enable-static \
 --disable-doc"
+  touch "no.autoreconf"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LIBS=\"$LIBS\""
@@ -4812,6 +4816,7 @@ LIBS=\"$LIBS\""
   change_dir "$src_dir/$lib/gettext-tools"
   config+="--disable-examples \
 --without-libtextstyle-prefix"
+  touch "no.autoreconf"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LIBS=\"$LIBS\" \
