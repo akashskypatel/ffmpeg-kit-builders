@@ -4306,10 +4306,12 @@ build_pocketsphinx() {
   change_dir "$src_dir/$parent" 1
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$parent/$lib"
-  touch "no.autoreconf"
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
+  [[ -f configure.ac ]] && mv configure.ac configure.ac.disabled
   do_configure "--prefix=$dependency_install_prefix \
 --libdir=$dependency_install_prefix/lib \
 --without-pcre \
+--disable-ccache \
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
   reset_cxxflags
