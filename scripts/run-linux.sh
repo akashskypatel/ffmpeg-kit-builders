@@ -941,6 +941,13 @@ build_libaribb24() {
   local repo="https://github.com/nkoriyama/aribb24"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  if [[ ! -f configure && -f configure.ac ]]; then
+    mkdir -p m4
+    for autotools_file in bootstrap configure.ac Makefile.am; do
+      [[ -f "$autotools_file" ]] && sed -i 's/\r$//' "$autotools_file"
+    done
+    autoreconf --install > >(redirect_output) 2>&1
+  fi
   generic_configure
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
