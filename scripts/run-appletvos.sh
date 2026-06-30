@@ -3481,6 +3481,8 @@ build_libzimg() {
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -fPIC"
   export CXXFLAGS="$CXXFLAGS -fPIC"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--enable-static \
 --disable-shared \
 --with-pic"

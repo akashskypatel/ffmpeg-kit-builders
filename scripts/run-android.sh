@@ -4019,6 +4019,8 @@ build_libzimg() {
     export CFLAGS="-march=armv7-a -mfpu=neon-fp16 -mfloat-abi=softfp"
     export CXXFLAGS="-march=armv7-a -mfpu=neon-fp16 -mfloat-abi=softfp"
   fi
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "$config"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install

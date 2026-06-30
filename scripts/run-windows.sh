@@ -495,6 +495,8 @@ build_libzimg() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--enable-static \
 --disable-shared \
 --with-pic"
