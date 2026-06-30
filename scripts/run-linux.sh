@@ -445,7 +445,7 @@ build_xcbproto() {
   # change_dir "$src_dir"
 }
 build_libxau() {
-  install_missing_packages "libxau-devel"
+  install_missing_packages "libXau-devel"
   # # run_valid_function "build_xorgproto"
   # # https://gitlab.freedesktop.org/xorg/lib/libxau
   # local lib="libxau"
@@ -462,7 +462,7 @@ build_libxau() {
 }
 # build_libxcb            # config_options+= --enable-libxcb              # enable X11 grabbing using XCB [autodetect]
 build_libxcb() {
-  install_missing_packages "libxau-devel" "xorg-x11-proto-devel" "libxcb-devel"
+  install_missing_packages "libXau-devel" "xorg-x11-proto-devel" "libxcb-devel"
   # https://gitlab.freedesktop.org/xorg/lib/libxcb
   # local lib="libxcb"
   # local repo="https://gitlab.freedesktop.org/xorg/lib/libxcb"
@@ -1041,8 +1041,8 @@ build_libbs2b() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  touch "no.autoreconf"
-  sed -i.bak "s/AC_FUNC_MALLOC//" configure.ac # #270
+  remove_path -f "no.autoreconf"
+  sed -i.bak -e "s/AC_FUNC_MALLOC//" -e "s/[[:space:]]*dist-lzma//" configure.ac # #270
   export LIBS="-lm"                              # avoid pow failure linux native
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include"
   export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include"
