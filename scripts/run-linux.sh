@@ -4321,14 +4321,13 @@ build_pocketsphinx() {
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
   reset_cxxflags
-  install_missing_packages python3-dev
-  install_missing_packages python3-pip
-  pip3 install distutils
+  install_missing_packages python3-dev python3-pip
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$parent/$lib"
   change_dir "$src_dir/$parent/$lib"
+  touch "no.autoreconf"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
@@ -4337,7 +4336,7 @@ build_pocketsphinx() {
 --without-pulse \
 --disable-pulseaudio \
 --disable-pulse \
-LIBS=\"-lasound\""
+LIBS=\"-lasound -L/opt/python/cp312-cp312/lib\""
   disable_nonessential "$src_dir/$parent/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
