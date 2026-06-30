@@ -4322,6 +4322,8 @@ build_pocketsphinx() {
   do_make_and_make_install
   reset_cxxflags
   install_missing_packages python3-dev
+  install_missing_packages python3-pip
+  pip3 install distutils
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
   change_dir "$src_dir"
