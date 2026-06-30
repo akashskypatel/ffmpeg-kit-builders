@@ -1653,6 +1653,8 @@ build_libklvanc() {
   change_dir "$src_dir/$lib"
   find . -maxdepth 2 \( -name "autogen.sh" -o -name "configure.ac" -o -name "Makefile.am" \) -exec sed -i 's/\r$//' {} +
   autoreconf_library
+  touch "no.autoreconf"
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   generic_configure "--enable-static \
 --disable-shared \
 --disable-examples"
