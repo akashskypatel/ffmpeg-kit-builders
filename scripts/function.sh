@@ -2788,6 +2788,10 @@ do_configure() {
 		if [[ ! -f $configure_name && -f bootstrap.sh ]]; then # fftw wants to only run this if no configure :|
 			(./bootstrap.sh) > >(redirect_output) 2>&1
 		fi
+    if [ -f autogen.sh ]; then
+      echo "INFO: autogen.sh found. Running autogen.sh..."
+      do_autogen
+    fi
     if needs_libtoolize "$cur_dir2" > >(redirect_output) 2>&1; then
       echo "INFO: Required libtool build-aux files not found. running libtoolize..." >>"$LOG_FILE"
       "$LIBTOOLIZE" --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize for $english_name"
@@ -2818,10 +2822,6 @@ do_configure() {
         echo "INFO: gitsub.sh found. Running gitsub.sh..."
         (./gitsub.sh pull) > >(redirect_output) 2>&1
       fi
-      if [ -f autogen.sh ]; then
-        echo "INFO: autogen.sh found. Running autogen.sh..."
-			  (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
-		  fi
 		fi
     if [[ ! -f config.h.in && -f configure.ac ]]; then
       echo -e "INFO: config.h.in not found. Running autoheader..." >>"$LOG_FILE"
@@ -2890,6 +2890,7 @@ do_autogen() {
 			exit_message 1 "do_autogen: failed ./autogen.sh with $extra_build_args\n see $LOG_FILE for more details"
     }
 		create_touch_file 0 "$touch_name"
+    touch "no.autoreconf"
     add_src_dir "$(pwd)"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files
 		echo -e "INFO: Done with ./autogen.sh" >>"$LOG_FILE"
