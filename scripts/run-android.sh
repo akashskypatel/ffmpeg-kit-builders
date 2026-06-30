@@ -4052,6 +4052,62 @@ build_libzmq() {
   do_make_and_make_install
   change_dir "$src_dir"
 }
+build_gettext_native() {
+  local min_ver="0.21"
+  if command -v gettext &>/dev/null; then
+    local installed_ver="$(gettext --version 2>/dev/null | head -n 1 | awk '{print $NF}')"
+  else
+    local installed_ver=0
+  fi
+  if [ "$(printf '%s\n' "$min_ver" "$installed_ver" | sort -V | head -n 1)" = "$installed_ver" ] && [ "$installed_ver" != "$min_ver" ]; then
+  # run_valid_function "build_iconv_minimal_native"
+  clear_cross_vars
+  local lib="gettext-native"
+  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+  change_dir "$src_dir"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib/gettext-runtime"
+  export LIBS="-liconv"
+  export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib -Dlibintl_STATIC"
+  export CXXFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
+  export CPPFLAGS=""
+  export LDFLAGS=""
+  export CC=gcc CXX=g++ AR=ar AS=as RANLIB=ranlib LD=ld STRIP=strip NASM=nasm
+  local config="--prefix=/usr \
+--with-sysroot=\"/usr\" \
+--with-libiconv-prefix=\"/usr\" \
+--libdir=/usr/lib \
+--with-included-gettext \
+--enable-static \
+--disable-doc"
+  do_configure "$config \
+CFLAGS=\"$CFLAGS\" \
+LIBS=\"$LIBS\""
+  do_make
+  do_make_install "PREFIX=\"/usr\""
+  change_dir "$src_dir/$lib/libtextstyle"
+  touch "no.autoreconf"
+  do_configure "$config \
+CFLAGS=\"$CFLAGS\" \
+LIBS=\"$LIBS\""
+  do_make
+  do_make_install "PREFIX=\"/usr\""
+  change_dir "$src_dir/$lib/gettext-tools"
+  config+="--disable-examples \
+--without-libtextstyle-prefix"
+  do_configure "$config \
+CFLAGS=\"$CFLAGS\" \
+LIBS=\"$LIBS\" \
+LDFLAGS=\"$LDFLAGS $LIBS\""
+  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\" LIBS=\"$LIBS\""
+  do_make
+  do_make_install "PREFIX=\"/usr\""
+  unset LIBS
+  reset_allflags
+  reset_cross_vars
+  fi
+}
 # build_libzvbi           # config_options+= --enable-libzvbi             # enable teletext support via libzvbi [no]
 build_libzvbi() {
   local lib="libzvbi"
