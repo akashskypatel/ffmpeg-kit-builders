@@ -4294,17 +4294,36 @@ build_vapoursynth() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   install_missing_packages python3-dev
-  if [[ -f "/opt/_internal/cpython-3.12.12/include/python3.12/Python.h" ]]; then
-  local py_root="/opt/_internal/cpython-3.12.12"
-  local py_ver="python3.12"
-  remove_path -rf "$dependency_install_prefix/include/$py_ver"
-  ln -sf "$py_root/include/$py_ver" "$dependency_install_prefix/include/"
-  find "$py_root/lib" -maxdepth 1 -name "lib$py_ver*" -exec ln -sf {} "$dependency_install_prefix/lib/" \;
+  local py_header
+  py_header="$(
+    python3 - <<'PY' 2>/dev/null
+import os
+import sysconfig
+
+for key in ("INCLUDEPY", "CONFINCLUDEPY"):
+    include_dir = sysconfig.get_config_var(key)
+    if include_dir and os.path.isfile(os.path.join(include_dir, "Python.h")):
+        print(os.path.join(include_dir, "Python.h"))
+        break
+PY
+  )"
+  if [[ -z "$py_header" ]]; then
+    py_header="$(find "$dependency_install_prefix" /opt/_internal /usr/local /usr -path "*/include/python*/Python.h" -print -quit 2>/dev/null)"
   fi
-  export CXXFLAGS="$CXXFLAGS -I$dependency_install_prefix/include/$py_ver "
-  export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include/$py_ver "
-  export CFLAGS="$CFLAGS -I$dependency_install_prefix/include/$py_ver "
-  export LDFLAGS="$LDFLAGS -L/opt/_internal/cpython-3.12.12"
+  if [[ -n "$py_header" ]]; then
+    local py_include_dir
+    local py_ver
+    local py_lib_dir
+    py_include_dir="$(dirname "$py_header")"
+    py_ver="$(basename "$py_include_dir")"
+    py_lib_dir="$(find "$dependency_install_prefix/lib" /opt/_internal /usr/local/lib /usr/lib /usr/lib64 -name "lib$py_ver*" -printf '%h\n' -quit 2>/dev/null)"
+    export CXXFLAGS="$CXXFLAGS -I$py_include_dir"
+    export CPPFLAGS="$CPPFLAGS -I$py_include_dir"
+    export CFLAGS="$CFLAGS -I$py_include_dir"
+    if [[ -n "$py_lib_dir" ]]; then
+      export LDFLAGS="$LDFLAGS -L$py_lib_dir"
+    fi
+  fi
   generic_meson "-Denable_vspipe=false -Denable_python_module=false"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
