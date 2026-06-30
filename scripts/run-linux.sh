@@ -2700,6 +2700,7 @@ build_libshine() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  sed -i 's/^void shine_mdct_initialise();/void shine_mdct_initialise(shine_global_config *config);/' src/lib/l3mdct.h
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
