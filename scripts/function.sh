@@ -2792,6 +2792,10 @@ do_configure() {
       echo "INFO: autogen.sh found. Running autogen.sh..."
       do_autogen
     fi
+    if [[ -f gitsub.sh ]]; then
+      echo "INFO: gitsub.sh found. Running gitsub.sh..."
+      (./gitsub.sh pull) > >(redirect_output) 2>&1
+    fi
     if needs_libtoolize "$cur_dir2" > >(redirect_output) 2>&1; then
       echo "INFO: Required libtool build-aux files not found. running libtoolize..." >>"$LOG_FILE"
       "$LIBTOOLIZE" --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize for $english_name"
@@ -2799,7 +2803,6 @@ do_configure() {
       libtoolize_ver=$("$LIBTOOLIZE" --version 2>/dev/null | head -n1 | awk '{print $NF}')
       create_touch_file 0 "$(get_small_touchfile_name "${touch_prefix}_libtoolize" "libtoolize: $libtoolize_ver")"
     fi
-
     if needs_automake_missing "$cur_dir2" > >(redirect_output) 2>&1; then
       echo -e "INFO: Makefile/build-aux files not found. running automake..." >>"$LOG_FILE"
       if ! automake --copy --force-missing --add-missing > >(redirect_output) 2>&1; then
@@ -2817,12 +2820,6 @@ do_configure() {
       echo -e "INFO: Configure not found. Running autoreconf with existing configure.ac..." >>"$LOG_FILE"
 			autoreconf_library || exit_message 1 "Failed to autoreconf $english_name"
     fi
-		if [[ ! -f $configure_name ]]; then
-      if [[ -f gitsub.sh ]]; then
-        echo "INFO: gitsub.sh found. Running gitsub.sh..."
-        (./gitsub.sh pull) > >(redirect_output) 2>&1
-      fi
-		fi
     if [[ ! -f config.h.in && -f configure.ac ]]; then
       echo -e "INFO: config.h.in not found. Running autoheader..." >>"$LOG_FILE"
       autoheader > >(redirect_output) 2>&1
