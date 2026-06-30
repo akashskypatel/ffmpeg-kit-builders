@@ -1929,6 +1929,7 @@ build_mpg123() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
+  autoreconf_library
   generic_configure
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3913,6 +3914,7 @@ LDFLAGS=\"$LDFLAGS\""
 }
 # build_libzvbi           # config_options+= --enable-libzvbi             # enable teletext support via libzvbi [no]
 build_libzvbi() {
+  build_gettext_native
   local lib="libzvbi"
   local repo="https://github.com/zapping-vbi/zvbi"
   local repo_ver="v0.2.44"

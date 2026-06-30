@@ -4074,6 +4074,7 @@ build_gettext_native() {
   export CXXFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
   export CPPFLAGS=""
   export LDFLAGS=""
+  export CC=gcc CXX=g++ AR=ar AS=as RANLIB=ranlib LD=ld STRIP=strip NASM=nasm
   local config="--prefix=/usr \
 --with-sysroot=\"/usr\" \
 --with-included-libintl \
@@ -4110,6 +4111,7 @@ LDFLAGS=\"$LDFLAGS\""
 }
 # build_libzvbi           # config_options+= --enable-libzvbi             # enable teletext support via libzvbi [no]
 build_libzvbi() {
+  build_gettext_native
   local lib="libzvbi"
   local repo="https://github.com/zapping-vbi/zvbi"
   local repo_ver="v0.2.44"
