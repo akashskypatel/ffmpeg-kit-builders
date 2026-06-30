@@ -30,7 +30,7 @@ on:
       build_from:
         description: "Start building from specified step instead of starting at the default starting point. Must be build_*"
         required: false
-        default:
+        default: ""
         type: string
 
 permissions:
@@ -81,16 +81,32 @@ jobs:
           arch="\${{ matrix.arch }}"
           WORKFLOW_BUILD_STEPS="\$(sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
           echo "WORKFLOW_BUILD_STEPS: \$WORKFLOW_BUILD_STEPS"
-          start_building=false
-          [[ -n \${BUILD_FROM} ]] && start_building=true
+          start_building=true
+          found_build_from=false
+          if [[ -n "\${BUILD_FROM:-}" ]]; then
+            if [[ "\$BUILD_FROM" != build_* ]]; then
+              echo "build_from must be a build_* step, got: \$BUILD_FROM" >&2
+              exit 1
+            fi
+            start_building=false
+          fi
+
           for build in \$WORKFLOW_BUILD_STEPS; do
-            [[ "\${build}" == "\${BUILD_FROM}" ]] && start_building=true
+            if [[ -n "\${BUILD_FROM:-}" && "\$build" == "\$BUILD_FROM" ]]; then
+              start_building=true
+              found_build_from=true
+            fi
             if [[ \${start_building} == "true" ]]; then
               echo "Running \$build for \${platform}-\${arch}"
               sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
               sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
             fi
           done
+
+          if [[ -n "\${BUILD_FROM:-}" && "\$found_build_from" != "true" ]]; then
+            echo "build_from step not found in workflow build steps: \$BUILD_FROM" >&2
+            exit 1
+          fi
 
       - name: Upload failure artifacts
         if: failure()
@@ -129,7 +145,7 @@ on:
       build_from:
         description: "Start building from specified step instead of starting at the default starting point. Must be build_*"
         required: false
-        default:
+        default: ""
         type: string
 
 permissions:
@@ -183,16 +199,32 @@ jobs:
           arch="\${{ matrix.arch }}"
           WORKFLOW_BUILD_STEPS="\$(sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
           echo "WORKFLOW_BUILD_STEPS: \$WORKFLOW_BUILD_STEPS"
-          start_building=false
-          [[ -n \${BUILD_FROM} ]] && start_building=true
+          start_building=true
+          found_build_from=false
+          if [[ -n "\${BUILD_FROM:-}" ]]; then
+            if [[ "\$BUILD_FROM" != build_* ]]; then
+              echo "build_from must be a build_* step, got: \$BUILD_FROM" >&2
+              exit 1
+            fi
+            start_building=false
+          fi
+
           for build in \$WORKFLOW_BUILD_STEPS; do
-            [[ "\${build}" == "\${BUILD_FROM}" ]] && start_building=true
+            if [[ -n "\${BUILD_FROM:-}" && "\$build" == "\$BUILD_FROM" ]]; then
+              start_building=true
+              found_build_from=true
+            fi
             if [[ \${start_building} == "true" ]]; then
               echo "Running \$build for \${platform}-\${arch}"
               sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
               sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
             fi
           done
+
+          if [[ -n "\${BUILD_FROM:-}" && "\$found_build_from" != "true" ]]; then
+            echo "build_from step not found in workflow build steps: \$BUILD_FROM" >&2
+            exit 1
+          fi
 
       - name: Upload failure artifacts
         if: failure()

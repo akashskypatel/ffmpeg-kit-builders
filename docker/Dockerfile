@@ -125,6 +125,11 @@ RUN echo 'export RUSTUP_HOME=/usr/local/rustup' >> /etc/profile.d/rust.sh && \
     cargo --version && \
     dnf clean all
 
+RUN cargo install cargo-c --locked && \
+    ln -sf /usr/local/cargo/bin/cargo-cbuild /usr/bin/cargo-cbuild && \
+    ln -sf /usr/local/cargo/bin/cargo-cinstall /usr/bin/cargo-cinstall && \
+    cargo cbuild --version
+
 RUN echo 'source /etc/profile.d/rust.sh' >> /home/vscode/.bashrc || true
 
 # Allow 'vscode' user to use Cargo
