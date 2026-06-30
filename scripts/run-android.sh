@@ -4070,12 +4070,10 @@ build_gettext_native() {
   change_dir "$src_dir/$lib"
   do_autogen --skip-gnulib
   change_dir "$src_dir/$lib/gettext-runtime"
-  export LIBS="-liconv"
-  export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib -Dlibintl_STATIC"
+  export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
   export CXXFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
   export CPPFLAGS=""
   export LDFLAGS=""
-  export CC=gcc CXX=g++ AR=ar AS=as RANLIB=ranlib LD=ld STRIP=strip NASM=nasm
   local config="--prefix=/usr \
 --with-sysroot=\"/usr\" \
 --with-included-libintl \
@@ -4086,15 +4084,13 @@ build_gettext_native() {
 --disable-doc"
   touch "no.autoreconf"
   do_configure "$config \
-CFLAGS=\"$CFLAGS\" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
   do_configure "$config \
-CFLAGS=\"$CFLAGS\" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/gettext-tools"
@@ -4103,9 +4099,8 @@ LIBS=\"$LIBS\""
   touch "no.autoreconf"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
-LIBS=\"$LIBS\" \
-LDFLAGS=\"$LDFLAGS $LIBS\""
-  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\" LIBS=\"$LIBS\""
+LDFLAGS=\"$LDFLAGS\""
+  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   unset LIBS
