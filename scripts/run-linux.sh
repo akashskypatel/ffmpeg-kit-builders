@@ -226,66 +226,6 @@ build_libv4l2() {
   unset LIBS
   change_dir "$src_dir"
 }
-# build_libxcb_shape      # config_options+= --enable-libxcb-shape        # enable X11 grabbing shape rendering [autodetect]
-build_libxcb_shape() {
-  # run_valid_function "build_libxcb" 1
-    echo "INFO: libxcb-shape is part of libxcb." >>"$LOG_FILE"
-}
-# build_libxcb_shm        # config_options+= --enable-libxcb-shm          # enable X11 grabbing shm communication [autodetect]
-build_libxcb_shm() {
-  # run_valid_function "build_libxcb" 1
-    echo "INFO: libxcb-shm is part of libxcb." >>"$LOG_FILE"
-}
-# build_libxcb_xfixes     # config_options+= --enable-libxcb-xfixes       # enable X11 grabbing mouse rendering [autodetect]
-build_libxcb_xfixes() {
-  # run_valid_function "build_libxcb" 1
-    echo "INFO: libxcb-xfixes is part of libxcb." >>"$LOG_FILE"
-}
-build_xcbproto() {
-  install_missing_packages "xorg-x11-proto-devel"
-  # https://gitlab.freedesktop.org/xorg/proto/xcbproto
-  # local lib="xcbproto"
-  # local repo="https://gitlab.freedesktop.org/xorg/proto/xcbproto"
-  # local repo_ver="xcb-proto-1.17.0"
-  # change_dir "$src_dir"
-  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  # change_dir "$src_dir/$lib"
-  # generic_configure "--enable-static --disable-shared"
-  # disable_nonessential "$src_dir/$lib"
-  # do_make_and_make_install
-  # change_dir "$src_dir"
-}
-build_libxau() {
-  install_missing_packages "libxau-devel"
-  # # run_valid_function "build_xorgproto"
-  # # https://gitlab.freedesktop.org/xorg/lib/libxau
-  # local lib="libxau"
-  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxau"
-  # local repo_ver="libXau-1.0.12"
-  # change_dir "$src_dir"
-  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  # change_dir "$src_dir/$lib"
-  # automake --force-missing --add-missing > >(redirect_output) 2>&1
-  # generic_configure "--enable-static --disable-shared"
-  # disable_nonessential "$src_dir/$lib"
-  # do_make_and_make_install
-  # change_dir "$src_dir"
-}
-# build_libxcb            # config_options+= --enable-libxcb              # enable X11 grabbing using XCB [autodetect]
-build_libxcb() {
-  install_missing_packages "libxau-devel" "xorg-x11-proto-devel" "libxcb-devel"
-  # https://gitlab.freedesktop.org/xorg/lib/libxcb
-  # local lib="libxcb"
-  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxcb"
-  # local repo_ver="libxcb-1.17.0"
-  # change_dir "$src_dir"
-  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  # change_dir "$src_dir/$lib"
-  # generic_configure "--enable-static --disable-shared"
-  # disable_nonessential "$src_dir/$lib"
-  # do_make_and_make_install
-  # change_dir "$src_dir"
-}
 # build_rkmpp             # config_options+= --enable-rkmpp               # enable Rockchip Media Process Platform code [no]
 build_rkmpp() {
   # https://github.com/rockchip-linux/mpp
@@ -316,6 +256,7 @@ build_vaapi() {
   # run_valid_function "build_xlib" 1
   # local original_pkg_path=$PKG_CONFIG_PATH
   # https://github.com/intel/libva
+  build_xlib
   local lib="vaapi"
   local repo="https://github.com/intel/libva"
   local repo_ver="2.22.0"
@@ -472,8 +413,83 @@ build_x11() {
   # do_make_and_make_install
   # change_dir "$src_dir"
 }
+
+# build_libxcb_shape      # config_options+= --enable-libxcb-shape        # enable X11 grabbing shape rendering [autodetect]
+build_libxcb_shape() {
+  # run_valid_function "build_libxcb" 1
+    echo "INFO: libxcb-shape is part of libxcb." >>"$LOG_FILE"
+}
+# build_libxcb_shm        # config_options+= --enable-libxcb-shm          # enable X11 grabbing shm communication [autodetect]
+build_libxcb_shm() {
+  # run_valid_function "build_libxcb" 1
+    echo "INFO: libxcb-shm is part of libxcb." >>"$LOG_FILE"
+}
+# build_libxcb_xfixes     # config_options+= --enable-libxcb-xfixes       # enable X11 grabbing mouse rendering [autodetect]
+build_libxcb_xfixes() {
+  # run_valid_function "build_libxcb" 1
+    echo "INFO: libxcb-xfixes is part of libxcb." >>"$LOG_FILE"
+}
+build_xcbproto() {
+  install_missing_packages "xorg-x11-proto-devel"
+  # https://gitlab.freedesktop.org/xorg/proto/xcbproto
+  # local lib="xcbproto"
+  # local repo="https://gitlab.freedesktop.org/xorg/proto/xcbproto"
+  # local repo_ver="xcb-proto-1.17.0"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib"
+  # generic_configure "--enable-static --disable-shared"
+  # disable_nonessential "$src_dir/$lib"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
+}
+build_libxau() {
+  install_missing_packages "libxau-devel"
+  # # run_valid_function "build_xorgproto"
+  # # https://gitlab.freedesktop.org/xorg/lib/libxau
+  # local lib="libxau"
+  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxau"
+  # local repo_ver="libXau-1.0.12"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib"
+  # automake --force-missing --add-missing > >(redirect_output) 2>&1
+  # generic_configure "--enable-static --disable-shared"
+  # disable_nonessential "$src_dir/$lib"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
+}
+# build_libxcb            # config_options+= --enable-libxcb              # enable X11 grabbing using XCB [autodetect]
+build_libxcb() {
+  install_missing_packages "libxau-devel" "xorg-x11-proto-devel" "libxcb-devel"
+  # https://gitlab.freedesktop.org/xorg/lib/libxcb
+  # local lib="libxcb"
+  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxcb"
+  # local repo_ver="libxcb-1.17.0"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib"
+  # generic_configure "--enable-static --disable-shared"
+  # disable_nonessential "$src_dir/$lib"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
+}
 # build_xlib              # config_options+= --disable-xlib               # disable xlib [autodetect]
 build_xlib() {
+  build_x11
+  build_libxft
+  build_libxrender
+  build_libxdmcp
+  build_libxext
+  build_xorg_macros
+  build_xorgproto
+  build_xtrans
+  build_libxcb
+  build_libxau
+  build_xcbproto
+  build_libxcb_xfixes
+  build_libxcb_shm
+  build_libxcb_shape
   install_missing_packages "libxcb-devel" "libX11-devel" "libXrender-devel" "libXext-devel" "libXft-devel" "libXdmcp-devel" "xorg-x11-xtrans-devel" "xorg-x11-proto-devel"
 }
 #endregion---------------------------------------------------------------------
@@ -1919,7 +1935,7 @@ build_libmodplug() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
-  generic_configure
+  generic_cmake
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
