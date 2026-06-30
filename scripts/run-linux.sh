@@ -4307,7 +4307,7 @@ build_pocketsphinx() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$parent/$lib"
   [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
-  [[ -f configure.ac ]] && mv configure.ac configure.ac.disabled
+  touch "no.autoreconf"
   do_configure "--prefix=$dependency_install_prefix \
 --libdir=$dependency_install_prefix/lib \
 --without-pcre \

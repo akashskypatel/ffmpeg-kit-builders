@@ -472,10 +472,27 @@ setup_windows_environment() {
 
 setup_linux_environment() {
     export PATCHDIR="$SCRIPTDIR/linux/patches"
-    export host_target="$build_triple"
-    export rust_target="$host_arch-unknown-linux-gnu"
     export dependency_install_prefix="$work_dir/libraries" # dependencies
     export install_pkgconfig_dir="${dependency_install_prefix}/lib/pkgconfig"
+
+    case "$host_arch" in
+        "x86_64")
+            export host_arch="x86_64"
+            export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
+            ;;
+        "aarch64"|"arm64"|"arm64-v8a")
+            export host_arch="aarch64"
+            export cmake_host_arch="aarch64"
+            export platform_arch="aarch64"
+            ;;
+        *)
+            exit_message 1 "setup_linux_environment: Unsupported host arch '$host_arch' for $host_platform"
+            ;;
+    esac
+
+    export host_target="$build_triple"
+    export rust_target="$host_arch-unknown-linux-gnu"
     
     export PKG_CONFIG_PATH="$original_pkg_config_path:$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
     export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:$original_path"
@@ -489,22 +506,6 @@ setup_linux_environment() {
     export linux_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -Wl,-rpath,${dependency_install_prefix}/lib "
     export LDFLAGS="$linux_ldflags"
     export LD_LIBRARY_PATH="${dependency_install_prefix}/lib:$LD_LIBRARY_PATH"
-
-    case "$host_arch" in
-        "x86_64")
-            export host_arch="x86_64"
-            export cmake_host_arch="x86_64"
-            export platform_arch="x86_64"
-            ;;
-        # TODO: Add support for aarch64
-        # "aarch64"|"arm64"|"arm64-v8a")
-        #     export host_arch="aarch64"
-        #     export cmake_host_arch="aarch64"
-        #     ;;
-        *)
-            exit_message 1 "setup_linux_environment: Unsupported host arch '$host_arch' for $host_platform"
-            ;;
-    esac
     
     source /opt/rh/gcc-toolset-14/enable
     
