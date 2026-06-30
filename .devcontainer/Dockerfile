@@ -120,15 +120,17 @@ RUN echo 'export RUSTUP_HOME=/usr/local/rustup' >> /etc/profile.d/rust.sh && \
     ln -sf /usr/local/cargo/bin/cargo /usr/bin/cargo && \
     cargo --version && \
     rustup target add x86_64-pc-windows-gnu && \
-    curl -L https://github.com/lu-zero/cargo-c/releases/download/v0.10.20/cargo-c-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/bin && \
+    curl -fsSL https://github.com/lu-zero/cargo-c/releases/download/v0.10.20/cargo-c-x86_64-unknown-linux-musl.tar.gz -o /tmp/cargo-c.tar.gz && \
+    mkdir -p /tmp/cargo-c /usr/local/bin && \
+    tar -xzf /tmp/cargo-c.tar.gz -C /tmp/cargo-c && \
+    find /tmp/cargo-c -type f -name 'cargo-c*' -exec install -m 0755 {} /usr/local/bin/ \; && \
+    rm -rf /tmp/cargo-c /tmp/cargo-c.tar.gz && \
+    ln -sf /usr/local/bin/cargo-cbuild /usr/bin/cargo-cbuild && \
+    ln -sf /usr/local/bin/cargo-cinstall /usr/bin/cargo-cinstall && \
+    cargo cbuild --version && \
     rustc --version && \
     cargo --version && \
     dnf clean all
-
-RUN cargo install cargo-c --locked && \
-    ln -sf /usr/local/cargo/bin/cargo-cbuild /usr/bin/cargo-cbuild && \
-    ln -sf /usr/local/cargo/bin/cargo-cinstall /usr/bin/cargo-cinstall && \
-    cargo cbuild --version
 
 RUN echo 'source /etc/profile.d/rust.sh' >> /home/vscode/.bashrc || true
 

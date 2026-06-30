@@ -87,14 +87,6 @@ jobs:
       - name: Prepare scripts
         shell: bash
         run: chmod +x runner.sh scripts/*.sh
-      
-      - name: Prepare tools
-        shell: bash
-        run: |
-          ln -sf /usr/local/bin/aclocal /usr/bin/aclocal-1.18 || true
-          ln -sf /usr/local/bin/automake /usr/bin/automake-1.18 || true
-          ln -sf /usr/local/bin/aclocal /usr/local/bin/aclocal-1.18 || true
-          ln -sf /usr/local/bin/automake /usr/local/bin/automake-1.18 || true
 
       - name: Build Linux
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
@@ -151,13 +143,6 @@ jobs:
         run: |
           brew install 'bash' 'coreutils' 'ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' 'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' 'bzip2' 'python3' 'bc' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'libtool' 'gsed'
           echo "HOMEBREW_BASH=$(brew --prefix)/bin/bash" >> "$GITHUB_ENV"
-      
-      - name: Prepare tools
-        shell: bash
-        run: |
-          tool_bin="$(dirname "$HOMEBREW_BASH")"
-          ln -sf "$tool_bin/aclocal" "$tool_bin/aclocal-1.18" || true
-          ln -sf "$tool_bin/automake" "$tool_bin/automake-1.18" || true
 
       - name: Accept Xcode license
         shell: bash
