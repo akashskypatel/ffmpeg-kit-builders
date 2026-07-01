@@ -2743,7 +2743,6 @@ build_pocketsphinx() {
   # run_valid_function "build_dlfcn"
   # run_valid_function "build_lzma"
   # run_valid_function "build_glib"
-  clear_cross_vars
   local lib="pocketsphinx"
   local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
   local repo_ver="r13291"
