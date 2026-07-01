@@ -4321,7 +4321,6 @@ build_pocketsphinx() {
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
   reset_cxxflagss
-  install_missing_packages python3-dev python3-pip
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
   change_dir "$src_dir"
