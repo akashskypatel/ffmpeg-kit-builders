@@ -821,6 +821,7 @@ build_libunistring() {
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   generic_configure
   sed -i -E 's/=[[:space:]]*libunistring\.res\.lo/=/g' "lib/Makefile"
   disable_nonessential "$src_dir/$lib"
@@ -1136,6 +1137,7 @@ build_libtwolame() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
+  sed -i.bak "s/--enable-maintainer-mode//g" autogen.sh
 	if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
 		sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
 	fi
@@ -2662,6 +2664,7 @@ build_swig() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   do_configure "--build=\"$build_triple\" \
 --host=\"$build_triple\" \
 --prefix=$dependency_install_prefix \
@@ -2679,6 +2682,7 @@ build_sphinxbase() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib"
 	change_dir "$src_dir/$lib"
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
 	generic_configure "--enable-static \
 --disable-shared \
 --without-python \
@@ -2724,6 +2728,7 @@ build_pocketsphinx() {
 	change_dir "$src_dir"
   do_svn_checkout "$repo" "$src_dir/$lib"
 	change_dir "$src_dir/$lib"
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
 	generic_configure "--enable-static \
 --disable-shared \
 --without-python \
@@ -3412,6 +3417,7 @@ build_libklvanc() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   sed -i.bak 's#<sys/errno.h>#<errno.h>#g' src/libklvanc/vanc.h src/libklvanc/vanc-packets.h src/core-private.h src/libklvanc/vanc-lines.h
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   generic_configure "--enable-static \
 --disable-shared"
   disable_nonessential "$src_dir/$lib"
@@ -4854,14 +4860,14 @@ build_gettext_native() {
 --enable-static \
 --disable-doc"
   touch "no.autoreconf"
-  mv -f autogen.sh autogen.sh.disabled
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
-  mv -f autogen.sh autogen.sh.disabled
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
@@ -4870,7 +4876,7 @@ CFLAGS=\"$CFLAGS\""
   config+="--disable-examples \
 --without-libtextstyle-prefix"
   touch "no.autoreconf"
-  mv -f autogen.sh autogen.sh.disabled
+  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LDFLAGS=\"$LDFLAGS\""
