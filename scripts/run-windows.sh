@@ -4781,9 +4781,9 @@ build_libdovi() {
   mkdir -p .cargo
 cat <<EOF > .cargo/config.toml
 [target.x86_64-pc-windows-gnu]
-rustflags = ["-C", "-C", "llvm-args=-mstack-alignment=8"]
+rustflags = ["-C", "llvm-args=-stackrealign", "-C", "llvm-args=-mstack-alignment=8"]
 EOF
-  export RUSTFLAGS="-C target-feature=+crt-static -C target-cpu=x86-64 -C link-arg=-mstackrealign -C llvm-args=-stackrealign --stackrealign"
+  export RUSTFLAGS="-C target-feature=+crt-static -C target-cpu=x86-64 -C link-arg=-mstackrealign -C llvm-args=-stackrealign"
 	cargo_build_and_install "--release" "--package dolby_vision \
 --release \
 --library-type=staticlib"
