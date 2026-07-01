@@ -4328,6 +4328,7 @@ build_pocketsphinx() {
   do_git_checkout "$repo" "$src_dir/$parent/$lib"
   change_dir "$src_dir/$parent/$lib"
   touch "no.autoreconf"
+  find_native_python
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
@@ -4389,17 +4390,7 @@ LIBS=\"-lasound -L/opt/python/cp312-cp312/lib\""
 #   change_dir "$src_dir"
 #   fi
 # }
-# build_vapoursynth       # config_options+= --enable-vapoursynth         # enable VapourSynth demuxer [no]
-build_vapoursynth() {
-  # run_valid_function "build_libzimg" 1
-  activate_meson
-  local lib="vapoursynth"
-  local repo="https://github.com/vapoursynth/vapoursynth"
-  local repo_ver="R73"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  install_missing_packages python3-dev
+find_native_python() {
   local py_header
   py_header="$(
     python3 - <<'PY' 2>/dev/null
@@ -4428,8 +4419,22 @@ PY
     export CFLAGS="$CFLAGS -I$py_include_dir"
     if [[ -n "$py_lib_dir" ]]; then
       export LDFLAGS="$LDFLAGS -L$py_lib_dir"
+      export LIBS="$LIBS -l$py_ver"
     fi
   fi
+}
+# build_vapoursynth       # config_options+= --enable-vapoursynth         # enable VapourSynth demuxer [no]
+build_vapoursynth() {
+  # run_valid_function "build_libzimg" 1
+  activate_meson
+  local lib="vapoursynth"
+  local repo="https://github.com/vapoursynth/vapoursynth"
+  local repo_ver="R73"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  install_missing_packages python3-dev
+  find_native_python
   generic_meson "-Denable_vspipe=false -Denable_python_module=false"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
