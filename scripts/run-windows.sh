@@ -2919,6 +2919,7 @@ build_libsmbclient() {
 build_libssh() {
   # run_valid_function "build_openssl" 1
   # run_valid_function "build_zlib" 1
+  reset_allflags
 	# https://github.com/canonical/libssh
 	local lib="libssh"
   # https://github.com/canonical/libssh
@@ -2927,21 +2928,38 @@ build_libssh() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib/build" 1
+  local previous_cpath="${CPATH:-}"
+  local previous_c_include_path="${C_INCLUDE_PATH:-}"
+  local previous_cplus_include_path="${CPLUS_INCLUDE_PATH:-}"
+  unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
   local cmake_params="-DBUILD_SHARED_LIBS=OFF \
 -DWITH_STATIC_LIB=ON \
 -DWITH_EXAMPLES=OFF \
--DWITH_TESTING=OFF \
+-DUNIT_TESTING=OFF \
+-DCLIENT_TESTING=OFF \
+-DSERVER_TESTING=OFF \
 -DWITH_SERVER=OFF \
 -DWITH_ZLIB=ON \
--DZLIB_LIBRARY=\"$dependency_install_prefix\" \
+-DZLIB_ROOT=\"$dependency_install_prefix\" \
+-DZLIB_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DZLIB_LIBRARY=\"$dependency_install_prefix/lib/libz.a\" \
+-DOPENSSL_ROOT_DIR=\"$dependency_install_prefix\" \
+-DOPENSSL_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DOPENSSL_CRYPTO_LIBRARY=\"$dependency_install_prefix/lib/libcrypto.a\" \
+-DOPENSSL_SSL_LIBRARY=\"$dependency_install_prefix/lib/libssl.a\" \
 -DWITH_SFTP=ON \
 -DWITH_GSSAPI=OFF \
 -DWITH_NACL=OFF \
 -DWITH_PCAP=OFF \
+-DCMAKE_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\" \
+-DCMAKE_SYSTEM_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\" \
 -DCMAKE_INSTALL_PREFIX=${dependency_install_prefix}"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
+  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
+  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
+  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
 	change_dir "$src_dir"
   add_libs_to_pkg -t="$install_pkgconfig_dir/libssh.pc" -l="-lssl -lcrypto -lcrypt32 -lws2_32 -lz -liphlpapi" -c="-DLIBSSH_STATIC"
 }
