@@ -582,15 +582,20 @@ build_libpng() {
 	local lib="libpng"
   local repo_ver="v1.6.53"
   local repo="https://github.com/glennrp/libpng"
-  export CPATH="$CPATH -I${dependency_install_prefix}/include ${dependency_install_prefix}/include"
-  export LIBS="-lz"
   change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  do_cmake_from_build_dir "$src_dir/$lib"
+  local cmake_params="-DPNG_SHARED=OFF \
+-DPNG_STATIC=ON \
+-DPNG_TESTS=OFF \
+-DPNG_TOOLS=OFF \
+-DPNG_EXECUTABLES=OFF \
+-DZLIB_ROOT=\"$dependency_install_prefix\" \
+-DZLIB_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DZLIB_LIBRARY=\"$dependency_install_prefix/lib/libz.a\""
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  unset CPATH LIBS
 	change_dir "$src_dir"
 }
 # build_libwebp           # config_options+= --enable-libwebp             # enable WebP encoding via libwebp [no]
