@@ -1371,6 +1371,7 @@ build_libklvanc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --disable-examples"
@@ -3092,6 +3093,7 @@ build_libunistring() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3219,6 +3221,7 @@ build_libtwolame() {
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
     sed -i'.bak' "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   find . -name "Makefile" -exec sed -i'.bak' 's/-std=gnu23/-std=gnu99/g' {} +
   disable_nonessential "$src_dir/$lib"
@@ -3999,23 +4002,17 @@ build_bison() {
     fi
   fi
 }
-# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
-build_pocketsphinx() {
-  # run_valid_function "build_alsa"
-  # run_valid_function "build_libunwind"
-  # run_valid_function "build_lzma"
-  # run_valid_function "build_glib"
-  local parent="pocketsphinx"
+build_swig() {
   local lib="swig"
   local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
   local repo_ver="v2.0.12"
   export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
   change_dir "$src_dir"
-  change_dir "$src_dir/$parent" 1
   download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$parent/$lib"
+  change_dir "$src_dir/$lib"
   touch "no.autoreconf"
-  get_config_sub "$src_dir/$parent/$lib/Tools/config"
+  touch "no.autogen"
+  get_config_sub "$src_dir/$lib/Tools/config"
   do_configure "--host=$host_target \
 --prefix=$dependency_install_prefix \
 --libdir=$dependency_install_prefix/lib \
@@ -4023,28 +4020,32 @@ build_pocketsphinx() {
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
   reset_cxxflags
-  install_missing_packages python3-dev
+}
+build_sphinxbase() {
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
   export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
   export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreFoundation"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_allflags
   change_dir "$src_dir"
+}
+build_gstreamer() {
   activate_meson
   local lib="gstreamer"
   local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
   local repo_ver="1.26.10"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
   export LDFLAGS="$LDFLAGS -framework CoreFoundation -framework Foundation"
   local meson_options="-Ddoc=disabled \
 -Dexamples=disabled \
@@ -4056,17 +4057,25 @@ build_pocketsphinx() {
 -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -framework ObjectiveC\" \
 -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -lobjc -llzma\""
   generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   add_libs_to_pkg -t="$install_pkgconfig_dir/gstreamer-1.0.pc" -l="-lresolv"
   reset_ldflags
   change_dir "$src_dir"
+}
+# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
+build_pocketsphinx() {
+  # run_valid_function "build_alsa"
+  # run_valid_function "build_libunwind"
+  # run_valid_function "build_lzma"
+  # run_valid_function "build_glib"
   local lib="pocketsphinx"
   local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
   local repo_ver="r13291"
   change_dir "$src_dir"
-  do_svn_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_svn_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \

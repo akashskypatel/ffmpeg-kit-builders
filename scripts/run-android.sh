@@ -1713,6 +1713,7 @@ build_libklvanc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --disable-examples"
@@ -3328,6 +3329,7 @@ build_libunistring() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3465,6 +3467,7 @@ build_libtwolame() {
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
     sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -4084,12 +4087,14 @@ build_gettext_native() {
 --enable-static \
 --disable-doc"
   touch "no.autoreconf"
+  touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
+  touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
@@ -4098,6 +4103,7 @@ CFLAGS=\"$CFLAGS\""
   config+="--disable-examples \
 --without-libtextstyle-prefix"
   touch "no.autoreconf"
+  touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LDFLAGS=\"$LDFLAGS\""
@@ -4401,46 +4407,15 @@ build_openssl() {
   find "$dependency_install_prefix/lib" -name "libcrypto.so*" -delete
   change_dir "$src_dir"
 }
-# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
-build_pocketsphinx() {
-  # run_valid_function "build_alsa"
-  # run_valid_function "build_libunwind"
-  # run_valid_function "build_lzma"
-  # run_valid_function "build_glib"
-  local parent="pocketsphinx"
-#   local lib="swig"
-#   local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
-#   local repo_ver="v2.0.12"
-#   export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
-#   change_dir "$src_dir"
-#   change_dir "$src_dir/$parent" 1
-#   download_and_unpack_file "$repo" "$lib"
-#   change_dir "$src_dir/$parent/$lib"
-#   touch "no.autoreconf"
-#   export LIBS="-lunwind -latomic"
-#   export LDFLAGS="${LDFLAGS} --rtlib=compiler-rt -stdlib=libc++ $LIBS"
-#   export CXXFLAGS="${CXXFLAGS} -static-libstdc++"
-#   do_configure "--prefix=$dependency_install_prefix \
-# --libdir=$dependency_install_prefix/lib \
-# --without-pcre \
-# --enable-static --disable-shared --enable-pic --with-pic \
-# --host=$host_target \
-# CXXFLAGS=\"${CXXFLAGS} -nostdlib++\" \
-# LIBS=\"-Wl,--start-group -lc++ -lc++abi -lunwind -latomic -Wl,--end-group -ldl -lc -lm\""
-#   if [ -f "Source/Makefile" ]; then
-#     sed -i 's/$(LDFLAGS) -o $@/$(LDFLAGS) -o $@ -Wl,--start-group -lc++ -lc++abi -lunwind -latomic -Wl,--end-group -ldl -lc -lm/g' Source/Makefile
-#   fi
-#   do_make_and_make_install
-#   reset_cxxflags
-#   reset_ldflags
-  install_missing_packages python3-dev
+build_sphinxbase() {
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
   export LIBS="${LIBS} -llog"
   export LDFLAGS="${LDFLAGS} -llog"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
@@ -4450,19 +4425,21 @@ build_pocketsphinx() {
 --without-alsa \
 --without-swig \
 --host=$host_target"
-  sed -i 's/ad_oss/ad_base/g' "$src_dir/$parent/$lib/Makefile"
-  sed -i 's/ad_oss/ad_base/g' "$src_dir/$parent/$lib/src/libsphinxad/Makefile"
-  disable_nonessential "$src_dir/$parent/$lib"
+  sed -i 's/ad_oss/ad_base/g' "$src_dir/$lib/Makefile"
+  sed -i 's/ad_oss/ad_base/g' "$src_dir/$lib/src/libsphinxad/Makefile"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
   reset_ldflags
   unset LIBS
+}
+build_gstreamer() {
   activate_meson
   local lib="gstreamer"
   local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
   local repo_ver="1.26.10"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
   local meson_options="-Ddoc=disabled \
 -Dexamples=disabled \
 -Dtests=disabled \
@@ -4472,21 +4449,29 @@ build_pocketsphinx() {
 -Dnls=disabled \
 -Dc_link_args=\"-L$dependency_install_prefix/lib -llzma\""
   generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   reset_ldflags
   change_dir "$src_dir"
+}
+# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
+build_pocketsphinx() {
+  # run_valid_function "build_alsa"
+  # run_valid_function "build_libunwind"
+  # run_valid_function "build_lzma"
+  # run_valid_function "build_glib"
   local lib="pocketsphinx"
   local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
   local repo_ver="r13291"
   change_dir "$src_dir"
-  do_svn_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_svn_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
 }

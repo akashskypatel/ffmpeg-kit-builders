@@ -83,7 +83,7 @@ build_libusb() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
+  touch "no.autogen"
   generic_configure "--disable-udev --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1685,7 +1685,7 @@ build_libklvanc() {
   find . -maxdepth 2 \( -name "autogen.sh" -o -name "configure.ac" -o -name "Makefile.am" \) -exec sed -i 's/\r$//' {} +
   autoreconf_library
   touch "no.autoreconf"
-  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --disable-examples"
@@ -3357,6 +3357,7 @@ build_libunistring() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3482,6 +3483,7 @@ build_libtwolame() {
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
     sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3943,12 +3945,14 @@ build_gettext_native() {
 --enable-static \
 --disable-doc"
   touch "no.autoreconf"
+  touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
+  touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
@@ -3957,6 +3961,7 @@ CFLAGS=\"$CFLAGS\""
   config+="--disable-examples \
 --without-libtextstyle-prefix"
   touch "no.autoreconf"
+  touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LDFLAGS=\"$LDFLAGS\""
@@ -4325,7 +4330,7 @@ build_swig() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
+  touch "no.autogen"
   local automake_aux_dir
   automake_aux_dir="$(automake --print-libdir)"
   for automake_aux_file in compile config.guess config.sub depcomp install-sh missing ylwrap; do
@@ -4347,7 +4352,7 @@ build_sphinxbase() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
-  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
@@ -4396,7 +4401,7 @@ build_pocketsphinx() {
   change_dir "$src_dir"
   do_svn_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
-  [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \

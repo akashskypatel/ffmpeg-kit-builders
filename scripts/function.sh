@@ -2875,6 +2875,7 @@ generic_configure() {
 # 2. touch_postfix
 # shellcheck disable=SC2086
 do_autogen() {
+  [[ -f "no.autogen" ]] && return 0
   [[ ! -f "autogen.sh" ]] && return 0
   local extra_build_args="$1"
 	local cur_dir2=$(pwd)
