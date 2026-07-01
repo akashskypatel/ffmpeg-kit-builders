@@ -1562,16 +1562,31 @@ build_libvidstab() {
 # build_libmysofa         # config_options+= --enable-libmysofa           # enable libmysofa, needed for sofalizer filter [no]
 build_libmysofa() {
   # run_valid_function "build_zlib" 1
+  reset_allflags
 	local lib="libmysofa"
   local repo="https://github.com/hoene/libmysofa"
   local repo_ver="latest"
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-	local cmake_params="-DBUILD_TESTS=0 -DCMAKE_POLICY_VERSION_MINIMUM=3.10 -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH"
+  local previous_cpath="${CPATH:-}"
+  local previous_c_include_path="${C_INCLUDE_PATH:-}"
+  local previous_cplus_include_path="${CPLUS_INCLUDE_PATH:-}"
+  unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
+	local cmake_params="-DBUILD_TESTS=0 \
+-DCMAKE_POLICY_VERSION_MINIMUM=3.10 \
+-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH \
+-DCMAKE_PREFIX_PATH=\"$dependency_install_prefix\" \
+-DCMAKE_INCLUDE_PATH=\"$dependency_install_prefix/include\" \
+-DCMAKE_LIBRARY_PATH=\"$dependency_install_prefix/lib\" \
+-DCMAKE_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\" \
+-DCMAKE_SYSTEM_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\""
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params" 
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
+  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
+  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
 	change_dir "$src_dir"
 }
 # build_decklink          # config_options+= --enable-decklink            # enable Blackmagic DeckLink I/O support [no]
