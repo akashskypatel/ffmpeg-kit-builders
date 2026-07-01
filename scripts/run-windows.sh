@@ -4855,12 +4855,14 @@ build_gettext_native() {
 --enable-static \
 --disable-doc"
   touch "no.autoreconf"
+  mv -f autogen.sh autogen.sh.disabled
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
+  mv -f autogen.sh autogen.sh.disabled
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
   do_make
@@ -4869,6 +4871,7 @@ CFLAGS=\"$CFLAGS\""
   config+="--disable-examples \
 --without-libtextstyle-prefix"
   touch "no.autoreconf"
+  mv -f autogen.sh autogen.sh.disabled
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LDFLAGS=\"$LDFLAGS\""
