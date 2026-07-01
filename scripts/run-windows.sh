@@ -2353,7 +2353,7 @@ build_sratom() {
   # ln -sf "libsratom-0.a" "libsratom.a"
   cp -f "libsratom-0.a" "libsratom.a"
   change_dir "$install_pkgconfig_dir"
-  ln -sf "sratom-0.pc" "sratom.pc"
+  cp -f "sratom-0.pc" "sratom.pc"
 	change_dir "$src_dir"
 }
 build_sord() {
@@ -2373,7 +2373,7 @@ build_sord() {
   # ln -sf "libsord-0.a" "libsord.a"
   cp -f "libsord-0.a" "libsord.a"
   change_dir "$install_pkgconfig_dir"
-  ln -sf "sord-0.pc" "sord.pc"
+  cp -f "sord-0.pc" "sord.pc"
 	change_dir "$src_dir"
 }
 build_serd() {
@@ -2392,7 +2392,7 @@ build_serd() {
   # ln -sf "libserd-0.a" "libserd.a"
   cp -f "libserd-0.a" "libserd.a"
   change_dir "$install_pkgconfig_dir"
-  ln -sf "serd-0.pc" "serd.pc"
+  cp -f "serd-0.pc" "serd.pc"
 	change_dir "$src_dir"
 }
 build_zix() {
@@ -2412,7 +2412,7 @@ build_zix() {
   # ln -sf "libzix-0.a" "libzix.a"
   cp -f "libzix-0.a" "libzix.a"
   change_dir "$install_pkgconfig_dir"
-  ln -sf "zix-0.pc" "zix.pc"
+  cp -f "zix-0.pc" "zix.pc"
 	change_dir "$src_dir"
 }
 build_lilv() {
@@ -2432,7 +2432,7 @@ build_lilv() {
   # ln -sf "liblilv-0.a" "liblilv.a"
   cp -f "liblilv-0.a" "liblilv.a"
   change_dir "$install_pkgconfig_dir"
-  ln -sf "lilv-0.pc" "lilv.pc"
+  cp -f "lilv-0.pc" "lilv.pc"
 	change_dir "$src_dir"
 }
 build_lv2_headers() {
