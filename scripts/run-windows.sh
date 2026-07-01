@@ -2345,7 +2345,7 @@ build_sratom() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled -Ddocs=disabled"
+  local meson_options="-Dtests=disabled -Ddocs=disabled -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -2365,7 +2365,7 @@ build_sord() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled -Dtools=disabled -Ddocs=disabled"
+  local meson_options="-Dtests=disabled -Dtools=disabled -Ddocs=disabled -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -2384,7 +2384,7 @@ build_serd() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled -Dtools=disabled -Ddocs=disabled -Dstatic=true"
+  local meson_options="-Dtests=disabled -Dtools=disabled -Ddocs=disabled -Dstatic=true -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -2404,7 +2404,7 @@ build_zix() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled -Dtests_cpp=disabled -Ddocs=disabled"
+  local meson_options="-Dtests=disabled -Dtests_cpp=disabled -Ddocs=disabled -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -2424,7 +2424,7 @@ build_lilv() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled -Ddocs=disabled -Dtools=disabled"
+  local meson_options="-Dtests=disabled -Ddocs=disabled -Dtools=disabled -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -2443,7 +2443,7 @@ build_lv2_headers() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled -Ddocs=disabled -Donline_docs=false -Dplugins=disabled"
+  local meson_options="-Dtests=disabled -Ddocs=disabled -Donline_docs=false -Dplugins=disabled -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
