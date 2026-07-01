@@ -3220,7 +3220,11 @@ do_meson() {
     command_name="${configure_name[*]}"
 	fi
 	if [[ -e "$local_meson" ]]; then
-    configure_command=(python3 "$local_meson" "${configure_name[*]}")
+    if [[ -f "/opt/python/cp312-cp312/bin/python3" ]]; then
+      configure_command=(/opt/python/cp312-cp312/bin/python3 "$local_meson" "${configure_name[*]}")
+    else
+      configure_command=(python3 "$local_meson" "${configure_name[*]}")
+    fi
 	else
 		configure_command=(meson)
 	fi
