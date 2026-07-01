@@ -4325,7 +4325,7 @@ build_libleptonica() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib/build" 1
-	export CFLAGS="$CFLAGS -DOPJ_STATIC -DJBG_STATIC "
+	export CFLAGS="$CFLAGS -DOPJ_STATIC -DJBG_STATIC -Wno-error -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wno-array-bounds -Wno-strict-aliasing "
   export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC -DJBG_STATIC "
   sed -i -e 's/@leptonica_OUTPUT_NAME@/leptonica/g' \
     -e '/set(pkg_conf_name lept_$<CONFIG>.pc)/d' \
