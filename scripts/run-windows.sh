@@ -586,7 +586,8 @@ build_libpng() {
   export LIBS="-lz"
   change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  generic_configure
+  change_dir "$src_dir/$lib/build" 1
+  do_cmake_from_build_dir "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   unset CPATH LIBS
@@ -2620,22 +2621,15 @@ CROSS_COMPILE="
   reset_cross_vars
 	change_dir "$src_dir"
 }
-# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
-build_pocketsphinx() {
-  # run_valid_function "build_dlfcn"
-  # run_valid_function "build_lzma"
-  # run_valid_function "build_glib"
-  clear_cross_vars
-  local parent="pocketsphinx"
+build_swig() {
   local lib="swig"
   # local repo="https://github.com/swig/swig"
   local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
   local repo_ver="v2.0.12"
   export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
 	change_dir "$src_dir"
-  change_dir "$src_dir/$parent" 1
   download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$parent/$lib"
+  change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   do_configure "--build=\"$build_triple\" \
 --host=\"$build_triple\" \
@@ -2647,24 +2641,29 @@ build_pocketsphinx() {
   do_make_install "CC=gcc AR=ar AS=as RANLIB=ranlib LD=ld STRIP=strip CXX=g++ WINDRES= CROSS_COMPILE="
   reset_cxxflags
   reset_cross_vars
+}
+build_sphinxbase() {
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
 	change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
-	change_dir "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
+	change_dir "$src_dir/$lib"
 	generic_configure "--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  add_libs_to_pkg -t="$install_pkgconfig_dir/sphinxbase.pc" -l="-lwinmm"
 	change_dir "$src_dir"
+}
+build_gstreamer() {
   activate_meson
   local lib="gstreamer"
   local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
   local repo_ver="1.26.10"
 	change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
   local meson_options="-Ddoc=disabled \
 -Dexamples=disabled \
 -Dtests=disabled \
@@ -2674,28 +2673,34 @@ build_pocketsphinx() {
 -Dnls=disabled \
 -Dc_link_args=\"-L${dependency_install_prefix}/lib -ldl -lpsapi\""
   generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   while IFS= read -r -d '' file; do
     add_libs_to_pkg -t="$file" -l="-llzma -ldl -lpsapi"
   done < <(find "$install_pkgconfig_dir" -name "gstreamer*.pc" -print0)
   reset_ldflags
 	change_dir "$src_dir"
+}
+# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
+build_pocketsphinx() {
+  # run_valid_function "build_dlfcn"
+  # run_valid_function "build_lzma"
+  # run_valid_function "build_glib"
+  clear_cross_vars
   local lib="pocketsphinx"
   local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
   local repo_ver="r13291"
 	change_dir "$src_dir"
-  do_svn_checkout "$repo" "$src_dir/$parent/$lib"
-	change_dir "$src_dir/$parent/$lib"
+  do_svn_checkout "$repo" "$src_dir/$lib"
+	change_dir "$src_dir/$lib"
 	generic_configure "--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-	change_dir "$src_dir"
-  add_libs_to_pkg -t="$install_pkgconfig_dir/pocketsphinx.pc" -l="-lwinmm"
-  add_libs_to_pkg -t="$install_pkgconfig_dir/sphinxbase.pc" -l="-lwinmm"
+	add_libs_to_pkg -t="$install_pkgconfig_dir/pocketsphinx.pc" -l="-lwinmm"
+  change_dir "$src_dir"
 }
 # build_pocketsphinx() {
 #   # 	# https://github.com/cmusphinx/pocketsphinx
