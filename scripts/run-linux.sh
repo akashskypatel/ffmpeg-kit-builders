@@ -721,7 +721,14 @@ build_liblcevc_dec() {
   local repo="https://github.com/v-novaltd/LCEVCdec"
   local repo_ver="4.0.4"
   change_dir "$src_dir"
+  local previous_git_lfs_skip_smudge="${GIT_LFS_SKIP_SMUDGE:-}"
+  export GIT_LFS_SKIP_SMUDGE=1
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  if [[ -n "$previous_git_lfs_skip_smudge" ]]; then
+    export GIT_LFS_SKIP_SMUDGE="$previous_git_lfs_skip_smudge"
+  else
+    unset GIT_LFS_SKIP_SMUDGE
+  fi
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
