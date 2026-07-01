@@ -2674,6 +2674,7 @@ build_swig() {
   # local repo="https://github.com/swig/swig"
   local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
   local repo_ver="v2.0.12"
+  clear_cross_vars
   export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
