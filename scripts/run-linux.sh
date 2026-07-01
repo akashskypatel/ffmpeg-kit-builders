@@ -722,12 +722,29 @@ build_liblcevc_dec() {
   local repo_ver="4.0.4"
   change_dir "$src_dir"
   local previous_git_lfs_skip_smudge="${GIT_LFS_SKIP_SMUDGE:-}"
+  local previous_git_config_count="${GIT_CONFIG_COUNT:-}"
+  local git_lfs_config_index="${GIT_CONFIG_COUNT:-0}"
   export GIT_LFS_SKIP_SMUDGE=1
+  export GIT_CONFIG_COUNT=$((git_lfs_config_index + 3))
+  export "GIT_CONFIG_KEY_${git_lfs_config_index}=filter.lfs.required"
+  export "GIT_CONFIG_VALUE_${git_lfs_config_index}=false"
+  export "GIT_CONFIG_KEY_$((git_lfs_config_index + 1))=filter.lfs.smudge"
+  export "GIT_CONFIG_VALUE_$((git_lfs_config_index + 1))=cat"
+  export "GIT_CONFIG_KEY_$((git_lfs_config_index + 2))=filter.lfs.process"
+  export "GIT_CONFIG_VALUE_$((git_lfs_config_index + 2))="
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   if [[ -n "$previous_git_lfs_skip_smudge" ]]; then
     export GIT_LFS_SKIP_SMUDGE="$previous_git_lfs_skip_smudge"
   else
     unset GIT_LFS_SKIP_SMUDGE
+  fi
+  unset "GIT_CONFIG_KEY_${git_lfs_config_index}" "GIT_CONFIG_VALUE_${git_lfs_config_index}"
+  unset "GIT_CONFIG_KEY_$((git_lfs_config_index + 1))" "GIT_CONFIG_VALUE_$((git_lfs_config_index + 1))"
+  unset "GIT_CONFIG_KEY_$((git_lfs_config_index + 2))" "GIT_CONFIG_VALUE_$((git_lfs_config_index + 2))"
+  if [[ -n "$previous_git_config_count" ]]; then
+    export GIT_CONFIG_COUNT="$previous_git_config_count"
+  else
+    unset GIT_CONFIG_COUNT
   fi
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
