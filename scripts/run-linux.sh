@@ -4315,7 +4315,7 @@ build_swig() {
 --disable-ccache \
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
-  reset_cxxflags
+  reset_allflags
 }
 build_sphinxbase() {
   local lib="sphinxbase"
@@ -4345,6 +4345,7 @@ build_gstreamer() {
   local repo_ver="1.26.10"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
   local meson_options="-Ddoc=disabled \
 -Dexamples=disabled \
 -Dtests=disabled \
@@ -4356,7 +4357,7 @@ build_gstreamer() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  reset_ldflags
+  reset_allflags
 }
 # build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
 build_pocketsphinx() {
