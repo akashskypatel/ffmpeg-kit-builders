@@ -2579,19 +2579,35 @@ build_openal() {
 build_pcre2() {
   # run_valid_function "build_zlib" 1
 	# run_valid_function "build_bzlib" 1
+  reset_allflags
   local lib="pcre2"
   local repo="https://github.com/PCRE2Project/pcre2"
   local repo_ver="pcre2-10.47"
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
+  local previous_cpath="${CPATH:-}"
+  local previous_c_include_path="${C_INCLUDE_PATH:-}"
+  local previous_cplus_include_path="${CPLUS_INCLUDE_PATH:-}"
+  unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
 	local cmake_params="-DCMAKE_BUILD_TYPE=Release \
--DOAPV_BUILD_STATIC_LIB=ON \
--DOAPV_BUILD_SHARED_LIB=ON \
--DPCRE2_BUILD_PCRE2_8=ON"
+-DPCRE2_BUILD_PCRE2_8=ON \
+-DPCRE2_BUILD_PCRE2_16=OFF \
+-DPCRE2_BUILD_PCRE2_32=OFF \
+-DPCRE2_BUILD_PCRE2GREP=OFF \
+-DPCRE2_BUILD_TESTS=OFF \
+-DPCRE2_SUPPORT_LIBZ=OFF \
+-DPCRE2_SUPPORT_LIBBZ2=OFF \
+-DPCRE2_SUPPORT_LIBREADLINE=OFF \
+-DPCRE2_SUPPORT_LIBEDIT=OFF \
+-DCMAKE_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\" \
+-DCMAKE_SYSTEM_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\""
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
+  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
+  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
+  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
 	change_dir "$src_dir"
 }
 build_bison() {
