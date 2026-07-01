@@ -4319,12 +4319,17 @@ build_libleptonica() {
 	# run_valid_function "build_giflib"
   # run_valid_function "build_libtiff"
   # run_valid_function "build_libopenjpeg" 1
+  reset_allflags
   local lib="libleptonica"
   local repo="https://github.com/DanBloomberg/leptonica"
   local repo_ver="1.86.0"
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib/build" 1
+  local previous_cpath="${CPATH:-}"
+  local previous_c_include_path="${C_INCLUDE_PATH:-}"
+  local previous_cplus_include_path="${CPLUS_INCLUDE_PATH:-}"
+  unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
 	export CFLAGS="$CFLAGS -DOPJ_STATIC -DJBG_STATIC -Wno-error -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -Wno-array-bounds -Wno-strict-aliasing "
   export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC -DJBG_STATIC "
   sed -i -e 's/@leptonica_OUTPUT_NAME@/leptonica/g' \
@@ -4340,10 +4345,18 @@ build_libleptonica() {
 -DBUILD_SHARED_LIBS=OFF \
 -DBUILD_PROG=OFF \
 -DSW_BUILD=OFF \
--DSTRICT_CONF=ON"
+-DSTRICT_CONF=ON \
+-DCMAKE_PREFIX_PATH=\"$dependency_install_prefix\" \
+-DCMAKE_INCLUDE_PATH=\"$dependency_install_prefix/include\" \
+-DCMAKE_LIBRARY_PATH=\"$dependency_install_prefix/lib\" \
+-DCMAKE_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\" \
+-DCMAKE_SYSTEM_IGNORE_PATH=\"/usr/include;/usr/lib;/usr/lib64\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib" "prog"
   do_make_and_make_install
+  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
+  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
+  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
 	reset_cflags
   reset_cppflags
 	change_dir "$src_dir"
