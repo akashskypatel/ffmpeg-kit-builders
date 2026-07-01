@@ -260,6 +260,7 @@ build_lzma() {
 	download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DBUILD_SHARED_LIBS=OFF \
+-DBUILD_TESTING=OFF \
 -DXZ_NLS=OFF \
 -DXZ_TOOL_XZ=OFF \
 -DXZ_TOOL_XZDEC=OFF \
