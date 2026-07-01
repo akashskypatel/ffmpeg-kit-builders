@@ -2678,7 +2678,6 @@ build_swig() {
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  touch "no.autoreconf"
   touch "no.autogen"
   do_configure "--build=\"$build_triple\" \
 --host=\"$build_triple\" \
