@@ -2767,8 +2767,7 @@ build_whisper() {
 -DGGML_AVX2=ON \
 -DGGML_FMA=ON \
 -DGGML_F16C=ON \
--DGGML_NATIVE=OFF \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\""
+-DGGML_NATIVE=OFF"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
