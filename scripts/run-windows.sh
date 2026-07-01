@@ -258,8 +258,17 @@ build_lzma() {
   local repo="https://sourceforge.net/projects/lzmautils/files/xz-5.8.1.tar.xz"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$lib"
-	generic_configure "--enable-static --disable-shared --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-scripts --disable-doc --disable-nls"
+  change_dir "$src_dir/$lib/build" 1
+  local cmake_params="-DBUILD_SHARED_LIBS=OFF \
+-DXZ_NLS=OFF \
+-DXZ_TOOL_XZ=OFF \
+-DXZ_TOOL_XZDEC=OFF \
+-DXZ_TOOL_LZMADEC=OFF \
+-DXZ_TOOL_LZMAINFO=OFF \
+-DXZ_TOOL_SCRIPTS=OFF \
+-DXZ_DOC=OFF \
+-DXZ_DOXYGEN=OFF"
+	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
 	change_dir "$src_dir"
