@@ -2750,10 +2750,12 @@ build_pocketsphinx() {
   do_svn_checkout "$repo" "$src_dir/$lib"
 	change_dir "$src_dir/$lib"
   touch "no.autogen"
+  export LDFLAGS="$LDFLAGS -lwinmm"
 	generic_configure "--enable-static \
 --disable-shared \
 --without-python \
---without-lapack"
+--without-lapack \
+LIBS=\"-lwinmm\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
 	add_libs_to_pkg -t="$install_pkgconfig_dir/pocketsphinx.pc" -l="-lwinmm"
