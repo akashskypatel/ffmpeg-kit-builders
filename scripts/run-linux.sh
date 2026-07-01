@@ -4366,6 +4366,7 @@ LIBS=\"-lasound\""
   change_dir "$src_dir"
   do_svn_checkout "$repo" "$src_dir/$parent/$lib"
   change_dir "$src_dir/$parent/$lib"
+  mv -f autogen.sh autogen.sh.disabled
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
