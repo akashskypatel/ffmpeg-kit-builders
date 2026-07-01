@@ -4291,21 +4291,16 @@ build_bison() {
     fi
   fi
 }
-# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
-build_pocketsphinx() {
-  # run_valid_function "build_alsa"
-  # run_valid_function "build_libunwind"
-  # run_valid_function "build_lzma"
-  # run_valid_function "build_glib"
-  local parent="pocketsphinx"
+
+build_swig() {
+  install_missing_packages python3-dev python3-pip
   local lib="swig"
   local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
   local repo_ver="v2.0.12"
   export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
   change_dir "$src_dir"
-  change_dir "$src_dir/$parent" 1
   download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$parent/$lib"
+  change_dir "$src_dir/$lib"
   [[ -f autogen.sh ]] && mv autogen.sh autogen.sh.disabled
   local automake_aux_dir
   automake_aux_dir="$(automake --print-libdir)"
@@ -4321,11 +4316,13 @@ build_pocketsphinx() {
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
   reset_cxxflagss
+}
+build_sphinxbase() {
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
   mv -f autogen.sh autogen.sh.disabled
   generic_configure "--enable-static \
 --disable-shared \
@@ -4336,16 +4333,18 @@ build_pocketsphinx() {
 --disable-pulseaudio \
 --disable-pulse \
 LIBS=\"-lasound\""
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
   reset_allflags
+}
+build_gstreamer() {
   activate_meson
   local lib="gstreamer"
   local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
   local repo_ver="1.26.10"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
   local meson_options="-Ddoc=disabled \
 -Dexamples=disabled \
 -Dtests=disabled \
@@ -4355,22 +4354,29 @@ LIBS=\"-lasound\""
 -Dnls=disabled \
 -Dc_link_args=\"-L$dependency_install_prefix/lib -llzma\""
   generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   reset_ldflags
+}
+# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
+build_pocketsphinx() {
+  # run_valid_function "build_alsa"
+  # run_valid_function "build_libunwind"
+  # run_valid_function "build_lzma"
+  # run_valid_function "build_glib"  
   change_dir "$src_dir"
   local lib="pocketsphinx"
   local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
   local repo_ver="r13291"
   change_dir "$src_dir"
-  do_svn_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_svn_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
   mv -f autogen.sh autogen.sh.disabled
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
 }
