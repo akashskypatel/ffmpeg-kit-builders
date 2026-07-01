@@ -1693,8 +1693,8 @@ build_libsrt() {
 -DENABLE_APPS=OFF \
 -DUSE_STATIC_LIBSTDCXX=ON \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DENABLE_CXX11=OFF"
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1760,9 +1760,9 @@ build_libtesseract() {
 --with-extra-includes=\"$dependency_install_prefix/include\" \
 LIBLEPT_HEADERSDIR=$dependency_install_prefix/include \
 LDFLAGS=\"$LDFLAGS\" \
-CFLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
-CPPFLAGS=\"$CPPFLAGS -static -static-libgcc -static-libstdc++ -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
-CXXFLAGS=\"$CXXFLAGS -static -static-libgcc -static-libstdc++ -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+CFLAGS=\"$CFLAGS\" \
+CPPFLAGS=\"$CPPFLAGS -static -static-libgcc -static-libstdc++\" \
+CXXFLAGS=\"$CXXFLAGS -static -static-libgcc -static-libstdc++\" \
 LIBS=\"$LIBS\" \
 --datadir=\"$dependency_install_prefix/bin\""
 	disable_nonessential "$src_dir/$lib"
@@ -2168,8 +2168,8 @@ build_libjxl() {
 -DJPEGXL_BUNDLE_LIBPNG=OFF \
 -DBUILD_TESTING=OFF \
 -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DJPEGXL_FORCE_SYSTEM_LCMS2=ON"
   sed -i '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
@@ -2577,8 +2577,8 @@ build_openal() {
 -DALSOFT_BACKEND_DSOUND=ON \
 -DALSOFT_BACKEND_ALSA=OFF \
 -DALSOFT_BACKEND_PULSEAUDIO=OFF \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DALSOFT_BACKEND_PIPEWIRE=OFF"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
@@ -3466,8 +3466,8 @@ build_liblcevc_dec() {
 -DVN_SDK_DOCS=OFF \
 -DVN_SDK_SAMPLE_SOURCE=OFF \
 -DVN_SDK_PIPELINE_VULKAN=OFF \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DVN_SDK_PIPELINE_LEGACY=OFF"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   # disable_nonessential "$src_dir/$lib"
@@ -3977,8 +3977,8 @@ build_libopencv() {
 -DOPENCV_EXTRA_EXE_LINKER_FLAGS=\"-L${dependency_install_prefix}/lib -Wl,--start-group $LIBS -Wl,--end-group\" \
 -DCMAKE_SHARED_LINKER_FLAGS=\"-L${dependency_install_prefix}/lib -Wl,--start-group $LIBS -Wl,--end-group\" \
 -DOPENCV_LINKER_LIBS=\"$LIBS\" \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DCMAKE_CXX_STANDARD_LIBRARIES=\" -lwinmm -luser32 -lgdi32\" \
 -DOPENCV_INCLUDE_INSTALL_PATH=${dependency_install_prefix}/include \
 -DHAVE_DSHOW=1"
@@ -4032,8 +4032,8 @@ build_libshaderc() {
 -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
 -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
 -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DBUILD_SHARED_LIBS=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
@@ -4545,8 +4545,8 @@ build_flac() {
 -DBUILD_STATIC_LIBS=ON \
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_BUILD_TYPE=Release \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DINSTALL_MANPAGES=OFF"
   disable_nonessential "$src_dir/$lib"
 	do_make_and_make_install
