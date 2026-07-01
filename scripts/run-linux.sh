@@ -4315,7 +4315,7 @@ build_swig() {
 --disable-ccache \
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
-  reset_cxxflagss
+  reset_cxxflags
 }
 build_sphinxbase() {
   local lib="sphinxbase"
