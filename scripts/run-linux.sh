@@ -4218,6 +4218,18 @@ build_glfw() {
   local lib="glfw"
   local repo="https://github.com/glfw/glfw"
   local repo_ver="3.4"
+  install_missing_packages \
+    wayland-devel \
+    wayland-protocols-devel \
+    libwayland-bin \
+    libxkbcommon-devel \
+    libX11-devel \
+    libXcursor-devel \
+    libXi-devel \
+    libXinerama-devel \
+    libXrandr-devel \
+    mesa-libGL-devel \
+    mesa-libGLU-devel
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
