@@ -1511,9 +1511,10 @@ build_gettext() {
   export CFLAGS=$cflags
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
---with-libiconv-prefix=\"${dependency_install_prefix}\" \
 --with-included-libintl \
 --without-libintl-prefix \
+--with-included-libiconv \
+--without-libiconv-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
