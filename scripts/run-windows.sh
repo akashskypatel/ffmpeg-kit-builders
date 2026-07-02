@@ -1704,6 +1704,7 @@ build_libsrt() {
   truthy "$enable_openssl" && enclib=openssl
   truthy "$enable_gnutls" && enclib=gnutls
   truthy "$enable_mbedtls" && enclib=mbedtls
+  enclib=${enclib:-"openssl"}
 	generic_cmake "-DUSE_ENCLIB=$enclib \
 -DENABLE_SHARED=OFF \
 -DENABLE_STATIC=ON \
