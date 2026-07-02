@@ -39,9 +39,9 @@ tar xzf ./actions-runner-linux-x64-2.335.1.tar.gz || { echo "Failed to extract a
 rm ./actions-runner-linux-x64-2.335.1.tar.gz || { echo "Failed to remove actions runner tar.gz" >&2; exit 1; }
 
 REG_TOKEN=$(curl -X POST -H "Authorization: token ${GITHUB_TOKEN}" \
-https://api.github.com/repos/akashskypatel/ffmpeg-kit-builders-dev/actions/runners/registration-token | jq -r .token) || { echo "Failed to fetch registration token" >&2; exit 1; }
+https://api.github.com/repos/akashskypatel/ffmpeg-kit-builders/actions/runners/registration-token | jq -r .token) || { echo "Failed to fetch registration token" >&2; exit 1; }
 
-./config.sh --url https://github.com/akashskypatel/ffmpeg-kit-builders-dev \
+./config.sh --url https://github.com/akashskypatel/ffmpeg-kit-builders \
             --token "${REG_TOKEN}" \
             --name "gcp-worker-$(hostname)" \
             --unattended --replace --ephemeral || { echo "Failed to configure runner" >&2; exit 1; }
