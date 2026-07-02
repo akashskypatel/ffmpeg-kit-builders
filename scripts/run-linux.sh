@@ -1799,9 +1799,10 @@ build_gettext() {
   local clfags="CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
---with-libiconv-prefix=\"${dependency_install_prefix}\" \
 --with-included-libintl \
 --without-libintl-prefix \
+--with-included-libiconv \
+--without-libiconv-prefix \
 --enable-static \
 --disable-shared \
 --disable-java \
