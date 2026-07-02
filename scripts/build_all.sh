@@ -20,6 +20,7 @@ STATE_FILE="${STATE_DIR}/build_all.state"
 LOCK_FILE="${STATE_DIR}/build_all.lock"
 
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true;
@@ -51,12 +52,12 @@ p_args=""
 deps=""
 bundles=""
 reset_state=false
-VALID_TYPES=("full" "video_hw" "video" "audio" "base" "debug")
-VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
-VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
-VALID_BUILDS=("ffmpeg" "kit" "bundle")
-VALID_LICENSES=("lgpl" "gpl")
-VALID_SMALL_FLAGS=("small" "")
+# VALID_TYPES=("full" "video_hw" "video" "audio" "base" "debug")
+# VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
+# VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
+# VALID_BUILDS=("ffmpeg" "kit" "bundle")
+# VALID_LICENSES=("lgpl" "gpl")
+# VALID_SMALL_FLAGS=("small" "")
 SMALL_FLAGS=("small" "")
 ANDROID_PLATFORM_ARCHS=()
 APPLE_PLATFORM_ARCHS=()

@@ -23,6 +23,7 @@ LOCK_FILE="${STATE_DIR}/build_xcframework.lock"
 
 # Source common functions
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true
@@ -50,11 +51,11 @@ touch "${LOCK_FILE}"
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # Parse arguments
-VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
-VALID_PLATFORMS=("ios" "macos")
-VALID_PLATFORM_ARCHS=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
-VALID_LICENSES=("lgpl" "gpl")
-VALID_SMALL_FLAGS=("small" "")
+# VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
+VALID_XCF_PLATFORMS=("ios" "macos")
+VALID_XCF_PLATFORM_ARCHS=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
+# VALID_LICENSES=("lgpl" "gpl")
+# VALID_SMALL_FLAGS=("small" "")
 REMOTE_RELEASE=true
 SMALL_FLAGS=("small" "")
 build_type="Release"
@@ -86,7 +87,7 @@ parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
   if [[ -z "${p_args}" ]]; then
-    p_args=$(IFS=,; echo "${VALID_PLATFORM_ARCHS[*]}")
+    p_args=$(IFS=,; echo "${VALID_XCF_PLATFORM_ARCHS[*]}")
   fi
   IFS=',' read -ra P_ARRAY <<< "$p_args"
   for p in "${P_ARRAY[@]}"; do
@@ -95,17 +96,17 @@ parse_platforms() {
 
     # Check if it's a plain platform name — expand to all valid archs for that platform
     local is_platform=false
-    for valid_plat in "${VALID_PLATFORMS[@]}"; do
+    for valid_plat in "${VALID_XCF_PLATFORMS[@]}"; do
       if [[ "$p" == "$valid_plat" ]]; then
         is_platform=true
-        for valid_pa in "${VALID_PLATFORM_ARCHS[@]}"; do
+        for valid_pa in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
           if [[ "${valid_pa}" == "${p}-"* ]]; then
             _add_platform_arch "${valid_pa%-*}" "${valid_pa#*-}"
           fi
         done
         # add iphonesimulator if platform is ios — store with 'sim:' prefix to avoid dedup with ios archs
         if [[ "$p" == "ios" ]]; then
-          for valid_pa in "${VALID_PLATFORM_ARCHS[@]}"; do
+          for valid_pa in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
             if [[ "${valid_pa}" == "iphonesimulator-"* ]]; then
               _add_platform_arch "ios" "sim:${valid_pa#*-}"
             fi
@@ -118,7 +119,7 @@ parse_platforms() {
 
     # Validate as a platform-arch combination
     local valid=false
-    for valid_p in "${VALID_PLATFORM_ARCHS[@]}"; do
+    for valid_p in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
       [[ "$p" == "$valid_p" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -860,8 +861,8 @@ for arg; do
       echo "                      A plain platform name expands to all valid archs for that platform."
       echo "                        e.g. --platform=ios              → ios-aarch64,iphonesimulator-aarch64"
       echo "                        e.g. --platform=ios,macos-x86_64 → ios (all archs) + macos-x86_64"
-      echo "                      Valid platforms (expands to all archs): ${VALID_PLATFORMS[*]}"
-      echo "                      Valid platform-arch combinations:       ${VALID_PLATFORM_ARCHS[*]}"
+      echo "                      Valid platforms (expands to all archs): ${VALID_XCF_PLATFORMS[*]}"
+      echo "                      Valid platform-arch combinations:       ${VALID_XCF_PLATFORM_ARCHS[*]}"
       echo "                      Note: iphonesimulator is automatically added when ios is specified"
       echo "  --bundle=*          Comma separated (without spaces) list of bundles to build"
       echo "                      Valid bundles: ${VALID_TYPES[*]}"

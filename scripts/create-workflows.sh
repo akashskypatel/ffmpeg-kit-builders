@@ -10,18 +10,29 @@ if [[ ! -d "$WORKFLOW_DIR" ]]; then
 fi
 
 write_linux_orchestrator() {
-	local platform="$1"
-	local arch_list="$2"
-	local file="$WORKFLOW_DIR/build_all_${platform}.yaml"
+	local runner_platform="$1"
+	local platform_list="$2"
+	local arch_list="$3"
+	local file="$WORKFLOW_DIR/build_all_${runner_platform}.yaml"
 	local tmp_file
 	tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
 
 	cat >"$tmp_file" <<YAML
-name: build_all_${platform}
+name: build_all_${runner_platform}
 
 on:
   workflow_dispatch:
     inputs:
+      target_platforms:
+        description: "Comma-separated target platforms this runner can build"
+        required: true
+        default: "${platform_list}"
+        type: string
+      target_archs:
+        description: "Comma-separated target architectures to try for each selected platform"
+        required: true
+        default: "${arch_list}"
+        type: string
       force:
         description: "Force rebuild instead of using existing self release artifacts"
         required: false
@@ -39,17 +50,15 @@ permissions:
 
 jobs:
   build:
-    name: ${platform} \${{ matrix.arch }}
+    name: ${runner_platform} targets
     runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        arch: [${arch_list}]
     env:
       GH_TOKEN: \${{ github.token }}
       WORKFLOW_FORCE_SELF: \${{ inputs.force }}
       BUILD_FROM: \${{ inputs.build_from }}
+      TARGET_PLATFORMS: \${{ inputs.target_platforms }}
+      TARGET_ARCHS: \${{ inputs.target_archs }}
+      RUNNER_TARGET_PLATFORMS: "${platform_list}"
     container:
       image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
       credentials:
@@ -64,47 +73,108 @@ jobs:
         shell: bash
         run: chmod +x runner.sh scripts/*.sh
 
-      - name: Build ${platform} dependencies
+      - name: Build selected dependencies
         shell: bash
         run: |
           set -euo pipefail
 
-          platform="${platform}"
-          arch="\${{ matrix.arch }}"
-          WORKFLOW_BUILD_STEPS="\$(sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
-          echo "WORKFLOW_BUILD_STEPS: \$WORKFLOW_BUILD_STEPS"
-          start_building=true
-          found_build_from=false
+          source "\${GITHUB_WORKSPACE}/scripts/supported.sh"
+
+          trim() {
+            local value="\$1"
+            value="\${value#"\${value%%[![:space:]]*}"}"
+            value="\${value%"\${value##*[![:space:]]}"}"
+            printf '%s' "\$value"
+          }
+
+          contains_csv_value() {
+            local csv="\$1"
+            local needle="\$2"
+            local item
+            IFS=',' read -ra items <<< "\$csv"
+            for item in "\${items[@]}"; do
+              item="\$(trim "\$item")"
+              [[ "\$item" == "\$needle" ]] && return 0
+            done
+            return 1
+          }
+
+          is_supported_combo() {
+            local combo="\$1"
+            local valid
+            for valid in "\${VALID_PLATFORM_ARCHS[@]}"; do
+              [[ "\$valid" == "\$combo" ]] && return 0
+            done
+            return 1
+          }
+
           if [[ -n "\${BUILD_FROM:-}" ]]; then
             if [[ "\$BUILD_FROM" != build_* ]]; then
               echo "build_from must be a build_* step, got: \$BUILD_FROM" >&2
               exit 1
             fi
-            start_building=false
           fi
 
-          for build in \$WORKFLOW_BUILD_STEPS; do
-            if [[ -n "\${BUILD_FROM:-}" && "\$build" == "\$BUILD_FROM" ]]; then
+          IFS=',' read -ra selected_platforms <<< "\$TARGET_PLATFORMS"
+          IFS=',' read -ra selected_archs <<< "\$TARGET_ARCHS"
+          ran_any=false
+
+          for raw_platform in "\${selected_platforms[@]}"; do
+            platform="\$(trim "\$raw_platform")"
+            [[ -z "\$platform" ]] && continue
+
+            if ! contains_csv_value "\$RUNNER_TARGET_PLATFORMS" "\$platform"; then
+              echo "::notice::Skipping platform '\$platform': this ${runner_platform} runner supports only \$RUNNER_TARGET_PLATFORMS"
+              continue
+            fi
+
+            for raw_arch in "\${selected_archs[@]}"; do
+              arch="\$(trim "\$raw_arch")"
+              [[ -z "\$arch" ]] && continue
+              combo="\${platform}-\${arch}"
+
+              if ! is_supported_combo "\$combo"; then
+                echo "::notice::Skipping unsupported target \$combo"
+                continue
+              fi
+
+              ran_any=true
+              echo "Preparing build steps for \$combo"
+              WORKFLOW_BUILD_STEPS="\$(sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
+              echo "WORKFLOW_BUILD_STEPS for \$combo: \$WORKFLOW_BUILD_STEPS"
+
               start_building=true
-              found_build_from=true
-            fi
-            if [[ \${start_building} == "true" ]]; then
-              echo "Running \$build for \${platform}-\${arch}"
-              sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
-              sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
-            fi
+              found_build_from=false
+              [[ -n "\${BUILD_FROM:-}" ]] && start_building=false
+
+              for build in \$WORKFLOW_BUILD_STEPS; do
+                if [[ -n "\${BUILD_FROM:-}" && "\$build" == "\$BUILD_FROM" ]]; then
+                  start_building=true
+                  found_build_from=true
+                fi
+                if [[ \${start_building} == "true" ]]; then
+                  echo "Running \$build for \$combo"
+                  sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
+                  sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+                fi
+              done
+
+              if [[ -n "\${BUILD_FROM:-}" && "\$found_build_from" != "true" ]]; then
+                echo "build_from step not found in workflow build steps for \$combo: \$BUILD_FROM" >&2
+                exit 1
+              fi
+            done
           done
 
-          if [[ -n "\${BUILD_FROM:-}" && "\$found_build_from" != "true" ]]; then
-            echo "build_from step not found in workflow build steps: \$BUILD_FROM" >&2
-            exit 1
+          if [[ "\$ran_any" != "true" ]]; then
+            echo "::notice::No supported platform-arch combinations selected for this runner"
           fi
 
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: failure-artifacts-\${{ github.workflow }}-\${{ github.job }}-\${{ matrix.arch }}
+          name: failure-artifacts-\${{ github.workflow }}-\${{ github.job }}-\${{ github.run_id }}
           path: |
             build.log
             prebuilt
@@ -117,18 +187,29 @@ YAML
 }
 
 write_macos_orchestrator() {
-	local platform="$1"
-	local arch_list="$2"
-	local file="$WORKFLOW_DIR/build_all_${platform}.yaml"
+	local runner_platform="$1"
+	local platform_list="$2"
+	local arch_list="$3"
+	local file="$WORKFLOW_DIR/build_all_${runner_platform}.yaml"
 	local tmp_file
 	tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
 
 	cat >"$tmp_file" <<YAML
-name: build_all_${platform}
+name: build_all_${runner_platform}
 
 on:
   workflow_dispatch:
     inputs:
+      target_platforms:
+        description: "Comma-separated target platforms this runner can build"
+        required: true
+        default: "${platform_list}"
+        type: string
+      target_archs:
+        description: "Comma-separated target architectures to try for each selected platform"
+        required: true
+        default: "${arch_list}"
+        type: string
       force:
         description: "Force rebuild instead of using existing self release artifacts"
         required: false
@@ -146,17 +227,15 @@ permissions:
 
 jobs:
   build:
-    name: ${platform} \${{ matrix.arch }}
+    name: ${runner_platform} targets
     runs-on: macos-14
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        arch: [${arch_list}]
     env:
       GH_TOKEN: \${{ github.token }}
       WORKFLOW_FORCE_SELF: \${{ inputs.force }}
       BUILD_FROM: \${{ inputs.build_from }}
+      TARGET_PLATFORMS: \${{ inputs.target_platforms }}
+      TARGET_ARCHS: \${{ inputs.target_archs }}
+      RUNNER_TARGET_PLATFORMS: "${platform_list}"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -175,47 +254,108 @@ jobs:
         shell: bash
         run: sudo xcodebuild -license accept
 
-      - name: Build ${platform} dependencies
+      - name: Build selected dependencies
         shell: bash
         run: |
           set -euo pipefail
 
-          platform="${platform}"
-          arch="\${{ matrix.arch }}"
-          WORKFLOW_BUILD_STEPS="\$(sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
-          echo "WORKFLOW_BUILD_STEPS: \$WORKFLOW_BUILD_STEPS"
-          start_building=true
-          found_build_from=false
+          source "\${GITHUB_WORKSPACE}/scripts/supported.sh"
+
+          trim() {
+            local value="\$1"
+            value="\${value#"\${value%%[![:space:]]*}"}"
+            value="\${value%"\${value##*[![:space:]]}"}"
+            printf '%s' "\$value"
+          }
+
+          contains_csv_value() {
+            local csv="\$1"
+            local needle="\$2"
+            local item
+            IFS=',' read -ra items <<< "\$csv"
+            for item in "\${items[@]}"; do
+              item="\$(trim "\$item")"
+              [[ "\$item" == "\$needle" ]] && return 0
+            done
+            return 1
+          }
+
+          is_supported_combo() {
+            local combo="\$1"
+            local valid
+            for valid in "\${VALID_PLATFORM_ARCHS[@]}"; do
+              [[ "\$valid" == "\$combo" ]] && return 0
+            done
+            return 1
+          }
+
           if [[ -n "\${BUILD_FROM:-}" ]]; then
             if [[ "\$BUILD_FROM" != build_* ]]; then
               echo "build_from must be a build_* step, got: \$BUILD_FROM" >&2
               exit 1
             fi
-            start_building=false
           fi
 
-          for build in \$WORKFLOW_BUILD_STEPS; do
-            if [[ -n "\${BUILD_FROM:-}" && "\$build" == "\$BUILD_FROM" ]]; then
+          IFS=',' read -ra selected_platforms <<< "\$TARGET_PLATFORMS"
+          IFS=',' read -ra selected_archs <<< "\$TARGET_ARCHS"
+          ran_any=false
+
+          for raw_platform in "\${selected_platforms[@]}"; do
+            platform="\$(trim "\$raw_platform")"
+            [[ -z "\$platform" ]] && continue
+
+            if ! contains_csv_value "\$RUNNER_TARGET_PLATFORMS" "\$platform"; then
+              echo "::notice::Skipping platform '\$platform': this ${runner_platform} runner supports only \$RUNNER_TARGET_PLATFORMS"
+              continue
+            fi
+
+            for raw_arch in "\${selected_archs[@]}"; do
+              arch="\$(trim "\$raw_arch")"
+              [[ -z "\$arch" ]] && continue
+              combo="\${platform}-\${arch}"
+
+              if ! is_supported_combo "\$combo"; then
+                echo "::notice::Skipping unsupported target \$combo"
+                continue
+              fi
+
+              ran_any=true
+              echo "Preparing build steps for \$combo"
+              WORKFLOW_BUILD_STEPS="\$(sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
+              echo "WORKFLOW_BUILD_STEPS for \$combo: \$WORKFLOW_BUILD_STEPS"
+
               start_building=true
-              found_build_from=true
-            fi
-            if [[ \${start_building} == "true" ]]; then
-              echo "Running \$build for \${platform}-\${arch}"
-              sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
-              sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
-            fi
+              found_build_from=false
+              [[ -n "\${BUILD_FROM:-}" ]] && start_building=false
+
+              for build in \$WORKFLOW_BUILD_STEPS; do
+                if [[ -n "\${BUILD_FROM:-}" && "\$build" == "\$BUILD_FROM" ]]; then
+                  start_building=true
+                  found_build_from=true
+                fi
+                if [[ \${start_building} == "true" ]]; then
+                  echo "Running \$build for \$combo"
+                  sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
+                  sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+                fi
+              done
+
+              if [[ -n "\${BUILD_FROM:-}" && "\$found_build_from" != "true" ]]; then
+                echo "build_from step not found in workflow build steps for \$combo: \$BUILD_FROM" >&2
+                exit 1
+              fi
+            done
           done
 
-          if [[ -n "\${BUILD_FROM:-}" && "\$found_build_from" != "true" ]]; then
-            echo "build_from step not found in workflow build steps: \$BUILD_FROM" >&2
-            exit 1
+          if [[ "\$ran_any" != "true" ]]; then
+            echo "::notice::No supported platform-arch combinations selected for this runner"
           fi
 
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: failure-artifacts-\${{ github.workflow }}-\${{ github.job }}-\${{ matrix.arch }}
+          name: failure-artifacts-\${{ github.workflow }}-\${{ github.job }}-\${{ github.run_id }}
           path: |
             build.log
             prebuilt
@@ -244,9 +384,11 @@ for build in "${builds[@]}"; do
 	"$SCRIPT_DIR/workflow.sh" "$build"
 done
 
-write_linux_orchestrator "linux" "x86_64"
-write_linux_orchestrator "windows" "x86_64"
-write_linux_orchestrator "android" "x86_64, aarch64, armv7a"
-write_macos_orchestrator "ios" "aarch64"
-write_macos_orchestrator "iphonesimulator" "aarch64"
-write_macos_orchestrator "macos" "x86_64, aarch64"
+rm -f \
+	"$WORKFLOW_DIR/build_all_android.yaml" \
+	"$WORKFLOW_DIR/build_all_windows.yaml" \
+	"$WORKFLOW_DIR/build_all_ios.yaml" \
+	"$WORKFLOW_DIR/build_all_iphonesimulator.yaml"
+
+write_linux_orchestrator "linux" "linux,windows,android" "x86_64,aarch64,armv7a"
+write_macos_orchestrator "macos" "ios,iphonesimulator,macos" "x86_64,aarch64"
