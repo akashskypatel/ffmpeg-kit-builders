@@ -74,6 +74,14 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     zip \
     zlib-devel
 
+RUN dnf install -y dnf-plugins-core && \
+    dnf --installroot=/opt/sysroots/aarch64-linux-gnu \
+        --forcearch=aarch64 \
+        --releasever="$(rpm -E %rhel)" \
+        --setopt=install_weak_deps=False \
+        --setopt=tsflags=nodocs \
+        install -y glibc glibc-devel libgcc libstdc++ libstdc++-devel
+
 # override installed older tools with bundled existing newer tools
 RUN for tool in autoconf automake aclocal autoheader autoreconf autom4te; do \
     ln -sf /usr/local/bin/$tool /usr/bin/$tool; \
@@ -122,7 +130,7 @@ RUN echo 'export RUSTUP_HOME=/usr/local/rustup' >> /etc/profile.d/rust.sh && \
     ln -sf /usr/local/cargo/bin/rustup /usr/bin/rustup && \
     ln -sf /usr/local/cargo/bin/cargo /usr/bin/cargo && \
     cargo --version && \
-    rustup target add x86_64-pc-windows-gnu && \
+    rustup target add x86_64-pc-windows-gnu aarch64-unknown-linux-gnu && \
     curl -fsSL https://github.com/lu-zero/cargo-c/releases/download/v0.10.20/cargo-c-x86_64-unknown-linux-musl.tar.gz -o /tmp/cargo-c.tar.gz && \
     mkdir -p /tmp/cargo-c /usr/local/bin && \
     tar -xzf /tmp/cargo-c.tar.gz -C /tmp/cargo-c && \
@@ -215,11 +223,11 @@ RUN curl -Lo /tmp/arm-toolchain.tar.xz "https://developer.arm.com/-/media/Files/
     mkdir -p ${ARM_TOOLCHAIN_PATH} && \
     tar -xf /tmp/arm-toolchain.tar.xz --strip-components=1 -C ${ARM_TOOLCHAIN_PATH} && \
     rm /tmp/arm-toolchain.tar.xz && \
-    # Create compatibility symlinks (e.g., aarch64-linux-gnu-gcc -> aarch64-none-linux-gnu-gcc)
     mkdir -p ${ARM_TOOLCHAIN_PATH}/sys-bin && \
     for tool in gcc g++ ar as ld nm objcopy objdump ranlib strip; do \
     ln -sf ${ARM_TOOLCHAIN_PATH}/bin/aarch64-none-linux-gnu-$tool ${ARM_TOOLCHAIN_PATH}/sys-bin/aarch64-linux-gnu-$tool; \
     done
+ENV PATH="${ARM_TOOLCHAIN_PATH}/sys-bin:${PATH}"
 
 # download gh cli
 RUN dnf install 'dnf-command(config-manager)' -y

@@ -480,22 +480,52 @@ setup_linux_environment() {
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
             export platform_arch="x86_64"
+            export host_target="$build_triple"
+            export CROSS_COMPILE=
+            export CC=gcc
+            export CXX=g++
+            export AR=ar
+            export AS=as
+            export RANLIB=ranlib
+            export LD=ld
+            export STRIP=strip
+            unset SYSROOT PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
             ;;
         "aarch64"|"arm64"|"arm64-v8a")
             export host_arch="aarch64"
             export cmake_host_arch="aarch64"
             export platform_arch="aarch64"
+            export SYSROOT=/opt/sysroots/aarch64-linux-gnu
+            export host_target="aarch64-linux-gnu"
+            export CROSS_COMPILE="$host_target-"
+            export CC="aarch64-linux-gnu-gcc --sysroot=$SYSROOT"
+            export CXX="aarch64-linux-gnu-g++ --sysroot=$SYSROOT"
+            export AR=aarch64-linux-gnu-ar
+            export AS=aarch64-linux-gnu-as
+            export RANLIB=aarch64-linux-gnu-ranlib
+            export LD="aarch64-linux-gnu-ld --sysroot=$SYSROOT"
+            export STRIP=aarch64-linux-gnu-strip
+            export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+            export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+            export build_cross_compile=y
             ;;
         *)
             exit_message 1 "setup_linux_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
 
-    export host_target="$build_triple"
     export rust_target="$host_arch-unknown-linux-gnu"
     
-    export PKG_CONFIG_PATH="$original_pkg_config_path:$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
-    export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:$original_path"
+    if [[ "$host_arch" == "aarch64" ]]; then
+        export PKG_CONFIG_PATH="$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/pkgconfig:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+    else
+        export PKG_CONFIG_PATH="$original_pkg_config_path:$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+    fi
+    if [[ "$host_arch" == "aarch64" ]]; then
+        export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:/usr/local/arm-gnu-toolchain/sys-bin:$original_path"
+    else
+        export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:$original_path"
+    fi
     
     export linux_cflags="$original_cflags -Wno-pedantic -I${dependency_install_prefix}/include "
     export CFLAGS="$linux_cflags"
@@ -510,13 +540,6 @@ setup_linux_environment() {
     source /opt/rh/gcc-toolset-14/enable
     
     export NASM=nasm
-    export CC=gcc
-    export AR=ar
-    export AS=as
-    export RANLIB=ranlib
-    export LD=ld
-    export STRIP=strip
-    export CXX=g++
 
     create_dir "$install_pkgconfig_dir"
     create_dir "$work_dir/pkgconfig"
@@ -970,7 +993,12 @@ native_cross_vars() {
     export LD=ld
     export STRIP=strip
     export NM=nm
-    export PKG_CONFIG_PATH="$original_pkg_config_path:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+    export CFLAGS="$original_cflags -Wno-pedantic"
+    export CPPFLAGS="$original_cppflags -DLINUX"
+    export CXXFLAGS="$original_cxxflags"
+    export LDFLAGS="$original_ldflags"
+    unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+    export PKG_CONFIG_PATH="$original_pkg_config_path:/usr/lib/$build_triple/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
   elif [[ "$BUILD_OS" == "macos" ]]; then
     export CROSS_COMPILE=
     export CC="$(xcrun --sdk macosx --find clang)"
@@ -991,7 +1019,43 @@ native_cross_vars() {
 }
 
 reset_cross_vars() {
-  if iswindows; then
+  if islinux; then
+    if [[ "$host_arch" == "aarch64" ]]; then
+      export SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
+      export CROSS_COMPILE="$host_target-"
+      export CC="${host_target}-gcc --sysroot=$SYSROOT"
+      export CXX="${host_target}-g++ --sysroot=$SYSROOT"
+      export AR="${host_target}-ar"
+      export AS="${host_target}-as"
+      export RANLIB="${host_target}-ranlib"
+      export LD="${host_target}-ld --sysroot=$SYSROOT"
+      export STRIP="${host_target}-strip"
+      export NM="${host_target}-nm"
+      export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+      export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+      export PKG_CONFIG_PATH="$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/pkgconfig:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+      export CFLAGS="$linux_cflags"
+      export CPPFLAGS="$linux_cppflags"
+      export CXXFLAGS="$linux_cxxflags"
+      export LDFLAGS="$linux_ldflags"
+    else
+      export CROSS_COMPILE=
+      export CC=gcc
+      export CXX=g++
+      export AR=ar
+      export AS=as
+      export RANLIB=ranlib
+      export LD=ld
+      export STRIP=strip
+      export NM=nm
+      unset SYSROOT PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+      export PKG_CONFIG_PATH="$original_pkg_config_path:$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+      export CFLAGS="$linux_cflags"
+      export CPPFLAGS="$linux_cppflags"
+      export CXXFLAGS="$linux_cxxflags"
+      export LDFLAGS="$linux_ldflags"
+    fi
+  elif iswindows; then
     export CROSS_COMPILE="$host_target-"
     export CC=${cross_prefix}gcc
     export CXX=${cross_prefix}g++
