@@ -133,3 +133,9 @@ RUN git config --global --add safe.directory '*'
 
 # Set the default user back to vscode for the dev container
 USER vscode
+
+# Copy entrypoint script
+COPY docker/docker-entry.sh /usr/local/bin/docker-entry.sh
+RUN chmod +x /usr/local/bin/docker-entry.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entry.sh"]
