@@ -1891,6 +1891,8 @@ build_gettext() {
   find "$src_dir/$lib" -type f -name configure -exec sed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
+  touch "no.autoreconf"
+  touch "no.autogen"
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\" \
 LDFLAGS=\"${LDFLAGS}\""
@@ -1913,6 +1915,7 @@ Cflags: -I\${includedir} -Dlibintl_STATIC
 EOF
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
+  touch "no.autogen"
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\""
   do_make_and_make_install
@@ -1922,6 +1925,8 @@ CFLAGS=\"$gettext_cflags\""
 --disable-nls \
 --disable-libasprintf \
 --without-libtextstyle-prefix"
+  touch "no.autoreconf"
+  touch "no.autogen"
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\" \
 LDFLAGS=\"$LDFLAGS\""
