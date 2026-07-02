@@ -2856,7 +2856,7 @@ do_configure() {
     if [[ -f $configure_name && ! -f configure.ac ]]; then
       echo "INFO: $configure_name exists and configure.ac is missing. Skipping autotools regeneration for $english_name." >>"$LOG_FILE"
     else
-      if [[ -f autogen.sh && ! -f "no.autogen" ]]; then
+      if [[ -f autogen.sh && ! -f "no.autogen" && ! -f $configure_name ]]; then
         echo "INFO: autogen.sh found. Running autogen.sh..."
         do_autogen
       fi
