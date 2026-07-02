@@ -1869,8 +1869,6 @@ build_gettext() {
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
-  export LIBS="-liconv"
-  export LDFLAGS="$LDFLAGS -liconv"
   local gettext_cflags="$CFLAGS -Dlibintl_STATIC -Dalignof=_Alignof -Dnullptr=NULL"
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
@@ -1895,13 +1893,12 @@ build_gettext() {
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\" \
-LIBS=\"$LIBS\" \
-LDFLAGS=\"${LDFLAGS} -liconv\""
+LDFLAGS=\"${LDFLAGS}\""
   # disable_nonessential "$src_dir/$lib"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
-  do_make_and_make_install "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
+  do_make_and_make_install "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
   change_dir "$src_dir/$lib/gettext-runtime"
-  do_make_and_make_install "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "LIBS=\"$LIBS\" CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
+  do_make_and_make_install "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
 exec_prefix=\${prefix}
@@ -1917,8 +1914,7 @@ EOF
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
   generic_configure "$config \
-CFLAGS=\"$gettext_cflags\" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$gettext_cflags\""
   do_make_and_make_install
   change_dir "$src_dir/$lib/gettext-tools"
   config+=" --disable-curses \
@@ -1928,12 +1924,10 @@ LIBS=\"$LIBS\""
 --without-libtextstyle-prefix"
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\" \
-LIBS=\"$LIBS\" \
-LDFLAGS=\"$LDFLAGS $LIBS\""
+LDFLAGS=\"$LDFLAGS\""
   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
-  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\" LIBS=\"$LIBS\""
+  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
   do_make_and_make_install "$make_config" "$make_config"
-  unset LIBS
   reset_allflags
   change_dir "$src_dir"
 }

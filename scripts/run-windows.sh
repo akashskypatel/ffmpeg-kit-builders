@@ -317,12 +317,12 @@ build_gettext() {
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime" 1
-  export LIBS="-liconv"
 	local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
---with-libiconv-prefix=\"${dependency_install_prefix}\" \
 --with-included-libintl \
 --without-libintl-prefix \
+--with-included-libiconv \
+--without-libiconv-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
@@ -332,8 +332,7 @@ build_gettext() {
 --disable-libasprintf \
 --disable-openmp \
 --disable-doc \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\""
   export aclocal="/usr/local/bin/aclocal"
   export automake="/usr/local/bin/automake"
   export ACLOCAL="$aclocal"
@@ -363,7 +362,6 @@ EOF
   change_dir "$src_dir/$lib"
   add_src_dir "$src_dir/$lib"
 	change_dir "$src_dir"
-  unset LIBS
   reset_cflags
 }
 # build_iconv             # config_options+= --disable-iconv              # disable iconv [autodetect]

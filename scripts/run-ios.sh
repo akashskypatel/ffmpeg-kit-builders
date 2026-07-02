@@ -1494,7 +1494,6 @@ build_gettext() {
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
   touch "no.autoreconf"
-  export LIBS="-liconv"
   local cflags="$CFLAGS -Dlibintl_STATIC -D_GNU_SOURCE -std=gnu11 -I$(xcrun --sdk macosx --show-sdk-path)/usr/include"
   export CFLAGS=$cflags
   local config="--prefix=${dependency_install_prefix} \
@@ -1516,8 +1515,7 @@ build_gettext() {
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "$config \
-CFLAGS=\"$cflags\" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$cflags\""
   # disable_nonessential "$src_dir/$lib"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
   MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\"" "CFLAGS=\"$cflags\""
@@ -1538,8 +1536,7 @@ EOF
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
   generic_configure "$config \
-CFLAGS=\"$cflags\" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$cflags\""
   MAKE_INSTALL_JOBS=1 do_make_and_make_install
 #   change_dir "$src_dir/$lib/gettext-tools"
 #   touch "no.autoreconf"
@@ -1555,7 +1552,6 @@ LIBS=\"$LIBS\""
 #   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
 #   local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\" LIBS=\"$LIBS\""
 #   do_make_and_make_install "$make_config" "$make_config"
-  unset LIBS
   reset_allflags
 }
 build_libffi() {

@@ -1795,7 +1795,6 @@ build_gettext() {
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
-  export LIBS="-liconv"
   local clfags="CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
@@ -1819,8 +1818,7 @@ build_gettext() {
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "$config \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   # disable_nonessential "$src_dir/$lib"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
   do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
@@ -1841,8 +1839,7 @@ EOF
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
   generic_configure "$config \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   do_make_and_make_install
   change_dir "$src_dir/$lib/gettext-tools"
   config+=" --disable-curses \
@@ -1852,12 +1849,10 @@ LIBS=\"$LIBS\""
 --without-libtextstyle-prefix"
   generic_configure "$config \
 CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
-LIBS=\"$LIBS\" \
-LDFLAGS=\"$LDFLAGS $LIBS\""
+LDFLAGS=\"$LDFLAGS\""
   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
-  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\" LIBS=\"$LIBS\""
+  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
   do_make_and_make_install "$make_config" "$make_config"
-  unset LIBS
   reset_allflags
 }
 build_libffi() {
