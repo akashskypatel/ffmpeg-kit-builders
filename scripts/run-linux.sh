@@ -4405,6 +4405,7 @@ build_pocketsphinx() {
 # }
 find_native_python() {
   local py_header
+  setup_default_python
   py_header="$(
     python3 - <<'PY' 2>/dev/null
 import os

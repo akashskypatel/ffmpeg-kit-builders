@@ -71,7 +71,7 @@ jobs:
 
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
 
       - name: Build selected dependencies
         shell: bash
@@ -108,6 +108,40 @@ jobs:
             return 1
           }
 
+          ensure_target_toolchain() {
+            local platform="\$1"
+            local arch="\$2"
+            local key="\$platform"
+            [[ "\$platform" == "linux" ]] && key="\${platform}-\${arch}"
+
+            if [[ -n "\${installed_toolchains[\$key]:-}" ]]; then
+              return 0
+            fi
+
+            case "\$platform" in
+              windows)
+                sudo -E "\${GITHUB_WORKSPACE}/scripts/toolchain/setup-mingw-w64.sh"
+                # shellcheck source=/dev/null
+                [[ -f /etc/profile.d/mingw-w64.sh ]] && source /etc/profile.d/mingw-w64.sh
+                ;;
+              android)
+                sudo -E "\${GITHUB_WORKSPACE}/scripts/toolchain/setup-android.sh"
+                # shellcheck source=/dev/null
+                [[ -f /etc/profile.d/android-sdk.sh ]] && source /etc/profile.d/android-sdk.sh
+                # shellcheck source=/dev/null
+                [[ -f /etc/profile.d/sdkman.sh ]] && source /etc/profile.d/sdkman.sh
+                ;;
+              linux)
+                if [[ "\$arch" == "aarch64" || "\$arch" == "arm64" || "\$arch" == "arm64-v8a" ]]; then
+                  sudo -E "\${GITHUB_WORKSPACE}/scripts/toolchain/setup-linux-arm64.sh"
+                  # shellcheck source=/dev/null
+                  [[ -f /etc/profile.d/linux-arm64-toolchain.sh ]] && source /etc/profile.d/linux-arm64-toolchain.sh
+                fi
+                ;;
+            esac
+            installed_toolchains["\$key"]=1
+          }
+
           if [[ -n "\${BUILD_FROM:-}" ]]; then
             if [[ "\$BUILD_FROM" != build_* ]]; then
               echo "build_from must be a build_* step, got: \$BUILD_FROM" >&2
@@ -118,6 +152,7 @@ jobs:
           IFS=',' read -ra selected_platforms <<< "\$TARGET_PLATFORMS"
           IFS=',' read -ra selected_archs <<< "\$TARGET_ARCHS"
           ran_any=false
+          declare -A installed_toolchains=()
 
           for raw_platform in "\${selected_platforms[@]}"; do
             platform="\$(trim "\$raw_platform")"
@@ -139,6 +174,7 @@ jobs:
               fi
 
               ran_any=true
+              ensure_target_toolchain "\$platform" "\$arch"
               echo "Preparing build steps for \$combo"
               WORKFLOW_BUILD_STEPS="\$(sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print \$2}')"
               echo "WORKFLOW_BUILD_STEPS for \$combo: \$WORKFLOW_BUILD_STEPS"
@@ -242,7 +278,7 @@ jobs:
 
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
 
       - name: Install Bash
         shell: bash

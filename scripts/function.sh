@@ -409,6 +409,134 @@ calculate_bits_target() {
     esac
 }
 
+run_toolchain_setup() {
+    local setup_name="$1"
+    local setup_script="${SCRIPTDIR}/toolchain/${setup_name}"
+
+    if [[ ! -x "$setup_script" ]]; then
+        exit_message 1 "Toolchain setup script not found or not executable: $setup_script"
+    fi
+
+    echo "INFO: Ensuring toolchain via $setup_script" >>"$LOG_FILE"
+    "$setup_script" >>"$LOG_FILE" 2>&1 || exit_message 1 "Failed to run toolchain setup script: $setup_script"
+}
+
+rust_target_installed() {
+    local target="$1"
+    command -v rustup >/dev/null 2>&1 && rustup target list --installed 2>/dev/null | grep -qx "$target"
+}
+
+setup_default_python() {
+    local preferred_version="${1:-3.12}"
+    local candidate=""
+    local candidate_name=""
+    local python_link=""
+    local search_root=""
+    local selected_python=""
+    local selected_version=""
+    local best_python=""
+    local best_version=""
+    local seen_candidates=""
+    local log_file="${LOG_FILE:-/dev/null}"
+    local search_roots=(
+        "/opt/_internal"
+        "/opt/python"
+        "/usr/local"
+        "/usr"
+        "/bin"
+        "/opt/homebrew"
+        "/home/linuxbrew/.linuxbrew"
+    )
+    local candidate_names=(
+        "python${preferred_version}"
+        "python${preferred_version}m"
+        "python3"
+        "python"
+    )
+    local candidates=()
+
+    for candidate_name in "${candidate_names[@]}"; do
+        candidate="$(command -v "$candidate_name" 2>/dev/null || true)"
+        if [[ -n "$candidate" && -x "$candidate" && ":$seen_candidates:" != *":$candidate:"* ]]; then
+            candidates+=("$candidate")
+            seen_candidates="${seen_candidates}:${candidate}"
+        fi
+    done
+
+    for search_root in "${search_roots[@]}"; do
+        [[ -d "$search_root" ]] || continue
+        while IFS= read -r -d '' candidate; do
+            if [[ -x "$candidate" && ":$seen_candidates:" != *":$candidate:"* ]]; then
+                candidates+=("$candidate")
+                seen_candidates="${seen_candidates}:${candidate}"
+            fi
+        done < <(find "$search_root" -maxdepth 5 \( -type f -o -type l \) \( \
+            -name "python${preferred_version}" -o \
+            -name "python${preferred_version}m" -o \
+            -name "python3" -o \
+            -name "python3.*" -o \
+            -name "python" \
+        \) -print0 2>/dev/null)
+    done
+
+    for candidate in "${candidates[@]}"; do
+        local candidate_version=""
+        candidate_version="$("$candidate" -c 'import sys; print("{}.{}".format(sys.version_info[0], sys.version_info[1]))' 2>/dev/null || true)"
+        [[ "$candidate_version" == 3.* ]] || continue
+
+        if [[ "$candidate_version" == "$preferred_version" ]]; then
+            selected_python="$candidate"
+            selected_version="$candidate_version"
+            break
+        fi
+
+        if [[ -z "$best_version" || "$(printf '%s\n%s\n' "$best_version" "$candidate_version" | sort -V | tail -n 1)" == "$candidate_version" ]]; then
+            best_python="$candidate"
+            best_version="$candidate_version"
+        fi
+    done
+
+    if [[ -z "$selected_python" ]]; then
+        selected_python="$best_python"
+        selected_version="$best_version"
+    fi
+
+    if [[ -z "$selected_python" ]]; then
+        exit_message 1 "setup_default_python: no usable Python 3 interpreter found"
+    fi
+
+    local link_dir="/usr/local/bin"
+    local python_link_path="${link_dir}/python"
+    local python3_link_path="${link_dir}/python3"
+    local selected_real=""
+
+    mkdir -p "$link_dir" || exit_message 1 "setup_default_python: unable to create $link_dir"
+    selected_real="$(readlink -f "$selected_python" 2>/dev/null || printf '%s' "$selected_python")"
+
+    for python_link in "$python_link_path" "$python3_link_path"; do
+        local link_real=""
+        link_real="$(readlink -f "$python_link" 2>/dev/null || true)"
+        if [[ -e "$python_link" && ! -L "$python_link" && "$link_real" != "$selected_real" ]]; then
+            echo "WARNING: setup_default_python: $python_link exists and is not a symlink; leaving it unchanged" >>"$log_file"
+            continue
+        fi
+        ln -sfn "$selected_python" "$python_link" || exit_message 1 "setup_default_python: unable to link $python_link to $selected_python"
+    done
+
+    case ":$PATH:" in
+        *":$link_dir:"*) ;;
+        *) export PATH="$link_dir:$PATH" ;;
+    esac
+
+    export PYTHON="$python_link_path"
+    export PYTHON3="$python3_link_path"
+    export PYTHON_BIN="$selected_python"
+    export PYTHON_VERSION="$selected_version"
+    hash -r 2>/dev/null || true
+
+    echo "INFO: setup_default_python: selected Python $selected_version at $selected_python" >>"$log_file"
+}
+
 setup_windows_environment() {
     export PATCHDIR="$SCRIPTDIR/windows/patches"
     export host_target="$host_arch-w64-mingw32"
@@ -444,6 +572,10 @@ setup_windows_environment() {
             exit_message 1 "setup_windows_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    if [[ ! -x "${toolchain_bin_path}/${host_target}-gcc" ]] || ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-mingw-w64.sh"
+    fi
     
     reset_cross_vars
     export PREFIX="$dependency_install_prefix"
@@ -492,6 +624,9 @@ setup_linux_environment() {
             unset SYSROOT PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
             ;;
         "aarch64"|"arm64"|"arm64-v8a")
+            if [[ ! -x "/usr/local/arm-gnu-toolchain/sys-bin/aarch64-linux-gnu-gcc" || ! -e "/opt/sysroots/aarch64-linux-gnu/lib64/libc.so.6" ]] || ! rust_target_installed "aarch64-unknown-linux-gnu"; then
+                run_toolchain_setup "setup-linux-arm64.sh"
+            fi
             export host_arch="aarch64"
             export cmake_host_arch="aarch64"
             export platform_arch="aarch64"
@@ -548,6 +683,13 @@ setup_linux_environment() {
 
 setup_android_environment() {
     export PATCHDIR="$SCRIPTDIR/android/patches"
+
+    if [[ ! -x "/usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager" || ! -d "/usr/local/android-sdk/ndk/29.0.14206865" ]] || \
+        ! rust_target_installed "x86_64-linux-android" || \
+        ! rust_target_installed "aarch64-linux-android" || \
+        ! rust_target_installed "armv7-linux-androideabi"; then
+        run_toolchain_setup "setup-android.sh"
+    fi
 
     # Detect Android SDK/NDK
     if [[ -z "$ANDROID_HOME" ]]; then
@@ -2550,6 +2692,7 @@ do_python() {
     wget https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1
     chmod +x waf
   fi
+  setup_default_python
   # shellcheck disable=SC2206,SC2128
   configure_command=(python3 ${configure_name[*]})
 	local cur_dir2=$(pwd)
@@ -3246,6 +3389,7 @@ do_cmake_and_install() {
 }
 
 activate_meson() {
+  setup_default_python
 	echo -e "INFO: Activating meson" >>"$LOG_FILE"
 	change_dir "$src_dir" # requires python3-full
 	if [[ ! -d "$src_dir/meson" ]]; then
@@ -3284,12 +3428,9 @@ do_meson() {
     configure_name=$($input_configure)
     command_name="${configure_name[*]}"
 	fi
+  setup_default_python
 	if [[ -e "$local_meson" ]]; then
-    if [[ -f "/opt/python/cp312-cp312/bin/python3" ]]; then
-      configure_command=(/opt/python/cp312-cp312/bin/python3 "$local_meson" "${configure_name[*]}")
-    else
-      configure_command=(python3 "$local_meson" "${configure_name[*]}")
-    fi
+    configure_command=(python3 "$local_meson" "${configure_name[*]}")
 	else
 		configure_command=(meson)
 	fi
@@ -4572,6 +4713,7 @@ install_ffmpeg() {
   if ismacos || isios || isiossimulator; then 
     export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
     local bin2c_py=$(create_bin2c_py)
+    setup_default_python
     sed -i '.bak' 's|RUN_BIN2C = $(BIN2C)|RUN_BIN2C = python3 ffbuild/bin2c.py|' "$ffmpeg_source_dir/ffbuild/common.mak"
   fi
 	do_make "AS=\"$AS\" PREFIX=\"$ffmpeg_install_prefix\"" "${touch_postfix}" 1 || exit_message 1 "install_ffmpeg: unable to make ffmpeg. see $LOG_FILE for details."

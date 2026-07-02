@@ -86,12 +86,32 @@ jobs:
 
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
+
+      - name: Setup Linux arm64 toolchain
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
+        shell: bash
+        run: sudo -E ./scripts/toolchain/setup-linux-arm64.sh
+
+      - name: Setup Windows toolchain
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'windows') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
+        shell: bash
+        run: sudo -E ./scripts/toolchain/setup-mingw-w64.sh
+
+      - name: Setup Android toolchain
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'android' }}
+        shell: bash
+        run: sudo -E ./scripts/toolchain/setup-android.sh
 
       - name: Build Linux
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
         run: sudo -E ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
+
+      - name: Build Linux aarch64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
+        shell: bash
+        run: sudo -E ./runner.sh --host=linux --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Windows
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'windows') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}

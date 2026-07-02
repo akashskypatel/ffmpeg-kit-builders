@@ -224,6 +224,7 @@ create_macos_xcframework() {
 
 create_bin2c_py() {
 	# binc2c python script because bin2c generated executable is no-op on mac due to security policy
+  setup_default_python
 	local bin2c_py_path="${ffmpeg_source_dir}/ffbuild/bin2c.py"
 	cat > "$bin2c_py_path" << 'EOF'
 #!/usr/bin/env python3
