@@ -7440,7 +7440,8 @@ check_maven_package_status() {
   local username="$(get_maven_username)"
   local password="$(get_maven_password)"
   local endpoint="https://central.sonatype.com/api/v1/publisher/published"
-  local namespace="io.github.akashskypatel.ffmpegkit"
+  local owner="$(get_github_owner)"
+  local namespace="io.github.$owner.ffmpegkit"
 
   echo "Checking for existing package $package_name version $package_version on Maven Central..." > >(redirect_output)
   auth_token="$(echo -n "$username:$password" | base64)"

@@ -4,6 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKFLOW_DIR="$(dirname "$SCRIPT_DIR")/.github/workflows"
 
+source "$SCRIPT_DIR/function.sh"
+
+OWNER="$(get_github_owner)"
+
 if [[ ! -d "$WORKFLOW_DIR" ]]; then
 	mkdir -p "$WORKFLOW_DIR"
 fi
@@ -75,9 +79,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       WORKFLOW_FORCE_SELF: ${{ inputs.force }}
     container:
-      image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+      image: ghcr.io/${OWNER}/ffmpeg-kit-builders-dev:latest
       credentials:
-        username: akashskypatel
+        username: ${OWNER}
         password: ${{ secrets.GHCR_PAT || github.token }}
       options: --user root
     steps:

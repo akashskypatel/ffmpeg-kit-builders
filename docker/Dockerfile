@@ -138,4 +138,8 @@ RUN chmod +x /usr/local/bin/docker-entry.sh
 # Set the default user back to vscode for the dev container
 USER vscode
 
+RUN mkdir -p "$HOME/.config/keystore/maven" && \
+    touch "$HOME/.config/keystore/maven/maven" && \
+    touch "$HOME/.config/keystore/github"
+
 ENTRYPOINT ["/usr/local/bin/docker-entry.sh"]
