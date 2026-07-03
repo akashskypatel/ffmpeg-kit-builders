@@ -66,7 +66,16 @@ EOF
 write_sdkman_environment() {
   cat >/etc/profile.d/sdkman.sh <<EOF
 export SDKMAN_DIR="${SDKMAN_DIR}"
+case "\$-" in
+  *u*) sdkman_restore_nounset=1 ;;
+  *) sdkman_restore_nounset=0 ;;
+esac
+set +u
 source "\${SDKMAN_DIR}/bin/sdkman-init.sh"
+if [[ "\$sdkman_restore_nounset" == 1 ]]; then
+  set -u
+fi
+unset sdkman_restore_nounset
 export PATH="\${SDKMAN_DIR}/candidates/gradle/current/bin:\$PATH"
 EOF
   chmod +x /etc/profile.d/sdkman.sh
@@ -75,6 +84,20 @@ EOF
   fi
   if [[ -n "${GITHUB_PATH:-}" ]]; then
     grep -qxF "${SDKMAN_DIR}/candidates/gradle/current/bin" "$GITHUB_PATH" 2>/dev/null || echo "${SDKMAN_DIR}/candidates/gradle/current/bin" >>"$GITHUB_PATH"
+  fi
+}
+
+source_sdkman() {
+  export SDKMAN_DIR
+  local restore_nounset=0
+  case "$-" in
+    *u*) restore_nounset=1 ;;
+  esac
+  set +u
+  # shellcheck source=/dev/null
+  source "${SDKMAN_DIR}/bin/sdkman-init.sh"
+  if [[ "$restore_nounset" == 1 ]]; then
+    set -u
   fi
 }
 
@@ -147,8 +170,7 @@ if [[ ! -s "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
   curl -s "https://get.sdkman.io" | bash
 fi
 
-# shellcheck source=/dev/null
-source "${SDKMAN_DIR}/bin/sdkman-init.sh"
+source_sdkman
 sdk install gradle || true
 sdk flush archives || true
 sdk flush temp || true
