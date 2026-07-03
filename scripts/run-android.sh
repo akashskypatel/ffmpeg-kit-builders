@@ -1920,20 +1920,20 @@ EOF
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\""
   do_make_and_make_install
-  change_dir "$src_dir/$lib/gettext-tools"
-  config+=" --disable-curses \
---disable-examples \
---disable-nls \
---disable-libasprintf \
---without-libtextstyle-prefix"
-  touch "no.autoreconf"
-  touch "no.autogen"
-  generic_configure "$config \
-CFLAGS=\"$gettext_cflags\" \
-LDFLAGS=\"$LDFLAGS\""
-  disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
-  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
-  do_make_and_make_install "$make_config" "$make_config"
+#   change_dir "$src_dir/$lib/gettext-tools"
+#   config+=" --disable-curses \
+# --disable-examples \
+# --disable-nls \
+# --disable-libasprintf \
+# --without-libtextstyle-prefix"
+#   touch "no.autoreconf"
+#   touch "no.autogen"
+#   generic_configure "$config \
+# CFLAGS=\"$gettext_cflags\" \
+# LDFLAGS=\"$LDFLAGS\""
+#   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
+#   local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
+#   do_make_and_make_install "$make_config" "$make_config"
   reset_allflags
   change_dir "$src_dir"
 }
