@@ -4119,6 +4119,8 @@ build_pocketsphinx() {
   change_dir "$src_dir"
   do_svn_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
+  export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
+  export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreFoundation"
   touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
@@ -4126,6 +4128,7 @@ build_pocketsphinx() {
 --without-lapack"
   disable_nonessential "$src_dir/$parent/$lib"
   do_make_and_make_install
+  reset_allflags
   change_dir "$src_dir"
 }
 # new version is not compatible yet
