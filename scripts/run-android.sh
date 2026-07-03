@@ -2964,6 +2964,14 @@ build_libssh() {
 -DWITH_TESTING=OFF \
 -DWITH_SERVER=OFF \
 -DWITH_ZLIB=ON \
+-DZLIB_ROOT=\"$dependency_install_prefix\" \
+-DZLIB_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DZLIB_LIBRARY=\"$dependency_install_prefix/lib/libz.a\" \
+-DOPENSSL_USE_STATIC_LIBS=TRUE \
+-DOPENSSL_ROOT_DIR=\"$dependency_install_prefix\" \
+-DOPENSSL_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DOPENSSL_CRYPTO_LIBRARY=\"$dependency_install_prefix/lib/libcrypto.a\" \
+-DOPENSSL_SSL_LIBRARY=\"$dependency_install_prefix/lib/libssl.a\" \
 -DWITH_SFTP=ON \
 -DWITH_GSSAPI=OFF \
 -DWITH_NACL=OFF \
