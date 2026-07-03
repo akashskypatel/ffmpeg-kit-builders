@@ -101,6 +101,19 @@ source_sdkman() {
   fi
 }
 
+install_sdkman() {
+  export SDKMAN_DIR
+  local restore_nounset=0
+  case "$-" in
+    *u*) restore_nounset=1 ;;
+  esac
+  set +u
+  curl -s "https://get.sdkman.io" | bash
+  if [[ "$restore_nounset" == 1 ]]; then
+    set -u
+  fi
+}
+
 android_toolchain_ready() {
   local toolchain_bin
   toolchain_bin="$(android_toolchain_bin)"
@@ -166,8 +179,7 @@ ln -sf "${toolchain_bin}/armv7a-linux-androideabi26-clang++" "${toolchain_bin}/a
 write_android_environment
 
 if [[ ! -s "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
-  export SDKMAN_DIR
-  curl -s "https://get.sdkman.io" | bash
+  install_sdkman
 fi
 
 source_sdkman
