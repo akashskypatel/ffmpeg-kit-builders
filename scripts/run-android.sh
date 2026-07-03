@@ -4153,6 +4153,7 @@ build_libzvbi() {
   fi
   do_autogen "--build-w$bits_target"
   change_dir "$src_dir/$lib"
+  sed -i 's|as_fn_error \$? "Unable to link pthread functions" "\$LINENO" 5|: # Android provides pthread functions in libc|g' configure
   touch "no.autoreconf"
   generic_configure "--enable-static \
 --disable-shared \
