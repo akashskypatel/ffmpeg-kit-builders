@@ -57,6 +57,8 @@ signing_identity=""
 team_id=""
 apple_id=""
 app_specific_password=""
+owner="$(get_github_owner)"
+
 declare -A PLATFORM_ARCHS
 
 # Check if a build step is already completed
@@ -614,7 +616,7 @@ if [[ "${skip_notarization}" == false && "${notarize_only}" == false ]]; then
           zip_path="$(create_zip_for_notarization "${xcframework_path}" "${xcframework_output_dir}")"
 
           # Submit for notarization
-          bundle_id="com.akashskypatel.ffmpegkit.${output_name}"
+          bundle_id="com.${owner}.ffmpegkit.${output_name}"
           request_uuid="$(submit_for_notarization "${zip_path}" "${bundle_id}")"
 
           # Wait for notarization to complete
@@ -658,7 +660,7 @@ if [[ "${notarize_only}" == true ]]; then
             zip_path="$(create_zip_for_notarization "${xcframework_path}" "${xcframework_output_dir}")"
 
             # Submit
-            bundle_id="com.akashskypatel.ffmpegkit.${output_name}"
+            bundle_id="com.${owner}.ffmpegkit.${output_name}"
             request_uuid="$(submit_for_notarization "${zip_path}" "${bundle_id}")"
 
             # Wait

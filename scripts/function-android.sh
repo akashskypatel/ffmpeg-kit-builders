@@ -249,8 +249,8 @@ create_android_aar() {
 
   cp -fv "${work_dir}/${kit_dir}/lib/pkgconfig/ffmpegkit.pc" "${jni_libs_dir}/lib/pkgconfig/ffmpegkit.pc" > >(redirect_output)
   cp -fv "${work_dir}/${kit_dir}/lib/libffmpegkit${lib_ext}" "${jni_libs_dir}/${arch_pfx}/libffmpegkit${lib_ext}" > >(redirect_output)
-
-  FFMPEG_KIT_NAMESPACE="io.github.akashskypatel.ffmpegkit"
+	local owner="$(get_github_owner)"
+  FFMPEG_KIT_NAMESPACE="io.github.$owner.ffmpegkit"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
   FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")-SNAPSHOT"
   FFMPEG_KIT_JNI_LIBS_DIR=$(realpath "${jni_libs_dir}")

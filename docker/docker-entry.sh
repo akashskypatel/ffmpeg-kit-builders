@@ -26,6 +26,23 @@ if [[ -z "${GITHUB_TOKEN:-}" ]]; then
     exit 1
 fi
 
+mkdir -p "$HOME/.config/keystore/maven"
+
+cat > "$HOME/.config/keystore/maven/maven" << EOF
+OSSRH_USERNAME=${OSSRH_USERNAME}
+OSSRH_PASSWORD=${OSSRH_PASSWORD}
+OSSRH_BASE64=${OSSRH_BASE64}
+EOF
+
+cat > "$HOME/.config/keystore/github" << EOF
+GH_TOKEN=${GITHUB_TOKEN}
+GH_TOKEN_CLASSIC=${GITHUB_TOKEN}
+GH_OWNER=${GH_OWNER}
+GH_REPO=${GH_REPO}
+EOF
+
+echo "Creating GitHub Actions runner configuration..."
+
 mkdir -p /usr/local/actions-runner || { echo "Failed to create directory" >&2; exit 1; }
 
 cd /usr/local/actions-runner || { echo "Failed to change directory" >&2; exit 1; }
@@ -49,3 +66,5 @@ https://api.github.com/repos/akashskypatel/ffmpeg-kit-builders/actions/runners/r
 ./svc.sh install || { echo "Failed to install GitHub Actions runner service" >&2; exit 1; }
 
 ./svc.sh start || { echo "Failed to start GitHub Actions runner service" >&2; exit 1; }
+
+echo "GitHub Actions runner configured and started successfully."
