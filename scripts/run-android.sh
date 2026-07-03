@@ -1718,6 +1718,7 @@ build_libklvanc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  sed -i 's/^SUBDIRS = src tools/SUBDIRS = src/' Makefile.am Makefile.in
   touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
