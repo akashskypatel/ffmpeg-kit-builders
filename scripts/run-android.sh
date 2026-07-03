@@ -500,7 +500,12 @@ build_bzlib() {
   change_dir "$src_dir/$lib"
   generic_make "libbz2.a CFLAGS=\"${CFLAGS}\""
   disable_nonessential "$src_dir/$lib"
-  generic_make_install "CFLAGS=\"${CFLAGS}\""
+  create_dir "$dependency_install_prefix/include"
+  create_dir "$dependency_install_prefix/lib"
+  execute "INFO: installing bzip2 header" "ERROR: unable to install bzip2 header" "true" \
+    cp -fv "$src_dir/$lib/bzlib.h" "$dependency_install_prefix/include/bzlib.h"
+  execute "INFO: installing bzip2 static library" "ERROR: unable to install bzip2 static library" "true" \
+    cp -fv "$src_dir/$lib/libbz2.a" "$dependency_install_prefix/lib/libbz2.a"
   change_dir "$src_dir"
     cat > "$install_pkgconfig_dir/bzip2.pc" <<EOF
 prefix=$dependency_install_prefix
