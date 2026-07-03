@@ -860,6 +860,7 @@ setup_macos_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export meson_cpu_family="x86_64"
             export platform_arch="x86_64"
             export build_cross_compile=y
             export PATH="$original_path"
