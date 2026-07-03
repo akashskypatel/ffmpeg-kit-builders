@@ -1612,7 +1612,7 @@ build_glib() {
   export LIBRARY_PATH="${dependency_install_prefix}/lib"
   export PKG_CONFIG_LIBDIR="${dependency_install_prefix}/lib/pkgconfig"
   local sdk_path=$(xcrun --sdk macosx --show-sdk-path)
-  export LDFLAGS="$LDFLAGS -liconv -lintl -lresolv -framework CoreFoundation"
+  export LDFLAGS="$LDFLAGS -lintl -liconv -lresolv -framework CoreFoundation"
   local meson_options="-Dforce_posix_threads=true \
 -Dman-pages=disabled \
 -Dsysprof=disabled \
@@ -1620,12 +1620,12 @@ build_glib() {
 -Dnls=disabled \
 -Dtests=false \
 --includedir=\"${dependency_install_prefix}/include\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -liconv -lintl -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -liconv -lintl -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
+-Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -liconv -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
+-Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -liconv -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
 --wrap-mode=nofallback"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  add_libs_to_pkg -t="$install_pkgconfig_dir/glib-2.0.pc" -l="-lm -liconv -lintl -lresolv"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/glib-2.0.pc" -l="-lm -lintl -liconv -lresolv"
   change_dir "$src_dir"
   reset_cflags
   unset C_INCLUDE_PATH

@@ -1601,7 +1601,7 @@ build_glib() {
   export C_INCLUDE_PATH="${dependency_install_prefix}/include"
   export LIBRARY_PATH="${dependency_install_prefix}/lib"
   export PKG_CONFIG_LIBDIR="${dependency_install_prefix}/lib/pkgconfig"
-  export LDFLAGS="$LDFLAGS -liconv -lintl -lresolv -framework CoreFoundation"
+  export LDFLAGS="$LDFLAGS -lintl -liconv -lresolv -framework CoreFoundation"
   local meson_options="-Dforce_posix_threads=true \
 -Dman-pages=disabled \
 -Dsysprof=disabled \
@@ -1615,13 +1615,13 @@ build_glib() {
 -Ddtrace=false \
 -Dsystemtap=false \
 --includedir=\"${dependency_install_prefix}/include\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -liconv -lintl -lresolv -framework CoreFoundation -isysroot ${IOS_SYSROOT}\" \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -liconv -lintl -lresolv -framework CoreFoundation -isysroot ${IOS_SYSROOT}\" \
+-Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -liconv -lresolv -framework CoreFoundation -isysroot ${IOS_SYSROOT}\" \
+-Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -liconv -lresolv -framework CoreFoundation -isysroot ${IOS_SYSROOT}\" \
 --wrap-mode=nofallback"
   sed -i'.bak' '/#ifdef HAVE_PIPE2/,/#endif/d' "$src_dir/$lib/glib/glib-unixprivate.h"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  sed -i'.bak' 's/-lglib-2.0.*$/-lglib-2.0 -lm -liconv -lintl/' "$install_pkgconfig_dir/glib-2.0.pc"
+  sed -i'.bak' 's/-lglib-2.0.*$/-lglib-2.0 -lm -lintl -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
   change_dir "$src_dir"
   reset_cflags
   unset C_INCLUDE_PATH
