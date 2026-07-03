@@ -130,6 +130,20 @@ install_sdkman() {
   fi
 }
 
+run_sdkman() {
+  local restore_nounset=0
+  case "$-" in
+    *u*) restore_nounset=1 ;;
+  esac
+  set +u
+  sdk "$@"
+  local sdk_status=$?
+  if [[ "$restore_nounset" == 1 ]]; then
+    set -u
+  fi
+  return "$sdk_status"
+}
+
 android_toolchain_ready() {
   local toolchain_bin
   toolchain_bin="$(android_toolchain_bin)"
@@ -199,9 +213,9 @@ if [[ ! -s "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
 fi
 
 source_sdkman
-sdk install gradle || true
-sdk flush archives || true
-sdk flush temp || true
+run_sdkman install gradle || true
+run_sdkman flush archives || true
+run_sdkman flush temp || true
 write_sdkman_environment
 
 if command -v rustup >/dev/null 2>&1; then
