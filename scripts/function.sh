@@ -2998,12 +2998,9 @@ needs_automake_missing() {
 get_config_sub() {
   local dest="$1"
   if [[ -d "$dest" ]]; then
-    curl -L -o "$dest/config.sub" 'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' > >(redirect_output) 2>&1 || {
-      if ! is_valid_git_dir "$src_dir/config"; then
-        do_git_checkout "$src_dir/config"
-      fi
-      copy_path "$src_dir/config/config.sub" "$dest/config.sub"
-    }
+    fetch_config_helper "$dest" "config.sub" \
+      'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' \
+      'https://gitlab.com/cinc-project/upstream/config/-/raw/master/config.sub?ref_type=heads'
   else
     exit_message 1 "DEBUG: Destination directory $dest does not exist"
   fi
@@ -3012,15 +3009,56 @@ get_config_sub() {
 get_config_guess() {
   local dest="$1"
   if [[ -d "$dest" ]]; then
-    curl -L -o "$dest/config.guess" 'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' > >(redirect_output) 2>&1 || {
-      if ! is_valid_git_dir "$src_dir/config"; then
-        do_git_checkout "$src_dir/config"
-      fi
-      copy_path "$src_dir/config/config.guess" "$dest/config.guess"
-    }
+    fetch_config_helper "$dest" "config.guess" \
+      'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' \
+      'https://gitlab.com/cinc-project/upstream/config/-/raw/master/config.guess?ref_type=heads'
   else
     exit_message 1 "DEBUG: Destination directory $dest does not exist"
   fi
+}
+
+is_valid_config_script() {
+  local file_path="$1"
+  [[ -s "$file_path" ]] || return 1
+  head -n 1 "$file_path" | grep -Eq '^#![[:space:]]*/bin/sh' || return 1
+  grep -q "timestamp='" "$file_path" || return 1
+}
+
+download_config_script() {
+  local url="$1"
+  local output_path="$2"
+  local tmp_path="${output_path}.tmp"
+
+  rm -f "$tmp_path"
+  curl --connect-timeout 10 --max-time 10 -fL -o "$tmp_path" "$url" > >(redirect_output) 2>&1 || {
+    rm -f "$tmp_path"
+    return 1
+  }
+
+  if ! is_valid_config_script "$tmp_path"; then
+    echo "WARNING: download_config_script: invalid response for $url" >>"$LOG_FILE"
+    rm -f "$tmp_path"
+    return 1
+  fi
+
+  mv "$tmp_path" "$output_path"
+}
+
+fetch_config_helper() {
+  local dest="$1"
+  local config_name="$2"
+  local primary_url="$3"
+  local mirror_url="$4"
+  local output_path="$dest/$config_name"
+
+  download_config_script "$primary_url" "$output_path" || \
+  download_config_script "$mirror_url" "$output_path" || {
+    if ! is_valid_git_dir "$src_dir/config"; then
+      do_git_checkout "$src_dir/config"
+    fi
+    copy_path "$src_dir/config/$config_name" "$output_path"
+    is_valid_config_script "$output_path" || exit_message 1 "DEBUG: downloaded fallback $config_name is invalid at $output_path"
+  }
 }
 
 # 1. configure_options
