@@ -3035,18 +3035,10 @@ build_libarchive() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include "
-  export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -L${dependency_install_prefix}/lib/${host_target} "
+  export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -L${dependency_install_prefix}/lib/${host_target} -framework CoreFoundation -framework Foundation"
   generic_configure "--enable-static \
 --disable-shared \
---bindir=$dependency_install_prefix/bin \
---without-bz2lib \
---without-lz4 \
---without-zstd \
---without-lzo2 \
---without-cng \
---without-xml2 \
---without-nettle \
---without-iconv"
+--bindir=$dependency_install_prefix/bin"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags
