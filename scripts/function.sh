@@ -427,6 +427,41 @@ rust_target_installed() {
     command -v rustup >/dev/null 2>&1 && rustup target list --installed 2>/dev/null | grep -qx "$target"
 }
 
+prepend_path_once() {
+    local path_entry="$1"
+    [[ -n "$path_entry" && -d "$path_entry" ]] || return 0
+    case ":$PATH:" in
+        *":$path_entry:"*) ;;
+        *) export PATH="$path_entry:$PATH" ;;
+    esac
+}
+
+apply_apple_homebrew_environment() {
+    local brew_prefix="${HOMEBREW_PREFIX:-}"
+
+    if [[ -z "$brew_prefix" ]] && command -v brew >/dev/null 2>&1; then
+        brew_prefix="$(brew --prefix 2>/dev/null || true)"
+    fi
+    if [[ -z "$brew_prefix" ]]; then
+        for candidate in /opt/homebrew /usr/local; do
+            if [[ -x "$candidate/bin/brew" || -d "$candidate/opt/bison/bin" ]]; then
+                brew_prefix="$candidate"
+                break
+            fi
+        done
+    fi
+
+    [[ -n "$brew_prefix" ]] || return 0
+
+    export HOMEBREW_PREFIX="$brew_prefix"
+    prepend_path_once "$brew_prefix/bin"
+    prepend_path_once "$brew_prefix/sbin"
+    prepend_path_once "$brew_prefix/opt/bison/bin"
+    prepend_path_once "$brew_prefix/opt/flex/bin"
+    prepend_path_once "$brew_prefix/opt/m4/bin"
+    hash -r 2>/dev/null || true
+}
+
 setup_default_python() {
     local preferred_version="${1:-3.12}"
     local candidate=""
@@ -849,6 +884,8 @@ setup_macos_environment() {
             ;;
     esac
 
+    apply_apple_homebrew_environment
+
     if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
         export PATH="${HOME}/.cargo/bin:$PATH"
     fi
@@ -923,6 +960,8 @@ setup_ios_environment() {
             exit_message 1 "setup_ios_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    apply_apple_homebrew_environment
 
     if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
         export PATH="${HOME}/.cargo/bin:$PATH"
@@ -1012,6 +1051,8 @@ setup_tvos_environment() {
             exit_message 1 "setup_tvos_environment: Unsupported host arch '$host_arch'"
             ;;
     esac
+
+    apply_apple_homebrew_environment
 
     reset_cross_vars
 
