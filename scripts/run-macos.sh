@@ -3808,6 +3808,8 @@ build_zix() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   local meson_options="-Dtests=disabled \
+-Dbenchmarks=disabled \
+-Dexamples=disabled \
 -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -framework CoreFoundation -framework Foundation\" \
 -Dtests_cpp=disabled \
 -Ddocs=disabled"
