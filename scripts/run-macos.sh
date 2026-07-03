@@ -4099,11 +4099,11 @@ build_gstreamer() {
 -Dgst_debug=false \
 -Dnls=disabled \
 -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -framework ObjectiveC\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -lobjc -llzma\""
+-Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -lglib-2.0 -lobjc -llzma\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  add_libs_to_pkg -t="$install_pkgconfig_dir/gstreamer-1.0.pc" -l="-lresolv"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/gstreamer-1.0.pc" -l="-lresolv -lglib-2.0 -llzma"
   reset_ldflags
   change_dir "$src_dir"
 }
