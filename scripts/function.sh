@@ -411,6 +411,7 @@ calculate_bits_target() {
 
 run_toolchain_setup() {
     local setup_name="$1"
+    shift || true
     local setup_script="${SCRIPTDIR}/toolchain/${setup_name}"
 
     if [[ ! -x "$setup_script" ]]; then
@@ -418,7 +419,7 @@ run_toolchain_setup() {
     fi
 
     echo "INFO: Ensuring toolchain via $setup_script" >>"$LOG_FILE"
-    "$setup_script" >>"$LOG_FILE" 2>&1 || exit_message 1 "Failed to run toolchain setup script: $setup_script"
+    "$setup_script" "$@" >>"$LOG_FILE" 2>&1 || exit_message 1 "Failed to run toolchain setup script: $setup_script"
 }
 
 rust_target_installed() {
@@ -847,6 +848,18 @@ setup_macos_environment() {
             exit_message 1 "setup_macos_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
+        export PATH="${HOME}/.cargo/bin:$PATH"
+    fi
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+        # shellcheck source=/dev/null
+        source "${HOME}/.cargo/env"
+    fi
+    if ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$host_arch"
+        [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
+    fi
     
     export macos_cflags="$original_cflags -Wno-pedantic -arch $host_arch -I${dependency_install_prefix}/include -isysroot $SDKROOT $macos_version_flag -target $cflags_target"
     export CFLAGS="$macos_cflags"
@@ -910,6 +923,18 @@ setup_ios_environment() {
             exit_message 1 "setup_ios_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
+        export PATH="${HOME}/.cargo/bin:$PATH"
+    fi
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+        # shellcheck source=/dev/null
+        source "${HOME}/.cargo/env"
+    fi
+    if ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$host_arch"
+        [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
+    fi
 
     reset_cross_vars
 

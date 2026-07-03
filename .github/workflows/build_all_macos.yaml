@@ -51,6 +51,9 @@ jobs:
         shell: bash
         run: |
           brew install 'bash' 'coreutils' 'ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' 'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' 'bzip2' 'python3' 'bc' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'libtool' 'gsed'
+          if ! cargo cinstall --version >/dev/null 2>&1; then
+            cargo install --locked cargo-c
+          fi
           echo "HOMEBREW_BASH=$(brew --prefix)/bin/bash" >> "$GITHUB_ENV"
 
       - name: Accept Xcode license
@@ -92,6 +95,24 @@ jobs:
             return 1
           }
 
+          ensure_target_toolchain() {
+            local platform="$1"
+            local arch="$2"
+            local key="${platform}-${arch}"
+
+            if [[ -n "${installed_toolchains[$key]:-}" ]]; then
+              return 0
+            fi
+
+            case "$platform" in
+              ios|iphonesimulator|macos)
+                "${GITHUB_WORKSPACE}/scripts/toolchain/setup-apple-rust.sh" "$platform" "$arch"
+                ;;
+            esac
+
+            installed_toolchains["$key"]=1
+          }
+
           if [[ -n "${BUILD_FROM:-}" ]]; then
             if [[ "$BUILD_FROM" != build_* ]]; then
               echo "build_from must be a build_* step, got: $BUILD_FROM" >&2
@@ -102,6 +123,7 @@ jobs:
           IFS=',' read -ra selected_platforms <<< "$TARGET_PLATFORMS"
           IFS=',' read -ra selected_archs <<< "$TARGET_ARCHS"
           ran_any=false
+          declare -A installed_toolchains=()
 
           for raw_platform in "${selected_platforms[@]}"; do
             platform="$(trim "$raw_platform")"
@@ -123,6 +145,7 @@ jobs:
               fi
 
               ran_any=true
+              ensure_target_toolchain "$platform" "$arch"
               echo "Preparing build steps for $combo"
               WORKFLOW_BUILD_STEPS="$(sudo -E "$HOMEBREW_BASH" ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
               echo "WORKFLOW_BUILD_STEPS for $combo: $WORKFLOW_BUILD_STEPS"
