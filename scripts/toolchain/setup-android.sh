@@ -104,11 +104,27 @@ source_sdkman() {
 install_sdkman() {
   export SDKMAN_DIR
   local restore_nounset=0
+  local installer=""
   case "$-" in
     *u*) restore_nounset=1 ;;
   esac
+  installer="$(mktemp)"
   set +u
-  curl -s "https://get.sdkman.io" | bash
+  if ! curl -fsSL "https://get.sdkman.io" -o "$installer"; then
+    rm -f "$installer"
+    if [[ "$restore_nounset" == 1 ]]; then
+      set -u
+    fi
+    return 1
+  fi
+  if ! env -u SHELLOPTS -u BASHOPTS SDKMAN_DIR="$SDKMAN_DIR" bash +u "$installer"; then
+    rm -f "$installer"
+    if [[ "$restore_nounset" == 1 ]]; then
+      set -u
+    fi
+    return 1
+  fi
+  rm -f "$installer"
   if [[ "$restore_nounset" == 1 ]]; then
     set -u
   fi
