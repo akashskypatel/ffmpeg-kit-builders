@@ -462,6 +462,12 @@ apply_apple_homebrew_environment() {
     hash -r 2>/dev/null || true
 }
 
+configure_apple_pkg_config_environment() {
+    local apple_pkg_config_path="$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/pkgconfig:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+    export PKG_CONFIG_PATH="$apple_pkg_config_path"
+    export PKG_CONFIG_LIBDIR="$apple_pkg_config_path"
+}
+
 setup_default_python() {
     local preferred_version="${1:-3.12}"
     local candidate=""
@@ -852,7 +858,6 @@ setup_macos_environment() {
     export dependency_install_prefix="$work_dir/libraries"
     export install_pkgconfig_dir="${dependency_install_prefix}/lib/pkgconfig"
     export toolchain_sys="macosx"
-    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$ffmpeg_install_prefix/lib/pkgconfig:/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
     export SDKROOT=$(xcrun --sdk "$toolchain_sys" --show-sdk-path)
     export MIN_MACOS_VERSION="13.0"
 
@@ -884,6 +889,8 @@ setup_macos_environment() {
             exit_message 1 "setup_macos_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    configure_apple_pkg_config_environment
 
     apply_apple_homebrew_environment
 
@@ -935,7 +942,6 @@ setup_ios_environment() {
     export SDKROOT="$IOS_SDK_PATH"
     export IOS_SYSROOT="$IOS_SDK_PATH"
 
-    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$ffmpeg_install_prefix/lib/pkgconfig"
     export PATH="$original_path"
 
     export MIN_IOS_VERSION="13.0"
@@ -961,6 +967,8 @@ setup_ios_environment() {
             exit_message 1 "setup_ios_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    configure_apple_pkg_config_environment
 
     apply_apple_homebrew_environment
 
@@ -1025,7 +1033,6 @@ setup_tvos_environment() {
     export SDKROOT="$TVOS_SDK_PATH"
     export TVOS_SYSROOT="$TVOS_SDK_PATH"
 
-    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$ffmpeg_install_prefix/lib/pkgconfig"
     export PATH="$original_path"
 
     # Minimum tvOS version (check your deployment target requirements)
@@ -1052,6 +1059,8 @@ setup_tvos_environment() {
             exit_message 1 "setup_tvos_environment: Unsupported host arch '$host_arch'"
             ;;
     esac
+
+    configure_apple_pkg_config_environment
 
     apply_apple_homebrew_environment
 
