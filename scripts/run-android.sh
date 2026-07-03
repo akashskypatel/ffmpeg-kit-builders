@@ -4098,6 +4098,7 @@ build_gettext_native() {
 --libdir=/usr/lib \
 --with-included-gettext \
 --enable-static \
+--disable-shared \
 --disable-doc"
   touch "no.autoreconf"
   touch "no.autogen"
