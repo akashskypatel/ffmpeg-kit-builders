@@ -1449,9 +1449,7 @@ CFLAGS=\"$CFLAGS\"" "" "minimal"
   disable_nonessential "$src_dir/$lib"
   do_make "" "minimal"
   do_make_install "" "-C lib install" "minimal"
-  if [[ -f "$src_dir/$lib/include/iconv.h.inst" ]]; then
-    copy_path "$src_dir/$lib/include/iconv.h.inst" "$dependency_install_prefix/include/iconv.h" "-fv" >>"$LOG_FILE" 2>&1
-  fi
+  remove_path -f "$dependency_install_prefix/include/iconv.h"
   change_dir "$src_dir"
 }
 # build_iconv             # config_options+= --disable-iconv              # disable iconv [autodetect]
@@ -1479,6 +1477,31 @@ build_iconv() {
 --with-libintl-prefix=${dependency_install_prefix} \
 CFLAGS=\"$CFLAGS\"" "" "full"
   do_make_and_make_install "" "" "full"
+  cat > "$src_dir/$lib/iconv-compat.c" <<'EOF'
+#include <stddef.h>
+
+typedef void *iconv_t;
+
+extern iconv_t libiconv_open(const char *tocode, const char *fromcode);
+extern size_t libiconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
+extern int libiconv_close(iconv_t cd);
+
+iconv_t iconv_open(const char *tocode, const char *fromcode) {
+  return libiconv_open(tocode, fromcode);
+}
+
+size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft) {
+  return libiconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
+}
+
+int iconv_close(iconv_t cd) {
+  return libiconv_close(cd);
+}
+EOF
+  "$CC" $CFLAGS -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o"
+  ar -q "$dependency_install_prefix/lib/libiconv.a" "$src_dir/$lib/iconv-compat.o"
+  ranlib "$dependency_install_prefix/lib/libiconv.a"
+  remove_path -f "$dependency_install_prefix/include/iconv.h"
   cat > "$install_pkgconfig_dir/iconv.pc" << EOF
 prefix=$dependency_install_prefix
 exec_prefix=\${prefix}
@@ -1499,6 +1522,7 @@ build_gettext() {
   local lib="gettext"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+  local repo_ver="1.0"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
@@ -1512,8 +1536,6 @@ build_gettext() {
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-included-libintl \
 --without-libintl-prefix \
---with-included-libiconv \
---without-libiconv-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
@@ -1522,19 +1544,26 @@ build_gettext() {
 --disable-native-java \
 --disable-libasprintf \
 --disable-openmp \
---disable-doc"
+--disable-doc \
+am_cv_func_iconv=yes \
+am_cv_func_iconv_works=yes \
+am_cv_lib_iconv=yes \
+LIBICONV=-liconv \
+LTLIBICONV=-liconv \
+LIBS=-liconv"
   find "$src_dir/$lib" -type f -name configure -exec sed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   touch "no.autoreconf"
   touch "no.autogen"
   generic_configure "$config \
-CFLAGS=\"$cflags\""
+CFLAGS=\"$cflags\" \
+LIBS=\"-liconv\""
   # disable_nonessential "$src_dir/$lib"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
-  MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\"" "CFLAGS=\"$cflags\""
+  MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\" LIBS=\"-liconv\"" "CFLAGS=\"$cflags\" LIBS=\"-liconv\""
   change_dir "$src_dir/$lib/gettext-runtime"
-  MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\"" "CFLAGS=\"$cflags\""
+  MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\" LIBS=\"-liconv\"" "CFLAGS=\"$cflags\" LIBS=\"-liconv\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
 exec_prefix=\${prefix}
@@ -1543,15 +1572,28 @@ includedir=\${prefix}/include
 
 Name: intl
 Description: GNU gettext library
-Version: ${version}
-Libs: -L\${libdir} -lintl -liconv
+Version: ${repo_ver}
+Libs: -L\${libdir} -lintl
 Cflags: -I\${includedir} -Dlibintl_STATIC
+EOF
+  cat > "$install_pkgconfig_dir/iconv.pc" <<EOF
+prefix=${dependency_install_prefix}
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: iconv
+Description: Apple SDK iconv shim
+Version: 1.0
+Libs: -liconv
+Cflags:
 EOF
   change_dir "$src_dir/$lib/libtextstyle"
   touch "no.autoreconf"
   touch "no.autogen"
   generic_configure "$config \
-CFLAGS=\"$cflags\""
+CFLAGS=\"$cflags\" \
+LIBS=\"-liconv\""
   MAKE_INSTALL_JOBS=1 do_make_and_make_install
   change_dir "$src_dir/$lib/gettext-tools"
   config+=" --disable-curses \
@@ -1598,7 +1640,6 @@ build_pcre2() {
   change_dir "$src_dir"
 }
 build_glib() {
-  # run_valid_function "build_iconv" 1
   # run_valid_function "build_libffi"
   # run_valid_function "build_pcre2"
   activate_meson
@@ -1612,7 +1653,7 @@ build_glib() {
   export LIBRARY_PATH="${dependency_install_prefix}/lib"
   export PKG_CONFIG_LIBDIR="${dependency_install_prefix}/lib/pkgconfig"
   local sdk_path=$(xcrun --sdk macosx --show-sdk-path)
-  export LDFLAGS="$LDFLAGS -lintl -liconv -lresolv -framework CoreFoundation"
+  export LDFLAGS="$LDFLAGS -lintl -lresolv -framework CoreFoundation"
   local meson_options="-Dforce_posix_threads=true \
 -Dman-pages=disabled \
 -Dsysprof=disabled \
@@ -1620,12 +1661,20 @@ build_glib() {
 -Dnls=disabled \
 -Dtests=false \
 --includedir=\"${dependency_install_prefix}/include\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -liconv -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -liconv -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
+-Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
+-Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${SDKROOT}\" \
 --wrap-mode=nofallback"
+  sed -i'.bak' \
+    -e "s|libiconv = dependency('iconv')|libiconv = declare_dependency(link_args : ['-liconv'])|" \
+    -e "s|libiconv = cc.find_library('iconv', required : true)|libiconv = declare_dependency(link_args : ['-liconv'])|" \
+    "$src_dir/$lib/meson.build"
+  sed -i'.bak' \
+    -e "s|libintl = dependency('intl', required: false)|libintl = declare_dependency(link_args : ['-lintl', '-liconv'])|" \
+    -e "s|if libintl.found() and libintl.type_name() != 'internal'|if libintl.found()|g" \
+    "$src_dir/$lib/meson.build"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  add_libs_to_pkg -t="$install_pkgconfig_dir/glib-2.0.pc" -l="-lm -lintl -liconv -lresolv"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/glib-2.0.pc" -l="-lm -lintl -lresolv"
   change_dir "$src_dir"
   reset_cflags
   unset C_INCLUDE_PATH
@@ -3580,7 +3629,6 @@ EOF
 }
 # build_libxml2           # config_options+= --enable-libxml2             # enable XML parsing using the C library libxml2, needed for dash and imf demuxing support [no]
 build_libxml2() {
-  # run_valid_function "build_iconv" 1
   local lib="libxml2"
   local repo="https://gitlab.gnome.org/GNOME/libxml2"
   local repo_ver="v2.10.1"
@@ -3589,7 +3637,7 @@ build_libxml2() {
   change_dir "$src_dir/$lib"
   do_autogen
   touch "no.autoreconf"
-  generic_configure "--with-ftp=no --with-http=no --with-python=no --with-iconv=$dependency_install_prefix" # using configure. meson doesnt work
+  generic_configure "--with-ftp=no --with-http=no --with-python=no --with-iconv" # using configure. meson doesnt work
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
