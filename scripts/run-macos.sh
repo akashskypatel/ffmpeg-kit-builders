@@ -732,19 +732,16 @@ build_libbluray() {
     echo "Patching $file" > >(redirect_output)
     sed -i'.bak' 's/dec_init/libbluray_dec_init/g' "$file" > >(redirect_output) 2>&1 || exit_message 1 "Failed to patch $file"
   done
-  export LIBS="-lfontconfig -lfreetype -lz -llzma"
-  export LDFLAGS="$LDFLAGS $LIBS"
   local meson_options="-Denable_examples=false \
 -Dbdj_jar=disabled \
 -Denable_tools=false \
 -Denable_docs=false \
 --wrap-mode=default \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\""
+-Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lz -llzma\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   change_dir "$src_dir"
-  unset LIBS
   reset_ldflags
 }
 # build_libbs2b           # config_options+= --enable-libbs2b             # enable bs2b DSP library [no]
