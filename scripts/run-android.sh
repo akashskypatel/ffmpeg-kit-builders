@@ -4375,6 +4375,7 @@ build_opencl() {
 -DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
 -DBUILD_TESTING=OFF \
+-DCMAKE_PREFIX_PATH=${dependency_install_prefix} \
 -DOPENCL_ICD_LOADER_BUILD_TESTING=OFF"
   do_cmake_from_build_dir "$src_dir/$parentlib/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$parentlib/$lib/build"
