@@ -196,6 +196,7 @@ jobs:
                   echo "Running \$build for \$combo"
                   sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+                  sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
                 fi
               done
 
@@ -400,6 +401,7 @@ jobs:
                   echo "Running \$build for \$combo"
                   sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
+                  sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
                 fi
               done
 

@@ -500,7 +500,12 @@ build_bzlib() {
   change_dir "$src_dir/$lib"
   generic_make "libbz2.a CFLAGS=\"${CFLAGS}\""
   disable_nonessential "$src_dir/$lib"
-  generic_make_install "CFLAGS=\"${CFLAGS}\""
+  create_dir "$dependency_install_prefix/include"
+  create_dir "$dependency_install_prefix/lib"
+  execute "INFO: installing bzip2 header" "ERROR: unable to install bzip2 header" "true" \
+    cp -fv "$src_dir/$lib/bzlib.h" "$dependency_install_prefix/include/bzlib.h"
+  execute "INFO: installing bzip2 static library" "ERROR: unable to install bzip2 static library" "true" \
+    cp -fv "$src_dir/$lib/libbz2.a" "$dependency_install_prefix/lib/libbz2.a"
   change_dir "$src_dir"
     cat > "$install_pkgconfig_dir/bzip2.pc" <<EOF
 prefix=$dependency_install_prefix
@@ -1872,9 +1877,10 @@ build_gettext() {
   local gettext_cflags="$CFLAGS -Dlibintl_STATIC -Dalignof=_Alignof -Dnullptr=NULL"
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
---with-libiconv-prefix=\"${dependency_install_prefix}\" \
 --with-included-libintl \
 --without-libintl-prefix \
+--with-included-libiconv \
+--without-libiconv-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
@@ -1919,20 +1925,20 @@ EOF
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\""
   do_make_and_make_install
-  change_dir "$src_dir/$lib/gettext-tools"
-  config+=" --disable-curses \
---disable-examples \
---disable-nls \
---disable-libasprintf \
---without-libtextstyle-prefix"
-  touch "no.autoreconf"
-  touch "no.autogen"
-  generic_configure "$config \
-CFLAGS=\"$gettext_cflags\" \
-LDFLAGS=\"$LDFLAGS\""
-  disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
-  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
-  do_make_and_make_install "$make_config" "$make_config"
+#   change_dir "$src_dir/$lib/gettext-tools"
+#   config+=" --disable-curses \
+# --disable-examples \
+# --disable-nls \
+# --disable-libasprintf \
+# --without-libtextstyle-prefix"
+#   touch "no.autoreconf"
+#   touch "no.autogen"
+#   generic_configure "$config \
+# CFLAGS=\"$gettext_cflags\" \
+# LDFLAGS=\"$LDFLAGS\""
+#   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
+#   local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
+#   do_make_and_make_install "$make_config" "$make_config"
   reset_allflags
   change_dir "$src_dir"
 }
