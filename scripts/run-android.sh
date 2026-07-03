@@ -2273,6 +2273,8 @@ build_flac() {
 -DBUILD_STATIC_LIBS=ON \
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_BUILD_TYPE=Release \
+-DOGG_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DOGG_LIBRARY=\"$dependency_install_prefix/lib/libogg.a\" \
 -DINSTALL_MANPAGES=OFF"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
