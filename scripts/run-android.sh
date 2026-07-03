@@ -4376,6 +4376,7 @@ build_opencl() {
 -DBUILD_SHARED_LIBS=OFF \
 -DBUILD_TESTING=OFF \
 -DCMAKE_PREFIX_PATH=${dependency_install_prefix} \
+-DOpenCLHeaders_DIR=${dependency_install_prefix}/share/cmake/OpenCLHeaders \
 -DOPENCL_ICD_LOADER_BUILD_TESTING=OFF"
   do_cmake_from_build_dir "$src_dir/$parentlib/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$parentlib/$lib/build"
