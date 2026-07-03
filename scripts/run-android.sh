@@ -1872,9 +1872,10 @@ build_gettext() {
   local gettext_cflags="$CFLAGS -Dlibintl_STATIC -Dalignof=_Alignof -Dnullptr=NULL"
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
---with-libiconv-prefix=\"${dependency_install_prefix}\" \
 --with-included-libintl \
 --without-libintl-prefix \
+--with-included-libiconv \
+--without-libiconv-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
