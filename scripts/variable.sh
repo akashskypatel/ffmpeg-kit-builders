@@ -199,6 +199,9 @@ CONFIG_VIDEO="\
 --enable-liboapv \
 --enable-libopenh264 \
 --enable-libopenjpeg \
+--enable-libsvtjpegxs \
+--enable-libopencolorio \
+--enable-libmpeghdec \
 --enable-librav1e \
 --enable-librsvg \
 --enable-libsnappy \
@@ -500,6 +503,9 @@ CONFIG_AUTODETECT="\
 # build_metal             # config_options+= --disable-metal              # Video  # disable Apple Metal framework [autodetect]
 # build_securetransport   # config_options+= --disable-securetransport    # System # disable Secure Transport, needed for TLS support on OSX if openssl and gnutls are not used [autodetect]
 # build_videotoolbox      # config_options+= --disable-videotoolbox       # Video  # disable VideoToolbox code [autodetect]
+# build_libsvtjpegxs      # config_options+= --disable-libsvtjpegxs       # Video  # disable SVT-JPEGXS code [autodetect]
+# build_libopencolorio    # config_options+= --disable-libopencolorio     # Video  # disable OpenColorIO code [autodetect]
+# build_libmpeghdec       # config_options+= --disable-libmpeghdec        # Audio  # disable MPEG-H 3D Audio decoder code [autodetect]
 
 # disabled on android
 # build_alsa

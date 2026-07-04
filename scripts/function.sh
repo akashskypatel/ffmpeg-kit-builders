@@ -4654,6 +4654,9 @@ configure_ffmpeg() {
   truthy "$enable_openal" && config_options+=" --enable-openal"                       # enable OpenAL 1.1 capture support [no]
   truthy "$enable_opencl" && config_options+=" --enable-opencl"                       # enable OpenCL processing [no]
   truthy "$enable_opengl" && config_options+=" --enable-opengl"                       # enable OpenGL rendering [no]
+  truthy "$enable_libsvtjpegxs" && config_options+=" --enable-libsvtjpegxs"           # enable SVT-JPEGXS code [autodetect]
+  truthy "$enable_libopencolorio" && config_options+=" --enable-libopencolorio"       # enable OpenColorIO code [autodetect]
+  truthy "$enable_libmpeghdec" && config_options+=" --enable-libmpeghdec"             # enable MPEG-H 3D Audio decoder code [autodetect]
   if truthy "$enable_opengl" && ismacos ; then
     add_extra_libs "-framework OpenGL -framework CoreVideo"
   fi
