@@ -3001,6 +3001,7 @@ get_config_sub() {
     fetch_config_helper "$dest" "config.sub" \
       'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' \
       'https://gitlab.com/cinc-project/upstream/config/-/raw/master/config.sub?ref_type=heads'
+    chmod +x "$dest/config.sub"
   else
     exit_message 1 "DEBUG: Destination directory $dest does not exist"
   fi
@@ -3012,6 +3013,7 @@ get_config_guess() {
     fetch_config_helper "$dest" "config.guess" \
       'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' \
       'https://gitlab.com/cinc-project/upstream/config/-/raw/master/config.guess?ref_type=heads'
+    chmod +x "$dest/config.guess"
   else
     exit_message 1 "DEBUG: Destination directory $dest does not exist"
   fi
@@ -3030,7 +3032,7 @@ download_config_script() {
   local tmp_path="${output_path}.tmp"
 
   rm -f "$tmp_path"
-  curl --connect-timeout 10 --max-time 10 -fL -o "$tmp_path" "$url" > >(redirect_output) 2>&1 || {
+  curl --connect-timeout 10 --max-time 3 -fL -o "$tmp_path" "$url" > >(redirect_output) 2>&1 || {
     rm -f "$tmp_path"
     return 1
   }
