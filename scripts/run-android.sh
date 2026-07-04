@@ -254,15 +254,18 @@ build_rkmpp() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export LDFLAGS="$LDFLAGS -lunwind"
+  local unwind_static="$($CXX -print-file-name=libunwind.a)"
+  local builtins_static="$($CXX -print-file-name=libclang_rt.builtins-${clang_arch}-android.a)"
+  local extra_ld="$LDFLAGS -Wl,--allow-multiple-definition -Wl,--exclude-libs,libunwind.a"
+  local standard_libs="$unwind_static $builtins_static -ldl -llog -landroid -latomic"
+  export LDFLAGS="$extra_ld"
   local cmake_options="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_TEST=OFF \
 -DBUILD_SHARED_LIBS=OFF"
-  if [[ "$host_arch" == "aarch64" || "$host_arch" == "armv7a" ]]; then
-    local extra_ld="$LDFLAGS -ldl"
-  fi
   cmake_options+=" -DCMAKE_SHARED_LINKER_FLAGS=\"$extra_ld\" \
--DCMAKE_MODULE_LINKER_FLAGS=\"$extra_ld\""
+-DCMAKE_MODULE_LINKER_FLAGS=\"$extra_ld\" \
+-DCMAKE_CXX_STANDARD_LIBRARIES=\"$standard_libs\" \
+-DCMAKE_C_STANDARD_LIBRARIES=\"$standard_libs\""
   generic_cmake "$cmake_options" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
