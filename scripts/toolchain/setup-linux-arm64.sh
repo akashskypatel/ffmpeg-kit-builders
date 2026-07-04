@@ -4,6 +4,8 @@ set -euo pipefail
 SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
 ARM_TOOLCHAIN_PATH="${ARM_TOOLCHAIN_PATH:-/usr/local/arm-gnu-toolchain}"
 ARM_TOOLCHAIN_URL="${ARM_TOOLCHAIN_URL:-https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz}"
+RHEL_RELEASEVER="${RHEL_RELEASEVER:-$(rpm -E %rhel)}"
+MODULE_PLATFORM_ID="${MODULE_PLATFORM_ID:-platform:el${RHEL_RELEASEVER}}"
 
 rust_target_installed() {
   local target="$1"
@@ -60,11 +62,14 @@ install_linux_arm64_sysroot_from_rpms() {
 
   rpm_dir="$(mktemp -d)"
   dnf download \
+    --installroot="$SYSROOT" \
     --resolve \
     --alldeps \
     --destdir "$rpm_dir" \
     --forcearch=aarch64 \
-    --releasever="$(rpm -E %rhel)" \
+    --releasever="$RHEL_RELEASEVER" \
+    --setopt=module_platform_id="$MODULE_PLATFORM_ID" \
+    --disable-modular-filtering \
     --arch=aarch64,noarch \
     "${packages[@]}"
 
@@ -106,9 +111,11 @@ fi
 if ! linux_arm64_sysroot_ready; then
   if ! dnf --installroot="$SYSROOT" \
     --forcearch=aarch64 \
-    --releasever="$(rpm -E %rhel)" \
+    --releasever="$RHEL_RELEASEVER" \
     --setopt=install_weak_deps=False \
     --setopt=tsflags=nodocs \
+    --setopt=module_platform_id="$MODULE_PLATFORM_ID" \
+    --disable-modular-filtering \
     install -y glibc glibc-devel glibc-headers kernel-headers libgcc libstdc++ libstdc++-devel libxcrypt-devel; then
     echo "WARNING: dnf installroot failed; falling back to downloading and extracting aarch64 RPMs into ${SYSROOT}." >&2
     install_linux_arm64_sysroot_from_rpms
