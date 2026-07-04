@@ -32,7 +32,47 @@ EOF
 linux_arm64_toolchain_ready() {
   [[ -x "${ARM_TOOLCHAIN_PATH}/sys-bin/aarch64-linux-gnu-gcc" ]] &&
     [[ -e "${SYSROOT}/lib64/libc.so.6" ]] &&
+    [[ -e "${SYSROOT}/usr/include/features.h" ]] &&
+    [[ -d "${SYSROOT}/usr/include/c++" ]] &&
     rust_target_installed aarch64-unknown-linux-gnu
+}
+
+linux_arm64_sysroot_ready() {
+  [[ -e "${SYSROOT}/lib64/libc.so.6" ]] &&
+    [[ -e "${SYSROOT}/usr/include/features.h" ]] &&
+    [[ -d "${SYSROOT}/usr/include/c++" ]]
+}
+
+install_linux_arm64_sysroot_from_rpms() {
+  local rpm_dir
+  local rpm_file
+  local packages=(
+    glibc
+    glibc-devel
+    glibc-headers
+    kernel-headers
+    libgcc
+    libstdc++
+    libstdc++-devel
+    libxcrypt
+    libxcrypt-devel
+  )
+
+  rpm_dir="$(mktemp -d)"
+  dnf download \
+    --resolve \
+    --alldeps \
+    --destdir "$rpm_dir" \
+    --forcearch=aarch64 \
+    --releasever="$(rpm -E %rhel)" \
+    --arch=aarch64,noarch \
+    "${packages[@]}"
+
+  mkdir -p "$SYSROOT"
+  for rpm_file in "$rpm_dir"/*.rpm; do
+    (cd "$SYSROOT" && rpm2cpio "$rpm_file" | cpio -idmu --quiet)
+  done
+  rm -rf "$rpm_dir"
 }
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -48,7 +88,7 @@ if linux_arm64_toolchain_ready; then
   exit 0
 fi
 
-dnf install -y dnf-plugins-core curl xz tar
+dnf install -y dnf-plugins-core curl xz tar cpio rpm
 
 if [[ ! -x "${ARM_TOOLCHAIN_PATH}/sys-bin/aarch64-linux-gnu-gcc" ]]; then
   tmp_tar="$(mktemp)"
@@ -63,13 +103,21 @@ if [[ ! -x "${ARM_TOOLCHAIN_PATH}/sys-bin/aarch64-linux-gnu-gcc" ]]; then
   done
 fi
 
-if [[ ! -e "${SYSROOT}/lib64/libc.so.6" ]]; then
-  dnf --installroot="$SYSROOT" \
+if ! linux_arm64_sysroot_ready; then
+  if ! dnf --installroot="$SYSROOT" \
     --forcearch=aarch64 \
     --releasever="$(rpm -E %rhel)" \
     --setopt=install_weak_deps=False \
     --setopt=tsflags=nodocs \
-    install -y glibc glibc-devel libgcc libstdc++ libstdc++-devel
+    install -y glibc glibc-devel glibc-headers kernel-headers libgcc libstdc++ libstdc++-devel libxcrypt-devel; then
+    echo "WARNING: dnf installroot failed; falling back to downloading and extracting aarch64 RPMs into ${SYSROOT}." >&2
+    install_linux_arm64_sysroot_from_rpms
+  fi
+fi
+
+if ! linux_arm64_sysroot_ready; then
+  echo "ERROR: Linux arm64 sysroot setup did not produce required glibc and libstdc++ headers in ${SYSROOT}." >&2
+  exit 1
 fi
 
 write_linux_arm64_environment
