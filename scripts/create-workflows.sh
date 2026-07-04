@@ -213,9 +213,9 @@ jobs:
                   sudo -E ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
-                fi
-                if [[ "\${WORKFLOW_BUILD_ONLY}" == "true" ]]; then
-                  exit 0
+                  if [[ "\${WORKFLOW_BUILD_ONLY}" == "true" ]]; then
+                    exit 0
+                  fi
                 fi
               done
 
@@ -434,9 +434,9 @@ jobs:
                   sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
-                fi
-                if [[ "\${WORKFLOW_BUILD_ONLY}" == "true" ]]; then
-                  exit 0
+                  if [[ "\${WORKFLOW_BUILD_ONLY}" == "true" ]]; then
+                    exit 0
+                  fi
                 fi
               done
 
