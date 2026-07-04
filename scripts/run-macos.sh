@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,SC2044
 
 # required for ffmpeg-kit
 build_libjsoncpp() {
@@ -1495,7 +1495,7 @@ int iconv_close(iconv_t cd) {
   return libiconv_close(cd);
 }
 EOF
-  "$CC" $CFLAGS -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o"
+  "$CC" "$CFLAGS" -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o"
   ar -q "$dependency_install_prefix/lib/libiconv.a" "$src_dir/$lib/iconv-compat.o"
   ranlib "$dependency_install_prefix/lib/libiconv.a"
   remove_path -f "$dependency_install_prefix/include/iconv.h"
@@ -2392,14 +2392,14 @@ build_librsvg() {
   add_libs_to_pkg -t="$install_pkgconfig_dir/librsvg-2.0.pc" -l="-lresolv"
   if [[ $host_arch == "x86_64" ]]; then
     # png.o always compiles to arm64 for some reason. remove png.o and thin the library
-    if "$AR" t $dependency_install_prefix/lib/librsvg-2.a | grep png.o > /dev/null; then
-      "$AR" d $dependency_install_prefix/lib/librsvg-2.a png.o > >(redirect_output) || exit_message 1 "Failed to remove incorrectly compiled png.o from librsvg-2.a"
-      lipo $dependency_install_prefix/lib/librsvg-2.a -thin x86_64 -output $dependency_install_prefix/lib/librsvg-2.a.thin > >(redirect_output) || exit_message 1 "Failed to thin librsvg-2.a"
-      mv -f $dependency_install_prefix/lib/librsvg-2.a.thin $dependency_install_prefix/lib/librsvg-2.a > >(redirect_output) || exit_message 1 "Failed to replace librsvg-2.a with thin version"
+    if "$AR" t "$dependency_install_prefix/lib/librsvg-2.a" | grep png.o > /dev/null; then
+      "$AR" d "$dependency_install_prefix/lib/librsvg-2.a" png.o > >(redirect_output) || exit_message 1 "Failed to remove incorrectly compiled png.o from librsvg-2.a"
+      lipo "$dependency_install_prefix/lib/librsvg-2.a" -thin x86_64 -output "$dependency_install_prefix/lib/librsvg-2.a.thin" > >(redirect_output) || exit_message 1 "Failed to thin librsvg-2.a"
+      mv -f "$dependency_install_prefix/lib/librsvg-2.a.thin" "$dependency_install_prefix/lib/librsvg-2.a" > >(redirect_output) || exit_message 1 "Failed to replace librsvg-2.a with thin version"
     fi
   fi
   # gcocoanotificationbackend gets merged into librsvg for some reason and causes duplicate symbol issues
-  mapfile -t OBJ_COUNT <<< "$($AR t $dependency_install_prefix/lib/librsvg-2.a | grep gcocoanotificationbackend.m.o)"
+  mapfile -t OBJ_COUNT <<< "$($AR t "$dependency_install_prefix/lib/librsvg-2.a" | grep gcocoanotificationbackend.m.o)"
   if [[ -n "${OBJ_COUNT[0]}" ]]; then
     for obj in "${OBJ_COUNT[@]}"; do
       echo "Removing $obj from librsvg-2.a"
@@ -2720,7 +2720,7 @@ build_libtbb() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  find "$dependency_install_prefix/lib" -type l -name "libtbb.*dylib" -delete
+  find "$dependency_install_prefix/lib" -type l -name "libtbb.*dylib" -delete 
   for file in $(find "$dependency_install_prefix/lib" -type f -name "libtbb.*dylib"); do
     if [[ $(basename "$file") != "libtbb.dylib" ]]; then
       mv -f "$file" "$(dirname "$file")/libtbb.dylib"
@@ -3395,6 +3395,7 @@ build_libx264() {
   local lib="libx264"
   local repo="https://code.videolan.org/videolan/x264.git"
   local repo_ver="stable"
+  local toolchain_ar="$AR"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -3404,6 +3405,7 @@ build_libx264() {
     export CC="$CC -target $cflags_target -isysroot $SDKROOT"
     export AS="$src_dir/$lib/tools/gas-preprocessor.pl -arch aarch64 -- $CC"
   fi
+  export AR="$toolchain_ar rc"
   generic_configure "--enable-static --disable-shared --disable-cli --disable-opencl"
   sed -i'.bak' -E 's/\$\(AR\)\$@/\$\(AR\) \$@/' Makefile
   disable_nonessential "$src_dir/$lib"

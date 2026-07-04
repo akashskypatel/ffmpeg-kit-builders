@@ -3246,6 +3246,8 @@ build_libx264() {
   if [[ "$host_arch" == "x86_64" ]]; then
     export AS=nasm
   fi
+  local toolchain_ar="$AR"
+  export AR="$toolchain_ar rc"
   get_config_guess "$src_dir/$lib"
   get_config_sub "$src_dir/$lib"
   unset CFLAGS ASFLAGS LDFLAGS CPPFLAGS CXXFLAGS
