@@ -4970,7 +4970,9 @@ build_libsvtjpegxs() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DBUILD_APPS=OFF \
+  -DBUILD_TESTING=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
@@ -4982,6 +4984,19 @@ build_libopencolorio() {
   local repo_ver="v2.5.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  sed -i \
+    's/string(STRIP "${yaml-cpp_CXX_FLAGS}" yaml-cpp_CXX_FLAGS)/set(yaml-cpp_CXX_FLAGS "${yaml-cpp_CXX_FLAGS} -include cstdint")\
+        string(STRIP "${yaml-cpp_CXX_FLAGS}" yaml-cpp_CXX_FLAGS)/' \
+    share/cmake/modules/install/Installyaml-cpp.cmake
+  sed -i \
+    's/find_package(expat ${expat_FIND_VERSION} CONFIG QUIET)/if(NOT WIN32)\
+        find_package(expat ${expat_FIND_VERSION} CONFIG QUIET)\
+    endif()/' \
+    share/cmake/modules/Findexpat.cmake
+  sed -i \
+    's/Platform::filenameToUTF(filepath), mode/Platform::CreateInputFileStream(filepath.c_str(), mode)/' \
+    src/OpenColorIO/transforms/FileTransform.cpp
   change_dir "$src_dir/$lib/build" 1
   export LDFLAGS="$LDFLAGS"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
@@ -4990,6 +5005,12 @@ build_libopencolorio() {
   -DOCIO_BUILD_TESTS=OFF \
   -DOCIO_BUILD_GPU_TESTS=OFF \
   -DOCIO_BUILD_PYTHON=OFF \
+  -DZLIB_USE_STATIC_LIBS=ON \
+  -DZLIB_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_STATIC_LIBRARY=ON \
+  -Dexpat_LIBRARY=\"$dependency_install_prefix/lib/libexpat.a\" \
+  -Dexpat_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
   -DOCIO_INSTALL_EXT_PACKAGES=\"MISSING\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
@@ -5002,9 +5023,14 @@ build_libmpeghdec() {
   local repo_ver="r3.0.3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  sed -i \
+    's/#if !defined(_MSC_VER) && defined(__x86_64__)/#if !defined(_MSC_VER) \&\& defined(__x86_64__) \&\& !defined(__MINGW32__)/' \
+    src/libFDK/include/common_fix.h
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -Dmpeghdec_BUILD_BINARIES=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install

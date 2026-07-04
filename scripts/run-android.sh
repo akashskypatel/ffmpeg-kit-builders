@@ -4671,6 +4671,10 @@ build_libfdk_aac() {
   change_dir "$src_dir"
 }
 build_libsvtjpegxs() {
+  if [[ "$host_arch" != "x86_64" ]]; then
+    echo -e "\nWARNING: libsvtjpegxs is only supported on x86_64, skipping..."
+    return 0
+  fi
   local lib="libsvtjpegxs"
   local repo="https://github.com/OpenVisualCloud/SVT-JPEG-XS"
   local repo_ver="v0.9.0"
@@ -4678,7 +4682,9 @@ build_libsvtjpegxs() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DBUILD_APPS=OFF \
+  -DBUILD_TESTING=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
@@ -4712,7 +4718,8 @@ build_libmpeghdec() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -Dmpeghdec_BUILD_BINARIES=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install

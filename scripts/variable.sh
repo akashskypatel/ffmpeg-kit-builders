@@ -143,6 +143,7 @@ CONFIG_AUDIO="\
 --enable-liblc3 \
 --enable-libmodplug \
 --enable-libmp3lame \
+--enable-libmpeghdec \
 --enable-libopencore-amrnb \
 --enable-libopencore-amrwb \
 --enable-libopenmpt \
@@ -201,7 +202,6 @@ CONFIG_VIDEO="\
 --enable-libopenjpeg \
 --enable-libsvtjpegxs \
 --enable-libopencolorio \
---enable-libmpeghdec \
 --enable-librav1e \
 --enable-librsvg \
 --enable-libsnappy \
