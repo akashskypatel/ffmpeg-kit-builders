@@ -1694,6 +1694,8 @@ build_libjxl() {
 -DJPEGXL_ENABLE_BENCHMARK=OFF \
 -DJPEGXL_ENABLE_EXAMPLES=OFF \
 -DCMAKE_PREFIX_PATH=\"$dependency_install_prefix\" \
+-DHWY_LIBRARY=\"$dependency_install_prefix/lib/libhwy.a\" \
+-DHWY_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
 -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
 -DJPEGXL_ENABLE_DOXYGEN=OFF \
 -DJPEGXL_ENABLE_MANPAGES=OFF \
