@@ -1696,6 +1696,14 @@ build_libjxl() {
 -DCMAKE_PREFIX_PATH=\"$dependency_install_prefix\" \
 -DHWY_LIBRARY=\"$dependency_install_prefix/lib/libhwy.a\" \
 -DHWY_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DBROTLI_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DBROTLICOMMON_LIBRARY=\"$dependency_install_prefix/lib/libbrotlicommon.a\" \
+-DBROTLIENC_LIBRARY=\"$dependency_install_prefix/lib/libbrotlienc.a\" \
+-DBROTLIDEC_LIBRARY=\"$dependency_install_prefix/lib/libbrotlidec.a\" \
+-DCPUINFO_LIBRARY=\"$dependency_install_prefix/lib/libcpuinfo.a\" \
+-DCPUINFO_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DLCMS2_LIBRARY=\"$dependency_install_prefix/lib/liblcms2.a\" \
+-DLCMS2_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
 -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
 -DJPEGXL_ENABLE_DOXYGEN=OFF \
 -DJPEGXL_ENABLE_MANPAGES=OFF \
