@@ -2298,6 +2298,7 @@ build_libthai() {
   local lib="libthai"
   local repo="https://github.com/tlwg/libthai/releases/download/v0.1.29/libthai-0.1.29.tar.xz"
   local repo_ver="v0.1.29"
+  install_missing_packages "trietool"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
