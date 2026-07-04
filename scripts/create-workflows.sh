@@ -214,7 +214,7 @@ jobs:
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
                   if [[ "\${WORKFLOW_BUILD_ONLY}" == "true" ]]; then
-                    exit 0
+                    start_building=false
                   fi
                 fi
               done
@@ -435,7 +435,7 @@ jobs:
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
                   if [[ "\${WORKFLOW_BUILD_ONLY}" == "true" ]]; then
-                    exit 0
+                    start_building=false
                   fi
                 fi
               done
