@@ -1005,8 +1005,8 @@ build_libbs2b() {
     cp -f /usr/share/misc/config.guess "$src_dir/$lib/build-aux/config.guess"
   else
     # Fallback: Download modern versions if not found locally
-    curl -L "https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD" -o "$src_dir/$lib/build-aux/config.sub" > /dev/null 2>&1
-    curl -L "https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD" -o "$src_dir/$lib/build-aux/config.guess" > /dev/null 2>&1
+    get_config_sub "$src_dir/$lib/build-aux" > /dev/null 2>&1
+    get_config_guess "$src_dir/$lib/build-aux" > /dev/null 2>&1
   fi
   sed -i.bak "s/AC_FUNC_MALLOC//" configure.ac # #270
   export LIBS="-lm"                              # avoid pow failure linux native
