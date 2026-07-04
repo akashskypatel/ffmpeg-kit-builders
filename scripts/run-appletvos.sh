@@ -462,7 +462,7 @@ build_frei0r() {
   local repo="https://github.com/dyne/frei0r"
   local repo_ver="v2.5.1"
   local CAIRO_LIBS=$(pkg-config --libs --static cairo)
-  export LDFLAGS="$LDFLAGS $CAIRO_LIBS -lpixman-1 -lpng -lfontconfig -lfreetype -framework CoreFoundation -framework CoreGraphics -framework CoreText"
+  export LDFLAGS="$LDFLAGS $CAIRO_LIBS -lpixman-1 -lpng -lfontconfig -lfreetype -lcairo -framework CoreFoundation -framework CoreGraphics -framework CoreText"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
