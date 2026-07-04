@@ -254,14 +254,15 @@ build_rkmpp() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  export LDFLAGS="$LDFLAGS -lunwind"
   local cmake_options="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_TEST=OFF \
 -DBUILD_SHARED_LIBS=OFF"
   if [[ "$host_arch" == "aarch64" || "$host_arch" == "armv7a" ]]; then
-    local extra_ld="$LDFLAGS -lunwind -ldl"
-    cmake_options+=" -DCMAKE_SHARED_LINKER_FLAGS=\"$extra_ld\" \
--DCMAKE_MODULE_LINKER_FLAGS=\"$extra_ld\""
+    local extra_ld="$LDFLAGS -ldl"
   fi
+  cmake_options+=" -DCMAKE_SHARED_LINKER_FLAGS=\"$extra_ld\" \
+-DCMAKE_MODULE_LINKER_FLAGS=\"$extra_ld\""
   generic_cmake "$cmake_options" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
