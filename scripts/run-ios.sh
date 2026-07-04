@@ -3989,7 +3989,7 @@ build_vapoursynth() {
   local repo="https://github.com/vapoursynth/vapoursynth"
   local repo_ver="R73"
   local cython_shim_dir="$work_dir/bin"
-  local cython_runner="python3 -m cython"
+  local cython_module_path=""
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -3997,22 +3997,24 @@ build_vapoursynth() {
   if command -v brew >/dev/null 2>&1; then
     local brew_cython_prefix=""
     brew_cython_prefix="$(brew --prefix cython 2>/dev/null || true)"
-    if [[ -x "$brew_cython_prefix/libexec/bin/cython" ]]; then
-      cython_runner="$brew_cython_prefix/libexec/bin/cython"
-    elif [[ -x "$brew_cython_prefix/bin/cython" ]]; then
-      cython_runner="$brew_cython_prefix/bin/cython"
-    fi
+    cython_module_path="$(find "$brew_cython_prefix" -type d -path '*/site-packages' -print 2>/dev/null | head -n 1)"
   fi
   create_dir "$cython_shim_dir"
   cat > "$cython_shim_dir/cython" <<'EOF'
 #!/usr/bin/env bash
-exec __CYTHON_RUNNER__ "$@"
+if [[ -n "__CYTHON_MODULE_PATH__" ]]; then
+  export PYTHONPATH="__CYTHON_MODULE_PATH__${PYTHONPATH:+:$PYTHONPATH}"
+fi
+exec python3 -m cython "$@"
 EOF
   cat > "$cython_shim_dir/cython3" <<'EOF'
 #!/usr/bin/env bash
-exec __CYTHON_RUNNER__ "$@"
+if [[ -n "__CYTHON_MODULE_PATH__" ]]; then
+  export PYTHONPATH="__CYTHON_MODULE_PATH__${PYTHONPATH:+:$PYTHONPATH}"
+fi
+exec python3 -m cython "$@"
 EOF
-  sed -i'.bak' "s|__CYTHON_RUNNER__|$cython_runner|g" "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
+  sed -i'.bak' "s|__CYTHON_MODULE_PATH__|$cython_module_path|g" "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
   chmod +x "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
   prepend_path_once "$cython_shim_dir"
   generic_meson "-Denable_vspipe=false -Denable_python_module=false"
