@@ -4152,10 +4152,22 @@ build_vapoursynth() {
   local lib="vapoursynth"
   local repo="https://github.com/vapoursynth/vapoursynth"
   local repo_ver="R73"
+  local cython_shim_dir="$work_dir/bin"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  install_missing_packages python3-dev
+  install_missing_packages python3-dev cython
+  create_dir "$cython_shim_dir"
+  cat > "$cython_shim_dir/cython" <<'EOF'
+#!/usr/bin/env bash
+exec python3 -m cython "$@"
+EOF
+  cat > "$cython_shim_dir/cython3" <<'EOF'
+#!/usr/bin/env bash
+exec python3 -m cython "$@"
+EOF
+  chmod +x "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
+  prepend_path_once "$cython_shim_dir"
   generic_meson "-Denable_vspipe=false -Denable_python_module=false"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
