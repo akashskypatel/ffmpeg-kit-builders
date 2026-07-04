@@ -3997,7 +3997,7 @@ build_vapoursynth() {
   local repo="https://github.com/vapoursynth/vapoursynth"
   local repo_ver="R73"
   local cython_shim_dir="$work_dir/bin"
-  local cython_module_path=""
+local cython_venv_dir="$work_dir/cython-venv"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -4006,29 +4006,27 @@ build_vapoursynth() {
 import Cython
 PY
   then
-    python3 -m pip install --user cython > >(redirect_output) 2>&1 || exit_message 1 "build_vapoursynth: could not install cython into active python"
-  fi
-  if command -v brew >/dev/null 2>&1; then
-    local brew_cython_prefix=""
-    brew_cython_prefix="$(brew --prefix cython 2>/dev/null || true)"
-    cython_module_path="$(find "$brew_cython_prefix" -type d -path '*/site-packages' -print 2>/dev/null | head -n 1)"
+    rm -rf "$cython_venv_dir"
+    python3 -m venv "$cython_venv_dir" > >(redirect_output) 2>&1 || exit_message 1 "build_vapoursynth: could not create cython venv"
+    "$cython_venv_dir/bin/python" -m pip install --upgrade pip > >(redirect_output) 2>&1 || exit_message 1 "build_vapoursynth: could not upgrade pip in cython venv"
+    "$cython_venv_dir/bin/python" -m pip install cython > >(redirect_output) 2>&1 || exit_message 1 "build_vapoursynth: could not install cython in venv"
   fi
   create_dir "$cython_shim_dir"
   cat > "$cython_shim_dir/cython" <<'EOF'
 #!/usr/bin/env bash
-if [[ -n "__CYTHON_MODULE_PATH__" ]]; then
-  export PYTHONPATH="__CYTHON_MODULE_PATH__${PYTHONPATH:+:$PYTHONPATH}"
+if [[ -x "__CYTHON_VENV__/bin/python" ]]; then
+  exec "__CYTHON_VENV__/bin/python" -m cython "$@"
 fi
 exec python3 -m cython "$@"
 EOF
   cat > "$cython_shim_dir/cython3" <<'EOF'
 #!/usr/bin/env bash
-if [[ -n "__CYTHON_MODULE_PATH__" ]]; then
-  export PYTHONPATH="__CYTHON_MODULE_PATH__${PYTHONPATH:+:$PYTHONPATH}"
+if [[ -x "__CYTHON_VENV__/bin/python" ]]; then
+  exec "__CYTHON_VENV__/bin/python" -m cython "$@"
 fi
 exec python3 -m cython "$@"
 EOF
-  sed -i'.bak' "s|__CYTHON_MODULE_PATH__|$cython_module_path|g" "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
+  sed -i'.bak' "s|__CYTHON_VENV__|$cython_venv_dir|g" "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
   chmod +x "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
   prepend_path_once "$cython_shim_dir"
   generic_meson "-Denable_vspipe=false -Denable_python_module=false"
