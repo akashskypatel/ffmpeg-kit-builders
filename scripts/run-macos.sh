@@ -4277,6 +4277,54 @@ build_libfdk_aac() {
   do_make_and_make_install
   change_dir "$src_dir"
 }
+build_libsvtjpegxs() {
+  local lib="libsvtjpegxs"
+  local repo="https://github.com/OpenVisualCloud/SVT-JPEG-XS"
+  local repo_ver="v0.9.0"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib/build"
+  do_make_and_make_install
+  change_dir "$src_dir"
+}
+build_libopencolorio() {
+  local lib="libopencolorio"
+  local repo="https://github.com/AcademySoftwareFoundation/OpenColorIO"
+  local repo_ver="v2.5.2"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  export LDFLAGS="$LDFLAGS"
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DOCIO_BUILD_APPS=OFF \
+  -DOCIO_BUILD_TESTS=OFF \
+  -DOCIO_BUILD_GPU_TESTS=OFF \
+  -DOCIO_BUILD_PYTHON=OFF \
+  -DOCIO_INSTALL_EXT_PACKAGES=\"MISSING\""
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib/build"
+  do_make_and_make_install
+  change_dir "$src_dir"
+}
+build_libmpeghdec() {
+  local lib="libmpeghdec"
+  local repo="https://github.com/Fraunhofer-IIS/mpeghdec"
+  local repo_ver="r3.0.3"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib/build"
+  do_make_and_make_install
+  change_dir "$src_dir"
+}
 #region-------------------- non-gpl hardware features -------------------------
 # build_cuda_llvm         # config_options+= --disable-cuda-llvm          # disable CUDA compilation using clang [autodetect]
 build_cuda_llvm() {
