@@ -673,7 +673,11 @@ build_chromaprint() {
 -DBUILD_SHARED_LIBS=OFF \
 -DBUILD_TOOLS=OFF \
 -DBUILD_TESTS=OFF \
--DFFT_LIB=fftw3" "$src_dir/$lib"
+-DFFT_LIB=fftw3 \
+-DFFTW3_DIR=\"$dependency_install_prefix\" \
+-DFFTW3_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DFFTW3_FFTW_LIBRARY=\"$dependency_install_prefix/lib/libfftw3.a\" \
+-DFFTW3_LIBRARIES=\"$dependency_install_prefix/lib/libfftw3.a\"" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
