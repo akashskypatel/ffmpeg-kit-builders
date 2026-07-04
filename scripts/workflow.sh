@@ -160,7 +160,7 @@ jobs:
 
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
 
       - name: Install Bash
         shell: bash

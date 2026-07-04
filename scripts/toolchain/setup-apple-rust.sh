@@ -93,3 +93,7 @@ fi
 
 rustup target add "${rust_target}"
 rustup target list --installed | grep -x "${rust_target}"
+
+if ! cargo cinstall --version >/dev/null 2>&1; then
+  cargo install --locked cargo-c
+fi
