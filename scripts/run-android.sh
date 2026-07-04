@@ -933,8 +933,16 @@ build_libaribcaption() {
   change_dir "$src_dir/$lib"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
+-DARIBCC_BUILD_TESTS=OFF \
+-DARIBCC_SHARED_LIBRARY=OFF \
+-DARIBCC_USE_EMBEDDED_FREETYPE=OFF \
 -DBUILD_TESTS=OFF \
--DBUILD_EXAMPLES=OFF"
+-DBUILD_EXAMPLES=OFF \
+-DFREETYPE_INCLUDE_DIRS=\"$dependency_install_prefix/include/freetype2\" \
+-DFREETYPE_INCLUDE_DIR_freetype2=\"$dependency_install_prefix/include/freetype2\" \
+-DFREETYPE_INCLUDE_DIR_ft2build=\"$dependency_install_prefix/include/freetype2\" \
+-DFREETYPE_LIBRARY=\"$dependency_install_prefix/lib/libfreetype.a\" \
+-DFREETYPE_LIBRARIES=\"$dependency_install_prefix/lib/libfreetype.a\""
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
