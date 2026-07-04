@@ -3994,6 +3994,12 @@ build_vapoursynth() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   install_missing_packages python3-dev cython
+  if ! python3 - <<'PY' >/dev/null 2>&1
+import Cython
+PY
+  then
+    python3 -m pip install --user cython > >(redirect_output) 2>&1 || exit_message 1 "build_vapoursynth: could not install cython into active python"
+  fi
   if command -v brew >/dev/null 2>&1; then
     local brew_cython_prefix=""
     brew_cython_prefix="$(brew --prefix cython 2>/dev/null || true)"
