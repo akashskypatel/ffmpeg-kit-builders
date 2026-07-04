@@ -43,10 +43,15 @@ on:
         default: false
         type: boolean
       build_from:
-        description: "Start building from specified step instead of starting at the default starting point. Must be build_*"
+        description: "Specify step as starting point. Must be build_*"
         required: false
         default: ""
         type: string
+      build_only:
+        description: "Only build the specified step and exit"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -60,6 +65,7 @@ jobs:
       GH_TOKEN: \${{ github.token }}
       WORKFLOW_FORCE_SELF: \${{ inputs.force }}
       BUILD_FROM: \${{ inputs.build_from }}
+      BUILD_ONLY: \${{ inputs.build_only }}
       TARGET_PLATFORMS: \${{ inputs.target_platforms }}
       TARGET_ARCHS: \${{ inputs.target_archs }}
       RUNNER_TARGET_PLATFORMS: "${platform_list}"
@@ -198,6 +204,9 @@ jobs:
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
                 fi
+                if [[ "\${BUILD_ONLY}" == "true" ]]; then
+                  exit 0
+                fi
               done
 
               if [[ -n "\${BUILD_FROM:-}" && "\$found_build_from" != "true" ]]; then
@@ -257,10 +266,15 @@ on:
         default: false
         type: boolean
       build_from:
-        description: "Start building from specified step instead of starting at the default starting point. Must be build_*"
+        description: "Specify step as starting point. Must be build_*"
         required: false
         default: ""
         type: string
+      build_only:
+        description: "Only build the specified step and exit"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -274,6 +288,7 @@ jobs:
       GH_TOKEN: \${{ github.token }}
       WORKFLOW_FORCE_SELF: \${{ inputs.force }}
       BUILD_FROM: \${{ inputs.build_from }}
+      BUILD_ONLY: \${{ inputs.build_only }}
       TARGET_PLATFORMS: \${{ inputs.target_platforms }}
       TARGET_ARCHS: \${{ inputs.target_archs }}
       RUNNER_TARGET_PLATFORMS: "${platform_list}"
@@ -399,6 +414,9 @@ jobs:
                   sudo -E "\$HOMEBREW_BASH" ./runner.sh --host="\$platform" --arch="\$arch" --enable-full --gpl -y --no-bundle --skip --workflow --build-only="\$build"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/\${platform}-\${arch}/libraries"
                   sudo rm -rf "\${GITHUB_WORKSPACE}/prebuilt/src"
+                fi
+                if [[ "\${BUILD_ONLY}" == "true" ]]; then
+                  exit 0
                 fi
               done
 
