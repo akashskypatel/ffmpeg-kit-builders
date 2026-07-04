@@ -3395,7 +3395,6 @@ build_libx264() {
   local lib="libx264"
   local repo="https://code.videolan.org/videolan/x264.git"
   local repo_ver="stable"
-  local toolchain_ar="$AR"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -3405,9 +3404,8 @@ build_libx264() {
     export CC="$CC -target $cflags_target -isysroot $SDKROOT"
     export AS="$src_dir/$lib/tools/gas-preprocessor.pl -arch aarch64 -- $CC"
   fi
-  export AR="$toolchain_ar rc"
   generic_configure "--enable-static --disable-shared --disable-cli --disable-opencl"
-  sed -i'.bak' -E 's/\$\(AR\)\$@/\$\(AR\) \$@/' Makefile
+  sed -i'.bak' -E 's/\$\(AR\)\$@/\$\(AR\) rc \$@/' Makefile
   disable_nonessential "$src_dir/$lib"
   do_make
   generic_make_install

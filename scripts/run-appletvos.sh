@@ -3253,8 +3253,6 @@ build_libx264() {
   if [[ "$host_arch" == "x86_64" ]]; then
     export AS=nasm
   fi
-  local toolchain_ar="$AR"
-  export AR="$toolchain_ar rc"
   get_config_guess "$src_dir/$lib"
   get_config_sub "$src_dir/$lib"
   unset CFLAGS ASFLAGS LDFLAGS CPPFLAGS CXXFLAGS
@@ -3262,9 +3260,9 @@ build_libx264() {
     copy_path "$PATCHDIR/build-x264.sh" "$src_dir/$lib/build-x264.sh" "-f"
     chmod +x "$src_dir/$lib/build-x264.sh"
     if istvossimulator; then
-      IS_SIMULATOR=y ./build-x264.sh $host_arch
+      IS_SIMULATOR=y ./build-x264.sh "$host_arch"
     else
-      CFLAGS="$CFLAGS -mfpu=neon" ./build-x264.sh $host_arch
+      CFLAGS="$CFLAGS -mfpu=neon" ./build-x264.sh "$host_arch"
     fi
   } > >(redirect_output) 2>&1 || exit_message 1 "build_libx264: Failed to build x264"
   copy_path "$src_dir/$lib/thin-x264/$host_arch/lib/libx264.a" "$dependency_install_prefix/lib/libx264.a" "-f"
