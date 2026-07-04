@@ -4457,6 +4457,13 @@ build_sphinxbase() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
+  if [[ -f configure.ac ]] && ! grep -q 'linux-android' configure.ac; then
+    sed -i '/case $host in/a\
+	*-linux-android*|*-*-linux-android*)\
+		ad_files="ad_base.lo"\
+		AC_MSG_RESULT([No audio interface for host type $host.])\
+		;;' configure.ac
+  fi
   export LIBS="${LIBS} -llog"
   export LDFLAGS="${LDFLAGS} -llog"
   touch "no.autogen"
