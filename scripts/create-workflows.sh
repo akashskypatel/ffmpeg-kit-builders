@@ -90,6 +90,16 @@ jobs:
 
           source "\${GITHUB_WORKSPACE}/scripts/supported.sh"
 
+          echo "==================================="
+          echo "Linux Orchestrator"
+          echo "workflow-force-self: \${WORKFLOW_FORCE_SELF}"
+          echo "workflow-build-from: \${WORKFLOW_BUILD_FROM}"
+          echo "workflow-build-only: \${WORKFLOW_BUILD_ONLY}"
+          echo "workflow-target-platforms: \${WORKFLOW_TARGET_PLATFORMS}"
+          echo "workflow-target-archs: \${WORKFLOW_TARGET_ARCHS}"
+          echo "runner-workflow-target-platforms: \${RUNNER_WORKFLOW_TARGET_PLATFORMS}"
+          echo "==================================="
+
           trim() {
             local value="\$1"
             value="\${value#"\${value%%[![:space:]]*}"}"
@@ -316,6 +326,16 @@ jobs:
           set -euo pipefail
 
           source "\${GITHUB_WORKSPACE}/scripts/supported.sh"
+
+          echo "==================================="
+          echo "Linux Orchestrator"
+          echo "workflow-force-self: \${WORKFLOW_FORCE_SELF}"
+          echo "workflow-build-from: \${WORKFLOW_BUILD_FROM}"
+          echo "workflow-build-only: \${WORKFLOW_BUILD_ONLY}"
+          echo "workflow-target-platforms: \${WORKFLOW_TARGET_PLATFORMS}"
+          echo "workflow-target-archs: \${WORKFLOW_TARGET_ARCHS}"
+          echo "runner-workflow-target-platforms: \${RUNNER_WORKFLOW_TARGET_PLATFORMS}"
+          echo "==================================="
 
           trim() {
             local value="\$1"
