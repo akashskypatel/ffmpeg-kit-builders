@@ -3419,7 +3419,9 @@ build_libx264() {
     export AS="$src_dir/$lib/tools/gas-preprocessor.pl -arch aarch64 -- $CC"
   fi
   generic_configure "--enable-static --disable-shared --disable-cli --disable-opencl"
-  sed -i'.bak' -E 's/\$\(AR\)\$@/\$\(AR\) rc \$@/' Makefile
+  if ! grep -Eq '^AR=.*[[:space:]]rc[[:space:]]*$' config.mak; then
+    sed -i'.bak' -E "s|^AR=.*$|AR=$AR rc |" config.mak
+  fi
   disable_nonessential "$src_dir/$lib"
   do_make
   generic_make_install
