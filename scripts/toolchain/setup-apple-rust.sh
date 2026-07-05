@@ -86,13 +86,12 @@ apply_apple_rust_environment
 rust_target="$(rust_target_for_combo "${combo}")"
 
 if rust_target_installed "${rust_target}"; then
-  echo "Rust target ${rust_target} already installed for ${combo}; skipping setup."
+  echo "Rust target ${rust_target} already installed for ${combo}."
   rustup target list --installed | grep -x "${rust_target}"
-  exit 0
+else
+  rustup target add "${rust_target}"
+  rustup target list --installed | grep -x "${rust_target}"
 fi
-
-rustup target add "${rust_target}"
-rustup target list --installed | grep -x "${rust_target}"
 
 if ! cargo cinstall --version >/dev/null 2>&1; then
   cargo install --locked cargo-c

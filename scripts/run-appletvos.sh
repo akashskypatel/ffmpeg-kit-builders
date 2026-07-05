@@ -2805,10 +2805,10 @@ build_libtiff() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests"
+  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests LIBS='-lsharpyuv'"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  add_libs_to_pkg -t="$install_pkgconfig_dir/libtiff-4.pc" -l="-ltiff -llzma -ljpeg -lz -ljbig -lwebp -lLerc"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/libtiff-4.pc" -l="-ltiff -llzma -ljpeg -lz -ljbig -lwebp -lLerc -lsharpyuv"
   change_dir "$src_dir"
 }
 build_libjpeg_turbo() {
