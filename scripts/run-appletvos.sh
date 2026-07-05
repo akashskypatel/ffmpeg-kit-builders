@@ -1060,7 +1060,9 @@ build_libglslang() {
 -DENABLE_GLSLANG_BINARIES=OFF \
 -DGLSLANG_TESTS=OFF \
 -DALLOW_EXTERNAL_SPIRV_TOOLS=ON \
--DCMAKE_PREFIX_PATH=${dependency_install_prefix}"
+-DCMAKE_PREFIX_PATH=${dependency_install_prefix} \
+-DSPIRV-Tools_DIR=${dependency_install_prefix}/lib/cmake/SPIRV-Tools \
+-DSPIRV-Tools-opt_DIR=${dependency_install_prefix}/lib/cmake/SPIRV-Tools-opt"
   change_dir "$src_dir/$lib/build" 1
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
