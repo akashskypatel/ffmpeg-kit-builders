@@ -3189,12 +3189,32 @@ build_libvpx() {
   local lib="libvpx"
   local repo="https://chromium.googlesource.com/webm/libvpx"
   local repo_ver="v1.15.2"
+  local config="--prefix=$dependency_install_prefix \
+--enable-static \
+--disable-shared \
+--disable-examples \
+--disable-tools \
+--disable-docs \
+--disable-unit-tests \
+--enable-vp9-highbitdepth \
+--extra-cflags=-fno-asynchronous-unwind-tables"
+  local saved_CPPFLAGS="$CPPFLAGS"
+  local saved_CFLAGS="$CFLAGS"
+  local saved_CXXFLAGS="$CXXFLAGS"
+  local saved_LDFLAGS="$LDFLAGS"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   if [[ "$host_arch" == "x86_64" ]]; then
     export AS=nasm
+  else
+    export LD="$CC"
+    export AS="$CC"
   fi
+  export CPPFLAGS="$original_cppflags -arch $ios_arch -I${dependency_install_prefix}/include -DIOS"
+  export CFLAGS="$original_cflags -arch $ios_arch -I${dependency_install_prefix}/include -isysroot $IOS_SYSROOT"
+  export CXXFLAGS="$original_cxxflags -arch $ios_arch -I${dependency_install_prefix}/include -isysroot $IOS_SYSROOT"
+  export LDFLAGS="$original_ldflags -arch $ios_arch -L${dependency_install_prefix}/lib -isysroot $IOS_SYSROOT"
   if isiossimulator; then
     sed -i '' '/arm64-darwin24-gcc/a\
 all_platforms="${all_platforms} arm64-iphonesimulator-gcc"' "$src_dir/$lib/configure"
@@ -3203,19 +3223,18 @@ all_platforms="${all_platforms} arm64-iphonesimulator-gcc"' "$src_dir/$lib/confi
   else
     vpx_target="arm64-darwin-gcc"
   fi
+  sed -i'.bak' \
+    -e "s/IOS_VERSION_MIN=\"8.0\"/IOS_VERSION_MIN=\"${MIN_IOS_VERSION}\"/g" \
+    -e "s/IOS_VERSION_MIN=\"7.0\"/IOS_VERSION_MIN=\"${MIN_IOS_VERSION}\"/g" \
+    "$src_dir/$lib/build/make/configure.sh"
   touch "no.autoreconf"
-  do_configure "--target=$vpx_target \
---prefix=$dependency_install_prefix \
---enable-static \
---disable-shared \
---disable-examples \
---disable-tools \
---disable-docs \
---disable-unit-tests \
---enable-vp9-highbitdepth \
---extra-cflags=-fno-asynchronous-unwind-tables" # fno for Error: invalid register for .seh_savexmm
+  do_configure "$config --target=$vpx_target" # fno for Error: invalid register for .seh_savexmm
   # disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  export CPPFLAGS="$saved_CPPFLAGS"
+  export CFLAGS="$saved_CFLAGS"
+  export CXXFLAGS="$saved_CXXFLAGS"
+  export LDFLAGS="$saved_LDFLAGS"
   change_dir "$src_dir"
   set_toolchain_paths
 }
