@@ -3053,6 +3053,7 @@ build_libarchive() {
 --disable-shared \
 --bindir=$dependency_install_prefix/bin \
 --without-lzo2 \
+--without-libxml2 \
 --without-cng" \
 "LIBICONV=-liconv LTLIBICONV=-liconv LIBS='-liconv' ./configure"
   disable_nonessential "$src_dir/$lib"
