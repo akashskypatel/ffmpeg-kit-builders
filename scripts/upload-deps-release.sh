@@ -6,11 +6,29 @@ source "${SCRIPTDIR}/function.sh"
 platform="$1"
 arch="$2"
 dep="${3:-${GITHUB_WORKFLOW#build_}}"
-workspace="${4:-${GITHUB_WORKSPACE:-$(pwd)}}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+workspace="${4:-${GITHUB_WORKSPACE:-$repo_root}}"
 archive_name="${platform}-${arch}-${dep}.zip"
 release_tag="${platform}-${arch}-deps"
 release_name="${platform}-${arch}-dependencies"
 libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
+token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
+repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+
+if [[ -z "$token" ]]; then
+  echo "GH_TOKEN or GITHUB_TOKEN must be set for release upload" >&2
+  exit 1
+fi
+
+if [[ -z "$repo" ]]; then
+  repo="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
+fi
+
+if [[ -z "$repo" ]]; then
+  echo "GITHUB_REPOSITORY must be set or remote.origin.url must point to GitHub" >&2
+  exit 1
+fi
 
 echo ""
 echo "==================================="
@@ -23,6 +41,7 @@ echo "archive_name: $archive_name"
 echo "release_tag: $release_tag"
 echo "release_name: $release_name"
 echo "libraries_dir: $libraries_dir"
+echo "repo: $repo"
 echo "==================================="
 
 if [[ ! -d "$libraries_dir" ]]; then
@@ -33,20 +52,20 @@ fi
 rm -f "${workspace}/${archive_name}"
 (cd "$libraries_dir" && zip -qry "${workspace}/${archive_name}" .)
 
-python3 - "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set for release upload}" "$release_tag" "$release_name" "${workspace}/${archive_name}" <<'PY'
+if ! authorize_github "$token" "${repo#*/}" "${repo%/*}"; then
+  exit 1
+fi
+
+python3 - "$repo" "$release_tag" "$release_name" "${workspace}/${archive_name}" "$token" <<'PY'
 import json
 import mimetypes
-import os
 import pathlib
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
-repo, tag, release_name, asset_path = sys.argv[1:]
-token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
-if not token:
-    raise SystemExit("GH_TOKEN or GITHUB_TOKEN must be set for release upload")
+repo, tag, release_name, asset_path, token = sys.argv[1:]
 api = "https://api.github.com"
 headers = {
     "Authorization": f"Bearer {token}",

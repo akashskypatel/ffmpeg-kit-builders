@@ -12,10 +12,26 @@ platform="$1"
 arch="$2"
 workflow_name="$3"
 mode="${4:-}"
-workspace="${GITHUB_WORKSPACE:-$(pwd)}"
-token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+workspace="${GITHUB_WORKSPACE:-$repo_root}"
+token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
 build_force="${WORKFLOW_FORCE_SELF:-false}"
 requested_step="${WORKFLOW_REQUESTED_STEP:-}"
+
+if [[ -z "$token" ]]; then
+	echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
+	exit 1
+fi
+
+repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+if [[ -z "$repo" ]]; then
+	repo="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
+fi
+if [[ -z "$repo" ]]; then
+	echo "GITHUB_REPOSITORY must be set or remote.origin.url must point to GitHub" >&2
+	exit 1
+fi
 
 echo ""
 echo "==================================="
@@ -27,20 +43,12 @@ echo "mode: $mode"
 echo "workspace: $workspace"
 echo "build_force: $build_force"
 echo "requested_step: $requested_step"
+echo "repo: $repo"
 echo "==================================="
 
-if [[ -z "$token" ]]; then
-	echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
-	exit 1
-fi
-
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="${GITHUB_REPOSITORY:-}"
-if [[ -z "$repo" ]]; then
-	repo="$(git -C "$script_dir/.." config --get remote.origin.url 2>/dev/null | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
-fi
-if [[ -z "$repo" ]]; then
-	echo "GITHUB_REPOSITORY must be set or remote.origin.url must point to GitHub" >&2
+# repo = owner/repo_name
+# authorize_github token repo_name owner
+if ! authorize_github "$token" "${repo#*/}" "${repo%/*}"; then
 	exit 1
 fi
 
@@ -89,7 +97,7 @@ for dependency in $dependencies; do
 
 	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
 
-	if ! python3 - "$repo" "$release_tag" "$release_name" "$asset_name" "$archive_path" <<'PY'
+	if ! python3 - "$repo" "$release_tag" "$release_name" "$asset_name" "$archive_path" "$token" <<'PY'
 import json
 import os
 import sys
@@ -97,8 +105,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-repo, tag, release_name, asset_name, archive_path = sys.argv[1:]
-token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+repo, tag, release_name, asset_name, archive_path, token = sys.argv[1:]
 api = "https://api.github.com"
 headers = {
     "Authorization": f"Bearer {token}",
@@ -125,6 +132,14 @@ status, release = request_json(
 if status == 404:
     raise SystemExit(
         f"Missing release for dependency artifact: tag='{tag}' name='{release_name}' asset='{asset_name}'"
+    )
+if status == 401:
+    raise SystemExit(
+        f"Unauthorized to access release for dependency artifact: tag='{tag}' name='{release_name}' asset='{asset_name}' in repo '{repo}'. Please check your GH_TOKEN/GITHUB_TOKEN."
+    )
+if status >= 400:
+    raise SystemExit(
+        f"Failed to access release for dependency artifact: tag='{tag}' name='{release_name}' asset='{asset_name}' in repo '{repo}'. Status: {status}"
     )
 
 asset = None

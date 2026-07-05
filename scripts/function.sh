@@ -4178,14 +4178,12 @@ run_valid_build_functions() {
     fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
-    if truthy "$workflow"; then
-      if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
-        echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
-        mark_as_built "$step_name"
-        continue
-      fi
-      sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
+    if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
+      echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
+      mark_as_built "$step_name"
+      continue
     fi
+    sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
     run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See $LOG_FILE for details"
     last_built_step="$step_name"
   done
@@ -7345,9 +7343,9 @@ get_github_owner() {
 }
 
 authorize_github() {
-  local github_token="$(get_github_token)"
-  local github_repo="$(get_github_repo)"
-  local github_owner="$(get_github_owner)"
+  local github_token="${1:-$(get_github_token)}"
+  local github_repo="${2:-$(get_github_repo)}"
+  local github_owner="${3:-$(get_github_owner)}"
   if curl -f --request GET \
     --url "https://api.github.com/octocat" \
     --header "Authorization: Bearer $github_token" \

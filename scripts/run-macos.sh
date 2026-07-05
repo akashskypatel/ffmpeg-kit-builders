@@ -1498,8 +1498,12 @@ int iconv_close(iconv_t cd) {
 }
 EOF
   "$CC" "$CFLAGS" -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o"
-  ar -q "$dependency_install_prefix/lib/libiconv.a" "$src_dir/$lib/iconv-compat.o"
-  ranlib "$dependency_install_prefix/lib/libiconv.a"
+  if [[ -f "$dependency_install_prefix/lib/libiconv.a" ]]; then
+    mv "$dependency_install_prefix/lib/libiconv.a" "$dependency_install_prefix/lib/libiconv_real.a"
+  fi
+  libtool -static -o "$dependency_install_prefix/lib/libiconv.a" \
+    "$dependency_install_prefix/lib/libiconv_real.a" \
+    "$src_dir/$lib/iconv-compat.o"
   remove_path -f "$dependency_install_prefix/include/iconv.h"
   cat > "$install_pkgconfig_dir/iconv.pc" << EOF
 prefix=$dependency_install_prefix
@@ -3720,6 +3724,7 @@ build_libzvbi() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  export CPPFLAGS="$CPPFLAGS -Diconv=libiconv -Diconv_open=libiconv_open -Diconv_close=libiconv_close"
   export LIBS="-lpng -lz -liconv -lm"
   export LDFLAGS="$LDFLAGS"
   local ORIG_PATH=$PATH
@@ -3747,6 +3752,7 @@ ac_cv_func_malloc_0_nonnull=yes"
   do_make_and_make_install
   change_dir "$src_dir"
   reset_ldflags
+  reset_cppflags
   unset LIBS
   export PATH=$ORIG_PATH
   export ACLOCAL_PATH=$ORIG_ACLOCAL_PATH
