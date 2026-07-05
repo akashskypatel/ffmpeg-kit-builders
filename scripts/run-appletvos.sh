@@ -911,6 +911,8 @@ build_libflite() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export LDFLAGS="$LDFLAGS -lpthread -ldl"
+  get_config_sub "$src_dir/$lib"
+  get_config_guess "$src_dir/$lib"
   generic_configure "--disable-shared --with-pic"
   disable_nonessential "$src_dir/$lib"
   find . -name "Makefile" -exec sed -i'.bak' 's/cp -pd/cp -p/' {} \;
