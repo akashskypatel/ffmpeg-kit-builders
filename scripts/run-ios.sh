@@ -2543,6 +2543,16 @@ build_libsoxr() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  if [[ "$host_arch" == "arm64" || "$host_arch" == "aarch64" ]]; then
+    # Upstream libsoxr assumes ARM SIMD is only exposed as __arm__ and probes
+    # 32-bit ARM-only NEON flags. Apple Silicon needs a small source patch.
+    perl -0pi -e 's/elseif \(CMAKE_SYSTEM_PROCESSOR MATCHES "\^arm"\)/elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)")\n  set (TRIAL_C_FLAGS\n    " "\n  )\n  set (TEST_C_SOURCE "\n    #include <arm_neon.h>\n    int main(int c, char * * v) {\n      float32x4_t a = vdupq_n_f32((float)c), b = vdupq_n_f32((float)!!v);\n      return !vgetq_lane_u32(vceqq_f32(a,b),0);\n    }\n  ")\nelseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")/' \
+      cmake/Modules/FindSIMD32.cmake
+    sed -i '.bak' 's/#elif !defined(PFFFT_SIMD_DISABLE) && defined(__arm__)/#elif !defined(PFFFT_SIMD_DISABLE) \&\& (defined(__arm__) || defined(__aarch64__) || defined(__arm64__))/g' src/pffft.c
+    sed -i '.bak' 's/#ifdef __arm__/#if defined(__arm__) || defined(__aarch64__) || defined(__arm64__)/g' src/pffft.c src/pffft-wrap.c
+    sed -i '.bak' 's/#elif defined __arm__/#elif defined __arm__ || defined __aarch64__ || defined __arm64__/g' src/dev32s.h
+    sed -i '.bak' 's/#if defined __arm__/#if defined __arm__ || defined __aarch64__ || defined __arm64__/g' src/cr-core.c
+  fi
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
 -DWITH_OPENMP=0 \
