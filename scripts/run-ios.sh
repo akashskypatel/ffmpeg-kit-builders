@@ -3969,7 +3969,7 @@ build_pocketsphinx() {
   do_svn_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
   export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
-  export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreFoundation"
+  export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework CoreFoundation"
   touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
