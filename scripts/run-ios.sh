@@ -3266,8 +3266,21 @@ build_libvpx() {
   export CXXFLAGS="$original_cxxflags -arch $ios_arch -I${dependency_install_prefix}/include -isysroot $IOS_SYSROOT"
   export LDFLAGS="$original_ldflags -arch $ios_arch -L${dependency_install_prefix}/lib -isysroot $IOS_SYSROOT"
   if isiossimulator; then
-    sed -i '' '/arm64-darwin24-gcc/a\
-all_platforms="${all_platforms} arm64-iphonesimulator-gcc"' "$src_dir/$lib/configure"
+    local toolchain_files=("$src_dir/$lib/configure" "$src_dir/$lib/build/make/configure.sh")
+    local toolchain_file=""
+    for toolchain_file in "${toolchain_files[@]}"; do
+      if ! grep -q 'arm64-iphonesimulator-gcc' "$toolchain_file"; then
+        awk '
+          !done && /arm64-darwin2[0-9]-gcc/ {
+            print
+            print "all_platforms=\"${all_platforms} arm64-iphonesimulator-gcc\""
+            done=1
+            next
+          }
+          { print }
+        ' "$toolchain_file" > "${toolchain_file}.tmp" && mv -f "${toolchain_file}.tmp" "$toolchain_file"
+      fi
+    done
     sed -i '' 's/-miphoneos-version-min=\${IOS_VERSION_MIN}"$/-mios-simulator-version-min=${IOS_VERSION_MIN}"/g' "$src_dir/$lib/build/make/configure.sh"
     vpx_target="arm64-iphonesimulator-gcc"
   else
