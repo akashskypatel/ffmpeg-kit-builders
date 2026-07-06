@@ -118,7 +118,7 @@ ffmpeg_patches() {
 get_generic_meson_cross_file() {
 	local variant_name="$1"      # e.g., "librist"
 	local extra_content="$2"     # e.g., "[built-in options]..."
-	local base_filename="$host_name-meson-cross.mingw.txt"
+	local base_filename="$host_name-meson-cross.txt"
 	local base_filepath="$src_dir/$base_filename"
   BUILD_ARCH=$(uname -m)
   BUILD_SYS=$(uname)
@@ -186,7 +186,7 @@ has_function_execv = false
 EOF
 	# 2. Handle Custom Variant logic
 	if [[ -n "$variant_name" ]]; then
-			local custom_filepath="$(pwd)/$host_name-meson-cross.mingw.${variant_name}.txt"
+			local custom_filepath="$(pwd)/$host_name-meson-cross.${variant_name}.txt"
 			# Always overwrite the variant with a fresh copy of the base
 			cp "$base_filepath" "$custom_filepath" 2>"$LOG_FILE"
 			# Append custom options if provided
@@ -206,7 +206,7 @@ EOF
 get_generic_meson_native_file() {
 	local variant_name="$1"      # e.g., "librist"
 	local extra_content="$2"     # e.g., "[built-in options]..."
-	local base_filename="$host_name-meson-native.mingw.txt"
+	local base_filename="$host_name-meson-native.txt"
 	local base_filepath="$src_dir/$base_filename"
 	BUILD_ARCH=$(uname -m)
   BUILD_SYS=$(uname)
@@ -233,7 +233,7 @@ cpp_args = ['-O3', '-march=native']
 EOF
 	# 2. Handle Custom Variant logic
 	if [[ -n "$variant_name" ]]; then
-			local custom_filepath="$(pwd)/$host_name-meson-cross.mingw.${variant_name}.txt"
+			local custom_filepath="$(pwd)/$host_name-meson-cross.${variant_name}.txt"
 			# Always overwrite the variant with a fresh copy of the base
 			cp "$base_filepath" "$custom_filepath" 2>"$LOG_FILE"
 			# Append custom options if provided
