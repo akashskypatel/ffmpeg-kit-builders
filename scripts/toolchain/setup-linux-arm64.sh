@@ -6,6 +6,16 @@ ARM_TOOLCHAIN_PATH="${ARM_TOOLCHAIN_PATH:-/usr/local/arm-gnu-toolchain}"
 ARM_TOOLCHAIN_URL="${ARM_TOOLCHAIN_URL:-https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz}"
 RHEL_RELEASEVER="${RHEL_RELEASEVER:-$(rpm -E %rhel)}"
 MODULE_PLATFORM_ID="${MODULE_PLATFORM_ID:-platform:el${RHEL_RELEASEVER}}"
+DNF_INSTALL_DISABLE_MODULAR_FILTERING_ARGS=()
+DNF_DOWNLOAD_DISABLE_MODULAR_FILTERING_ARGS=()
+
+if dnf install --help 2>&1 | grep -q -- '--disable-modular-filtering'; then
+  DNF_INSTALL_DISABLE_MODULAR_FILTERING_ARGS=(--disable-modular-filtering)
+fi
+
+if dnf download --help 2>&1 | grep -q -- '--disable-modular-filtering'; then
+  DNF_DOWNLOAD_DISABLE_MODULAR_FILTERING_ARGS=(--disable-modular-filtering)
+fi
 
 rust_target_installed() {
   local target="$1"
@@ -69,7 +79,7 @@ install_linux_arm64_sysroot_from_rpms() {
     --forcearch=aarch64 \
     --releasever="$RHEL_RELEASEVER" \
     --setopt=module_platform_id="$MODULE_PLATFORM_ID" \
-    --disable-modular-filtering \
+    "${DNF_DOWNLOAD_DISABLE_MODULAR_FILTERING_ARGS[@]}" \
     --arch=aarch64,noarch \
     "${packages[@]}"
 
@@ -115,7 +125,7 @@ if ! linux_arm64_sysroot_ready; then
     --setopt=install_weak_deps=False \
     --setopt=tsflags=nodocs \
     --setopt=module_platform_id="$MODULE_PLATFORM_ID" \
-    --disable-modular-filtering \
+    "${DNF_INSTALL_DISABLE_MODULAR_FILTERING_ARGS[@]}" \
     install -y glibc glibc-devel glibc-headers kernel-headers libgcc libstdc++ libstdc++-devel libxcrypt-devel; then
     echo "WARNING: dnf installroot failed; falling back to downloading and extracting aarch64 RPMs into ${SYSROOT}." >&2
     install_linux_arm64_sysroot_from_rpms
