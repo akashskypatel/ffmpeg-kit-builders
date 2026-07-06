@@ -2338,7 +2338,11 @@ build_libdatrie() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-doxygen-doc"
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared --disable-doxygen-doc"
   do_make_and_make_install
   change_dir "$src_dir"
 }
@@ -2351,7 +2355,11 @@ build_libthai() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-doxygen-doc"
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared --disable-doxygen-doc"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
