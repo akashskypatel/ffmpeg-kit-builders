@@ -2881,7 +2881,12 @@ build_libleptonica() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC"
-  generic_configure "--enable-static --disable-shared --disable-programs --disable-tests"
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" 
+--enable-static --disable-shared --disable-programs --disable-tests"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cppflags
