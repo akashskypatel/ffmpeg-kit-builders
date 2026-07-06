@@ -155,13 +155,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       WORKFLOW_FORCE_SELF: ${{ inputs.force }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Prepare scripts
-        shell: bash
-        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
-
       - name: Install Bash
         shell: bash
         run: |
@@ -171,6 +164,13 @@ jobs:
       - name: Accept Xcode license
         shell: bash
         run: sudo xcodebuild -license accept
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare scripts
+        shell: bash
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
 
       - name: Build iOS
         if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'ios') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}

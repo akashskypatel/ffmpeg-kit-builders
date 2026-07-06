@@ -46,13 +46,6 @@ jobs:
       WORKFLOW_TARGET_ARCHS: ${{ inputs.target_archs }}
       RUNNER_WORKFLOW_TARGET_PLATFORMS: "ios,iphonesimulator,macos"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Prepare scripts
-        shell: bash
-        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
-
       - name: Install Bash
         shell: bash
         run: |
@@ -62,6 +55,13 @@ jobs:
       - name: Accept Xcode license
         shell: bash
         run: sudo xcodebuild -license accept
+      
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare scripts
+        shell: bash
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
 
       - name: Build selected dependencies
         shell: bash

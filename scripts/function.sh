@@ -7232,7 +7232,11 @@ get_keystore(){
   fi
 
   if [[ -n "$original_user" ]]; then
-    original_home="$(getent passwd "$original_user" | cut -d: -f6)"
+    if command -v getent >/dev/null 2>&1; then
+      original_home="$(getent passwd "$original_user" | cut -d: -f6)"
+    else
+      original_home="$(dscl . -read "/Users/$original_user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+    fi
   fi
 
   if [[ -z "$original_home" && -n "${HOME:-}" && "${HOME:-}" != "/root" ]]; then
