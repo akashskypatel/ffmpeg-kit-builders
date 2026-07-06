@@ -2885,7 +2885,7 @@ build_libleptonica() {
   if isiossimulator; then
     ffi_host="${host_arch}-apple-darwin"
   fi
-  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" 
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" \
 --enable-static --disable-shared --disable-programs --disable-tests"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
