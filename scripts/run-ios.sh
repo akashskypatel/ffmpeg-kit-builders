@@ -1378,7 +1378,11 @@ build_libklvanc() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   touch "no.autogen"
-  generic_configure "--enable-static \
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static \
 --disable-shared \
 --disable-examples"
 cat > "$install_pkgconfig_dir/libklvanc.pc" <<EOF
