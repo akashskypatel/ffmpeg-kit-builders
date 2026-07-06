@@ -3732,9 +3732,6 @@ build_libzvbi() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  if [[ "$host_arch" != "x86_64" ]]; then
-    export CPPFLAGS="$CPPFLAGS -Diconv=libiconv -Diconv_open=libiconv_open -Diconv_close=libiconv_close"
-  fi
   export LIBS="-lpng -lz -liconv -lm"
   export LDFLAGS="$LDFLAGS"
   local ORIG_PATH=$PATH
