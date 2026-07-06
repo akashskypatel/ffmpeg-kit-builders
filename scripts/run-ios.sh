@@ -786,7 +786,11 @@ build_libcaca() {
   change_dir "$src_dir/$lib"
   sed -i'.bak' 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
   apply_patch "$PATCHDIR/caca_dither_c.patch"
-  generic_configure "--libdir=$dependency_install_prefix/lib \
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --libdir=$dependency_install_prefix/lib \
 --disable-csharp \
 --disable-java  \
 --disable-python \
