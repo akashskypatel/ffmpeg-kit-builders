@@ -424,8 +424,10 @@ build_fftw() {
   local repo="http://fftw.org/fftw-3.3.10.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$lib"
-  generic_configure "--disable-doc --enable-static --disable-shared --enable-pic"
+  change_dir "$src_dir/$lib/build" 1
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
