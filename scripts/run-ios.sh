@@ -3065,7 +3065,12 @@ build_libtesseract() {
   export LDFLAGS="${LDFLAGS} -lleptonica -lz -larchive -ltiff -lpng16 \
         -ljpeg -lgif -lwebpmux -lwebp -lopenjp2 -ljbig -lLerc \
         -lsharpyuv -llzma -lzstd -ldeflate"
-  generic_configure "--disable-openmp \
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot='$IOS_SYSROOT' \
+--disable-openmp \
 --with-archive \
 --disable-graphics \
 --disable-tessdata-prefix \
