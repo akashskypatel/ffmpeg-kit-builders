@@ -1,21 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
 ARM_TOOLCHAIN_PATH="${ARM_TOOLCHAIN_PATH:-/usr/local/arm-gnu-toolchain}"
+SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
 ARM_TOOLCHAIN_URL="${ARM_TOOLCHAIN_URL:-https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz}"
 RHEL_RELEASEVER="${RHEL_RELEASEVER:-$(rpm -E %rhel)}"
 MODULE_PLATFORM_ID="${MODULE_PLATFORM_ID:-platform:el${RHEL_RELEASEVER}}"
 DNF_INSTALL_DISABLE_MODULAR_FILTERING_ARGS=()
 DNF_DOWNLOAD_DISABLE_MODULAR_FILTERING_ARGS=()
-
-if dnf install --help 2>&1 | grep -q -- '--disable-modular-filtering'; then
-  DNF_INSTALL_DISABLE_MODULAR_FILTERING_ARGS=(--disable-modular-filtering)
-fi
-
-if dnf download --help 2>&1 | grep -q -- '--disable-modular-filtering'; then
-  DNF_DOWNLOAD_DISABLE_MODULAR_FILTERING_ARGS=(--disable-modular-filtering)
-fi
 
 rust_target_installed() {
   local target="$1"
@@ -46,13 +38,21 @@ linux_arm64_toolchain_ready() {
     [[ -e "${SYSROOT}/lib64/libc.so.6" ]] &&
     [[ -e "${SYSROOT}/usr/include/features.h" ]] &&
     [[ -d "${SYSROOT}/usr/include/c++" ]] &&
+    [[ -e "${SYSROOT}/usr/lib64/libgcc_s.so" ]] &&
     rust_target_installed aarch64-unknown-linux-gnu
 }
 
 linux_arm64_sysroot_ready() {
   [[ -e "${SYSROOT}/lib64/libc.so.6" ]] &&
     [[ -e "${SYSROOT}/usr/include/features.h" ]] &&
-    [[ -d "${SYSROOT}/usr/include/c++" ]]
+    [[ -d "${SYSROOT}/usr/include/c++" ]] &&
+    [[ -e "${SYSROOT}/usr/lib64/libgcc_s.so" ]]
+}
+
+fix_linux_arm64_sysroot_links() {
+  if [[ ! -e "${SYSROOT}/usr/lib64/libgcc_s.so" && -e "${SYSROOT}/usr/lib64/libgcc_s.so.1" ]]; then
+    ln -sf libgcc_s.so.1 "${SYSROOT}/usr/lib64/libgcc_s.so"
+  fi
 }
 
 install_linux_arm64_sysroot_from_rpms() {
@@ -96,11 +96,20 @@ if [[ "$(id -u)" -ne 0 ]]; then
 fi
 
 if linux_arm64_toolchain_ready; then
+  fix_linux_arm64_sysroot_links
   write_linux_arm64_environment
   echo "Linux arm64 toolchain is already available at ${ARM_TOOLCHAIN_PATH}; skipping setup."
   aarch64-linux-gnu-gcc --version
   strings "${SYSROOT}/lib64/libc.so.6" | grep 'GNU C Library' || true
   exit 0
+fi
+
+if dnf install --help 2>&1 | grep -q -- '--disable-modular-filtering'; then
+  DNF_INSTALL_DISABLE_MODULAR_FILTERING_ARGS=(--disable-modular-filtering)
+fi
+
+if dnf download --help 2>&1 | grep -q -- '--disable-modular-filtering'; then
+  DNF_DOWNLOAD_DISABLE_MODULAR_FILTERING_ARGS=(--disable-modular-filtering)
 fi
 
 dnf install -y dnf-plugins-core curl xz tar cpio rpm
@@ -118,6 +127,8 @@ if [[ ! -x "${ARM_TOOLCHAIN_PATH}/sys-bin/aarch64-linux-gnu-gcc" ]]; then
   done
 fi
 
+fix_linux_arm64_sysroot_links
+
 if ! linux_arm64_sysroot_ready; then
   if ! dnf --installroot="$SYSROOT" \
     --forcearch=aarch64 \
@@ -130,6 +141,10 @@ if ! linux_arm64_sysroot_ready; then
     echo "WARNING: dnf installroot failed; falling back to downloading and extracting aarch64 RPMs into ${SYSROOT}." >&2
     install_linux_arm64_sysroot_from_rpms
   fi
+fi
+
+if ! linux_arm64_sysroot_ready; then
+  fix_linux_arm64_sysroot_links
 fi
 
 if ! linux_arm64_sysroot_ready; then

@@ -666,7 +666,7 @@ setup_linux_environment() {
             unset SYSROOT PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
             ;;
         "aarch64"|"arm64"|"arm64-v8a")
-            if [[ ! -x "/usr/local/arm-gnu-toolchain/sys-bin/aarch64-linux-gnu-gcc" || ! -e "/opt/sysroots/aarch64-linux-gnu/lib64/libc.so.6" ]] || ! rust_target_installed "aarch64-unknown-linux-gnu"; then
+            if [[ ! -x "/usr/local/arm-gnu-toolchain/sys-bin/aarch64-linux-gnu-gcc" || ! -e "/opt/sysroots/aarch64-linux-gnu/lib64/libc.so.6" || ! -e "/opt/sysroots/aarch64-linux-gnu/usr/lib64/libgcc_s.so" ]] || ! rust_target_installed "aarch64-unknown-linux-gnu"; then
                 run_toolchain_setup "setup-linux-arm64.sh"
             fi
             export host_arch="aarch64"
@@ -675,12 +675,12 @@ setup_linux_environment() {
             export SYSROOT=/opt/sysroots/aarch64-linux-gnu
             export host_target="aarch64-linux-gnu"
             export CROSS_COMPILE="$host_target-"
-            export CC="aarch64-linux-gnu-gcc --sysroot=$SYSROOT"
-            export CXX="aarch64-linux-gnu-g++ --sysroot=$SYSROOT"
+            export CC="clang"
+            export CXX="clang++"
             export AR=aarch64-linux-gnu-ar
             export AS=aarch64-linux-gnu-as
             export RANLIB=aarch64-linux-gnu-ranlib
-            export LD="aarch64-linux-gnu-ld --sysroot=$SYSROOT"
+            export LD="aarch64-linux-gnu-ld"
             export STRIP=aarch64-linux-gnu-strip
             export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
             export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"
@@ -705,12 +705,24 @@ setup_linux_environment() {
     fi
     
     export linux_cflags="$original_cflags -Wno-pedantic -I${dependency_install_prefix}/include "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_cflags+=" --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT "
+    fi
     export CFLAGS="$linux_cflags"
     export linux_cppflags="$original_cppflags -I${dependency_install_prefix}/include -DLINUX "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_cppflags+=" --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT "
+    fi
     export CPPFLAGS="$linux_cppflags"
     export linux_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_cxxflags+=" --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT -I$SYSROOT/usr/include/c++/8 -I$SYSROOT/usr/include/c++/8/aarch64-redhat-linux "
+    fi
     export CXXFLAGS="$linux_cxxflags"
     export linux_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -Wl,-rpath,${dependency_install_prefix}/lib "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_ldflags+=" --sysroot=$SYSROOT -fuse-ld=lld -B/usr/local/arm-gnu-toolchain/lib/gcc/aarch64-none-linux-gnu/13.2.1 -L$SYSROOT/usr/lib/gcc/aarch64-redhat-linux/8 -L$SYSROOT/usr/lib64 -L$SYSROOT/lib64 -L/usr/local/arm-gnu-toolchain/lib/gcc/aarch64-none-linux-gnu/13.2.1 "
+    fi
     export LDFLAGS="$linux_ldflags"
     export LD_LIBRARY_PATH="${dependency_install_prefix}/lib:$LD_LIBRARY_PATH"
     
@@ -1241,12 +1253,12 @@ reset_cross_vars() {
     if [[ "$host_arch" == "aarch64" ]]; then
       export SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
       export CROSS_COMPILE="$host_target-"
-      export CC="${host_target}-gcc --sysroot=$SYSROOT"
-      export CXX="${host_target}-g++ --sysroot=$SYSROOT"
+      export CC="clang"
+      export CXX="clang++"
       export AR="${host_target}-ar"
       export AS="${host_target}-as"
       export RANLIB="${host_target}-ranlib"
-      export LD="${host_target}-ld --sysroot=$SYSROOT"
+      export LD="${host_target}-ld"
       export STRIP="${host_target}-strip"
       export NM="${host_target}-nm"
       export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
@@ -4237,7 +4249,7 @@ run_valid_function() {
   local arg=()
   arg+=("$@")
   reset_allflags
-  if ! ismacos && ! isios; then
+  if ! ismacos && ! isios && ! { islinux && [[ "$host_arch" == "aarch64" ]]; }; then
     export LDFLAGS=" $LDFLAGS -static-libstdc++ "
   fi
   iswindows && export LDFLAGS=" -static $LDFLAGS"
@@ -7207,38 +7219,60 @@ get_changes_from_changelog() {
 }
 
 get_keystore(){
-  # Ensure the script is running with sudo
-  if [ -z "$SUDO_USER" ]; then
-    ORIGINAL_USER=$(whoami)
-    ORIGINAL_HOME=$(eval echo ~"$ORIGINAL_USER")
-  else
-    ORIGINAL_USER="$SUDO_USER"
-    ORIGINAL_HOME=$(eval echo ~"$SUDO_USER")
+  local original_user=""
+  local original_home=""
+  local keystore_dir=""
+
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
+    original_user="$SUDO_USER"
+  elif [[ -n "${PKEXEC_UID:-}" ]]; then
+    original_user="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"
+  elif [[ "$(id -u)" -ne 0 ]]; then
+    original_user="$(id -un)"
   fi
 
-  if [[ -d "$ORIGINAL_HOME/.config/keystore" ]]; then
-    echo "$ORIGINAL_HOME/.config/keystore"
-  elif [[ -d "$HOME/.config/keystore" ]]; then
-    # $HOME is root's home when running with sudo; this matches original ~ expansion
-    realpath "$HOME/.config/keystore"
-  else
-    exit_message 1 "Keystore directory not found" | tee -a "$LOG_FILE"
+  if [[ -n "$original_user" ]]; then
+    original_home="$(getent passwd "$original_user" | cut -d: -f6)"
   fi
+
+  if [[ -z "$original_home" && -n "${HOME:-}" && "${HOME:-}" != "/root" ]]; then
+    original_home="$HOME"
+  fi
+
+  if [[ -n "$original_home" ]]; then
+    keystore_dir="$original_home/.config/keystore"
+    if [[ -d "$keystore_dir" ]]; then
+      realpath "$keystore_dir"
+      return 0
+    fi
+  fi
+
+  exit_message 1 "Keystore directory not found for user '${original_user:-$(id -un)}' at '${keystore_dir:-<unknown>}'" | tee -a "$LOG_FILE" >&2
+  return 1
 }
 
 get_maven_keystore_file() {
-  if [[ -f "$(realpath "$(get_keystore)"/maven/maven)" ]]; then
-    echo "$(realpath "$(get_keystore)"/maven/maven)"
+  local keystore_dir
+  if ! keystore_dir="$(get_keystore)"; then
+    return 1
+  fi
+
+  if [[ -f "$keystore_dir/maven/maven" ]]; then
+    realpath "$keystore_dir/maven/maven"
   else
-    exit_message 1 "Keystore file not found. Please create a .env or $(get_keystore)/maven/maven file with the following format: \n\
+    exit_message 1 "Keystore file not found. Please create a .env or ${keystore_dir}/maven/maven file with the following format: \n\
     OSSRH_USERNAME=<your-maven-username>\n\
     OSSRH_PASSWORD=<your-maven-password>\n\
-    OSSRH_BASE64=<your-maven-username:password-base64>" | tee -a "$LOG_FILE"
+    OSSRH_BASE64=<your-maven-username:password-base64>" | tee -a "$LOG_FILE" >&2
+    return 1
   fi
 }
 
 get_maven_username() {
-  local keystore="$(get_maven_keystore_file)"
+  local keystore
+  if ! keystore="$(get_maven_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local maven_username=$(grep '^OSSRH_USERNAME=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$maven_username" ]]; then
@@ -7251,7 +7285,10 @@ get_maven_username() {
 }
 
 get_maven_password() {
-  local keystore="$(get_maven_keystore_file)"
+  local keystore
+  if ! keystore="$(get_maven_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local maven_password=$(grep '^OSSRH_PASSWORD=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$maven_password" ]]; then
@@ -7264,7 +7301,10 @@ get_maven_password() {
 }
 
 get_maven_base64() {
-  local keystore="$(get_maven_keystore_file)"
+  local keystore
+  if ! keystore="$(get_maven_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local maven_base64=$(grep '^OSSRH_BASE64=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$maven_base64" ]]; then
@@ -7277,21 +7317,33 @@ get_maven_base64() {
 }
 
 get_keystore_file() {
+  local keystore_dir
   if [[ -f .env ]]; then
     echo ".env"
-  elif [[ -f "$(realpath "$(get_keystore)"/github)" ]]; then
-    echo "$(realpath "$(get_keystore)"/github)"
+    return 0
+  fi
+
+  if ! keystore_dir="$(get_keystore)"; then
+    return 1
+  fi
+
+  if [[ -f "$keystore_dir/github" ]]; then
+    realpath "$keystore_dir/github"
   else
-    exit_message 1 "Keystore file not found. Please create a .env or $(get_keystore)/github file with the following format: \n\
+    exit_message 1 "Keystore file not found. Please create a .env or ${keystore_dir}/github file with the following format: \n\
     GH_TOKEN=<your-github-token>\n\
     GH_TOKEN_CLASSIC=<your-github-token-classic>\n\
     GH_OWNER=<your-github-owner>\n\
-    GH_REPO=<your-github-repo>" | tee -a "$LOG_FILE"
+    GH_REPO=<your-github-repo>" | tee -a "$LOG_FILE" >&2
+    return 1
   fi
 }
 
 get_github_token() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_token=$(grep '^GH_TOKEN=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_token" ]]; then
@@ -7304,7 +7356,10 @@ get_github_token() {
 }
 
 get_github_token_classic() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_token=$(grep '^GH_TOKEN_CLASSIC=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_token" ]]; then
@@ -7317,7 +7372,10 @@ get_github_token_classic() {
 }
 
 get_github_repo() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_repo=$(grep '^GH_REPO=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_repo" ]]; then
@@ -7330,7 +7388,10 @@ get_github_repo() {
 }
 
 get_github_owner() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_owner=$(grep '^GH_OWNER=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_owner" ]]; then
