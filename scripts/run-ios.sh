@@ -2506,7 +2506,11 @@ build_libshine() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--enable-static --disable-shared --host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\""
   sed -i'.bak' -E 's/void shine_mdct_initialise.*/void shine_mdct_initialise(shine_global_config *config);/' "$src_dir/$lib/src/lib/l3mdct.h"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
