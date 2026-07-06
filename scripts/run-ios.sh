@@ -3966,7 +3966,12 @@ build_sphinxbase() {
   export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
   export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework CoreFoundation"
   touch "no.autogen"
-  generic_configure "--enable-static \
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" \
+--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
@@ -4015,7 +4020,12 @@ build_pocketsphinx() {
   export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
   export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework CoreFoundation"
   touch "no.autogen"
-  generic_configure "--enable-static \
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" \
+--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
