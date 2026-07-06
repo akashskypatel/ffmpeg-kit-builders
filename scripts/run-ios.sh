@@ -3227,6 +3227,11 @@ all_platforms="${all_platforms} arm64-iphonesimulator-gcc"' "$src_dir/$lib/confi
     -e "s/IOS_VERSION_MIN=\"8.0\"/IOS_VERSION_MIN=\"${MIN_IOS_VERSION}\"/g" \
     -e "s/IOS_VERSION_MIN=\"7.0\"/IOS_VERSION_MIN=\"${MIN_IOS_VERSION}\"/g" \
     "$src_dir/$lib/build/make/configure.sh"
+  sed -i'.bak' \
+    -e 's/[[:space:]]*check_add_cflags -fembed-bitcode/:/' \
+    -e '/check_add_asflags -fembed-bitcode/d' \
+    -e '/check_add_ldflags -fembed-bitcode/d' \
+    "$src_dir/$lib/build/make/configure.sh"
   touch "no.autoreconf"
   do_configure "$config --target=$vpx_target" # fno for Error: invalid register for .seh_savexmm
   # disable_nonessential "$src_dir/$lib"
