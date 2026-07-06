@@ -1608,9 +1608,11 @@ build_libffi() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  get_config_sub "$src_dir/$lib"
-  get_config_guess "$src_dir/$lib"
-  generic_configure "--disable-multi-os-directory"
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--disable-multi-os-directory --host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
