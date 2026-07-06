@@ -2292,6 +2292,8 @@ build_libexpat() {
   find "$src_dir/$lib/expat" -type f -name configure -exec sed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
+  get_config_sub "$src_dir/$lib/expat/conftools"
+  get_config_guess "$src_dir/$lib/expat/conftools"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
