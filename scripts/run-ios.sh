@@ -670,7 +670,11 @@ build_libaribb24() {
   local repo="https://github.com/nkoriyama/aribb24"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  generic_configure "LIBS=\"-lpng16\""
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" LIBS=\"-lpng16\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
