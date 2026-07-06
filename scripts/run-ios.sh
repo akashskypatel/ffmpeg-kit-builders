@@ -3160,7 +3160,11 @@ build_libtwolame() {
     sed -i'.bak' "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
   touch "no.autogen"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared"
   find . -name "Makefile" -exec sed -i'.bak' 's/-std=gnu23/-std=gnu99/g' {} +
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
