@@ -767,7 +767,11 @@ build_libbs2b() {
   export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include"
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib"
   get_config_sub "$src_dir/$lib/build-aux"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if isiossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags
