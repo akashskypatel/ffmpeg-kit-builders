@@ -4332,6 +4332,12 @@ build_libopencolorio() {
   local repo_ver="v2.5.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  sed -i.bak \
+    's/find_package(expat ${expat_FIND_VERSION} CONFIG QUIET)/if(NOT APPLE)\
+        find_package(expat ${expat_FIND_VERSION} CONFIG QUIET)\
+    endif()/' \
+    share/cmake/modules/Findexpat.cmake
   change_dir "$src_dir/$lib/build" 1
   export LDFLAGS="$LDFLAGS"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
@@ -4340,6 +4346,12 @@ build_libopencolorio() {
   -DOCIO_BUILD_TESTS=OFF \
   -DOCIO_BUILD_GPU_TESTS=OFF \
   -DOCIO_BUILD_PYTHON=OFF \
+  -DZLIB_USE_STATIC_LIBS=ON \
+  -DZLIB_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_STATIC_LIBRARY=ON \
+  -Dexpat_LIBRARY=\"$dependency_install_prefix/lib/libexpat.a\" \
+  -Dexpat_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
   -DOCIO_INSTALL_EXT_PACKAGES=\"MISSING\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"

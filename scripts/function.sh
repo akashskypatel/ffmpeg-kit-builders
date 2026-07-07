@@ -1104,6 +1104,18 @@ setup_tvos_environment() {
     configure_apple_pkg_config_environment
 
     apply_apple_homebrew_environment
+    
+    if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
+        export PATH="${HOME}/.cargo/bin:$PATH"
+    fi
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+        # shellcheck source=/dev/null
+        source "${HOME}/.cargo/env"
+    fi
+    if ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$host_arch"
+        [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
+    fi
 
     reset_cross_vars
 
@@ -2905,6 +2917,7 @@ do_cargo_install() {
   local touch_prefix="${host_name}${touch_postfix}already_cargo"
 	local touch_name=$(get_small_touchfile_name "${touch_prefix}_install" "cargo install $extra_install_args")
   local src_touch="$(validate_path "$host_touch")"
+  local cargo_home_dir="${CARGO_HOME:-${HOME}/.cargo}"
   [[ ! -f "$src_touch" ]] && echo -e "INFO: $src_touch not found during do_cargo_install()" >>"$LOG_FILE"
 	if truthy "$build_force" || [[ ! -f "$src_touch" ]]; then
     echo -e "INFO: Force requested in do_cargo_install(): build_force: $build_force" >>"$LOG_FILE"
@@ -2914,6 +2927,11 @@ do_cargo_install() {
     echo "INFO: (Re-)do_cargo_install() because $touch_name not found with \"cargo install $extra_install_args\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_install"*
     ensure_rust_target_ready "$rust_target"
+    prepend_path_once "${cargo_home_dir}/bin"
+    if ! command -v cargo-cinstall >/dev/null 2>&1; then
+      echo -e "INFO: cargo-cinstall not found. Installing cargo-c..." >>"$LOG_FILE"
+      cargo install --locked cargo-c > >(redirect_output) 2>&1 || exit_message 1 "do_cargo_install: failed to install cargo-c"
+    fi
     local cargo_cmd
     cargo_cmd="$(cargo_command_for_target "$rust_target")"
     export RUSTFLAGS+=" -C relocation-model=pic"

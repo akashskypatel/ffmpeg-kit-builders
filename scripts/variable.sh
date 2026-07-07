@@ -172,6 +172,7 @@ CONFIG_AUDIO_EXTRA="\
 # Cross-Platform Audio Focused NON-FREE
 CONFIG_AUDIO_NON_FREE="\
 --enable-libfdk-aac \
+--enable-libsvtjpegxs \
 --enable-audiotoolbox"
 
 # Cross-platform Video Focused
@@ -200,7 +201,6 @@ CONFIG_VIDEO="\
 --enable-liboapv \
 --enable-libopenh264 \
 --enable-libopenjpeg \
---enable-libsvtjpegxs \
 --enable-libopencolorio \
 --enable-librav1e \
 --enable-librsvg \
