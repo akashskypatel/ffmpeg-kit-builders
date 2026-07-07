@@ -4742,7 +4742,8 @@ configure_ffmpeg() {
     # SVT-JPEGXS is not supported on arm architectures
     config_options+=" --disable-libsvtjpegxs"
   fi
-  truthy "$enable_libopencolorio" && config_options+=" --enable-libopencolorio"       # enable OpenColorIO code [autodetect]
+  truthy "$enable_libopencolorio" && { config_options+=" --enable-libopencolorio" \
+  && add_extra_libs "-lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"; }                                                # enable OpenColorIO code [autodetect]
   truthy "$enable_libmpeghdec" && config_options+=" --enable-libmpeghdec"             # enable MPEG-H 3D Audio decoder code [autodetect]
   if truthy "$enable_opengl" && ismacos ; then
     add_extra_libs "-framework OpenGL -framework CoreVideo"
