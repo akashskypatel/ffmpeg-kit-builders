@@ -6,7 +6,7 @@ on:
       target_platforms:
         description: "Comma-separated target platforms this runner can build"
         required: true
-        default: "ios,iphonesimulator,macos"
+        default: "ios,iphonesimulator,macos,appletvos,appletvsimulator"
         type: string
       target_archs:
         description: "Comma-separated target architectures to try for each selected platform"
@@ -44,7 +44,7 @@ jobs:
       WORKFLOW_BUILD_ONLY: ${{ inputs.build_only }}
       WORKFLOW_TARGET_PLATFORMS: ${{ inputs.target_platforms }}
       WORKFLOW_TARGET_ARCHS: ${{ inputs.target_archs }}
-      RUNNER_WORKFLOW_TARGET_PLATFORMS: "ios,iphonesimulator,macos"
+      RUNNER_WORKFLOW_TARGET_PLATFORMS: "ios,iphonesimulator,macos,appletvos,appletvsimulator"
     steps:
       - name: Install Bash
         shell: bash

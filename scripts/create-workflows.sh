@@ -491,4 +491,4 @@ rm -f \
 	"$WORKFLOW_DIR/build_all_iphonesimulator.yaml"
 
 write_linux_orchestrator "linux" "linux,windows,android" "x86_64,aarch64,armv7a"
-write_macos_orchestrator "macos" "ios,iphonesimulator,macos" "x86_64,aarch64"
+write_macos_orchestrator "macos" "ios,iphonesimulator,macos,appletvos,appletvsimulator" "x86_64,aarch64"
