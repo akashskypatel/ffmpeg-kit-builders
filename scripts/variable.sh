@@ -143,7 +143,6 @@ CONFIG_AUDIO="\
 --enable-liblc3 \
 --enable-libmodplug \
 --enable-libmp3lame \
---enable-libmpeghdec \
 --enable-libopencore-amrnb \
 --enable-libopencore-amrwb \
 --enable-libopenmpt \
@@ -172,7 +171,7 @@ CONFIG_AUDIO_EXTRA="\
 # Cross-Platform Audio Focused NON-FREE
 CONFIG_AUDIO_NON_FREE="\
 --enable-libfdk-aac \
---enable-libsvtjpegxs \
+--enable-libmpeghdec \
 --enable-audiotoolbox"
 
 # Cross-platform Video Focused
@@ -201,6 +200,7 @@ CONFIG_VIDEO="\
 --enable-liboapv \
 --enable-libopenh264 \
 --enable-libopenjpeg \
+--enable-libsvtjpegxs \
 --enable-libopencolorio \
 --enable-librav1e \
 --enable-librsvg \
