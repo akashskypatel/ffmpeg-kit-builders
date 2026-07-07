@@ -52,8 +52,8 @@ while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # Parse arguments
 # VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
-VALID_XCF_PLATFORMS=("ios" "macos")
-VALID_XCF_PLATFORM_ARCHS=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
+VALID_XCF_PLATFORMS=("ios" "macos" "appletvos")
+VALID_XCF_PLATFORM_ARCHS=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64" "appletvos-aarch64" "appletvsimulator-aarch64")
 # VALID_LICENSES=("lgpl" "gpl")
 # VALID_SMALL_FLAGS=("small" "")
 REMOTE_RELEASE=true
@@ -112,6 +112,14 @@ parse_platforms() {
             fi
           done
         fi
+        # add appletvsimulator if platform is appletvos — store with 'sim:' prefix to avoid dedup with appletvos archs
+        if [[ "$p" == "appletvos" ]]; then
+          for valid_pa in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
+            if [[ "${valid_pa}" == "appletvsimulator-"* ]]; then
+              _add_platform_arch "appletvos" "sim:${valid_pa#*-}"
+            fi
+          done
+        fi
         break
       fi
     done
@@ -132,6 +140,11 @@ parse_platforms() {
     # Map iphonesimulator to 'ios' platform key with 'sim:' prefix for combined XCFramework
     if [[ "$plat" == "iphonesimulator" ]]; then
       plat="ios"
+      arch="sim:${arch}"
+    fi
+    # Map appletvsimulator to 'appletvos' platform key with 'sim:' prefix for combined XCFramework
+    if [[ "$plat" == "appletvsimulator" ]]; then
+      plat="appletvos"
       arch="sim:${arch}"
     fi
     _add_platform_arch "${plat}" "${arch}"
@@ -451,6 +464,9 @@ create_xcframework() {
     local actual_platform="${target_platform}"
     if [[ "${target_platform}" == "ios" && "$is_simulator" == true ]]; then
       actual_platform="iphonesimulator"
+    fi
+    if [[ "${target_platform}" == "appletvos" && "$is_simulator" == true ]]; then
+      actual_platform="appletvsimulator"
     fi
 
     local ffmpeg_kit_dir="$(get_ffmpeg_kit_dir "${actual_platform}" "${clean_arch}" "${bundle}" "${license}" "${small}")"
@@ -854,7 +870,7 @@ for arg; do
       create_release=true
       shift;;
     --help)
-      echo "Usage: $0 [--platform=ios-aarch64,iphonesimulator-aarch64,macos-aarch64,macos-x86_64] [--bundle=base,audio,video,video_hw,full,debug] [--license=gpl,lgpl] [--reset] [--help]"
+      echo "Usage: $0 [--platform=ios-aarch64,iphonesimulator-aarch64,macos-aarch64,macos-x86_64,appletvos-aarch64,appletvsimulator-aarch64] [--bundle=base,audio,video,video_hw,full,debug] [--license=gpl,lgpl] [--reset] [--help]"
       echo ""
       echo "Options:"
       echo "  --platform=*        Comma separated (without spaces) list of platforms or platform-arch pairs."
@@ -864,6 +880,7 @@ for arg; do
       echo "                      Valid platforms (expands to all archs): ${VALID_XCF_PLATFORMS[*]}"
       echo "                      Valid platform-arch combinations:       ${VALID_XCF_PLATFORM_ARCHS[*]}"
       echo "                      Note: iphonesimulator is automatically added when ios is specified"
+      echo "                      Note: appletvsimulator is automatically added when appletvos is specified"
       echo "  --bundle=*          Comma separated (without spaces) list of bundles to build"
       echo "                      Valid bundles: ${VALID_TYPES[*]}"
       echo "  --license=*         Comma separated (without spaces) list of licenses to build"
