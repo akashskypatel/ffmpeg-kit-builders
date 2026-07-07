@@ -375,7 +375,7 @@ jobs:
             fi
 
             case "\$platform" in
-              ios|iphonesimulator|macos)
+              ios|iphonesimulator|macos|appletvos|appletvsimulator)
                 "\${GITHUB_WORKSPACE}/scripts/toolchain/setup-apple-rust.sh" "\$platform" "\$arch"
                 ;;
             esac
