@@ -64,6 +64,12 @@ rust_target_for_combo() {
     iphonesimulator-aarch64)
       echo "aarch64-apple-ios-sim"
       ;;
+    appletvos-aarch64)
+      echo "aarch64-apple-tvos"
+      ;;
+    appletvsimulator-aarch64)
+      echo "aarch64-apple-tvos-sim"
+      ;;
     macos-aarch64)
       echo "aarch64-apple-darwin"
       ;;
@@ -85,12 +91,23 @@ apply_apple_rust_environment
 
 rust_target="$(rust_target_for_combo "${combo}")"
 
-if rust_target_installed "${rust_target}"; then
-  echo "Rust target ${rust_target} already installed for ${combo}."
-  rustup target list --installed | grep -x "${rust_target}"
+if [[ "${combo}" == appletvos-* || "${combo}" == appletvsimulator-* ]]; then
+  rustup toolchain install nightly
+  rustup component add rust-src --toolchain nightly
+  if rust_target_installed "${rust_target}"; then
+    echo "Rust target ${rust_target} already installed for ${combo}."
+    rustup target list --installed | grep -x "${rust_target}"
+  else
+    rustup target add "${rust_target}" --toolchain nightly || true
+  fi
 else
-  rustup target add "${rust_target}"
-  rustup target list --installed | grep -x "${rust_target}"
+  if rust_target_installed "${rust_target}"; then
+    echo "Rust target ${rust_target} already installed for ${combo}."
+    rustup target list --installed | grep -x "${rust_target}"
+  else
+    rustup target add "${rust_target}"
+    rustup target list --installed | grep -x "${rust_target}"
+  fi
 fi
 
 if ! cargo cinstall --version >/dev/null 2>&1; then

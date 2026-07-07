@@ -204,8 +204,8 @@ copy_path() {
 	fi
 
 	# Update permissions on the copied path
-  execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
-    chmod -R a+rwx "$path"
+  execute "INFO: updating path permissions: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "true" \
+    chmod -R a+rwx "$destination_path"
 }
 
 # 1. skip_if_missing
@@ -425,6 +425,35 @@ run_toolchain_setup() {
 rust_target_installed() {
     local target="$1"
     command -v rustup >/dev/null 2>&1 && rustup target list --installed 2>/dev/null | grep -qx "$target"
+}
+
+rust_requires_build_std() {
+    case "${1:-$rust_target}" in
+        aarch64-apple-tvos|aarch64-apple-tvos-sim)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+ensure_rust_target_ready() {
+    local target="${1:-$rust_target}"
+    if rust_requires_build_std "$target"; then
+        rustup toolchain install nightly > >(redirect_output) 2>&1 || exit_message 1 "ensure_rust_target_ready: could not install nightly rust toolchain"
+        rustup component add rust-src --toolchain nightly > >(redirect_output) 2>&1 || exit_message 1 "ensure_rust_target_ready: could not install rust-src for nightly"
+        rustup target add "$target" --toolchain nightly > >(redirect_output) 2>&1 || true
+    else
+        rustup target add "$target" > >(redirect_output) 2>&1 || exit_message 1 "ensure_rust_target_ready: could not install rust target $target"
+    fi
+}
+
+cargo_command_for_target() {
+    local target="${1:-$rust_target}"
+    if rust_requires_build_std "$target"; then
+        echo "cargo +nightly -Z build-std=std,panic_abort"
+    else
+        echo "cargo"
+    fi
 }
 
 prepend_path_once() {
@@ -2849,10 +2878,12 @@ do_cargo_build() {
     echo "INFO: (Re-)do_cargo_build() because $touch_name not found with \"cargo build $extra_build_args\"." >>"$LOG_FILE"
     reset_touch "$cur_dir2" "${touch_prefix}*.touch"
     { cargo clean --release >>"$LOG_FILE" 2>&1 || true; }
+    ensure_rust_target_ready "$rust_target"
+    local cargo_cmd
+    cargo_cmd="$(cargo_command_for_target "$rust_target")"
     export RUSTFLAGS+=" -C relocation-model=pic"
-		echo -e "INFO: Running cargo build with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"cargo build --target $rust_target $extra_build_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-    rustup target add $rust_target > >(redirect_output) 2>&1
-		cargo build --target "$rust_target" $extra_build_args > >(redirect_output) 2>&1 || {
+		echo -e "INFO: Running cargo build with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cargo_cmd} build --target $rust_target $extra_build_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+		eval "${cargo_cmd} build --target \"$rust_target\" $extra_build_args" > >(redirect_output) 2>&1 || {
 			exit_message 1 "do_cargo_build: failed cargo build with $extra_build_args\n see $LOG_FILE for more details"
 		}
 		create_touch_file 0 "$touch_name"
@@ -2882,10 +2913,13 @@ do_cargo_install() {
 	if [ ! -f "$touch_name" ]; then
     echo "INFO: (Re-)do_cargo_install() because $touch_name not found with \"cargo install $extra_install_args\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_install"*
+    ensure_rust_target_ready "$rust_target"
+    local cargo_cmd
+    cargo_cmd="$(cargo_command_for_target "$rust_target")"
     export RUSTFLAGS+=" -C relocation-model=pic"
 		echo -e "INFO: Running cargo install cargo-c" >>"$LOG_FILE"
-    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"cargo cinstall --prefix=$dependency_install_prefix --target $rust_target $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-    cargo cinstall --prefix="$dependency_install_prefix" --target "$rust_target" $extra_install_args > >(redirect_output) 2>&1 || {
+    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cargo_cmd} cinstall --prefix=$dependency_install_prefix --target $rust_target $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+    eval "${cargo_cmd} cinstall --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args" > >(redirect_output) 2>&1 || {
 			exit_message 1 "do_cargo_install: failed cargo cinstall with $extra_install_args\n see $LOG_FILE for more details"
 		}
 		create_touch_file 0 "$touch_name"
@@ -3034,13 +3068,20 @@ get_config_guess() {
 is_valid_config_script() {
   local file_path="$1"
   [[ -s "$file_path" ]] || return 1
-  head -n 1 "$file_path" | grep -Eq '^#![[:space:]]*/bin/sh' || return 1
+  head -n 1 "$file_path" | grep -Eq '^#![[:space:]]*/bin/(sh|bash)' || return 1
   grep -q "timestamp='" "$file_path" || return 1
+}
+
+is_valid_shell_script() {
+  local file_path="$1"
+  [[ -s "$file_path" ]] || return 1
+  head -n 1 "$file_path" | grep -Eq '^#![[:space:]]*/bin/(sh|bash)' || return 1
 }
 
 download_config_script() {
   local url="$1"
   local output_path="$2"
+  local validation_mode="${3:-config}"
   local tmp_path="${output_path}.tmp"
 
   rm -f "$tmp_path"
@@ -3049,11 +3090,15 @@ download_config_script() {
     return 1
   }
 
-  if ! is_valid_config_script "$tmp_path"; then
+  if [[ "$validation_mode" == "shell" ]]; then
+    is_valid_shell_script "$tmp_path"
+  else
+    is_valid_config_script "$tmp_path"
+  fi || {
     echo "WARNING: download_config_script: invalid response for $url" >>"$LOG_FILE"
     rm -f "$tmp_path"
     return 1
-  fi
+  }
 
   mv "$tmp_path" "$output_path"
 }
@@ -3478,6 +3523,11 @@ generic_cmake() {
   [[ "$extra_args" != *"-DCMAKE_SYSTEM_NAME"* ]] && extra_args+=" -DCMAKE_SYSTEM_NAME=iOS"
   [[ "$extra_args" != *"-DCMAKE_OSX_ARCHITECTURES"* ]] && extra_args+=" -DCMAKE_OSX_ARCHITECTURES=$host_arch"
   [[ "$extra_args" != *"-DCMAKE_OSX_DEPLOYMENT_TARGET"* ]] && extra_args+=" -DCMAKE_OSX_DEPLOYMENT_TARGET=$MIN_IOS_VERSION"
+  [[ "$extra_args" != *"-DCMAKE_OSX_SYSROOT"* ]] && extra_args+=" -DCMAKE_OSX_SYSROOT=$(xcrun --sdk "$toolchain_sys" --show-sdk-path)"
+  elif istvos; then
+  [[ "$extra_args" != *"-DCMAKE_SYSTEM_NAME"* ]] && extra_args+=" -DCMAKE_SYSTEM_NAME=tvOS"
+  [[ "$extra_args" != *"-DCMAKE_OSX_ARCHITECTURES"* ]] && extra_args+=" -DCMAKE_OSX_ARCHITECTURES=$host_arch"
+  [[ "$extra_args" != *"-DCMAKE_OSX_DEPLOYMENT_TARGET"* ]] && extra_args+=" -DCMAKE_OSX_DEPLOYMENT_TARGET=$MIN_TVOS_VERSION"
   [[ "$extra_args" != *"-DCMAKE_OSX_SYSROOT"* ]] && extra_args+=" -DCMAKE_OSX_SYSROOT=$(xcrun --sdk "$toolchain_sys" --show-sdk-path)"
   else
   [[ "$extra_args" != *"-DCMAKE_SYSTEM_NAME"* ]] && extra_args+=" -DCMAKE_SYSTEM_NAME=${host_platform^}"
@@ -4190,10 +4240,12 @@ run_valid_build_functions() {
     fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
-    if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
-      echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
-      mark_as_built "$step_name"
-      continue
+    if ! truthy "$build_force"; then
+      if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
+        echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
+        mark_as_built "$step_name"
+        continue
+      fi
     fi
     sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
     run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See $LOG_FILE for details"

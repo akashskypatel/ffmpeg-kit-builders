@@ -348,6 +348,12 @@ CONFIG_AUTODETECT="\
 --disable-securetransport \
 --disable-videotoolbox"
 
+CONFIG_TVOS_UNSUPPORTED=" \
+--disable-frei0r \
+--disable-liblensfun \
+--disable-librsvg \
+--disable-pocketsphinx"
+
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
 # build_mediacodec        # config_options+= --disable-mediacodec         # Video  # enable Android MediaCodec support [no]
 # build_ohcodec           # config_options+= --disable-ohcodec            # Video  # enable OpenHarmony Codec support [no]

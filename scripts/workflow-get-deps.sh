@@ -56,6 +56,9 @@ case "$platform" in
 	iphonesimulator)
 		deps_platform="ios"
 		;;
+    appletvsimulator)
+        deps_platform="appletvos"
+        ;;
 	*)
 		deps_platform="$platform"
 		;;

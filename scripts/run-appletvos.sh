@@ -366,6 +366,7 @@ build_zlib() {
   change_dir "$src_dir"
   [[ -f "$dependency_install_prefix/lib/libzlibstatic.a" ]] && mv -f "$dependency_install_prefix/lib/libzlibstatic.a" "$dependency_install_prefix/lib/libz.a"
   [[ -f "$dependency_install_prefix/lib/libzlib.so" ]] && rm -f "$dependency_install_prefix/lib/libzlib.so"
+  return 0
 }
 # build_libvo_amrwbenc    # config_options+= --enable-libvo-amrwbenc      # enable AMR-WB encoding via libvo-amrwbenc [no]
 build_libvo_amrwbenc() {
@@ -374,7 +375,11 @@ build_libvo_amrwbenc() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -386,7 +391,11 @@ build_libopencore_amrnb() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -426,8 +435,10 @@ build_fftw() {
   local repo="http://fftw.org/fftw-3.3.10.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$lib"
-  generic_configure "--disable-doc --enable-static --disable-shared --enable-pic"
+  change_dir "$src_dir/$lib/build" 1
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -454,22 +465,6 @@ build_chromaprint() {
   do_make_and_make_install
   change_dir "$src_dir"
   add_libs_to_pkg -t="$install_pkgconfig_dir/libchromaprint.pc" -l="-lfftw3"
-}
-# build_frei0r            # config_options+= --enable-frei0r              # enable frei0r video filtering [no]
-build_frei0r() {
-  # https://github.com/dyne/frei0r
-  local lib="frei0r"
-  local repo="https://github.com/dyne/frei0r"
-  local repo_ver="v2.5.1"
-  local CAIRO_LIBS=$(pkg-config --libs --static cairo)
-  export LDFLAGS="$LDFLAGS $CAIRO_LIBS -lpixman-1 -lpng -lfontconfig -lfreetype -lcairo -framework CoreFoundation -framework CoreGraphics -framework CoreText"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib/build" 1
-  do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWITHOUT_OPENCV=1"
-  disable_nonessential "$src_dir/$lib/build"
-  do_make_and_make_install
-  change_dir "$src_dir"
 }
 build_libgpg_error() {
   # https://github.com/gpg/libgpg-error
@@ -639,8 +634,10 @@ build_libpng() {
   export CPPFLAGS=" $CPPFLAGS -I${dependency_install_prefix}/include"
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -lz"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  sed -i'.bak' 's/^if(UNIX$/if(UNIX OR APPLE/' "$src_dir/$lib/CMakeLists.txt"
   change_dir "$src_dir/$lib/build" 1
-  local cmake_args="-DPNG_STATIC=ON \
+  local cmake_args="-DPNG_SHARED=OFF \
+-DPNG_STATIC=ON \
 -DPNG_TESTS=OFF \
 -DPNG_TOOLS=OFF \
 -DPNG_FRAMEWORK=OFF \
@@ -670,7 +667,11 @@ build_libaribb24() {
   local repo="https://github.com/nkoriyama/aribb24"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  generic_configure "LIBS=\"-lpng16\""
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" LIBS=\"-lpng16\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -753,7 +754,11 @@ build_libbs2b() {
   export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include"
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib"
   get_config_sub "$src_dir/$lib/build-aux"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags
@@ -772,7 +777,11 @@ build_libcaca() {
   change_dir "$src_dir/$lib"
   sed -i'.bak' 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
   apply_patch "$PATCHDIR/caca_dither_c.patch"
-  generic_configure "--libdir=$dependency_install_prefix/lib \
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --libdir=$dependency_install_prefix/lib \
 --disable-csharp \
 --disable-java  \
 --disable-python \
@@ -1191,8 +1200,9 @@ build_libharfbuzz() {
   change_dir "$src_dir/$lib"
   local meson_options="-Dglib=disabled \
 -Dcoretext=enabled \
--Dgobject=enabled \
--Dcairo=enabled \
+-Dgobject=disabled \
+-Dglib=disabled \
+-Dcairo=disabled \
 -Dicu=disabled \
 -Dtests=disabled \
 -Dintrospection=disabled \
@@ -1356,7 +1366,11 @@ build_libklvanc() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   touch "no.autogen"
-  generic_configure "--enable-static \
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static \
 --disable-shared \
 --disable-examples"
 cat > "$install_pkgconfig_dir/libklvanc.pc" <<EOF
@@ -1455,6 +1469,8 @@ build_iconv() {
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -fPIC"
   export CXXFLAGS="$CXXFLAGS -fPIC"
+  local iconv_shim_c="$src_dir/$lib/iconv-compat.c"
+  local iconv_shim_o="$src_dir/$lib/iconv-compat.o"
   if istvossimulator; then
   get_config_sub "$src_dir/$lib/build-aux"
   get_config_guess "$src_dir/$lib/build-aux"
@@ -1471,30 +1487,11 @@ build_iconv() {
 --with-libintl-prefix=${dependency_install_prefix} \
 CFLAGS=\"$CFLAGS\"" "" "full"
   do_make_and_make_install "" "" "full"
-  cat > "$src_dir/$lib/iconv-compat.c" <<'EOF'
-#include <stddef.h>
-
-typedef void *iconv_t;
-
-extern iconv_t libiconv_open(const char *tocode, const char *fromcode);
-extern size_t libiconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft);
-extern int libiconv_close(iconv_t cd);
-
-iconv_t iconv_open(const char *tocode, const char *fromcode) {
-  return libiconv_open(tocode, fromcode);
-}
-
-size_t iconv(iconv_t cd, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft) {
-  return libiconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
-}
-
-int iconv_close(iconv_t cd) {
-  return libiconv_close(cd);
-}
-EOF
-  "$CC" $CFLAGS -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o"
-  ar -q "$dependency_install_prefix/lib/libiconv.a" "$src_dir/$lib/iconv-compat.o"
-  ranlib "$dependency_install_prefix/lib/libiconv.a"
+  copy_path "$PATCHDIR/iconv_shim.c" "$iconv_shim_c"
+  # shellcheck disable=2086
+  "$CC" $CFLAGS -c "$iconv_shim_c" -o "$iconv_shim_o" > >(redirect_output) || exit_message 1 "build_iconv: could not compile simulator iconv shim"
+  ar -q "$dependency_install_prefix/lib/libiconv.a" "$iconv_shim_o" > >(redirect_output) || exit_message 1 "build_iconv: could not append simulator iconv shim to libiconv.a"
+  ranlib "$dependency_install_prefix/lib/libiconv.a" > >(redirect_output) || exit_message 1 "build_iconv: could not ranlib simulator libiconv.a"
   remove_path -f "$dependency_install_prefix/include/iconv.h"
   cat > "$install_pkgconfig_dir/iconv.pc" << EOF
 prefix=$dependency_install_prefix
@@ -1523,14 +1520,12 @@ build_gettext() {
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
-  touch "no.autoreconf"
   local cflags="$CFLAGS -Dlibintl_STATIC -D_GNU_SOURCE -std=gnu11 -I$(xcrun --sdk macosx --show-sdk-path)/usr/include"
   export CFLAGS=$cflags
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-included-libintl \
 --without-libintl-prefix \
---without-libiconv-prefix \
 --with-included-gettext \
 --enable-static \
 --disable-shared \
@@ -1546,7 +1541,7 @@ am_cv_lib_iconv=yes \
 LIBICONV=-liconv \
 LTLIBICONV=-liconv \
 LIBS=-liconv"
-  find "$src_dir/$lib" -type f -name configure -exec sed -i.bak \
+  find "$src_dir/$lib" -type f -name configure -exec sed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   touch "no.autoreconf"
@@ -1557,8 +1552,14 @@ LIBS=\"-liconv\""
   # disable_nonessential "$src_dir/$lib"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
   MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\" LIBS=\"-liconv\"" "CFLAGS=\"$cflags\" LIBS=\"-liconv\""
+  if istvossimulator; then
+    [[ -f "$src_dir/$lib/gettext-runtime/intl/.libs/libintl.a" ]] && copy_path "$src_dir/$lib/gettext-runtime/intl/.libs/libintl.a" "$dependency_install_prefix/lib/libintl.a"
+    [[ -f "$src_dir/$lib/gettext-runtime/intl/libintl.h" ]] && copy_path "$src_dir/$lib/gettext-runtime/intl/libintl.h" "$dependency_install_prefix/include/libintl.h"
+  fi
   change_dir "$src_dir/$lib/gettext-runtime"
-  MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\" LIBS=\"-liconv\"" "CFLAGS=\"$cflags\" LIBS=\"-liconv\""
+  if ! istvossimulator; then
+    MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\" LIBS=\"-liconv\"" "CFLAGS=\"$cflags\" LIBS=\"-liconv\""
+  fi
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
 exec_prefix=\${prefix}
@@ -1612,11 +1613,12 @@ build_libffi() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
+  touch "no.autoreconf"
   local ffi_host="$host_target"
   if istvossimulator; then
     ffi_host="${host_arch}-apple-darwin"
   fi
-  generic_configure "--disable-multi-os-directory --host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\""
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --disable-multi-os-directory"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1642,81 +1644,6 @@ BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/CMakeLists.txt"
   do_make_and_make_install
   change_dir "$src_dir"
 }
-build_glib() {
-  # run_valid_function "build_libffi"
-  # run_valid_function "build_pcre2"
-  activate_meson
-  local lib="glib"
-  local repo="https://github.com/GNOME/glib"
-  local repo_ver="5e14886ca7c3f4ed270a336018c1573e97b0e125"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export C_INCLUDE_PATH="${dependency_install_prefix}/include"
-  export LIBRARY_PATH="${dependency_install_prefix}/lib"
-  export PKG_CONFIG_LIBDIR="${dependency_install_prefix}/lib/pkgconfig"
-  export LDFLAGS="$LDFLAGS -lintl -lresolv -framework CoreFoundation"
-  local meson_options="-Dforce_posix_threads=true \
--Dman-pages=disabled \
--Dsysprof=disabled \
--Dglib_debug=disabled \
--Dglib_assert=false \
--Dnls=disabled \
--Dtests=false \
--Dglib_checks=false \
--Dinstalled_tests=false \
--Dxattr=false \
--Dlibmount=disabled \
--Ddtrace=false \
--Dsystemtap=false \
--Dintrospection=disabled \
---includedir=\"${dependency_install_prefix}/include\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${TVOS_SYSROOT}\" \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${TVOS_SYSROOT}\" \
---wrap-mode=nofallback"
-  sed -i'.bak' \
-    -e "s|libiconv = dependency('iconv')|libiconv = declare_dependency(link_args : ['-liconv'])|" \
-    -e "s|libiconv = cc.find_library('iconv', required : true)|libiconv = declare_dependency(link_args : ['-liconv'])|" \
-    "$src_dir/$lib/meson.build"
-  sed -i'.bak' \
-    -e "s|libintl = dependency('intl', required: false)|libintl = declare_dependency(link_args : ['-lintl', '-liconv'])|" \
-    -e "s|if libintl.found() and libintl.type_name() != 'internal'|if libintl.found()|g" \
-    "$src_dir/$lib/meson.build"
-  sed -i'.bak' '/#ifdef HAVE_PIPE2/,/#endif/d' "$src_dir/$lib/glib/glib-unixprivate.h"
-  generic_meson "$meson_options"
-  do_ninja_and_ninja_install
-  sed -i'.bak' 's/-lglib-2.0.*$/-lglib-2.0 -lm -lintl/' "$install_pkgconfig_dir/glib-2.0.pc"
-  change_dir "$src_dir"
-  reset_cflags
-  unset C_INCLUDE_PATH
-  unset LIBRARY_PATH
-  unset PKG_CONFIG_LIBDIR
-}
-# build_liblensfun        # config_options+= --enable-liblensfun          # enable lensfun lens correction [no]
-build_liblensfun() {
-  # run_valid_function "build_glib"
-  local lib="liblensfun"
-  local repo="https://github.com/lensfun/lensfun"
-  local repo_ver="master"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export CPPFLAGS="$CFLAGS $CPPFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include "
-  export CXXFLAGS="$CFLAGS $CXXFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include "
-  generic_cmake "-DCMAKE_BUILD_TYPE=Release \
--DBUILD_STATIC=on \
--DCMAKE_INSTALL_DATAROOTDIR=$dependency_install_prefix \
--DBUILD_TESTS=off \
--DBUILD_DOC=off \
--DINSTALL_HELPER_SCRIPTS=off \
--DINSTALL_PYTHON_MODULE=OFF" "$src_dir/$lib"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  sed -i'.bak' 's/-llensfun/-llensfun -framework CoreText -framework CoreFoundation/' "$install_pkgconfig_dir/lensfun.pc"
-  reset_cppflags
-  reset_cxxflags
-  change_dir "$src_dir"
-}
 # build_libmodplug        # config_options+= --enable-libmodplug          # enable ModPlug via libmodplug [no]
 build_libmodplug() {
   local lib="libmodplug"
@@ -1724,7 +1651,11 @@ build_libmodplug() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
-  generic_configure
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1736,7 +1667,12 @@ build_mpg123() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--disable-programs --with-audio=dummy --with-cpu=aarch64"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --disable-programs --disable-buffer --with-network=none --with-audio=dummy --with-cpu=aarch64" \
+  "ac_cv_func_fork=no ac_cv_func_execvp=no ./Configure"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1817,12 +1753,22 @@ build_libopencv() {
   local repo_ver="4.12.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  sed -i'.bak' \
+    -e 's/if(IOS OR XROS)/if(IOS OR XROS OR CMAKE_SYSTEM_NAME STREQUAL "tvOS")/' \
+    -e 's/if(APPLE AND (NOT IOS) AND (NOT XROS))/if(APPLE AND (NOT IOS) AND (NOT XROS) AND NOT CMAKE_SYSTEM_NAME STREQUAL "tvOS")/' \
+    "$src_dir/$lib/modules/imgcodecs/CMakeLists.txt"
   change_dir "$src_dir/$lib/build" 1
   #export LDFLAGS="$LDFLAGS -L${ffmpeg_install_prefix}/lib -L${dependency_install_prefix}/lib -lsharpyuv -ljbig -llzma -ldeflate -lzstd -ljpeg"
   local original_pkg_path=$PKG_CONFIG_PATH
   export PKG_CONFIG_PATH="$install_pkgconfig_dir"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DWITH_FFMPEG=0 \
+-DWITH_OPENCL=OFF \
+-DHAVE_OPENCL=OFF \
+-DBUILD_OPENCL_STUBS=OFF \
+-DWITH_AVFOUNDATION=OFF \
+-DBUILD_opencv_highgui=OFF \
+-DBUILD_opencv_videoio=OFF \
 -DBUILD_DOCS=OFF \
 -DBUILD_EXAMPLES=OFF \
 -DBUILD_TESTS=OFF \
@@ -1878,9 +1824,7 @@ build_libopenh264() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  if istvossimulator; then
-    sed -i'.bak' "s/'tvos',/'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
-  fi
+  sed -i'.bak' "s/'ios',/'ios', 'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
   local meson_options="-Dtests=disabled"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
@@ -2249,44 +2193,6 @@ build_pixman() {
   do_ninja_and_ninja_install
   change_dir "$src_dir"
 }
-build_cairo() {
-  # run_valid_function "build_libpng"
-  # run_valid_function "build_pixman"
-  # run_valid_function "build_libfontconfig" 1
-  # run_valid_function "build_glib"
-   # https://gitlab.freedesktop.org/cairo/cairo
-  local lib="cairo"
-  local repo="https://gitlab.freedesktop.org/cairo/cairo"
-  local repo_ver="1.18.4"
-  activate_meson
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export CFLAGS="$CFLAGS -DCAIRO_HAS_INT64_T=1"
-  export CXXFLAGS="$CXXFLAGS -DCAIRO_HAS_INT64_T=1"
-  export LDFLAGS="$LDFLAGS -lpthread"
-  export LIBS="-lfontconfig -lfreetype -lpng -lpthread -lbrotlidec -lbrotlicommon -ldl -lstdc++"
-  local meson_options="-Dtests=disabled \
--Dgtk_doc=false \
--Dglib=enabled \
--Dxlib=disabled \
--Dxcb=disabled \
--Dxlib-xcb=disabled \
--Dspectre=disabled \
--Dsymbol-lookup=disabled \
--Dlzo=disabled \
--Dpng=enabled \
--Dfontconfig=enabled \
--Dfreetype=enabled \
--Dtee=enabled \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\" \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\""
-  generic_meson "$meson_options"
-  do_ninja_and_ninja_install
-  change_dir "$src_dir"
-  unset LIBS
-  reset_allflags
-}
 build_libexpat() {
   local lib="libexpat"
   local repo="https://github.com/libexpat/libexpat"
@@ -2303,6 +2209,8 @@ build_libexpat() {
   find "$src_dir/$lib/expat" -type f -name configure -exec sed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
+  get_config_sub "$src_dir/$lib/expat/conftools"
+  get_config_guess "$src_dir/$lib/expat/conftools"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -2315,7 +2223,11 @@ build_libdatrie() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-doxygen-doc"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared --disable-doxygen-doc"
   do_make_and_make_install
   change_dir "$src_dir"
 }
@@ -2328,92 +2240,14 @@ build_libthai() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-doxygen-doc"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared --disable-doxygen-doc"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
-}
-build_pango() {
-  # run_valid_function "build_libharfbuzz" 1
-  # run_valid_function "build_libthai"
-  # run_valid_function "build_libexpat"
-  # run_valid_function "build_xlib" 1
-  # run_valid_function "build_libfribidi" 1
-   # https://gitlab.gnome.org/GNOME/pango
-  local lib="pango"
-  local repo="https://gitlab.gnome.org/GNOME/pango"
-  local repo_ver="1.57.0"
-  activate_meson
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export LIBS="-lfontconfig -lexpat -lfreetype -lbrotlidec -lbrotlicommon -lpng -lz -lbz2 -lintl -liconv -ldl -framework CoreFoundation"
-  export LDFLAGS="$LDFLAGS $LIBS"
-  local meson_options="-Ddocumentation=false \
--Dgtk_doc=false \
--Dman-pages=false \
--Dfontconfig=enabled \
--Dcairo=enabled \
--Dfreetype=enabled \
--Dbuild-testsuite=false \
--Dbuild-examples=false \
--Dintrospection=disabled \
--Dxft=disabled \
--Dc_args=\"-arch $host_arch -I${dependency_install_prefix}/include -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
--Dcpp_args=\"-arch $host_arch -I${dependency_install_prefix}/include -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\" \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\""
-  # disable tools - not needed for ffmpeg
-  sed -i'.bak' "s/subdir('utils')/# subdir('utils')/g" meson.build
-  sed -i'.bak' "s/ApplicationServices/CoreFoundation/g" meson.build
-  generic_meson "$meson_options"
-  do_ninja_and_ninja_install
-  change_dir "$src_dir"
-    unset LIBS
-    reset_allflags
-}
-# build_librsvg           # config_options+= --enable-librsvg             # enable SVG rasterization via librsvg [no]
-build_librsvg() {
-  # run_valid_function "build_pango"
-  activate_meson
-  local lib="librsvg"
-  local repo="https://gitlab.gnome.org/GNOME/librsvg"
-  local repo_ver="2.61.3"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  if istvossimulator; then
-    min_ver="-mtvos-simulator-version-min=$MIN_TVOS_VERSION"
-    target_min="$host_arch-apple-tvos$MIN_TVOS_VERSION-simulator"
-  else
-    min_ver="-mtvos-version-min=$MIN_TVOS_VERSION"
-    target_min="$host_arch-apple-tvos$MIN_TVOS_VERSION"
-  fi
-  local meson_options="-Ddocs=disabled \
--Dintrospection=disabled \
--Dvala=disabled \
--Davif=disabled \
--Dpixbuf-loader=disabled \
--Dtests=false \
--Drsvg-convert=disabled \
--Dtriplet=$rust_target \
--Dc_args=\"-arch $host_arch -I${dependency_install_prefix}/include -target $target_min $min_ver -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
--Dcpp_args=\"-arch $host_arch -I${dependency_install_prefix}/include -target $target_min $min_ver -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -target $target_min $min_ver -lresolv -isysroot ${SDKROOT}\" \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -target $target_min $min_ver -lresolv -isysroot ${SDKROOT}\""
-  generic_meson "$meson_options"
-  do_ninja_and_ninja_install
-  change_dir "$src_dir"
-  add_libs_to_pkg -t="$install_pkgconfig_dir/librsvg-2.0.pc" -p="-lresolv"
-  sed -i'.bak' 's/-lrsvg-2/-lrsvg-2 -framework CoreFoundation/g' "$install_pkgconfig_dir/librsvg-2.0.pc"
-  if [[ $host_arch == "x86_64" ]]; then
-    # png.o always compiles to arm64 for some reason. remove png.o and thin the library
-    if ar t $dependency_install_prefix/lib/librsvg-2.a | grep png.o > /dev/null; then
-      ar d $dependency_install_prefix/lib/librsvg-2.a png.o > >(redirect_output) || exit_message 1 "Failed to remove incorrectly compiled png.o from librsvg-2.a"
-      lipo $dependency_install_prefix/lib/librsvg-2.a -thin x86_64 -output $dependency_install_prefix/lib/librsvg-2.a.thin > >(redirect_output) || exit_message 1 "Failed to thin librsvg-2.a"
-      mv -f $dependency_install_prefix/lib/librsvg-2.a.thin $dependency_install_prefix/lib/librsvg-2.a > >(redirect_output) || exit_message 1 "Failed to replace librsvg-2.a with thin version"
-    fi
-  fi
 }
 # build_librtmp           # config_options+= --enable-librtmp             # enable RTMP[E] support via librtmp [no]
 build_librtmp() {
@@ -2433,7 +2267,7 @@ INC=\"${dependency_install_prefix}/include\" \
 XLDFLAGS=\"$LDFLAGS $LIBS\" \
 prefix=${dependency_install_prefix}"
   disable_nonessential "$src_dir/$lib"
-  do_make_install "SHARED= prefix=${dependency_install_prefix} LDFLAGS=\"$LDFLAGS\""
+  do_make_install "-C librtmp SHARED= prefix=${dependency_install_prefix} LDFLAGS=\"$LDFLAGS\""
   change_dir "$src_dir"
   unset LIBS
 }
@@ -2505,7 +2339,11 @@ build_libshine() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared"
   sed -i'.bak' -E 's/void shine_mdct_initialise.*/void shine_mdct_initialise(shine_global_config *config);/' "$src_dir/$lib/src/lib/l3mdct.h"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -2645,11 +2483,13 @@ build_libssh() {
 -DWITH_EXAMPLES=OFF \
 -DWITH_TESTING=OFF \
 -DWITH_SERVER=OFF \
+-DWITH_EXEC=OFF \
 -DWITH_ZLIB=ON \
 -DWITH_SFTP=ON \
 -DWITH_GSSAPI=OFF \
 -DWITH_NACL=OFF \
 -DWITH_PCAP=OFF \
+-DHAVE_COMPILER__FUNC__=1 \
 -DOPENSSL_INCLUDE_DIR=${dependency_install_prefix}/include \
 -DOPENSSL_LIBRARY=${dependency_install_prefix}/lib/libssl.a \
 -DOPENSSL_CRYPTO_LIBRARY=${dependency_install_prefix}/lib/libcrypto.a \
@@ -2722,7 +2562,7 @@ build_libsvtav1() {
       change_dir "$src_dir/$lib/build" 1
       sed -i'.bak' -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_FULL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_FULL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/Source/App/CMakeLists.txt"
-      do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_CPUINFO=SYSTEM" # -DSVT_AV1_LTO=OFF if fails try adding this
+      do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_CPUINFO=SYSTEM -DENABLE_NEON=ON -DENABLE_NEON_DOTPROD=OFF -DENABLE_NEON_I8MM=OFF -DENABLE_SVE=OFF -DENABLE_SVE2=OFF" # -DSVT_AV1_LTO=OFF if fails try adding this
       disable_nonessential "$src_dir/$lib"
       do_make_and_make_install
           change_dir "$src_dir"
@@ -2811,7 +2651,11 @@ build_libtiff() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests LIBS='-lsharpyuv'"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared --disable-docs --disable-tools --disable-tests LIBS='-lsharpyuv'"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   add_libs_to_pkg -t="$install_pkgconfig_dir/libtiff-4.pc" -l="-ltiff -llzma -ljpeg -lz -ljbig -lwebp -lLerc -lsharpyuv"
@@ -2841,7 +2685,11 @@ build_giflib() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -2858,7 +2706,11 @@ build_libleptonica() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC"
-  generic_configure "--enable-static --disable-shared --disable-programs --disable-tests"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared --disable-programs --disable-tests"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cppflags
@@ -2886,12 +2738,30 @@ build_libarchive() {
   local repo_ver="v3.8.4"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
+  perl -0pi'.bak' -e 's/CHECK_FUNCTION_EXISTS_GLIBC\(pipe HAVE_PIPE\)\nCHECK_FUNCTION_EXISTS_GLIBC\(poll HAVE_POLL\)\nCHECK_FUNCTION_EXISTS_GLIBC\(posix_spawn HAVE_POSIX_SPAWN\)\nCHECK_FUNCTION_EXISTS_GLIBC\(posix_spawnp HAVE_POSIX_SPAWNP\)/CHECK_FUNCTION_EXISTS_GLIBC(pipe HAVE_PIPE)\nCHECK_FUNCTION_EXISTS_GLIBC(poll HAVE_POLL)\nCHECK_FUNCTION_EXISTS_GLIBC(posix_spawn HAVE_POSIX_SPAWN)\nCHECK_FUNCTION_EXISTS_GLIBC(posix_spawnp HAVE_POSIX_SPAWNP)\nif(CMAKE_SYSTEM_NAME STREQUAL "tvOS")\n  set(HAVE_FORK 0)\n  set(HAVE_VFORK 0)\n  set(HAVE_EXECVP 0)\n  set(HAVE_POSIX_SPAWN 0)\n  set(HAVE_POSIX_SPAWNP 0)\nendif()/g' "$src_dir/$lib/CMakeLists.txt"
+  change_dir "$src_dir/$lib/build" 1
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include "
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -L${dependency_install_prefix}/lib/${host_target}"
-  generic_configure "--enable-static \
---disable-shared \
---bindir=$dependency_install_prefix/bin"
+  local cmake_args="-DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+-DENABLE_OPENSSL=OFF \
+-DENABLE_MBEDTLS=OFF \
+-DENABLE_NETTLE=OFF \
+-DENABLE_OPENSSL=OFF \
+-DENABLE_LIBB2=OFF \
+-DENABLE_LZ4=OFF \
+-DENABLE_LZO=OFF \
+-DENABLE_LZMA=OFF \
+-DENABLE_ZSTD=OFF \
+-DENABLE_ZLIB=OFF \
+-DENABLE_BZip2=OFF \
+-DENABLE_ICONV=OFF \
+-DENABLE_TAR=OFF \
+-DENABLE_CPIO=OFF \
+-DENABLE_CAT=OFF \
+-DENABLE_UNZIP=OFF \
+-DENABLE_TEST=OFF \
+-DENABLE_LIBXML2=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags
@@ -3035,7 +2905,11 @@ build_libtesseract() {
   export LDFLAGS="${LDFLAGS} -lleptonica -lz -larchive -ltiff -lpng16 \
         -ljpeg -lgif -lwebpmux -lwebp -lopenjp2 -ljbig -lLerc \
         -lsharpyuv -llzma -lzstd -ldeflate"
-  generic_configure "--disable-openmp \
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --disable-openmp \
 --with-archive \
 --disable-graphics \
 --disable-tessdata-prefix \
@@ -3113,7 +2987,11 @@ build_libtwolame() {
     sed -i'.bak' "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
   touch "no.autogen"
-  generic_configure "--enable-static --disable-shared"
+  local ffi_host="$host_target"
+  if istvossimulator; then
+    ffi_host="${host_arch}-apple-darwin"
+  fi
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared"
   find . -name "Makefile" -exec sed -i'.bak' 's/-std=gnu23/-std=gnu99/g' {} +
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3614,9 +3492,19 @@ build_libzvbi() {
   local lib="libzvbi"
   local repo="https://github.com/zapping-vbi/zvbi"
   local repo_ver="v0.2.44"
+  local iconv_archive="$dependency_install_prefix/lib/libiconv.a"
+  local iconv_shim_c="$src_dir/$lib/iconv-compat.c"
+  local iconv_shim_o="$src_dir/$lib/iconv-compat.o"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  if istvossimulator && ! nm -gU "$iconv_archive" | grep -q ' _iconv$'; then
+    copy_path "$PATCHDIR/iconv_shim.c" "$iconv_shim_c"
+    # shellcheck disable=2086
+    "$CC" $CFLAGS -c "$iconv_shim_c" -o "$iconv_shim_o" > >(redirect_output) || exit_message 1 "build_libzvbi: could not compile simulator iconv shim"
+    ar -q "$iconv_archive" "$iconv_shim_o" > >(redirect_output) || exit_message 1 "build_libzvbi: could not append simulator iconv shim to libiconv.a"
+    ranlib "$iconv_archive" > >(redirect_output) || exit_message 1 "build_libzvbi: could not ranlib simulator libiconv.a"
+  fi
   export LIBS="-lpng -lz -liconv -lm"
   do_autogen "--build-w$bits_target"
   change_dir "$src_dir/$lib"
@@ -3878,19 +3766,78 @@ build_opengl() {
 # build_openssl           # config_options+= --enable-openssl             # enable openssl, needed for https support if gnutls, libtls or mbedtls is not used [no]
 build_openssl() {
   local lib="openssl"
-  # https://github.com/openssl/openssl
   local repo="https://github.com/openssl/openssl"
   local repo_ver="openssl-3.6.0"
+  local jason_phase1_url="https://raw.githubusercontent.com/jasonacox/Build-OpenSSL-cURL/master/openssl/openssl-build-phase1.sh"
+  local jason_phase1_path=""
+  local generated_patch=""
+  local backup_root=""
+  local rel=""
+  local openssl_host="iphoneos-cross"
+  local developer_dir=""
+  local patch_targets=(
+    "apps/speed.c"
+    "apps/lib/http_server.c"
+    "test/drbgtest.c"
+    "crypto/async/arch/async_posix.h"
+    "crypto/ui/ui_openssl.c"
+    "Configure"
+  )
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   install_missing_packages perl-IPC-Cmd perl-Time-Piece
   touch "no.autoreconf"
   unset CROSS_COMPILE
-  local host="tvos64-xcrun"
-  do_configure "$host --release --prefix=$dependency_install_prefix --openssldir=$dependency_install_prefix/ssl --libdir=lib no-shared no-tests no-docs no-demos no-legacy"
+  developer_dir="$(xcode-select -print-path)"
+  export CROSS_TOP="${developer_dir}/Platforms/AppleTVOS.platform/Developer"
+  export CROSS_SDK="AppleTVOS.sdk"
+  export CC="$(xcrun --sdk appletvos --find clang)"
+  export LC_CTYPE=C
+
+  jason_phase1_path="$src_dir/$lib/.openssl-build-phase1.sh"
+  generated_patch="$src_dir/$lib/.tvos-openssl.patch"
+  backup_root="$src_dir/$lib/.tvos-patch-orig"
+
+  download_config_script "$jason_phase1_url" "$jason_phase1_path" "shell"
+  rg -q "Patch Configure to build for tvOS, not iOS" "$jason_phase1_path" || \
+    exit_message 1 "build_openssl: downloaded Jason Cox phase1 script does not contain the expected tvOS patch markers"
+
+  remove_path -f "$generated_patch" "$backup_root"
+  create_dir "$backup_root"
+
+  for rel in "${patch_targets[@]}"; do
+    create_dir "$backup_root/$(dirname "$rel")"
+    cp -f "$rel" "$backup_root/$rel"
+  done
+
+  sed -i'.bak' 's/define HAVE_FORK 1/define HAVE_FORK 0/' "./apps/speed.c"
+  sed -i'.bak' 's/fork()/-1/' "./apps/speed.c"
+  sed -i'.bak' 's/fork()/-1/' "./apps/lib/http_server.c"
+  sed -i'.bak' 's/fork()/-1/' "./test/drbgtest.c"
+  sed -i'.bak' 's/undef NO_FORK/define NO_FORK/' "./crypto/async/arch/async_posix.h"
+  sed -i'.bak' 's/static volatile intr_signal/static volatile int intr_signal/' "./crypto/ui/ui_openssl.c"
+  if grep -q 'D_REENTRANT:iOS' "./Configure"; then
+    sed -i'.bak' 's/D_REENTRANT:iOS/D_REENTRANT:tvOS/' "./Configure"
+  fi
+
+  : > "$generated_patch"
+  for rel in "${patch_targets[@]}"; do
+    if ! cmp -s "$backup_root/$rel" "$rel"; then
+      diff -u "$backup_root/$rel" "$rel" | \
+        sed -e "1s|--- .*|--- a/$rel|" -e "2s|+++ .*|+++ b/$rel|" >> "$generated_patch" || true
+    fi
+    cp -f "$backup_root/$rel" "$rel"
+  done
+
+  [[ -s "$generated_patch" ]] || exit_message 1 "build_openssl: failed to generate tvOS patch from Jason Cox phase1 script"
+  apply_patch "$generated_patch"
+
+  do_configure "$openssl_host --prefix=$dependency_install_prefix --openssldir=$dependency_install_prefix/ssl --libdir=lib no-asm no-shared no-tests no-docs no-demos no-apps no-legacy"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  remove_path -f "$generated_patch" "$backup_root"
+  unset CROSS_TOP CROSS_SDK LC_CTYPE
   change_dir "$src_dir"
   reset_cross_vars
 }
@@ -3928,93 +3875,6 @@ build_bison() {
       change_dir "$src_dir"
     fi
   fi
-}
-# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
-build_swig() {
-  local lib="swig"
-  local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
-  local repo_ver="v2.0.12"
-  export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
-  change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$lib"
-  touch "no.autoreconf"
-  get_config_sub "$src_dir/$lib/Tools/config"
-  touch "no.autogen"
-  do_configure "--host=$host_target \
---prefix=$dependency_install_prefix \
---libdir=$dependency_install_prefix/lib \
---without-pcre \
---enable-static --disable-shared --enable-pic --with-pic"
-  do_make_and_make_install
-  reset_cxxflags
-}
-build_sphinxbase() {
-  local lib="sphinxbase"
-  local repo="https://github.com/cmusphinx/sphinxbase"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib"
-  change_dir "$src_dir/$lib"
-  export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
-  export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework CoreFoundation"
-  touch "no.autogen"
-  generic_configure "--enable-static \
---disable-shared \
---without-python \
---without-lapack"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  reset_allflags
-  change_dir "$src_dir"
-}
-build_gstreamer() {
-  activate_meson
-  local lib="gstreamer"
-  local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
-  local repo_ver="1.26.10"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib"
-  export LDFLAGS="$LDFLAGS -framework CoreFoundation -framework Foundation"
-  local meson_options="-Ddoc=disabled \
--Dexamples=disabled \
--Dtests=disabled \
--Dtools=disabled \
--Dbenchmarks=disabled \
--Dgst_debug=false \
--Dnls=disabled \
--Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -framework ObjectiveC\" \
--Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -lobjc -llzma\""
-  generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$lib"
-  sed -i'.bak' 's/-Wl,--export-dynamic//g' "$src_dir/$lib/build/build.ninja"
-  do_ninja_and_ninja_install
-  reset_ldflags
-  change_dir "$src_dir"
-}
-# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
-build_pocketsphinx() {
-  # run_valid_function "build_alsa"
-  # run_valid_function "build_libunwind"
-  # run_valid_function "build_lzma"
-  # run_valid_function "build_glib"
-  install_missing_packages python3-dev
-  local lib="pocketsphinx"
-  local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
-  local repo_ver="r13291"
-  change_dir "$src_dir"
-  do_svn_checkout "$repo" "$src_dir/$lib"
-  change_dir "$src_dir/$lib"
-  export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
-  export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreFoundation"
-  touch "no.autogen"
-  generic_configure "--enable-static \
---disable-shared \
---without-python \
---without-lapack"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  reset_allflags
-  change_dir "$src_dir"
 }
 # new version is not compatible yet
 # build_pocketsphinx() {
@@ -4355,3 +4215,321 @@ build_videotoolbox() {
 #endregion
 #endregion---------------------------------------------------------------------
 #------------------------------------------------------------------------------
+
+# build_frei0r            # config_options+= --enable-frei0r              # enable frei0r video filtering [no]
+build_frei0r() {
+  # https://github.com/dyne/frei0r
+  local lib="frei0r"
+  local repo="https://github.com/dyne/frei0r"
+  local repo_ver="v2.5.1"
+  echo "INFO: Frei0r not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+  # export LDFLAGS="$LDFLAGS -lpixman-1 -lpng -lfontconfig -lfreetype -framework CoreFoundation -framework CoreGraphics -framework CoreText"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib/build" 1
+  # do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWITHOUT_OPENCV=1"
+  # disable_nonessential "$src_dir/$lib/build"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
+}
+build_glib() {
+  # run_valid_function "build_libffi"
+  # run_valid_function "build_pcre2"
+  activate_meson
+  local lib="glib"
+  local repo="https://github.com/GNOME/glib"
+  local repo_ver="5e14886ca7c3f4ed270a336018c1573e97b0e125"
+  echo "INFO: Glib not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   change_dir "$src_dir"
+#   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+#   change_dir "$src_dir/$lib"
+#   export C_INCLUDE_PATH="${dependency_install_prefix}/include"
+#   export LIBRARY_PATH="${dependency_install_prefix}/lib"
+#   export PKG_CONFIG_LIBDIR="${dependency_install_prefix}/lib/pkgconfig"
+#   export LDFLAGS="$LDFLAGS -lintl -lresolv -framework CoreFoundation"
+#   local meson_options="-Dforce_posix_threads=true \
+# -Dman-pages=disabled \
+# -Dsysprof=disabled \
+# -Dglib_debug=disabled \
+# -Dglib_assert=false \
+# -Dnls=disabled \
+# -Dtests=false \
+# -Dglib_checks=false \
+# -Dinstalled_tests=false \
+# -Dxattr=false \
+# -Dlibmount=disabled \
+# -Ddtrace=false \
+# -Dsystemtap=false \
+# -Dintrospection=disabled \
+# --includedir=\"${dependency_install_prefix}/include\" \
+# -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${TVOS_SYSROOT}\" \
+# -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${TVOS_SYSROOT}\" \
+# --wrap-mode=nofallback"
+#   sed -i'.bak' \
+#     -e "s|libiconv = dependency('iconv')|libiconv = declare_dependency(link_args : ['-liconv'])|" \
+#     -e "s|libiconv = cc.find_library('iconv', required : true)|libiconv = declare_dependency(link_args : ['-liconv'])|" \
+#     "$src_dir/$lib/meson.build"
+#   sed -i'.bak' \
+#     -e "s|libintl = dependency('intl', required: false)|libintl = declare_dependency(link_args : ['-lintl', '-liconv'])|" \
+#     -e "s|if libintl.found() and libintl.type_name() != 'internal'|if libintl.found()|g" \
+#     "$src_dir/$lib/meson.build"
+#   sed -i'.bak' '/#ifdef HAVE_PIPE2/,/#endif/d' "$src_dir/$lib/glib/glib-unixprivate.h"
+#   generic_meson "$meson_options"
+#   do_ninja_and_ninja_install
+#   sed -i'.bak' 's/-lglib-2.0.*$/-lglib-2.0 -lm -lintl/' "$install_pkgconfig_dir/glib-2.0.pc"
+#   change_dir "$src_dir"
+#   reset_cflags
+#   unset C_INCLUDE_PATH
+#   unset LIBRARY_PATH
+#   unset PKG_CONFIG_LIBDIR
+}
+# build_liblensfun        # config_options+= --enable-liblensfun          # enable lensfun lens correction [no]
+build_liblensfun() {
+  # run_valid_function "build_glib"
+  local lib="liblensfun"
+  local repo="https://github.com/lensfun/lensfun"
+  local repo_ver="master"
+  echo "INFO: Liblensfun not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   change_dir "$src_dir"
+#   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+#   change_dir "$src_dir/$lib"
+#   export CPPFLAGS="$CFLAGS $CPPFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include "
+#   export CXXFLAGS="$CFLAGS $CXXFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include "
+#   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
+# -DBUILD_STATIC=on \
+# -DCMAKE_INSTALL_DATAROOTDIR=$dependency_install_prefix \
+# -DBUILD_TESTS=off \
+# -DBUILD_DOC=off \
+# -DINSTALL_HELPER_SCRIPTS=off \
+# -DINSTALL_PYTHON_MODULE=OFF" "$src_dir/$lib"
+#   disable_nonessential "$src_dir/$lib"
+#   do_make_and_make_install
+#   sed -i'.bak' 's/-llensfun/-llensfun -framework CoreText -framework CoreFoundation/' "$install_pkgconfig_dir/lensfun.pc"
+#   reset_cppflags
+#   reset_cxxflags
+#   change_dir "$src_dir"
+}
+build_cairo() {
+  # run_valid_function "build_libpng"
+  # run_valid_function "build_pixman"
+  # run_valid_function "build_libfontconfig" 1
+  # run_valid_function "build_glib"
+   # https://gitlab.freedesktop.org/cairo/cairo
+  local lib="cairo"
+  local repo="https://gitlab.freedesktop.org/cairo/cairo"
+  local repo_ver="1.18.4"
+  echo "INFO: Cairo not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   activate_meson
+#   change_dir "$src_dir"
+#   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+#   change_dir "$src_dir/$lib"
+#   export CFLAGS="$CFLAGS -DCAIRO_HAS_INT64_T=1"
+#   export CXXFLAGS="$CXXFLAGS -DCAIRO_HAS_INT64_T=1"
+#   export LDFLAGS="$LDFLAGS -lpthread"
+#   export LIBS="-lfontconfig -lfreetype -lpng -lpthread -lbrotlidec -lbrotlicommon -ldl -lstdc++"
+#   local meson_options="-Dtests=disabled \
+# -Dgtk_doc=false \
+# -Dglib=enabled \
+# -Dxlib=disabled \
+# -Dxcb=disabled \
+# -Dxlib-xcb=disabled \
+# -Dspectre=disabled \
+# -Dsymbol-lookup=disabled \
+# -Dlzo=disabled \
+# -Dpng=enabled \
+# -Dfontconfig=enabled \
+# -Dfreetype=enabled \
+# -Dtee=enabled \
+# -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\" \
+# -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\""
+#   generic_meson "$meson_options"
+#   do_ninja_and_ninja_install
+#   change_dir "$src_dir"
+#   unset LIBS
+#   reset_allflags
+}
+build_pango() {
+  # run_valid_function "build_libharfbuzz" 1
+  # run_valid_function "build_libthai"
+  # run_valid_function "build_libexpat"
+  # run_valid_function "build_xlib" 1
+  # run_valid_function "build_libfribidi" 1
+   # https://gitlab.gnome.org/GNOME/pango
+  local lib="pango"
+  local repo="https://gitlab.gnome.org/GNOME/pango"
+  local repo_ver="1.57.0"
+  echo "INFO: Pango not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   activate_meson
+#   change_dir "$src_dir"
+#   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+#   change_dir "$src_dir/$lib"
+#   export LIBS="-lfontconfig -lexpat -lfreetype -lbrotlidec -lbrotlicommon -lpng -lz -lbz2 -lintl -liconv -ldl -framework CoreFoundation"
+#   export LDFLAGS="$LDFLAGS $LIBS"
+#   local meson_options="-Ddocumentation=false \
+# -Dgtk_doc=false \
+# -Dman-pages=false \
+# -Dfontconfig=enabled \
+# -Dcairo=enabled \
+# -Dfreetype=enabled \
+# -Dbuild-testsuite=false \
+# -Dbuild-examples=false \
+# -Dintrospection=disabled \
+# -Dxft=disabled \
+# -Dc_args=\"-arch $host_arch -I${dependency_install_prefix}/include -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
+# -Dcpp_args=\"-arch $host_arch -I${dependency_install_prefix}/include -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
+# -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\" \
+# -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\""
+#   # disable tools - not needed for ffmpeg
+#   sed -i'.bak' "s/subdir('utils')/# subdir('utils')/g" meson.build
+#   sed -i'.bak' "s/ApplicationServices/CoreFoundation/g" meson.build
+#   generic_meson "$meson_options"
+#   do_ninja_and_ninja_install
+#   change_dir "$src_dir"
+#     unset LIBS
+#     reset_allflags
+}
+# build_librsvg           # config_options+= --enable-librsvg             # enable SVG rasterization via librsvg [no]
+build_librsvg() {
+  # run_valid_function "build_pango"
+  activate_meson
+  local lib="librsvg"
+  local repo="https://gitlab.gnome.org/GNOME/librsvg"
+  local repo_ver="2.61.3"
+  echo "INFO: Librsvg not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   change_dir "$src_dir"
+#   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+#   change_dir "$src_dir/$lib"
+#   if istvossimulator; then
+#     min_ver="-mtvos-simulator-version-min=$MIN_TVOS_VERSION"
+#     target_min="$host_arch-apple-tvos$MIN_TVOS_VERSION-simulator"
+#   else
+#     min_ver="-mtvos-version-min=$MIN_TVOS_VERSION"
+#     target_min="$host_arch-apple-tvos$MIN_TVOS_VERSION"
+#   fi
+#   local meson_options="-Ddocs=disabled \
+# -Dintrospection=disabled \
+# -Dvala=disabled \
+# -Davif=disabled \
+# -Dpixbuf-loader=disabled \
+# -Dtests=false \
+# -Drsvg-convert=disabled \
+# -Dtriplet=$rust_target \
+# -Dc_args=\"-arch $host_arch -I${dependency_install_prefix}/include -target $target_min $min_ver -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
+# -Dcpp_args=\"-arch $host_arch -I${dependency_install_prefix}/include -target $target_min $min_ver -isysroot ${SDKROOT} -DGLIB_STATIC_COMPILATION\" \
+# -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -target $target_min $min_ver -lresolv -isysroot ${SDKROOT}\" \
+# -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -target $target_min $min_ver -lresolv -isysroot ${SDKROOT}\""
+#   generic_meson "$meson_options"
+#   do_ninja_and_ninja_install
+#   change_dir "$src_dir"
+#   add_libs_to_pkg -t="$install_pkgconfig_dir/librsvg-2.0.pc" -p="-lresolv"
+#   sed -i'.bak' 's/-lrsvg-2/-lrsvg-2 -framework CoreFoundation/g' "$install_pkgconfig_dir/librsvg-2.0.pc"
+#   if [[ $host_arch == "x86_64" ]]; then
+#     # png.o always compiles to arm64 for some reason. remove png.o and thin the library
+#     if ar t "$dependency_install_prefix/lib/librsvg-2.a" | grep png.o > /dev/null; then
+#       ar d "$dependency_install_prefix/lib/librsvg-2.a" png.o > >(redirect_output) || exit_message 1 "Failed to remove incorrectly compiled png.o from librsvg-2.a"
+#       lipo "$dependency_install_prefix/lib/librsvg-2.a" -thin x86_64 -output "$dependency_install_prefix/lib/librsvg-2.a.thin" > >(redirect_output) || exit_message 1 "Failed to thin librsvg-2.a"
+#       mv -f "$dependency_install_prefix/lib/librsvg-2.a.thin" "$dependency_install_prefix/lib/librsvg-2.a" > >(redirect_output) || exit_message 1 "Failed to replace librsvg-2.a with thin version"
+#     fi
+#   fi
+}
+# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
+build_swig() {
+  local lib="swig"
+  local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
+  local repo_ver="v2.0.12"
+  echo "INFO: Swig not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
+#   change_dir "$src_dir"
+#   download_and_unpack_file "$repo" "$lib"
+#   change_dir "$src_dir/$lib"
+#   touch "no.autoreconf"
+#   get_config_sub "$src_dir/$lib/Tools/config"
+#   touch "no.autogen"
+#   do_configure "--host=$host_target \
+# --prefix=$dependency_install_prefix \
+# --libdir=$dependency_install_prefix/lib \
+# --without-pcre \
+# --enable-static --disable-shared --enable-pic --with-pic"
+#   do_make_and_make_install
+#   reset_cxxflags
+}
+build_sphinxbase() {
+  local lib="sphinxbase"
+  local repo="https://github.com/cmusphinx/sphinxbase"
+  echo "INFO: Sphinxbase not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   change_dir "$src_dir"
+#   do_git_checkout "$repo" "$src_dir/$lib"
+#   change_dir "$src_dir/$lib"
+#   export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
+#   export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework CoreFoundation"
+#   touch "no.autogen"
+#   generic_configure "--enable-static \
+# --disable-shared \
+# --without-python \
+# --without-lapack"
+#   disable_nonessential "$src_dir/$lib"
+#   do_make_and_make_install
+#   reset_allflags
+#   change_dir "$src_dir"
+}
+build_gstreamer() {
+  activate_meson
+  local lib="gstreamer"
+  local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
+  local repo_ver="1.26.10"
+  echo "INFO: Gstreamer not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   change_dir "$src_dir"
+#   do_git_checkout "$repo" "$src_dir/$lib"
+#   export LDFLAGS="$LDFLAGS -framework CoreFoundation -framework Foundation"
+#   local meson_options="-Ddoc=disabled \
+# -Dexamples=disabled \
+# -Dtests=disabled \
+# -Dtools=disabled \
+# -Dbenchmarks=disabled \
+# -Dgst_debug=false \
+# -Dnls=disabled \
+# -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -framework ObjectiveC\" \
+# -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -lobjc -llzma\""
+#   generic_meson "$meson_options"
+#   disable_nonessential "$src_dir/$lib"
+#   sed -i'.bak' 's/-Wl,--export-dynamic//g' "$src_dir/$lib/build/build.ninja"
+#   do_ninja_and_ninja_install
+#   reset_ldflags
+#   change_dir "$src_dir"
+}
+# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
+build_pocketsphinx() {
+  # run_valid_function "build_alsa"
+  # run_valid_function "build_libunwind"
+  # run_valid_function "build_lzma"
+  # run_valid_function "build_glib"
+  install_missing_packages python3-dev
+  local lib="pocketsphinx"
+  local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
+  local repo_ver="r13291"
+  echo "INFO: Pocketsphinx not supported on Apple TV" >>"$LOG_FILE"
+  return 0
+#   change_dir "$src_dir"
+#   do_svn_checkout "$repo" "$src_dir/$lib"
+#   change_dir "$src_dir/$lib"
+#   export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include"
+#   export LDFLAGS="$LDFLAGS -L$dependency_install_prefix/lib -lopenal -lc++ -framework CoreAudio -framework AudioToolbox -framework AudioUnit -framework CoreFoundation"
+#   touch "no.autogen"
+#   generic_configure "--enable-static \
+# --disable-shared \
+# --without-python \
+# --without-lapack"
+#   disable_nonessential "$src_dir/$lib"
+#   do_make_and_make_install
+#   reset_allflags
+#   change_dir "$src_dir"
+}

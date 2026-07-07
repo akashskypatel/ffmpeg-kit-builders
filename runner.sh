@@ -724,12 +724,15 @@ else
     android)
     apply_preset "$CONFIG_ANDROID"
     ;;
-    ios|macos|iphonesimulator)
+    ios|macos|iphonesimulator|appletvos|appletvsimulator)
     apply_preset "$CONFIG_APPLE"
     if [[ "$host_platform" == "macos" ]]; then
       apply_preset "$CONFIG_MACOS"
     elif [[ "$host_platform" == "ios" ]]; then
       apply_preset "$CONFIG_IOS"
+    fi
+    if [[ "$host_platform" == "appletvos" || "$host_platform" == "appletvsimulator" ]]; then
+      apply_preset "$CONFIG_TVOS_UNSUPPORTED"
     fi
     ;;
     rpi)
