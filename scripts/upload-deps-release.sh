@@ -101,7 +101,7 @@ if status == 404:
         "tag_name": tag,
         "name": release_name,
         "draft": False,
-        "prerelease": False,
+        "prerelease": True,
     })
 
 asset_name = pathlib.Path(asset_path).name
