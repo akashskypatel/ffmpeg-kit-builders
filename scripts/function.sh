@@ -943,7 +943,7 @@ setup_macos_environment() {
         source "${HOME}/.cargo/env"
     fi
     if ! rust_target_installed "$rust_target"; then
-        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$host_arch"
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
     
@@ -1021,7 +1021,7 @@ setup_ios_environment() {
         source "${HOME}/.cargo/env"
     fi
     if ! rust_target_installed "$rust_target"; then
-        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$host_arch"
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
 
@@ -1104,7 +1104,7 @@ setup_tvos_environment() {
     configure_apple_pkg_config_environment
 
     apply_apple_homebrew_environment
-    
+
     if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
         export PATH="${HOME}/.cargo/bin:$PATH"
     fi
@@ -1113,7 +1113,7 @@ setup_tvos_environment() {
         source "${HOME}/.cargo/env"
     fi
     if ! rust_target_installed "$rust_target"; then
-        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$host_arch"
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
 
