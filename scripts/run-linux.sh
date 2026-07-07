@@ -1042,7 +1042,7 @@ build_libbs2b() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   remove_path -f "no.autoreconf"
-  sed -i.bak -e "s/AC_FUNC_MALLOC//" -e "s/[[:space:]]*dist-lzma//" configure.ac # #270
+  sed -i '.bak' -e "s/AC_FUNC_MALLOC//" -e "s/[[:space:]]*dist-lzma//" configure.ac # #270
   export LIBS="-lm"                              # avoid pow failure linux native
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include"
   export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include"
@@ -1190,7 +1190,7 @@ build_libdvdnav() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  #sed -i.bak 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
+  #sed -i '.bak' 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
   change_dir "$src_dir"
 }
 build_libdvdcss() {
@@ -1224,7 +1224,7 @@ build_libdvdread() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  #sed -i.bak 's/-ldvdread.*/-ldvdread -ldvdcss/' "$install_pkgconfig_dir/dvdread.pc"
+  #sed -i '.bak' 's/-ldvdread.*/-ldvdread -ldvdcss/' "$install_pkgconfig_dir/dvdread.pc"
   change_dir "$src_dir"
   reset_cflags
   reset_cxxflags
@@ -1911,7 +1911,7 @@ build_glib() {
 --wrap-mode=nofallback"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  sed -i.bak 's/-lglib-2.0.*$/-lglib-2.0 -lintl -lm -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
+  sed -i '.bak' 's/-lglib-2.0.*$/-lglib-2.0 -lintl -lm -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
   change_dir "$src_dir"
   reset_cflags
 }
@@ -1935,7 +1935,7 @@ build_liblensfun() {
 -DINSTALL_PYTHON_MODULE=OFF" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i.bak 's/-llensfun/-llensfun -lstdc++/' "$install_pkgconfig_dir/lensfun.pc"
+  sed -i '.bak' 's/-llensfun/-llensfun -lstdc++/' "$install_pkgconfig_dir/lensfun.pc"
   reset_cppflags
   reset_cxxflags
   change_dir "$src_dir"
@@ -2296,7 +2296,7 @@ build_libplacebo() {
   generic_meson "$meson_options"
   # disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i.bak 's/-lplacebo.*$/-lplacebo -lm -lunwind -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
+  sed -i '.bak' 's/-lplacebo.*$/-lplacebo -lm -lunwind -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
 }
 build_libid3tag() {
   # run_valid_function "build_zlib" 1
@@ -2688,8 +2688,8 @@ build_libshaderc() {
   if [[ -f "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" ]] ; then
     copy_path "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" "$dependency_install_prefix/lib/libshaderc_util.a" >>"$LOG_FILE"
   fi
-  sed -i.bak "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_combined.pc"
-  sed -i.bak "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_static.pc"
+  sed -i '.bak' "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_combined.pc"
+  sed -i '.bak' "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_static.pc"
   change_dir "$src_dir"
 }
 # build_libshine          # config_options+= --enable-libshine            # enable fixed-point MP3 encoding via libshine [no]
@@ -3293,7 +3293,7 @@ build_libpsl() {
 --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i.bak "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
+  sed -i '.bak' "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
   reset_cflags
   change_dir "$src_dir"
 }
@@ -3456,9 +3456,9 @@ build_libtwolame() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   install_missing_packages "asciidoc" "doxygen"
-  sed -i.bak "s/--enable-maintainer-mode//g" autogen.sh
+  sed -i '.bak' "s/--enable-maintainer-mode//g" autogen.sh
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
-    sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
+    sed -i '.bak' "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
   touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
@@ -3516,7 +3516,7 @@ build_libvmaf() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i.bak "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
+  sed -i '.bak' "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
   change_dir "$src_dir"
 }
 # build_libvorbis         # config_options+= --enable-libvorbis           # enable Vorbis en/decoding via libvorbis, native implementation exists [no]
@@ -4773,6 +4773,26 @@ build_libopencolorio() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
+    while read -r lib_file; do
+    cp -v "$lib_file" "$dependency_install_prefix/lib/" > >(redirect_output) || exit_message 1 "Failed to copy library file for $lib"
+    filename="$(basename "$lib_file")"
+    file_noext="${filename%.a}"
+    lib_flag="-l${file_noext#lib}"
+    add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag"
+  done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
+  if [[ -d "$src_dir/$lib/build/ext/dist/include" ]]; then
+    cp -rfv "$src_dir/$lib/build/ext/dist/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
+  fi
+  if [[ -d "$src_dir/$lib/build/ext/dist/lib/cmake" ]]; then
+    cp -rfv "$src_dir/$lib/build/ext/dist/lib/cmake" "$dependency_install_prefix/lib" > >(redirect_output) || exit_message 1 "Failed to copy cmake directory for $lib"
+  fi
+  if [[ -d "$src_dir/$lib/build/ext/dist/share" ]]; then
+    cp -rfv "$src_dir/$lib/build/ext/dist/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
+  fi
+  if [[ -d "$src_dir/$lib/build/ext/dist/lib/pkgconfig" ]]; then
+    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec sed -i '.bak' -e "s|prefix=.*|prefix=$dependency_install_prefix|g" {} \; > >(redirect_output) || exit_message 1 "Failed to update prefix in pkgconfig files for $lib"
+    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
+  fi
   change_dir "$src_dir"
 }
 build_libmpeghdec() {

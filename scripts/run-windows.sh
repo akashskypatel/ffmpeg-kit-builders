@@ -62,7 +62,7 @@ build_dlfcn() {
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
 	if [[ ! -f Makefile.bak ]]; then # Change CFLAGS.
-		sed -i.bak "s/-O3/-O2/" Makefile
+		sed -i '.bak' "s/-O3/-O2/" Makefile
 	fi
 	do_configure "--prefix=$dependency_install_prefix --cross-prefix=$cross_prefix" # rejects some normal cross compile options so custom here
 	do_make_and_make_install
@@ -82,7 +82,7 @@ build_libxavs() {
   sed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
   sed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
 	if [[ ! -f Makefile.bak ]]; then
-		sed -i.bak "s/O4/O2/" configure # Change CFLAGS.
+		sed -i '.bak' "s/O4/O2/" configure # Change CFLAGS.
 	fi
   clear_cross_vars AS
   # wget "https://patch-diff.githubusercontent.com/raw/Distrotech/xavs/pull/1.patch" > >(redirect_output) 2>&1
@@ -205,8 +205,8 @@ build_libcaca() {
 --disable-x11 \
 --disable-gl"
   change_dir "$src_dir/$lib/caca"
-  sed -i.bak "s/__declspec(dllexport)//g" *.h # get rid of the declspec lines otherwise the build will fail for undefined symbols
-  sed -i.bak "s/__declspec(dllimport)//g" *.h
+  sed -i '.bak' "s/__declspec(dllexport)//g" *.h # get rid of the declspec lines otherwise the build will fail for undefined symbols
+  sed -i '.bak' "s/__declspec(dllimport)//g" *.h
   change_dir "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib" "src"
 	do_make_and_make_install
@@ -1138,7 +1138,7 @@ build_libtwolame() {
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
 	if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
-		sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
+		sed -i '.bak' "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
 	fi
   touch "no.autogen"
 	generic_configure "--enable-static --disable-shared"
@@ -1274,8 +1274,8 @@ build_libmodplug() {
   do_git_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
   export LDFLAGS="$LDFLAGS -static -static-libgcc -static-libstdc++"
-  sed -i.bak 's/__declspec(dllexport)//' "$src_dir/$lib/src/modplug.h" #strip DLL import/export directives
-	sed -i.bak 's/__declspec(dllimport)//' "$src_dir/$lib/src/modplug.h"
+  sed -i '.bak' 's/__declspec(dllexport)//' "$src_dir/$lib/src/modplug.h" #strip DLL import/export directives
+	sed -i '.bak' 's/__declspec(dllimport)//' "$src_dir/$lib/src/modplug.h"
   autoreconf_library
   automake --add-missing > >(redirect_output) 2>&1
 	generic_configure
@@ -1337,7 +1337,7 @@ build_libbs2b() {
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   # apply_patch "$PATCHDIR/libbs2b.patch" # not needed anymore?
-	sed -i.bak "s/AC_FUNC_MALLOC//" configure.ac # #270
+	sed -i '.bak' "s/AC_FUNC_MALLOC//" configure.ac # #270
 	generic_configure "--enable-static --disable-shared"
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1375,7 +1375,7 @@ build_libflite() {
   change_dir "$src_dir/$lib"
   # apply_patch "$PATCHDIR/flite-2.1.0_mingw-w64-fixes.patch"
   if grep -Fq -e "cp -pd" Makefile; then
-		sed -i.bak "s/cp -pd/cp -p/" main/Makefile # friendlier cp for OS X
+		sed -i '.bak' "s/cp -pd/cp -p/" main/Makefile # friendlier cp for OS X
 	fi
   export CFLAGS="$CFLAGS -Dc99_snprintf=snprintf"
 	generic_configure "--bindir=$dependency_install_prefix/bin \
@@ -1428,11 +1428,11 @@ build_vamp_plugin() {
 	change_dir "$src_dir/vamp-plugin-sdk-vamp-plugin-sdk-v2.10"
 	apply_patch "$PATCHDIR/vamp-plugin-sdk-2.10_static-lib.diff"
 	if [[ ! -f src/vamp-sdk/PluginAdapter.cpp.bak ]]; then
-		sed -i.bak "s/#include <mutex>/#include <mingw.mutex.h>/" src/vamp-sdk/PluginAdapter.cpp
+		sed -i '.bak' "s/#include <mutex>/#include <mingw.mutex.h>/" src/vamp-sdk/PluginAdapter.cpp
 	fi
 	if [[ ! -f configure.bak ]]; then # Fix for "'M_PI' was not declared in this scope" (see https://stackoverflow.com/a/29264536).
-		sed -i.bak "s/c++11/gnu++11/" configure
-		sed -i.bak "s/c++11/gnu++11/" Makefile.in
+		sed -i '.bak' "s/c++11/gnu++11/" configure
+		sed -i '.bak' "s/c++11/gnu++11/" Makefile.in
 	fi
 	generic_configure "--host=$host_target --prefix=$dependency_install_prefix --disable-programs"
 	do_make "install-static" # No need for 'do_make_install', because 'install-static' already has install-instructions.
@@ -1499,7 +1499,7 @@ build_librubberband() {
 	# apply_patch "$PATCHDIR/rubberband_git_static-lib.diff" # create install-static target
 	# generic_configure "--disable-ladspa"
 	# do_make "install-static AR=${cross_prefix}ar" # No need for 'do_make_install', because 'install-static' already has install-instructions.
-	# sed -i.bak 's/-lrubberband.*$/-lrubberband -lfftw3 -lsamplerate /' "$install_pkgconfig_dir/rubberband.pc"
+	# sed -i '.bak' 's/-lrubberband.*$/-lrubberband -lfftw3 -lsamplerate /' "$install_pkgconfig_dir/rubberband.pc"
   # 	#	change_dir "$src_dir"
 }
 # build_frei0r            # config_options+= --enable-frei0r              # enable frei0r video filtering [no]
@@ -1511,8 +1511,8 @@ build_frei0r() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i.bak 's/-arch i386//' CMakeLists.txt # OS X https://github.com/dyne/frei0r/issues/64
-  sed -i.bak 's/find_package (Cairo)/# find_package (Cairo)/' CMakeLists.txt # OS X https://github.com/dyne/frei0r/issues/64
+  sed -i '.bak' 's/-arch i386//' CMakeLists.txt # OS X https://github.com/dyne/frei0r/issues/64
+  sed -i '.bak' 's/find_package (Cairo)/# find_package (Cairo)/' CMakeLists.txt # OS X https://github.com/dyne/frei0r/issues/64
   export LDFLAGS="$LDFLAGS -static -static-libgcc -static-libstdc++"
   change_dir "$src_dir/$lib/build" 1	
   do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release \
@@ -3440,7 +3440,7 @@ build_libklvanc() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i.bak 's#<sys/errno.h>#<errno.h>#g' src/libklvanc/vanc.h src/libklvanc/vanc-packets.h src/core-private.h src/libklvanc/vanc-lines.h
+  sed -i '.bak' 's#<sys/errno.h>#<errno.h>#g' src/libklvanc/vanc.h src/libklvanc/vanc-packets.h src/core-private.h src/libklvanc/vanc-lines.h
   touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared"
@@ -4148,7 +4148,7 @@ build_libdvdnav() {
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   add_libs_to_pkg -t="$install_pkgconfig_dir/dvdnav.pc" -l="-ldvdread -ldvdcss -lpsapi"
-	#sed -i.bak 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
+	#sed -i '.bak' 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
 	change_dir "$src_dir"
 }
 
@@ -5015,6 +5015,26 @@ build_libopencolorio() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
+    while read -r lib_file; do
+    cp -v "$lib_file" "$dependency_install_prefix/lib/" > >(redirect_output) || exit_message 1 "Failed to copy library file for $lib"
+    filename="$(basename "$lib_file")"
+    file_noext="${filename%.a}"
+    lib_flag="-l${file_noext#lib}"
+    add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag"
+  done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
+  if [[ -d "$src_dir/$lib/build/ext/dist/include" ]]; then
+    cp -rfv "$src_dir/$lib/build/ext/dist/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
+  fi
+  if [[ -d "$src_dir/$lib/build/ext/dist/lib/cmake" ]]; then
+    cp -rfv "$src_dir/$lib/build/ext/dist/lib/cmake" "$dependency_install_prefix/lib" > >(redirect_output) || exit_message 1 "Failed to copy cmake directory for $lib"
+  fi
+  if [[ -d "$src_dir/$lib/build/ext/dist/share" ]]; then
+    cp -rfv "$src_dir/$lib/build/ext/dist/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
+  fi
+  if [[ -d "$src_dir/$lib/build/ext/dist/lib/pkgconfig" ]]; then
+    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec sed -i '.bak' -e "s|prefix=.*|prefix=$dependency_install_prefix|g" {} \; > >(redirect_output) || exit_message 1 "Failed to update prefix in pkgconfig files for $lib"
+    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
+  fi
   change_dir "$src_dir"
 }
 build_libmpeghdec() {
