@@ -4965,7 +4965,7 @@ CFLAGS=\"$CFLAGS\"" "" "minimal"
 build_libsvtjpegxs() {
   local lib="libsvtjpegxs"
   local repo="https://github.com/OpenVisualCloud/SVT-JPEG-XS"
-  local repo_ver="v0.9.0"
+  local repo_ver="main"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
