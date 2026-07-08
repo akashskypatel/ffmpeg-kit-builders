@@ -354,8 +354,9 @@ overwrite_file() {
 # setup gsed so both linux and macos use GNU sed syntax
 setup_gsed() {
   determine_distro
-  if [[ "$BUILD_OS" == "linux" ]]; then
+  if [[ "$BUILD_OS" == "linux" ]] && ! command -v gsed &> /dev/null; then
     ln -sf /usr/bin/sed /usr/local/bin/gsed
+    ln -sf /usr/bin/sed /usr/bin/gsed
   # else check if gsed is installed
   elif ! command -v gsed &> /dev/null; then
     install_missing_packages gsed
@@ -370,6 +371,7 @@ setup_build_environment() {
     pick_host_arch "$host_arch"
     calculate_bits_target
     determine_distro
+    setup_gsed
     export host_name="$host_platform-$host_arch"
     echo -e "\n************** Setting up environment for $host_name build... **************" | tee -a "$LOG_FILE"
     
@@ -424,8 +426,6 @@ setup_build_environment() {
             echo " -> Keeping system version (System is newer or Bundled is missing)" >> "$LOG_FILE"
         fi
     done
-
-    setup_gsed
 }
 
 calculate_bits_target() {
