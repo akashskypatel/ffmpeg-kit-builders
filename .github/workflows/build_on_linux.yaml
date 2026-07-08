@@ -49,8 +49,6 @@ env:
   RUNNER_WORKFLOW_TARGET_PLATFORMS: "linux,windows,android"
   WORKFLOW_BUILD_FFMPEG: ${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: ${{ inputs.build_bundle }}
-  WORKFLOW_STEPS_BUILT: ""
-  WORKFLOW_CURRENT_STEP: ""
 
 permissions:
   contents: write

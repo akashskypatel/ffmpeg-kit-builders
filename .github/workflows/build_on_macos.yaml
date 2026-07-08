@@ -49,8 +49,6 @@ env:
   RUNNER_WORKFLOW_TARGET_PLATFORMS: "ios,iphonesimulator,macos,appletvos,appletvsimulator"
   WORKFLOW_BUILD_FFMPEG: ${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: ${{ inputs.build_bundle }}
-  WORKFLOW_STEPS_BUILT: ""
-  WORKFLOW_CURRENT_STEP: ""
 
 permissions:
   contents: write
@@ -61,6 +59,9 @@ jobs:
     name: macos targets
     runs-on: macos-14
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
       - name: Install Bash
         shell: bash
         run: ${GITHUB_WORKSPACE}/scripts/supported.sh
@@ -68,9 +69,6 @@ jobs:
       - name: Accept Xcode license
         shell: bash
         run: sudo xcodebuild -license accept
-      
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Prepare scripts
         shell: bash
