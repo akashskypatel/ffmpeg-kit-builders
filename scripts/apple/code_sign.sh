@@ -323,7 +323,7 @@ submit_for_notarization() {
 
   # Extract request UUID
   local request_uuid
-  request_uuid=$(echo "${result}" | grep -A1 "notarization-upload" | grep "RequestUUID" | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+  request_uuid=$(echo "${result}" | grep -A1 "notarization-upload" | grep "RequestUUID" | gsed 's/.*<string>\(.*\)<\/string>.*/\1/')
 
   if [[ -z "${request_uuid}" ]]; then
     echo "ERROR: Failed to submit for notarization"
@@ -366,7 +366,7 @@ check_notarization_status() {
 
   # Extract status
   local notarization_status
-  notarization_status=$(echo "${status}" | grep -A1 "Status" | grep "string" | sed 's/.*<string>\(.*\)<\/string>.*/\1/' | head -1)
+  notarization_status=$(echo "${status}" | grep -A1 "Status" | grep "string" | gsed 's/.*<string>\(.*\)<\/string>.*/\1/' | head -1)
 
   echo "Status: ${notarization_status}"
 

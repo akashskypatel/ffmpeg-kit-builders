@@ -1,3 +1,16 @@
+#!/usr/bin/env bash
+
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # Run this on the clean, unpatched src/ directory
 # Command to find functional calls that are dangerous in global scope
 (grep -Enw 'getenv|setenv|putenv|chdir|setlocale|signal|sigaction|av_log_set_callback' src/*.c src/*.h) > audit_func.log 2>&1

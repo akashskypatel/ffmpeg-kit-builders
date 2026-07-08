@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034
 
 # required for ffmpeg-kit
@@ -181,8 +192,8 @@ build_libv4l2() {
 -Ddoxygen-man=false \
 -Dlibdvbv5=disabled \
 -Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
-  sed -i "s/find_library('rt')/find_library('rt', required : false)/g" meson.build
-  sed -i "s/find_library('argp')/find_library('argp', required : false)/g" meson.build
+  gsed -i "s/find_library('rt')/find_library('rt', required : false)/g" meson.build
+  gsed -i "s/find_library('argp')/find_library('argp', required : false)/g" meson.build
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -1012,7 +1023,7 @@ build_libbs2b() {
     get_config_sub "$src_dir/$lib/build-aux" > /dev/null 2>&1
     get_config_guess "$src_dir/$lib/build-aux" > /dev/null 2>&1
   fi
-  sed -i '.bak' "s/AC_FUNC_MALLOC//" configure.ac # #270
+  gsed -i "s/AC_FUNC_MALLOC//" configure.ac # #270
   export LIBS="-lm"                              # avoid pow failure linux native
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include"
   export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include"
@@ -1035,7 +1046,7 @@ build_libcaca() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -Wno-ignored-optimization-argument"
-  sed -i 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
+  gsed -i 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
   generic_configure "--libdir=$dependency_install_prefix/lib \
 --disable-csharp \
 --disable-java  \
@@ -1052,9 +1063,9 @@ build_libcaca() {
 ac_cv_func_fldln2=no \
 ac_cv_header_fpu_control_h=no"
   disable_nonessential "$src_dir/$lib" "src"
-  # If the code still fails, we use sed as a fail-safe to undefine it manually
+  # If the code still fails, we use gsed as a fail-safe to undefine it manually
   if [ -f "config.h" ]; then
-    sed -i 's/#define HAVE_FLDLN2 1/\/* #undef HAVE_FLDLN2 *\//g' config.h
+    gsed -i 's/#define HAVE_FLDLN2 1/\/* #undef HAVE_FLDLN2 *\//g' config.h
   fi
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1168,14 +1179,14 @@ build_libcodec2() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
   local host_codebook_gen="$dependency_install_prefix/bin/generate_codebook"
-  sed -i '/if(CMAKE_CROSSCOMPILING)/,/endif(CMAKE_CROSSCOMPILING)/d' "$src_dir/$lib/src/CMakeLists.txt"
-  sed -i "s|COMMAND generate_codebook|COMMAND ${host_codebook_gen}|g" "$src_dir/$lib/src/CMakeLists.txt"
-  sed -i "s|DEPENDS generate_codebook|DEPENDS |g" "$src_dir/$lib/src/CMakeLists.txt"
+  gsed -i '/if(CMAKE_CROSSCOMPILING)/,/endif(CMAKE_CROSSCOMPILING)/d' "$src_dir/$lib/src/CMakeLists.txt"
+  gsed -i "s|COMMAND generate_codebook|COMMAND ${host_codebook_gen}|g" "$src_dir/$lib/src/CMakeLists.txt"
+  gsed -i "s|DEPENDS generate_codebook|DEPENDS |g" "$src_dir/$lib/src/CMakeLists.txt"
   if [[ "$host_arch" == "aarch64" && $ANDROID_API_LEVEL -lt 26 ]]; then
     copy_path "$PATCHDIR/libcodec2_math_shim.h" "$src_dir/$lib/src/math_shim.h" "-f"
     export CFLAGS="$CFLAGS -include $src_dir/$lib/src/math_shim.h"
   fi
-  sed -i 's/\bcomplex\b/is_complex/g' "$src_dir/$lib/src/fsk_mod.c"
+  gsed -i 's/\bcomplex\b/is_complex/g' "$src_dir/$lib/src/fsk_mod.c"
   do_cmake_from_build_dir "$src_dir/$lib" "-DUNITTEST=OFF -DBUILD_SHARED_LIBS=OFF -DGENERATE_CODEBOOK=${host_codebook_gen}"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
@@ -1217,7 +1228,7 @@ build_libdavs2() {
     export AS=""
   fi
   if [[ "$host_arch" != "x86_64" && "$host_arch" != "x86" ]]; then
-    sed -i -e 's/-mmmx//g' \
+    gsed -i -e 's/-mmmx//g' \
            -e 's/-msse[0-9.a]*//g' \
            -e 's/-mssse3//g' \
            -e 's/-mavx[0-9]*//g' \
@@ -1225,19 +1236,19 @@ build_libdavs2() {
   fi
   do_configure "$config"
   if [[ "$host_arch" == "aarch64" ]]; then
-    sed -i 's/SYS_ARCH=X86_64/SYS_ARCH=AARCH64/g' "$src_dir/$lib/build/linux/config.mak"
-    sed -i 's/SYS_ARCH=X86/SYS_ARCH=AARCH64/g' "$src_dir/$lib/build/linux/config.mak"
+    gsed -i 's/SYS_ARCH=X86_64/SYS_ARCH=AARCH64/g' "$src_dir/$lib/build/linux/config.mak"
+    gsed -i 's/SYS_ARCH=X86/SYS_ARCH=AARCH64/g' "$src_dir/$lib/build/linux/config.mak"
   elif [[ "$host_arch" == "armv7a" ]]; then
-    sed -i 's/SYS_ARCH=X86_64/SYS_ARCH=ARM/g' "$src_dir/$lib/build/linux/config.mak"
-    sed -i 's/SYS_ARCH=X86/SYS_ARCH=ARM/g' "$src_dir/$lib/build/linux/config.mak"
+    gsed -i 's/SYS_ARCH=X86_64/SYS_ARCH=ARM/g' "$src_dir/$lib/build/linux/config.mak"
+    gsed -i 's/SYS_ARCH=X86/SYS_ARCH=ARM/g' "$src_dir/$lib/build/linux/config.mak"
   fi
   disable_nonessential "$src_dir/$lib/build/linux"
-  sed -i 's/$(AR)$@/$(AR) rcs $@/g' Makefile
+  gsed -i 's/$(AR)$@/$(AR) rcs $@/g' Makefile
   do_make_and_make_install ""
   if [[ ! -f "$install_pkgconfig_dir/davs2.pc" && -f "$src_dir/$lib/build/linux/davs2.pc" ]]; then
     copy_path "$src_dir/$lib/build/linux/davs2.pc" "$install_pkgconfig_dir/davs2.pc" "-f"
   fi
-  sed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$install_pkgconfig_dir/davs2.pc"
+  gsed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$install_pkgconfig_dir/davs2.pc"
   change_dir "$src_dir"
   reset_cross_vars
 }
@@ -1255,7 +1266,7 @@ build_libdvdnav() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  #sed -i '.bak' 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
+  #gsed -i 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
   change_dir "$src_dir"
 }
 build_libdvdcss() {
@@ -1289,7 +1300,7 @@ build_libdvdread() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  #sed -i '.bak' 's/-ldvdread.*/-ldvdread -ldvdcss/' "$install_pkgconfig_dir/dvdread.pc"
+  #gsed -i 's/-ldvdread.*/-ldvdread -ldvdcss/' "$install_pkgconfig_dir/dvdread.pc"
   change_dir "$src_dir"
   reset_cflags
   reset_cxxflags
@@ -1517,7 +1528,7 @@ build_libgsm() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  sed -i -e "s|^INSTALL_ROOT.*|INSTALL_ROOT = $dependency_install_prefix|g" \
+  gsed -i -e "s|^INSTALL_ROOT.*|INSTALL_ROOT = $dependency_install_prefix|g" \
   -e "s|^GSM_INSTALL_LIB.*|GSM_INSTALL_LIB = $dependency_install_prefix/lib|g" \
   -e "s|^GSM_INSTALL_INC.*|GSM_INSTALL_INC = $dependency_install_prefix/include|g" \
   -e "s|^GSM_INSTALL_MAN.*|GSM_INSTALL_MAN = $dependency_install_prefix/man|g" \
@@ -1546,16 +1557,16 @@ build_graphite() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i "s/add_subdirectory(tests)/#add_subdirectory(tests)/g" CMakeLists.txt
-  sed -i "s/add_subdirectory(gr2fonttest)/#add_subdirectory(gr2fonttest)/g" CMakeLists.txt
-  sed -i "s/add_subdirectory(doc)/#add_subdirectory(doc)/g" CMakeLists.txt
+  gsed -i "s/add_subdirectory(tests)/#add_subdirectory(tests)/g" CMakeLists.txt
+  gsed -i "s/add_subdirectory(gr2fonttest)/#add_subdirectory(gr2fonttest)/g" CMakeLists.txt
+  gsed -i "s/add_subdirectory(doc)/#add_subdirectory(doc)/g" CMakeLists.txt
   export LDFLAGS="$LDFLAGS -ldl"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
 -DBUILD_TESTING=OFF \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
   if [[ "$host_arch" == "aarch64" ]]; then
-    sed -i 's/add_definitions(-mfpmath=sse -msse2)//g' src/CMakeLists.txt
+    gsed -i 's/add_definitions(-mfpmath=sse -msse2)//g' src/CMakeLists.txt
   fi
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
@@ -1668,8 +1679,8 @@ build_libjxl() {
   local repo_ver="v0.7.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  sed -i 's/if(${ANDROID_ABI} /if("${ANDROID_ABI}" /g' "$src_dir/$lib/third_party/sjpeg/cmake/cpu.cmake"
-  sed -i 's|include(third_party/testing.cmake)||g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/if(${ANDROID_ABI} /if("${ANDROID_ABI}" /g' "$src_dir/$lib/third_party/sjpeg/cmake/cpu.cmake"
+  gsed -i 's|include(third_party/testing.cmake)||g' "$src_dir/$lib/CMakeLists.txt"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_TESTING=OFF \
@@ -1724,7 +1735,7 @@ build_libjxl() {
 -DATOMICS_LOCK_FREE_INSTRUCTIONS=ON \
 -DJPEGXL_FORCE_SYSTEM_LCMS2=ON"
   # force third party PIC
-  sed -i '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
+  gsed -i '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
   if [[ "$host_arch" == "armv7a" ]]; then
     # Force 32-bit ARM mode and Optimize for Size (-Os) to prevent 
     # template unrolling from exceeding PC-relative branch limits.
@@ -1746,7 +1757,7 @@ build_libklvanc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i 's/^SUBDIRS = src tools/SUBDIRS = src/' Makefile.am Makefile.in
+  gsed -i 's/^SUBDIRS = src tools/SUBDIRS = src/' Makefile.am Makefile.in
   touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
@@ -1783,8 +1794,8 @@ build_libkvazaar() {
 -DBUILD_SHARED_LIBS=OFF"
   #do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   generic_configure "--disable-shared --enable-static --enable-pic --with-pic ASFLAGS=\"$ASFLAGS\""
-  find . -type f -name "Makefile" -exec sed -i 's/-lrt//g' {} +
-  sed -i 's/-lrt//g' "$install_pkgconfig_dir/kvazaar.pc"
+  find . -type f -name "Makefile" -exec gsed -i 's/-lrt//g' {} +
+  gsed -i 's/-lrt//g' "$install_pkgconfig_dir/kvazaar.pc"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1832,7 +1843,7 @@ CFLAGS=\"$CFLAGS\"" "" "minimal"
   do_make_install "" "-C lib install" "minimal"
   
   if [[ -f "$src_dir/$lib/include/iconv.h.inst" ]]; then
-    sed -i -e '/#define iconv /d' \
+    gsed -i -e '/#define iconv /d' \
            -e '/#define iconv_open /d' \
            -e '/#define iconv_close /d' \
            -e '/#define iconv_open_into /d' \
@@ -1881,7 +1892,7 @@ Libs: -L\${libdir} -liconv
 Cflags: -I\${includedir}
 EOF
   if [[ -f "$src_dir/$lib/include/iconv.h.inst" ]]; then
-    sed -i -e '/#define iconv /d' \
+    gsed -i -e '/#define iconv /d' \
            -e '/#define iconv_open /d' \
            -e '/#define iconv_close /d' \
            -e '/#define iconv_open_into /d' \
@@ -1923,7 +1934,7 @@ build_gettext() {
   export automake="/usr/local/bin/automake"
   export ACLOCAL="$aclocal"
   export AUTOMAKE="$automake"
-  find "$src_dir/$lib" -type f -name configure -exec sed -i \
+  find "$src_dir/$lib" -type f -name configure -exec gsed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   touch "no.autoreconf"
@@ -2028,7 +2039,7 @@ build_glib() {
 --wrap-mode=nofallback"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  sed -i '.bak' 's/-lglib-2.0.*$/-lglib-2.0 -lintl -lm -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
+  gsed -i 's/-lglib-2.0.*$/-lglib-2.0 -lintl -lm -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
   change_dir "$src_dir"
   unset LIBS
   reset_cflags
@@ -2056,7 +2067,7 @@ build_liblensfun() {
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i '.bak' 's/-llensfun/-llensfun -lstdc++/' "$install_pkgconfig_dir/lensfun.pc"
+  gsed -i 's/-llensfun/-llensfun -lstdc++/' "$install_pkgconfig_dir/lensfun.pc"
   reset_cppflags
   reset_cxxflags
   change_dir "$src_dir"
@@ -2143,14 +2154,14 @@ build_liboapv() {
 -DCMAKE_INSTALL_INCLUDEDIR=\"${dependency_install_prefix}/include\" \
 -DENABLE_TESTS=OFF"
   if [[ "$host_arch" == "aarch64" ]]; then
-      sed -i 's/set_property(SOURCE ${SSE} APPEND PROPERTY COMPILE_FLAGS "-msse4.1")//g' "$src_dir/$lib/src/CMakeLists.txt"
-      sed -i 's/set_property(SOURCE ${AVX} APPEND PROPERTY COMPILE_FLAGS " -mavx2")//g' "$src_dir/$lib/src/CMakeLists.txt"
+      gsed -i 's/set_property(SOURCE ${SSE} APPEND PROPERTY COMPILE_FLAGS "-msse4.1")//g' "$src_dir/$lib/src/CMakeLists.txt"
+      gsed -i 's/set_property(SOURCE ${AVX} APPEND PROPERTY COMPILE_FLAGS " -mavx2")//g' "$src_dir/$lib/src/CMakeLists.txt"
   fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  sed -i 's|libdir=.*|libdir=\${prefix}/lib/oapv|g' "$install_pkgconfig_dir/oapv.pc"
-  sed -i 's|includedir=.*|includedir=\${prefix}/include|g' "$install_pkgconfig_dir/oapv.pc"
+  gsed -i 's|libdir=.*|libdir=\${prefix}/lib/oapv|g' "$install_pkgconfig_dir/oapv.pc"
+  gsed -i 's|includedir=.*|includedir=\${prefix}/include|g' "$install_pkgconfig_dir/oapv.pc"
   change_dir "$src_dir"
 }
 # build_libopencv         # config_options+= --enable-libopencv           # enable video filtering via libopencv [no]
@@ -2229,7 +2240,7 @@ build_libopencv() {
   copy_path "$src_dir/$lib/build/unix-install/opencv4.pc" "$install_pkgconfig_dir/opencv4.pc" -f
   add_libs_to_pkg -t="$install_pkgconfig_dir/opencv.pc" -p="-lopencv_imgproc -lopencv_core -lkleidicv_hal -lkleidicv_thread -lkleidicv -ltegra_hal -lcarotene_objs -lz -lm -llog"
   add_libs_to_pkg -t="$install_pkgconfig_dir/opencv4.pc" -p="-lopencv_imgproc -lopencv_core -lkleidicv_hal -lkleidicv_thread -lkleidicv -ltegra_hal -lcarotene_objs -lz -lm -llog"
-  find "$install_pkgconfig_dir" -name "opencv*.pc" -exec sed -i -E \
+  find "$install_pkgconfig_dir" -name "opencv*.pc" -exec gsed -i -E \
   -e 's/(^|[[:space:]])-ldl([[:space:]]|$)/ /g' \
   -e 's/(^|[[:space:]])-lpthread([[:space:]]|$)/ /g' \
   -e 's/(^|[[:space:]])-l3rdparty([[:space:]]|$)/ /g' {} +
@@ -2270,7 +2281,7 @@ build_libopenjpeg() {
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
-  find "$install_pkgconfig_dir" -name "libopenjp2.pc" -exec sed -i \
+  find "$install_pkgconfig_dir" -name "libopenjp2.pc" -exec gsed -i \
   -e 's/-l-lpthread//g' \
   -e 's/-l-pthread//g' {} +
 }
@@ -2474,7 +2485,7 @@ build_libplacebo() {
   generic_meson "$meson_options"
   # disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i '.bak' 's/-lplacebo.*$/-lplacebo -lm -lunwind -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
+  gsed -i 's/-lplacebo.*$/-lplacebo -lm -lunwind -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
 }
 build_libid3tag() {
   # run_valid_function "build_zlib" 1
@@ -2525,14 +2536,14 @@ build_libquirc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   create_dir "$src_dir/$lib/build"
-  sed -i 's/all: libquirc.$(LIB_SUFFIX) qrtest/all: libquirc.$(LIB_SUFFIX)/g' "$src_dir/$lib/Makefile"
-  sed -i 's|install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
-  sed -i 's|install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
-  sed -i 's|install: libquirc.a libquirc.$(LIB_SUFFIX) quirc-demo quirc-scanner|install: libquirc.a libquirc.$(LIB_SUFFIX)|g' "$src_dir/$lib/Makefile"
-  sed -i 's/SDL_CFLAGS := .*/SDL_CFLAGS :=/g' "$src_dir/$lib/Makefile"
-  sed -i 's/SDL_LIBS = .*/SDL_LIBS =/g' "$src_dir/$lib/Makefile"
-  sed -i 's/OPENCV_CFLAGS := .*/OPENCV_CFLAGS :=/g' "$src_dir/$lib/Makefile"
-  sed -i 's/OPENCV_LIBS = .*/OPENCV_LIBS =/g' "$src_dir/$lib/Makefile"
+  gsed -i 's/all: libquirc.$(LIB_SUFFIX) qrtest/all: libquirc.$(LIB_SUFFIX)/g' "$src_dir/$lib/Makefile"
+  gsed -i 's|install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
+  gsed -i 's|install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
+  gsed -i 's|install: libquirc.a libquirc.$(LIB_SUFFIX) quirc-demo quirc-scanner|install: libquirc.a libquirc.$(LIB_SUFFIX)|g' "$src_dir/$lib/Makefile"
+  gsed -i 's/SDL_CFLAGS := .*/SDL_CFLAGS :=/g' "$src_dir/$lib/Makefile"
+  gsed -i 's/SDL_LIBS = .*/SDL_LIBS =/g' "$src_dir/$lib/Makefile"
+  gsed -i 's/OPENCV_CFLAGS := .*/OPENCV_CFLAGS :=/g' "$src_dir/$lib/Makefile"
+  gsed -i 's/OPENCV_LIBS = .*/OPENCV_LIBS =/g' "$src_dir/$lib/Makefile"
   do_make "libquirc.a LDFLAGS=\"-static\" PREFIX=${dependency_install_prefix}"
   disable_nonessential "$src_dir/$lib"
   do_make_install "PREFIX=${dependency_install_prefix}"
@@ -2560,7 +2571,7 @@ build_librabbitmq() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  sed -i -E 's/(^|[[:space:]])-l([[:space:]]|$)/ /g' "$install_pkgconfig_dir/librabbitmq.pc"
+  gsed -i -E 's/(^|[[:space:]])-l([[:space:]]|$)/ /g' "$install_pkgconfig_dir/librabbitmq.pc"
   change_dir "$src_dir"
 }
 # build_librav1e          # config_options+= --enable-librav1e            # enable AV1 encoding via rav1e [no]
@@ -2669,7 +2680,7 @@ build_libexpat() {
   export automake="/usr/local/bin/automake"
   export ACLOCAL="$aclocal"
   export AUTOMAKE="$automake"
-  find "$src_dir/$lib/expat" -type f -name configure -exec sed -i \
+  find "$src_dir/$lib/expat" -type f -name configure -exec gsed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "--enable-static --disable-shared"
@@ -2733,7 +2744,7 @@ build_pango() {
 -Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\" \
 -Dcpp_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
   # disable tools - not needed for ffmpeg
-  sed -i "s/subdir('utils')/# subdir('utils')/g" meson.build
+  gsed -i "s/subdir('utils')/# subdir('utils')/g" meson.build
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
   change_dir "$src_dir"
@@ -2772,11 +2783,11 @@ build_librtmp() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local CLEAN_CFLAGS=$(echo "$CFLAGS" | sed 's/-D__errno=__errno\(\)//g' | sed 's/-D__assert2=__assert//g')
+  local CLEAN_CFLAGS=$(echo "$CFLAGS" | gsed 's/-D__errno=__errno\(\)//g' | gsed 's/-D__assert2=__assert//g')
   local RTMP_LIBS="-lpthread -ldl"
-  sed -i 's/^CC[[:space:]]*=[[:space:]]*gcc/CC ?= gcc/' Makefile
-  sed -i 's/^LD[[:space:]]*=[[:space:]]*$(CC)/LD ?= $(CC)/' Makefile
-  sed -i 's/^AR[[:space:]]*=[[:space:]]*ar/AR ?= ar/' Makefile
+  gsed -i 's/^CC[[:space:]]*=[[:space:]]*gcc/CC ?= gcc/' Makefile
+  gsed -i 's/^LD[[:space:]]*=[[:space:]]*$(CC)/LD ?= $(CC)/' Makefile
+  gsed -i 's/^AR[[:space:]]*=[[:space:]]*ar/AR ?= ar/' Makefile
   do_make "-C librtmp \
     CC=\"$CC\" \
     AR=\"$AR\" \
@@ -2818,7 +2829,7 @@ build_libshaderc() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   ./utils/git-sync-deps > >(redirect_output) 2>&1
   change_dir "$src_dir/$lib"
-  sed -i 's/add_subdirectory(third_party)/#add_subdirectory(third_party)/g' CMakeLists.txt
+  gsed -i 's/add_subdirectory(third_party)/#add_subdirectory(third_party)/g' CMakeLists.txt
   change_dir "$src_dir/$lib/build" 1
   export LDFLAGS="$LDFLAGS -lunwind"
   do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=release \
@@ -2848,8 +2859,8 @@ build_libshaderc() {
   if [[ -f "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" ]] ; then
     copy_path "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" "$dependency_install_prefix/lib/libshaderc_util.a" >>"$LOG_FILE"
   fi
-  find "$install_pkgconfig_dir" -name "shaderc*.pc" -exec sed -i 's/-lshaderc_shared/-lshaderc_combined/g' {} +
-  find "$install_pkgconfig_dir" -name "shaderc*.pc" -exec sed -i "s/Libs: .*/& -lglslang -lSPIRV -lSPIRV-Tools -lSPIRV-Tools-opt -lstdc++ -lm/" {} +
+  find "$install_pkgconfig_dir" -name "shaderc*.pc" -exec gsed -i 's/-lshaderc_shared/-lshaderc_combined/g' {} +
+  find "$install_pkgconfig_dir" -name "shaderc*.pc" -exec gsed -i "s/Libs: .*/& -lglslang -lSPIRV -lSPIRV-Tools -lSPIRV-Tools-opt -lstdc++ -lm/" {} +
   change_dir "$src_dir"
 }
 # build_libshine          # config_options+= --enable-libshine            # enable fixed-point MP3 encoding via libshine [no]
@@ -2987,7 +2998,7 @@ build_libssh() {
   export CFLAGS="${CFLAGS} -D__func__=__FUNCTION__ -DS_IWRITE=S_IWUSR -DS_IREAD=S_IRUSR -DS_IEXEC=S_IXUSR"
   if [[ "$host_arch" == "armv7a" ]]; then
     export CFLAGS="$CFLAGS -DHAVE_GETIFADDRS=1 -DHAVE_FREEIFADDRS=1"
-    sed -i '1i #include <ifaddrs.h>' "$src_dir/$lib/include/libssh/config.h"
+    gsed -i '1i #include <ifaddrs.h>' "$src_dir/$lib/include/libssh/config.h"
   fi
   local cmake_params="-DBUILD_SHARED_LIBS=OFF \
 -DWITH_STATIC_LIB=ON \
@@ -3013,7 +3024,7 @@ build_libssh() {
 -DCMAKE_INSTALL_PREFIX=${dependency_install_prefix}"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
-  sed -i 's/#  error "Your system must provide a __func__ macro"/#  define __func__ __FUNCTION__/g' "$src_dir/$lib/include/libssh/priv.h"
+  gsed -i 's/#  error "Your system must provide a __func__ macro"/#  define __func__ __FUNCTION__/g' "$src_dir/$lib/include/libssh/priv.h"
   do_make_and_make_install
   change_dir "$src_dir"
   add_libs_to_pkg -t="$install_pkgconfig_dir/libssh.pc" -l="-lcrypto"
@@ -3135,8 +3146,8 @@ build_jbig() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local escaped_cflags=$(echo "${CFLAGS}" | sed 's/(/\\(/g; s/)/\\)/g')
-  sed -i "s|CCFLAGS = -O2 -W|CCFLAGS = -O2 -W ${escaped_cflags}|g" Makefile
+  local escaped_cflags=$(echo "${CFLAGS}" | gsed 's/(/\\(/g; s/)/\\)/g')
+  gsed -i "s|CCFLAGS = -O2 -W|CCFLAGS = -O2 -W ${escaped_cflags}|g" Makefile
   do_make
   cp -fv "$src_dir/$lib/libjbig/libjbig.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"
   cp -fv "$src_dir/$lib/libjbig/jbig.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"
@@ -3184,7 +3195,7 @@ build_libtiff() {
   generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i '.bak' "s/-ltiff.*$/-ltiff -llzma -ljpeg -lz/" "$install_pkgconfig_dir/libtiff-4.pc" # static deps
+  gsed -i "s/-ltiff.*$/-ltiff -llzma -ljpeg -lz/" "$install_pkgconfig_dir/libtiff-4.pc" # static deps
   change_dir "$src_dir"
 }
 build_libjpeg_turbo() {
@@ -3267,8 +3278,8 @@ build_libarchive() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   # Fix Android NDK build: remove the internal AOSP android_lf.h include
-  sed -i 's|#include "android_lf.h"|/* #include "android_lf.h" */|g' libarchive/archive.h
-  sed -i 's|#include "android_lf.h"|/* #include "android_lf.h" */|g' libarchive/archive_entry.h
+  gsed -i 's|#include "android_lf.h"|/* #include "android_lf.h" */|g' libarchive/archive.h
+  gsed -i 's|#include "android_lf.h"|/* #include "android_lf.h" */|g' libarchive/archive_entry.h
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include "
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -L${dependency_install_prefix}/lib/${host_target} "
   generic_configure "--enable-static \
@@ -3332,7 +3343,7 @@ build_libpsl() {
 --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i '.bak' "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
+  gsed -i "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
   reset_cflags
   change_dir "$src_dir"
 }
@@ -3422,10 +3433,10 @@ build_libtesseract() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i '/if(ANDROID)/,/endif()/d' CMakeLists.txt
-  sed -i 's/add_executable(tesseract.*//g' CMakeLists.txt
-  sed -i 's/target_link_libraries(tesseract.*//g' CMakeLists.txt
-  sed -i 's/install(TARGETS tesseract.*//g' CMakeLists.txt
+  gsed -i '/if(ANDROID)/,/endif()/d' CMakeLists.txt
+  gsed -i 's/add_executable(tesseract.*//g' CMakeLists.txt
+  gsed -i 's/target_link_libraries(tesseract.*//g' CMakeLists.txt
+  gsed -i 's/install(TARGETS tesseract.*//g' CMakeLists.txt
   local cmake_params="-DOPENMP_BUILD=OFF \
 -DGRAPHICS_DISABLED=ON \
 -DDISABLE_CURL=ON \
@@ -3440,7 +3451,7 @@ build_libtesseract() {
   if [[ "$host_arch" == "x86_64" ]]; then
     cmake_params="$cmake_params -DOPENMP_SIMD=OFF -DHAVE_AVX:BOOL=OFF -DHAVE_AVX2:BOOL=OFF -DHAVE_FMA:BOOL=OFF -DHAVE_SSE4_1:BOOL=ON"
     # Update the x86 block to ignore Android
-    sed -i 's/if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86|x86_64|AMD64|amd64|i386|i686")/if(NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86|x86_64|AMD64|amd64|i386|i686")/' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86|x86_64|AMD64|amd64|i386|i686")/if(NOT ANDROID AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86|x86_64|AMD64|amd64|i386|i686")/' "$src_dir/$lib/CMakeLists.txt"
   fi
   change_dir "$src_dir/$lib/build" 1
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
@@ -3509,7 +3520,7 @@ build_libtwolame() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
-    sed -i '.bak' "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
+    gsed -i "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
   touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
@@ -3527,10 +3538,10 @@ build_libuavs3d() {
   chmod -R a+rwx "$src_dir/$lib/version.sh"
   (cd "$src_dir/$lib" && ./version.sh) >>"$LOG_FILE" 2>&1
   change_dir "$src_dir/$lib"
-  sed -i 's/add_executable(uavs3dec ${DIR_SRC_TEST})/#add_executable(uavs3dec ${DIR_SRC_TEST})/' CMakeLists.txt
-  sed -i 's|aux_source_directory(./test DIR_SRC_TEST)|#aux_source_directory(./test DIR_SRC_TEST)|' CMakeLists.txt
-  sed -i 's|target_link_libraries(uavs3dec m)|#target_link_libraries(uavs3dec m)|' CMakeLists.txt
-  sed -i 's|target_link_libraries(uavs3dec uavs3d)|#target_link_libraries(uavs3dec uavs3d)|' CMakeLists.txt
+  gsed -i 's/add_executable(uavs3dec ${DIR_SRC_TEST})/#add_executable(uavs3dec ${DIR_SRC_TEST})/' CMakeLists.txt
+  gsed -i 's|aux_source_directory(./test DIR_SRC_TEST)|#aux_source_directory(./test DIR_SRC_TEST)|' CMakeLists.txt
+  gsed -i 's|target_link_libraries(uavs3dec m)|#target_link_libraries(uavs3dec m)|' CMakeLists.txt
+  gsed -i 's|target_link_libraries(uavs3dec uavs3d)|#target_link_libraries(uavs3dec uavs3d)|' CMakeLists.txt
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCOMPILE_10BIT=0 \
 -DBUILD_SHARED_LIBS=0 \
@@ -3545,7 +3556,7 @@ build_libuavs3d() {
     cmake_params+=" -DUAVS3D_TARGET_CPU=arm64"
   elif [[ "$host_arch" == "armv7a" ]]; then
     cmake_params+=" -DUAVS3D_TARGET_CPU=armv7"
-    sed -i 's/-mfloat-abi=hard//g' "$src_dir/$lib/source/CMakeLists.txt"
+    gsed -i 's/-mfloat-abi=hard//g' "$src_dir/$lib/source/CMakeLists.txt"
   fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
@@ -3584,7 +3595,7 @@ build_libvmaf() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i '.bak' "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
+  gsed -i "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
   change_dir "$src_dir"
 }
 # build_libvorbis         # config_options+= --enable-libvorbis           # enable Vorbis en/decoding via libvorbis, native implementation exists [no]
@@ -3632,8 +3643,8 @@ build_libvpx() {
       export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
       export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
       vpx_target="armv7-android-gcc"
-      sed -i '/#error "not hardfp"/d' "$src_dir/$lib/build/make/configure.sh"
-      sed -i 's/-mfloat-abi=${float_abi}//g' "$src_dir/$lib/build/make/configure.sh"
+      gsed -i '/#error "not hardfp"/d' "$src_dir/$lib/build/make/configure.sh"
+      gsed -i 's/-mfloat-abi=${float_abi}//g' "$src_dir/$lib/build/make/configure.sh"
       config="$config --disable-thumb"
     fi
   fi
@@ -3669,7 +3680,7 @@ build_libvvenc() {
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   # Fix corrupted pkg-config file generated by static libvvenc install
-  sed -i 's/interface_libs-NOTFOUND//g' "$install_pkgconfig_dir/libvvenc.pc"
+  gsed -i 's/interface_libs-NOTFOUND//g' "$install_pkgconfig_dir/libvvenc.pc"
   change_dir "$src_dir"
 }
 # build_libwebp           # config_options+= --enable-libwebp             # enable WebP encoding via libwebp [no]
@@ -3725,26 +3736,26 @@ build_libx265() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   # Fix for CMake > 3.0 dropping support for OLD policy behaviors
-  sed -i 's/cmake_policy(SET CMP0025 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
-  sed -i 's/cmake_policy(SET CMP0054 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/cmake_policy(SET CMP0025 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/cmake_policy(SET CMP0054 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
   local extra_cmake=""
   local extra_cmake_high_bit=""
   if [[ "$host_arch" == "aarch64" ]]; then
-    sed -i '/if(INTEL_CXX OR CLANG OR (NOT CC_VERSION VERSION_LESS 4.3))/,/endif()/d' "$src_dir/$lib/source/common/CMakeLists.txt"
+    gsed -i '/if(INTEL_CXX OR CLANG OR (NOT CC_VERSION VERSION_LESS 4.3))/,/endif()/d' "$src_dir/$lib/source/common/CMakeLists.txt"
     extra_cmake=" -DCROSS_COMPILE_ARM64=ON"
     extra_cmake_high_bit=" -DENABLE_ASSEMBLY=OFF"
     # Inject target triple into hardcoded add_custom_command ARGS
-    sed -i 's/ARGS ${ARM_ARGS}/ARGS --target=aarch64-linux-android26 ${ARM_ARGS}/g' "$src_dir/$lib/source/CMakeLists.txt"
+    gsed -i 's/ARGS ${ARM_ARGS}/ARGS --target=aarch64-linux-android26 ${ARM_ARGS}/g' "$src_dir/$lib/source/CMakeLists.txt"
   elif [[ "$host_arch" == "armv7a" ]]; then
-    sed -i '/if(INTEL_CXX OR CLANG OR (NOT CC_VERSION VERSION_LESS 4.3))/,/endif()/d' "$src_dir/$lib/source/common/CMakeLists.txt"
+    gsed -i '/if(INTEL_CXX OR CLANG OR (NOT CC_VERSION VERSION_LESS 4.3))/,/endif()/d' "$src_dir/$lib/source/common/CMakeLists.txt"
     extra_cmake=" -DCROSS_COMPILE_ARM=ON"
     extra_cmake_high_bit=" -DENABLE_ASSEMBLY=OFF"
     # Inject target triple into hardcoded add_custom_command ARGS
-    sed -i 's/ARGS ${ARM_ARGS}/ARGS --target=armv7a-linux-androideabi26 ${ARM_ARGS}/g' "$src_dir/$lib/source/CMakeLists.txt"
+    gsed -i 's/ARGS ${ARM_ARGS}/ARGS --target=armv7a-linux-androideabi26 ${ARM_ARGS}/g' "$src_dir/$lib/source/CMakeLists.txt"
   fi
-  sed -i 's/ARGS ${NASM_FLAGS} ${ASM_SRC}/ARGS ${NASM_FLAGS} -DPIC ${ASM_SRC}/g' "$src_dir/$lib/source/CMakeLists.txt"
-  sed -i 's/set(ARGS -f elf64)/set(ARGS -f elf64 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
-  sed -i 's/set(ARGS -f elf32)/set(ARGS -f elf32 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
+  gsed -i 's/ARGS ${NASM_FLAGS} ${ASM_SRC}/ARGS ${NASM_FLAGS} -DPIC ${ASM_SRC}/g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/set(ARGS -f elf64)/set(ARGS -f elf64 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
+  gsed -i 's/set(ARGS -f elf32)/set(ARGS -f elf32 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
   # Purge cache to ensure modified CMakeLists.txt is processed
   rm -rf "$src_dir/$lib/12bit" "$src_dir/$lib/10bit" "$src_dir/$lib/8bit"
   mkdir -p "$src_dir/$lib/12bit" "$src_dir/$lib/10bit" "$src_dir/$lib/8bit"
@@ -3811,7 +3822,7 @@ SAVE
 END
 EOF
   do_make_install
-  sed -i -E 's/-l+[-:]*libunwind\.a//g' "$install_pkgconfig_dir/x265.pc"
+  gsed -i -E 's/-l+[-:]*libunwind\.a//g' "$install_pkgconfig_dir/x265.pc"
   change_dir "$src_dir"
 }
 # build_libxavs           # config_options+= --enable-libxavs             # enable AVS encoding via xavs [no]
@@ -3823,11 +3834,11 @@ build_libxavs() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export AS=yasm
-  sed -i 's/, tmp\[0\]);/, \&tmp[0]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  sed -i 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  sed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  sed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  sed -i 's/extern void predict_8x8c_p_core_mmxext.*/extern void predict_8x8c_p_core_mmxext(uint8_t *src, int i00, int b, int c);/' "$src_dir/$lib/common/i386/predict-c.c"
+  gsed -i 's/, tmp\[0\]);/, \&tmp[0]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/extern void predict_8x8c_p_core_mmxext.*/extern void predict_8x8c_p_core_mmxext(uint8_t *src, int i00, int b, int c);/' "$src_dir/$lib/common/i386/predict-c.c"
   generic_configure "--enable-static \
 --disable-shared \
 --enable-pic \
@@ -3863,15 +3874,15 @@ AS=$AS"
   fi
   generic_configure "$config"
   if [[ "$host_arch" == "aarch64" ]]; then
-    sed -i 's/SYS_ARCH=AARCH64/SYS_ARCH=GENERIC/g' config.mak
+    gsed -i 's/SYS_ARCH=AARCH64/SYS_ARCH=GENERIC/g' config.mak
   elif [[ "$host_arch" == "armv7a" ]]; then
-    sed -i 's/SYS_ARCH=ARM/SYS_ARCH=GENERIC/g' config.mak
+    gsed -i 's/SYS_ARCH=ARM/SYS_ARCH=GENERIC/g' config.mak
   fi
   disable_nonessential "$src_dir/$lib"
-  sed -i 's/$(AR)$@/$(AR) $@/g' Makefile
+  gsed -i 's/$(AR)$@/$(AR) $@/g' Makefile
   do_make "AR=\"$AR\" AS=$AS"
   do_make_install
-  sed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$dependency_install_prefix"/lib/pkgconfig/xavs2.pc
+  gsed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$dependency_install_prefix"/lib/pkgconfig/xavs2.pc
   change_dir "$src_dir"
   reset_cross_vars
 }
@@ -3901,20 +3912,20 @@ build_libxevd() {
         VERSION="v0.5.0"
     fi
     echo "$VERSION" >"$src_dir/$lib/version.txt"
-    sed -i 's/-Wno-stringop-overflow//g' "$src_dir/$lib/CMakeLists.txt"
-    sed -i 's/-Wno-maybe-uninitialized//g' "$src_dir/$lib/CMakeLists.txt"
-    sed -i 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/-Wno-stringop-overflow//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/-Wno-maybe-uninitialized//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
     local cmake_options="-DBUILD_SHARED_LIBS=OFF \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
   -DCMAKE_BUILD_TYPE=Release"
     if [[ "$host_arch" == "aarch64" || "$host_arch" == "armv7a" ]]; then
       cmake_options+=" -DARM=TRUE"
-      sed -i 's/add_definitions(-DARM=1)/add_definitions(-DARM=TRUE)/g' "$src_dir/$lib/CMakeLists.txt"
+      gsed -i 's/add_definitions(-DARM=1)/add_definitions(-DARM=TRUE)/g' "$src_dir/$lib/CMakeLists.txt"
     fi
     do_cmake_from_build_dir "$src_dir/$lib" "$cmake_options"
     disable_nonessential "$src_dir/$lib/build"
     do_make "xevd"
-    sed -i "s/Version:.*/Version: ${VERSION//v/}/g" "$src_dir/$lib/build/xevd.pc"
+    gsed -i "s/Version:.*/Version: ${VERSION//v/}/g" "$src_dir/$lib/build/xevd.pc"
     { cp -fv "$src_dir/$lib/build/src_main/libxevd.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib static lib"
     { cp -fv "$src_dir/$lib/inc/xevd.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib headers"
     { cp -fv "$src_dir/$lib/build/xevd_exports.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib headers"
@@ -3951,25 +3962,25 @@ build_libxeve() {
         VERSION="0.5.1"
     fi
     echo "$VERSION" > "$src_dir/$lib/version.txt"
-    sed -i 's/-Wno-stringop-overflow//g' "$src_dir/$lib/CMakeLists.txt"
-    sed -i 's/-Wno-maybe-uninitialized//g' "$src_dir/$lib/CMakeLists.txt"
-    sed -i 's/add_subdirectory(app)//g' "$src_dir/$lib/CMakeLists.txt"
-    sed -i 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/-Wno-stringop-overflow//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/-Wno-maybe-uninitialized//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/add_subdirectory(app)//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
     local cmake_options="-DBUILD_SHARED_LIBS=OFF \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
   -DCMAKE_BUILD_TYPE=Release"
     if [[ "$host_arch" == "aarch64" ]]; then
       cmake_options+=" -DARM=TRUE"
-      sed -i 's/add_definitions(-DARM=1)/add_definitions(-DARM=TRUE)/g' "$src_dir/$lib/CMakeLists.txt"
-      sed -i 's/if("${ARM}" STREQUAL "TRUE")/if(ARM)/g' "$src_dir/$lib/src_base/CMakeLists.txt"
-      sed -i 's/if("${ARM}" STREQUAL "TRUE")/if(ARM)/g' "$src_dir/$lib/src_main/CMakeLists.txt"
-      sed -i '6006s/float32x4_t/float64x2_t/' "$src_dir/$lib/src_base/neon/sse2neon.h"
-      sed -i '6021s/a, p/a, (int32x4_t *) p/' "$src_dir/$lib/src_base/neon/sse2neon.h"
+      gsed -i 's/add_definitions(-DARM=1)/add_definitions(-DARM=TRUE)/g' "$src_dir/$lib/CMakeLists.txt"
+      gsed -i 's/if("${ARM}" STREQUAL "TRUE")/if(ARM)/g' "$src_dir/$lib/src_base/CMakeLists.txt"
+      gsed -i 's/if("${ARM}" STREQUAL "TRUE")/if(ARM)/g' "$src_dir/$lib/src_main/CMakeLists.txt"
+      gsed -i '6006s/float32x4_t/float64x2_t/' "$src_dir/$lib/src_base/neon/sse2neon.h"
+      gsed -i '6021s/a, p/a, (int32x4_t *) p/' "$src_dir/$lib/src_base/neon/sse2neon.h"
     fi
     do_cmake_from_build_dir "$src_dir/$lib" "$cmake_options"
     disable_nonessential "$src_dir/$lib/build"
     do_make "xeve"
-    sed -i "s/Version:.*/Version: ${VERSION//v/}/g" "$src_dir/$lib/build/xeve.pc"
+    gsed -i "s/Version:.*/Version: ${VERSION//v/}/g" "$src_dir/$lib/build/xeve.pc"
     { cp -fv "$src_dir/$lib/build/src_main/libxeve.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"; } || exit_message 1 "build_libxeve: could not install $lib static lib"
     { cp -fv "$src_dir/$lib/inc/xeve.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxeve: could not install $lib headers"
     { cp -fv "$src_dir/$lib/build/xeve_exports.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxeve: could not install $lib headers"
@@ -4027,10 +4038,10 @@ build_libxvid() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build/generic"
-  sed -i 's/BUILD_DIR = =build/BUILD_DIR = build/g' Makefile
-  sed -i 's|install:.*|install: $(STATIC_LIB)|g' Makefile
-  sed -i 's|$(LN_S)|$(LN_S) -f|g' Makefile
-  sed -i '/ifeq ($(SHARED_EXTENSION)/,/endif/ s/^/# /' Makefile
+  gsed -i 's/BUILD_DIR = =build/BUILD_DIR = build/g' Makefile
+  gsed -i 's|install:.*|install: $(STATIC_LIB)|g' Makefile
+  gsed -i 's|$(LN_S)|$(LN_S) -f|g' Makefile
+  gsed -i '/ifeq ($(SHARED_EXTENSION)/,/endif/ s/^/# /' Makefile
   generic_configure "--enable-pic --with-pic --enable-static --disable-shared --disable-assembly"
   do_make "libxvidcore.a CFLAGS=\"$CFLAGS -fvisibility=hidden\""
   do_make "install"
@@ -4093,8 +4104,8 @@ build_libzmq() {
 --disable-curve-keygen \
 --disable-curve"
   # Add these before generic_configure
-  # sed -i 's/strlcpy/zmq_strlcpy_internal/g' "$src_dir/$lib/src/compat.hpp"
-  # sed -i 's/strnlen/zmq_strnlen_internal/g' "$src_dir/$lib/src/compat.hpp"
+  # gsed -i 's/strlcpy/zmq_strlcpy_internal/g' "$src_dir/$lib/src/compat.hpp"
+  # gsed -i 's/strnlen/zmq_strnlen_internal/g' "$src_dir/$lib/src/compat.hpp"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -4184,7 +4195,7 @@ build_libzvbi() {
   fi
   do_autogen "--build-w$bits_target"
   change_dir "$src_dir/$lib"
-  sed -i 's|as_fn_error \$? "Unable to link pthread functions" "\$LINENO" 5|: # Android provides pthread functions in libc|g' configure
+  gsed -i 's|as_fn_error \$? "Unable to link pthread functions" "\$LINENO" 5|: # Android provides pthread functions in libc|g' configure
   touch "no.autoreconf"
   generic_configure "--enable-static \
 --disable-shared \
@@ -4324,7 +4335,7 @@ build_lv2_headers() {
 # build_lv2               # config_options+= --enable-lv2                 # enable LV2 audio filtering [no]
 build_lv2() {
   # run_valid_function "build_lilv"
-  find "$install_pkgconfig_dir" -type f -name "*.pc" -exec sed -i \
+  find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i \
   -e 's/-lsratom-0\b/-lsratom/g' \
   -e 's/-lsord-0\b/-lsord/g' \
   -e 's/-lserd-0\b/-lserd/g' \
@@ -4396,8 +4407,8 @@ build_opencl() {
   disable_nonessential "$src_dir/$parentlib/$lib/build"
   do_make_and_make_install
   cp -f "$src_dir/$parentlib/$lib/OpenCL-Headers.pc.in" "$install_pkgconfig_dir/OpenCL-Headers.pc"
-  sed -i "s|@PKGCONFIG_PREFIX@|${dependency_install_prefix}|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
-  sed -i "s|@OPENCL_INCLUDEDIR_PC@|\${prefix}/include|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
+  gsed -i "s|@PKGCONFIG_PREFIX@|${dependency_install_prefix}|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
+  gsed -i "s|@OPENCL_INCLUDEDIR_PC@|\${prefix}/include|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
   local lib="OpenCL-ICD-Loader"
   local repo="https://github.com/KhronosGroup/OpenCL-ICD-Loader"
   local repo_ver="v2025.07.22"
@@ -4462,7 +4473,7 @@ build_sphinxbase() {
   do_git_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
   if [[ -f configure.ac ]] && ! grep -q 'linux-android' configure.ac; then
-    sed -i '/case $host in/a\
+    gsed -i '/case $host in/a\
 	*-linux-android*|*-*-linux-android*)\
 		ad_files="ad_base.lo"\
 		AC_MSG_RESULT([No audio interface for host type $host.])\
@@ -4480,8 +4491,8 @@ build_sphinxbase() {
 --without-alsa \
 --without-swig \
 --host=$host_target"
-  sed -i 's/ad_oss/ad_base/g' "$src_dir/$lib/Makefile"
-  sed -i 's/ad_oss/ad_base/g' "$src_dir/$lib/src/libsphinxad/Makefile"
+  gsed -i 's/ad_oss/ad_base/g' "$src_dir/$lib/Makefile"
+  gsed -i 's/ad_oss/ad_base/g' "$src_dir/$lib/src/libsphinxad/Makefile"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -4572,8 +4583,8 @@ build_vapoursynth() {
   fi
   if [[ -f "python_dev_${host_arch}/prefix/include/python3.14/Python.h" ]]; then
     meson_options="$meson_options -Denable_python_module=true -Denable_vsscript=true -Dpython3_bin=\"/opt/python/cp314-cp314/bin/python3.14\""
-    find "python_dev_${host_arch}/prefix/lib" -name "*.pc" -exec sed -i "s|\(^prefix=\)\(.*\)|\1$dependency_install_prefix|g" {} \;
-    find "python_dev_${host_arch}/prefix/lib" -name "python*.pc" -exec sed -i "s|\$(BLDLIBRARY)|-lpython3.14|g" {} \;
+    find "python_dev_${host_arch}/prefix/lib" -name "*.pc" -exec gsed -i "s|\(^prefix=\)\(.*\)|\1$dependency_install_prefix|g" {} \;
+    find "python_dev_${host_arch}/prefix/lib" -name "python*.pc" -exec gsed -i "s|\$(BLDLIBRARY)|-lpython3.14|g" {} \;
     py_root="python_dev_${host_arch}/prefix"
     local py_ver="python3.14"
     remove_path -rf "$dependency_install_prefix/include/$py_ver"
@@ -4630,8 +4641,8 @@ build_whisper() {
   if [[ "$host_arch" == "aarch64" ]]; then
     cmake_params="$cmake_params -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
 -DGGML_NATIVE=OFF"
-    sed -i 's/list(APPEND ARCH_FLAGS -msse4.2)//g' "$src_dir/$lib/ggml/src/ggml-cpu/CMakeLists.txt"
-    sed -i 's/list(APPEND ARCH_FLAGS -mbmi2)//g' "$src_dir/$lib/ggml/src/ggml-cpu/CMakeLists.txt"
+    gsed -i 's/list(APPEND ARCH_FLAGS -msse4.2)//g' "$src_dir/$lib/ggml/src/ggml-cpu/CMakeLists.txt"
+    gsed -i 's/list(APPEND ARCH_FLAGS -mbmi2)//g' "$src_dir/$lib/ggml/src/ggml-cpu/CMakeLists.txt"
   fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
@@ -4639,7 +4650,7 @@ build_whisper() {
   while IFS= read -r -d '' file; do
     add_libs_to_pkg -t="$file" -l="-lwhisper -lggml -lggml-base -lggml-cpu -lstdc++ -lm"
   done < <(find "$install_pkgconfig_dir" -name "*whisper*.pc" -print0)
-  find "$install_pkgconfig_dir" -name "*whisper*.pc" -exec sed -i -E -e 's/(^|[[:space:]])-lgomp([[:space:]]|$)/ /g' {} +
+  find "$install_pkgconfig_dir" -name "*whisper*.pc" -exec gsed -i -E -e 's/(^|[[:space:]])-lgomp([[:space:]]|$)/ /g' {} +
   change_dir "$src_dir"
 }
 #endregion---------------------------------------------------------------------
@@ -4715,18 +4726,35 @@ build_libopencolorio() {
     lib_flag="-l${file_noext#lib}"
     add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag"
   done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
-  if [[ -d "$src_dir/$lib/build/ext/dist/include" ]]; then
-    cp -rfv "$src_dir/$lib/build/ext/dist/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
+  
+  local ocio_ext_dist_dir="$src_dir/$lib/build/ext/dist"
+  
+  if [[ -d "$ocio_ext_dist_dir" ]]; then
+    local ocio_ext_dist_dir_sed="$(
+      printf '%s\n' "$ocio_ext_dist_dir" |
+        gsed -e 's/[\/&|]/\\&/g'
+    )"
+    local dependency_install_prefix_sed="$(
+      printf '%s\n' "$dependency_install_prefix" |
+        gsed -e 's/[\/&|]/\\&/g'
+    )"
+    find "$ocio_ext_dist_dir" -type f -name "*.pc" \
+      -exec gsed -i \
+        -e "s|^prefix=.*|prefix=$dependency_install_prefix_sed|g" \
+        -e "s|$ocio_ext_dist_dir_sed|\${prefix}|g" {} \; \
+      > >(redirect_output) \
+      || exit_message 1 "Failed to update prefix in pkgconfig files for $lib"
+    
+    find "$ocio_ext_dist_dir/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
   fi
-  if [[ -d "$src_dir/$lib/build/ext/dist/lib/cmake" ]]; then
-    cp -rfv "$src_dir/$lib/build/ext/dist/lib/cmake" "$dependency_install_prefix/lib" > >(redirect_output) || exit_message 1 "Failed to copy cmake directory for $lib"
+  if [[ -d "$ocio_ext_dist_dir/include" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
   fi
-  if [[ -d "$src_dir/$lib/build/ext/dist/share" ]]; then
-    cp -rfv "$src_dir/$lib/build/ext/dist/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
+  if [[ -d "$ocio_ext_dist_dir/lib/cmake" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/lib/cmake" "$dependency_install_prefix/lib" > >(redirect_output) || exit_message 1 "Failed to copy cmake directory for $lib"
   fi
-  if [[ -d "$src_dir/$lib/build/ext/dist/lib/pkgconfig" ]]; then
-    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec sed -i '.bak' -e "s|prefix=.*|prefix=$dependency_install_prefix|g" {} \; > >(redirect_output) || exit_message 1 "Failed to update prefix in pkgconfig files for $lib"
-    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
+  if [[ -d "$ocio_ext_dist_dir/share" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
   fi
   change_dir "$src_dir"
 }
@@ -4817,8 +4845,8 @@ build_omx() {
   export PATH="/usr/local/arm-gnu-toolchain/sys-bin:/usr/local/arm-gnu-toolchain/bin:$PATH"
   export CFLAGS="$CFLAGS -Wno-error"
   # disable omxregister utility. not needed for ffmpeg
-  sed -i 's/bin_PROGRAMS = omxregister-bellagio/#bin_PROGRAMS = omxregister-bellagio/' src/Makefile.am
-  find . -name "configure.ac" -exec sed -i 's/-Werror//g' {} +
+  gsed -i 's/bin_PROGRAMS = omxregister-bellagio/#bin_PROGRAMS = omxregister-bellagio/' src/Makefile.am
+  find . -name "configure.ac" -exec gsed -i 's/-Werror//g' {} +
   find . -exec touch {} +
   generic_configure "--disable-doc"
   disable_nonessential "$src_dir/$lib"

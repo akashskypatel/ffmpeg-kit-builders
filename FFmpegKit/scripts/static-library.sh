@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 set -e
 OUTPUT_LIB="$1"
 AR_CMD="$2"
@@ -213,7 +224,7 @@ $AR_CMD -M <lib.mri
 $RANLIB_CMD "$OUTPUT_LIB"
 rm -f lib.mri
 
-clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | sed 's/ *$//')
+clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | gsed 's/ *$//')
 if test -f ffmpegkit.pc; then
   perl -i -pe "s|FFMPEG_KIT_EXT_LIBS|\Q$clean_libs\E|g" ffmpegkit.pc
 fi

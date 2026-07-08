@@ -1,8 +1,21 @@
+#!/usr/bin/env bash
+
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 export VALID_TYPES=("full" "video_hw" "video" "audio" "base" "debug")
 export VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
-export VALID_PLATFORM_ARCHS=("linux-x86_64" "linux-aarch64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64" "appletvos-aarch64" "appletvsimulator-aarch64")
+export VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64" "appletvos-aarch64" "appletvsimulator-aarch64")
 export VALID_ARCHS=("x86_64" "aarch64" "armv7a")
-export VALID_LINUX=("linux-x86_64" "linux-aarch64")
+export VALID_LINUX=("linux-x86_64")
 export VALID_WINDOWS=("windows-x86_64")
 export VALID_ANDROID=("android-aarch64" "android-armv7a" "android-x86_64")
 export VALID_IOS=("ios-aarch64")

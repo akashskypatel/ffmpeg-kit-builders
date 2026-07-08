@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 ##
 # Generates a patch file for a given file.
 # Usage: ./generate_patch.sh <INPUT_FILE> [FFMPEG_SRC_DIR] [CURRENT_SOURCE_DIR]
@@ -66,8 +77,8 @@ echo "Patch file created: $PATCH_FILE"
 
 SRC_DIR=$(basename "$CURRENT_SOURCE_DIR")
 
-sed -i'.patchbak' "s|a/.*/${FILE_NAME}_orig.$FILE_EXT|a/$SRC_DIR/$FILE_NAME.$FILE_EXT|g" "$PATCH_FILE"
-sed -i'.patchbak' "s|b/.*/${FILE_NAME}_bak.$FILE_EXT|b/$SRC_DIR/$FILE_NAME.$FILE_EXT|g" "$PATCH_FILE"
+gsed -i "s|a/.*/${FILE_NAME}_orig.$FILE_EXT|a/$SRC_DIR/$FILE_NAME.$FILE_EXT|g" "$PATCH_FILE"
+gsed -i "s|b/.*/${FILE_NAME}_bak.$FILE_EXT|b/$SRC_DIR/$FILE_NAME.$FILE_EXT|g" "$PATCH_FILE"
 
 rm -f "$PATCH_FILE.patchbak"
 

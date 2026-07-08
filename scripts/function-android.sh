@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2312,2250,2292,2249
 
 set_toolchain_paths() {
@@ -42,7 +53,7 @@ configure_ffmpeg_kit() {
 	UNWIND_STATIC=$($CXX -print-file-name=libunwind.a)
     BUILTINS_STATIC=$($CXX -print-file-name=libclang_rt.builtins-"${clang_arch}"-android.a)
     export LDFLAGS="${LDFLAGS} -Wl,--allow-multiple-definition -Wl,--exclude-libs,libunwind.a $UNWIND_STATIC $BUILTINS_STATIC"
-    export LDFLAGS=$(echo "${LDFLAGS}" | sed 's/-Wl,--fatal-warnings//g')
+    export LDFLAGS=$(echo "${LDFLAGS}" | gsed 's/-Wl,--fatal-warnings//g')
 	export LDFLAGS="${LDFLAGS//-static /} -static-libstdc++ -L${ffmpeg_install_prefix}/lib -L${dependency_install_prefix}/lib"
 
 	local cmake_params="-DCMAKE_SYSTEM_NAME=Android \
@@ -203,7 +214,7 @@ EOF
 
 fix_pkgconfig_flags() {
 	echo "INFO: Fixing pkgconfig files for Android in $install_pkgconfig_dir"
-	find "$install_pkgconfig_dir" -name "*.pc" -exec sed -i -E \
+	find "$install_pkgconfig_dir" -name "*.pc" -exec gsed -i -E \
 	-e 's/(^|[[:space:]])-lrt([[:space:]]|$)/ /g' \
 	-e 's/(^|[[:space:]])-lpthread([[:space:]]|$)/ -pthread /g' \
 	-e 's/(^|[[:space:]])-l([[:space:]]|$)/ /g' "{}" + \
@@ -217,7 +228,7 @@ ffmpeg_patches() {
 		copy_path "$PATCHDIR/binder.c" "$ffmpeg_source_dir/compat/android/binder.c" "-f"
 		if [[ "$host_arch" == "armv7a" ]]; then		
 			if [[ -f "$ffmpeg_source_dir/libavutil/hwcontext_vulkan.c" ]]; then
-				sed -i 's/static VkBool32 VKAPI_CALL vk_dbg_callback/static VKAPI_ATTR VkBool32 VKAPI_CALL vk_dbg_callback/' "$ffmpeg_source_dir/libavutil/hwcontext_vulkan.c"
+				gsed -i 's/static VkBool32 VKAPI_CALL vk_dbg_callback/static VKAPI_ATTR VkBool32 VKAPI_CALL vk_dbg_callback/' "$ffmpeg_source_dir/libavutil/hwcontext_vulkan.c"
 			fi
 		fi
 		echo "INFO: Done patching ffmpeg for Android." >>"$LOG_FILE"

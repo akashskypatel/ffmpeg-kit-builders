@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 set -euo pipefail
 
 source "${SCRIPTDIR}/function.sh"
@@ -22,7 +34,7 @@ if [[ -z "$token" ]]; then
 fi
 
 if [[ -z "$repo" ]]; then
-  repo="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
+  repo="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null | gsed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
 fi
 
 if [[ -z "$repo" ]]; then

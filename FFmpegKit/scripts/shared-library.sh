@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 set -e
 
 FFMPEG_BUILD_DIR="$1"
@@ -151,7 +162,7 @@ process_library_path() {
 				echo_log "  [DEBUG] $filename is static. Bundling not needed."
 				return
 			fi
-			clean_name=$(echo "$filename" | sed -E 's/^lib//; s/\.(dll\.a|a|lib)$//; s/\.dll$//')
+			clean_name=$(echo "$filename" | gsed -E 's/^lib//; s/\.(dll\.a|a|lib)$//; s/\.dll$//')
 
 			bin_dir="$(dirname "$dirname")/bin"
 			found_dll=""
@@ -219,7 +230,7 @@ done
 if test -f bundle_manifest.txt; then
 	sort -u bundle_manifest.txt -o bundle_manifest.txt
 fi
-clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | sed 's/ *$//')
+clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | gsed 's/ *$//')
 if test -f ffmpegkit.pc; then
   perl -i -pe "s|FFMPEG_KIT_EXT_LIBS|\Q$clean_libs\E|g" ffmpegkit.pc
 fi

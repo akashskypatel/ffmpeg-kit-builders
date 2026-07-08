@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
 
 configure_ffmpeg_kit() {
@@ -31,6 +42,7 @@ configure_ffmpeg_kit() {
 -DCMAKE_CXX_COMPILER=$CXX \
 -DFFMPEG_SRC_DIR=\"$ffmpeg_source_dir\" \
 -DFFMPEG_BUILD_DIR=\"$ffmpeg_install_prefix\" \
+-DDEPENDENCY_BUILD_DIR=\"$dependency_install_prefix\" \
 -DCMAKE_INSTALL_PREFIX=\"$ffmpeg_kit_install\" \
 -DFFMPEG_KIT_BUNDLE_TYPE=\"$(get_bundle_type)\" \
 -DCMAKE_OSX_ARCHITECTURES=$host_arch \
@@ -111,7 +123,7 @@ ffmpeg_patches() {
 	if ismacos; then
 		echo "INFO: Patching ffmpeg for macOS quirks..." >>"$LOG_FILE"
     if truthy "$enable_vulkan"; then
-      sed -i'.bak' '/#include <SDL_vulkan.h>/a\
+      gsed -i '/#include <SDL_vulkan.h>/a\
 #include "libavutil/hwcontext.h"\
 #include "libavutil/hwcontext_vulkan.h"' "$ffmpeg_source_dir/fftools/ffplay_renderer.c"
     fi

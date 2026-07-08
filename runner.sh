@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,1090
 
 export BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -605,7 +616,7 @@ if [[ "$*" == *"--resume"* ]]; then
   fi
   if [[ -f "$RUN_STATE_FILE" ]]; then
     LINE=$(head -n 1 "$RUN_STATE_FILE")
-    STEP=$(sed -i'' -n '2{p;q;}' "$RUN_STATE_FILE")
+    STEP=$(gsed -i -n '2{p;q;}' "$RUN_STATE_FILE")
     read -r -a args <<< "$LINE"
     idx_run=-1
     idx_build_only=-1

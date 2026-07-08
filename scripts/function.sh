@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,SC2269
 
 # 1. exit code
@@ -340,6 +351,20 @@ overwrite_file() {
 	copy_path "$1" "$2" "-rf" 2>>"$LOG_FILE"
 }
 
+# setup gsed so both linux and macos use GNU sed syntax
+setup_gsed() {
+  determine_distro
+  if [[ "$BUILD_OS" == "linux" ]]; then
+    ln -sf /usr/bin/sed /usr/local/bin/gsed
+  # else check if gsed is installed
+  elif ! command -v gsed &> /dev/null; then
+    install_missing_packages gsed
+    if ! command -v gsed &> /dev/null; then
+      exit_message 1 "setup_gsed: gsed is not installed and failed to install. Please install it manually."
+    fi
+  fi
+}
+
 setup_build_environment() {
     pick_host_platform "$host_platform"
     pick_host_arch "$host_arch"
@@ -399,6 +424,8 @@ setup_build_environment() {
             echo " -> Keeping system version (System is newer or Bundled is missing)" >> "$LOG_FILE"
         fi
     done
+
+    setup_gsed
 }
 
 calculate_bits_target() {
@@ -1569,7 +1596,7 @@ get_concurrent_proc() {
 }
 
 display_version() {
-	COMMAND=$(echo -e "$0" | sed -e 's/\.\///g')
+	COMMAND=$(echo -e "$0" | gsed -e 's/\.\///g')
 
 	echo -e "\
 $COMMAND v$(get_latest_version_from_changelog)
@@ -1582,99 +1609,99 @@ either version 3 of the License, or (at your option) any later version."
 }
 
 get_ffmpeg_libavcodec_version() {
-	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVCODEC_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVCODEC_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | gsed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVCODEC_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | gsed -e 's|LIBAVCODEC_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVCODEC_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | gsed -e 's|LIBAVCODEC_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavcodec_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | gsed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavdevice_version() {
-	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVDEVICE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | gsed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | gsed -e 's|LIBAVDEVICE_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVDEVICE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | gsed -e 's|LIBAVDEVICE_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavdevice_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | gsed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavfilter_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVFILTER_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVFILTER_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | gsed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVFILTER_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | gsed -e 's|LIBAVFILTER_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVFILTER_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | gsed -e 's|LIBAVFILTER_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavfilter_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | gsed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavformat_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVFORMAT_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | gsed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | gsed -e 's|LIBAVFORMAT_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVFORMAT_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | gsed -e 's|LIBAVFORMAT_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavformat_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | gsed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavutil_version() {
-	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVUTIL_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVUTIL_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | gsed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVUTIL_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | gsed -e 's|LIBAVUTIL_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVUTIL_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | gsed -e 's|LIBAVUTIL_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavutil_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version_major.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version_major.h | gsed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libswresample_version() {
-	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libswresample_major_version() {
-	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libswscale_version() {
-	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBSWSCALE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBSWSCALE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | gsed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBSWSCALE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | gsed -e 's|LIBSWSCALE_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBSWSCALE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | gsed -e 's|LIBSWSCALE_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libswscale_major_version() {
-	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | gsed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
@@ -1885,9 +1912,9 @@ function sortable_version { echo -e "$@" | awk -F. '{ printf("%d%03d%03d%03d\n",
 
 at_least_required_version() { # params: required actual
 	local sortable_required=$(sortable_version "$1")
-	sortable_required=$(echo -e "$sortable_required" | sed -e  's/^0*//') # remove preceding zeroes, which bash later interprets as octal or screwy
+	sortable_required=$(echo -e "$sortable_required" | gsed -e  's/^0*//') # remove preceding zeroes, which bash later interprets as octal or screwy
 	local sortable_actual=$(sortable_version "$2")
-	sortable_actual=$(echo -e "$sortable_actual" | sed -e  's/^0*//')
+	sortable_actual=$(echo -e "$sortable_actual" | gsed -e  's/^0*//')
 	[[ "$sortable_actual" -ge "$sortable_required" ]]
 }
 
@@ -1945,7 +1972,7 @@ check_missing_packages() {
     # zeranoe's build scripts use wget, though we don't here...
     local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
   'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
-  'bzip2' 'python3' 'bc')
+  'bzip2' 'python3' 'bc' 'ripgrep' 'libdatrie')
     # autoconf-archive is just for leptonica FWIW
     # I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
     # that being said, if it where set I would imagine it would be set to centos... And this contition will satisfy the "Is not initially set"
@@ -1954,11 +1981,11 @@ check_missing_packages() {
       check_packages+=('cmake')
     elif [ "${VENDOR}" == "redhat" ]; then
       check_packages+=('libzstd-devel')
-    elif [ "${VENDOR}" == "canonical" ]; then
+    elif [ "${VENDOR}" == "debian" ]; then
       check_packages+=('zstd' 'cython3' 'xutils-dev' 'python3-venv' 'python3-numpy')
     elif [ "${VENDOR}" == "macos" ]; then
       # also needs 'python@3.10' 'python@3.12' 'python@3.14'
-      check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'gsed' 'coreutils')
+      check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'gsed' 'coreutils' 'bash')
     else
       check_packages+=('libtoolize' 'g++' 'patch' 'realpath' 'clang' 'autopoint' 'ld') # the rest of the world
     fi
@@ -2029,7 +2056,7 @@ check_missing_packages() {
       *macos*)
         xcode-select -s /Library/Developer/CommandLineTools > >(redirect_output) 2>&1
         xcode-select -s /Applications/Xcode.app/Contents/Developer > >(redirect_output) 2>&1
-        xcodebuild -license
+        xcodebuild -license accept
         ;;
       *)
         echo "check_missing_packages: Build platform: ${DISTRO,,} not supported. The build script may not run correctly on unsupported platforms. Please use a container with Ubuntu >= 24.04 (noble)"
@@ -2046,7 +2073,7 @@ check_missing_packages() {
 		# the version of cmake required move up to, say, 3.1.0 and the cmake3 package still only pulls in 3.0.0 flat, then the user having manually
 		# installed cmake at a higher version wouldn't be detected.
 		if hash "$cmake_binary" &>/dev/null; then
-			cmake_version="$("${cmake_binary}" --version | sed -e "s#${cmake_binary}##g" | head -n 1 | tr -cd '0-9.\n')"
+			cmake_version="$("${cmake_binary}" --version | gsed -e "s#${cmake_binary}##g" | head -n 1 | tr -cd '0-9.\n')"
 			if at_least_required_version "${REQUIRED_CMAKE_VERSION}" "${cmake_version}"; then
 				export cmake_command="${cmake_binary}"
 				break
@@ -2072,7 +2099,7 @@ check_missing_packages() {
 	# because of all the trailing lines of stuff
 	export REQUIRED_YASM_VERSION="1.2.0" # export ???
 	local yasm_binary=yasm
-	local yasm_version="$("${yasm_binary}" --version | sed -e "s#${yasm_binary}##g" | head -n 1 | tr -dc '0-9.\n')"
+	local yasm_version="$("${yasm_binary}" --version | gsed -e "s#${yasm_binary}##g" | head -n 1 | tr -dc '0-9.\n')"
 	if ! at_least_required_version "${REQUIRED_YASM_VERSION}" "${yasm_version}"; then
 		exit_message 1 "check_missing_packages: your yasm version is too old $yasm_version wanted ${REQUIRED_YASM_VERSION}"
 	fi
@@ -2109,112 +2136,193 @@ check_missing_packages() {
 determine_distro() {
   local os_id=""
   local os_id_like=""
+  local os_name=""
+  local token=""
 
   unset VENDOR
   unset BUILD_OS
   unset BUILD_ARCH
+  unset DISTRO
   unset INSTALL_COMMAND
   unset SEARCH_COMMAND
+  unset CHECK_INSTALLED_CMD
 
-  if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    os_id="$ID"
-    os_id_like="$ID_LIKE"
-    DISTRO="$NAME"
-  elif [ -f /etc/lsb-release ]; then
-    . /etc/lsb-release
-    os_id="$DISTRIB_ID"
-    DISTRO="$NAME"
-  else
-    os_id=$(uname -s | tr '[:upper:]' '[:lower:]')
-    DISTRO=$os_id
-  fi
-  export BUILD_ARCH=$(uname -m)
-  # shellcheck disable=2222,2221
-  case "${os_id}|${os_id_like}" in
-    *rhel*|*centos*|*fedora*|*rocky*|*almalinux*|*amzn*)
-      export BUILD_OS="linux"
-      export VENDOR="redhat"
-      export INSTALL_COMMAND="dnf"
-      export SEARCH_COMMAND="dnf list"
-      export CHECK_INSTALLED_CMD="rpm -q"
+  BUILD_ARCH="$(uname -m)"
+  export BUILD_ARCH
+
+  case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
+    darwin)
+      BUILD_OS="macos"
+      VENDOR="macos"
+      DISTRO="macos"
+      INSTALL_COMMAND="brew"
+      SEARCH_COMMAND="brew search"
+      CHECK_INSTALLED_CMD="brew list"
+      export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
+      return 0
       ;;
-    *ubuntu*|*debian*|*mint*|*kali*|*pop*|*raspbian*)
-      export BUILD_OS="linux"
-      export VENDOR="canonical"
-      export INSTALL_COMMAND="apt-get"
-      export SEARCH_COMMAND="apt-cache show"
-      export CHECK_INSTALLED_CMD="dpkg -s"
-      ;;
-    *arch*|*manjaro*|*endeavouros*)
-      export BUILD_OS="linux"
-      export VENDOR="arch"
-      export INSTALL_COMMAND="pacman"
-      export SEARCH_COMMAND="pacman -Ss"
-      export CHECK_INSTALLED_CMD="pacman -Q"
-      ;;
-    *alpine*)
-      export BUILD_OS="linux"
-      export VENDOR="alpine"
-      export INSTALL_COMMAND="apk"
-      export SEARCH_COMMAND="apk search"
-      export CHECK_INSTALLED_CMD="apk info -e"
-      ;;
-    *void*)
-      export BUILD_OS="linux"
-      export VENDOR="void"
-      export INSTALL_COMMAND="xbps-install"
-      export SEARCH_COMMAND="xbps-query -Rs"
-      export CHECK_INSTALLED_CMD="xbps-query" 
-      ;;
-    *gentoo*)
-      export BUILD_OS="linux"
-      export VENDOR="gentoo"
-      export INSTALL_COMMAND="emerge"
-      export SEARCH_COMMAND="emerge --search"
-      export CHECK_INSTALLED_CMD="qlist -I"
-      ;;
-    *freebsd*)
-      export BUILD_OS="linux"
-      export VENDOR="freebsd"
-      export INSTALL_COMMAND="pkg"
-      export SEARCH_COMMAND="pkg search"
-      export CHECK_INSTALLED_CMD="pkg info"
-      ;;
-    *sles*|*suse*)
-      export BUILD_OS="linux"
-      export VENDOR="sles"
-      export INSTALL_COMMAND="zypper"
-      export SEARCH_COMMAND="zypper search"
-      export CHECK_INSTALLED_CMD="rpm -q"
-      ;;
-    *nix*)
-      export BUILD_OS="linux"
-      export VENDOR="nix"
-      export INSTALL_COMMAND="nix-env"
-      export SEARCH_COMMAND="nix-env -qa"
-      export CHECK_INSTALLED_CMD="nix-env -q"
-      ;;
-    *guix*)
-      export BUILD_OS="linux"
-      export VENDOR="guix"
-      export INSTALL_COMMAND="guix"
-      export SEARCH_COMMAND="guix package -A"
-      export CHECK_INSTALLED_CMD="guix package -I"
-      ;;
-    *macos*|*darwin*)
-      export BUILD_OS="macos"
-      export VENDOR="macos"
-      export DISTRO="macos"
-      export INSTALL_COMMAND="brew"
-      export SEARCH_COMMAND="brew search"
-      export CHECK_INSTALLED_CMD="brew list"
-      ;;
-    *)
-      export VENDOR="unknown"
-      return 1
+
+    freebsd)
+      BUILD_OS="freebsd"
+      VENDOR="freebsd"
+      DISTRO="freebsd"
+      INSTALL_COMMAND="pkg"
+      SEARCH_COMMAND="pkg search"
+      CHECK_INSTALLED_CMD="pkg info"
+      export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
+      return 0
       ;;
   esac
+
+  if [ -f /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+
+    os_id="${ID:-}"
+    os_id_like="${ID_LIKE:-}"
+    os_name="${PRETTY_NAME:-${NAME:-$os_id}}"
+  elif [ -f /etc/lsb-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/lsb-release
+
+    os_id="${DISTRIB_ID:-}"
+    os_id_like="${DISTRIB_CODENAME:-}"
+    os_name="${DISTRIB_DESCRIPTION:-${DISTRIB_ID:-unknown}}"
+  else
+    os_id="$(uname -s)"
+    os_name="$os_id"
+  fi
+
+  os_id="$(printf '%s' "$os_id" | tr '[:upper:]' '[:lower:]')"
+  os_id_like="$(printf '%s' "$os_id_like" | tr '[:upper:]' '[:lower:]')"
+  DISTRO="$os_name"
+
+  for token in $os_id $os_id_like; do
+    case "$token" in
+      rhel|centos|fedora|rocky|almalinux|amzn|ol)
+        BUILD_OS="linux"
+        VENDOR="redhat"
+        INSTALL_COMMAND="dnf"
+        SEARCH_COMMAND="dnf list"
+        CHECK_INSTALLED_CMD="rpm -q"
+        ;;
+
+      ubuntu|debian|mint|kali|pop|raspbian)
+        BUILD_OS="linux"
+        VENDOR="debian"
+        INSTALL_COMMAND="apt-get"
+        SEARCH_COMMAND="apt-cache show"
+        CHECK_INSTALLED_CMD="dpkg -s"
+        ;;
+
+      arch|manjaro|endeavouros)
+        BUILD_OS="linux"
+        VENDOR="arch"
+        INSTALL_COMMAND="pacman"
+        SEARCH_COMMAND="pacman -Ss"
+        CHECK_INSTALLED_CMD="pacman -Q"
+        ;;
+
+      alpine)
+        BUILD_OS="linux"
+        VENDOR="alpine"
+        INSTALL_COMMAND="apk"
+        SEARCH_COMMAND="apk search"
+        CHECK_INSTALLED_CMD="apk info -e"
+        ;;
+
+      void)
+        BUILD_OS="linux"
+        VENDOR="void"
+        INSTALL_COMMAND="xbps-install"
+        SEARCH_COMMAND="xbps-query -Rs"
+        CHECK_INSTALLED_CMD="xbps-query -p pkgver"
+        ;;
+
+      gentoo)
+        BUILD_OS="linux"
+        VENDOR="gentoo"
+        INSTALL_COMMAND="emerge"
+        SEARCH_COMMAND="emerge --search"
+        CHECK_INSTALLED_CMD="qlist -I"
+        ;;
+
+      sles|suse|opensuse|opensuse-leap|opensuse-tumbleweed)
+        BUILD_OS="linux"
+        VENDOR="suse"
+        INSTALL_COMMAND="zypper"
+        SEARCH_COMMAND="zypper search"
+        CHECK_INSTALLED_CMD="rpm -q"
+        ;;
+
+      nix|nixos)
+        BUILD_OS="linux"
+        VENDOR="nix"
+        INSTALL_COMMAND="nix-env"
+        SEARCH_COMMAND="nix-env -qa"
+        CHECK_INSTALLED_CMD="nix-env -q"
+        ;;
+
+      guix)
+        BUILD_OS="linux"
+        VENDOR="guix"
+        INSTALL_COMMAND="guix"
+        SEARCH_COMMAND="guix package -A"
+        CHECK_INSTALLED_CMD="guix package -I"
+        ;;
+    esac
+
+    if [ -n "${VENDOR:-}" ]; then
+      export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
+      return 0
+    fi
+  done
+
+  # Fallback by package manager. Useful for derivative/minimal containers.
+  if command -v dnf >/dev/null 2>&1 || command -v rpm >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="redhat"
+    INSTALL_COMMAND="dnf"
+    SEARCH_COMMAND="dnf list"
+    CHECK_INSTALLED_CMD="rpm -q"
+  elif command -v apt-get >/dev/null 2>&1 && command -v dpkg >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="debian"
+    INSTALL_COMMAND="apt-get"
+    SEARCH_COMMAND="apt-cache show"
+    CHECK_INSTALLED_CMD="dpkg -s"
+  elif command -v pacman >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="arch"
+    INSTALL_COMMAND="pacman"
+    SEARCH_COMMAND="pacman -Ss"
+    CHECK_INSTALLED_CMD="pacman -Q"
+  elif command -v apk >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="alpine"
+    INSTALL_COMMAND="apk"
+    SEARCH_COMMAND="apk search"
+    CHECK_INSTALLED_CMD="apk info -e"
+  elif command -v zypper >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="suse"
+    INSTALL_COMMAND="zypper"
+    SEARCH_COMMAND="zypper search"
+    CHECK_INSTALLED_CMD="rpm -q"
+  elif command -v brew >/dev/null 2>&1; then
+    BUILD_OS="macos"
+    VENDOR="macos"
+    DISTRO="macos"
+    INSTALL_COMMAND="brew"
+    SEARCH_COMMAND="brew search"
+    CHECK_INSTALLED_CMD="brew list"
+  else
+    VENDOR="unknown"
+    export VENDOR DISTRO BUILD_ARCH
+    return 1
+  fi
+
+  export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
 }
 
 package_exists() {
@@ -2587,7 +2695,7 @@ do_git_checkout() {
   local touch_file="$host_touch"
 	echo -e "INFO: Starting git checkout $repo_url" >>"$LOG_FILE"
 	if [[ -z $to_dir ]]; then
-		to_dir=$(basename "$repo_url" | sed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
+		to_dir=$(basename "$repo_url" | gsed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
 	fi
 	if [ -d "$to_dir" ] && is_valid_git_dir "$to_dir"; then
     echo -e "INFO: Directory already exists $to_dir." >>"$LOG_FILE"
@@ -2653,7 +2761,7 @@ do_git_sparse_checkout() {
   local path="$3"
 	echo -e "INFO: Starting git checkout $repo_url" >>"$LOG_FILE"
 	if [[ -z $to_dir ]]; then
-		to_dir=$(basename "$repo_url" | sed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
+		to_dir=$(basename "$repo_url" | gsed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
 	fi
   local touch_file="$host_touch"
   if truthy "$build_force" || [[ ! -f "${to_dir}/$host_touch" ]]; then
@@ -2758,7 +2866,7 @@ get_small_touchfile_name() { # have to call with assignment like a=$(get_small..
 	local beginning="$1"
 	local extra_stuff="$2"
 	local touch_name="${beginning}_$(echo -e -- "$extra_stuff" | /usr/bin/env md5sum)" # md5sum to make it smaller, cflags to force rebuild if changes
-	touch_name=$(echo -e "$touch_name" | sed -e  "s/ //g")                                                      # md5sum introduces spaces, remove them
+	touch_name=$(echo -e "$touch_name" | gsed -e  "s/ //g")                                                      # md5sum introduces spaces, remove them
 	echo -e "$touch_name.touch"                                                                                   # bash cruddy return system LOL
 }
 
@@ -2981,7 +3089,7 @@ needs_autoreconf() {
         src_ver=$(grep -E '^VERSION=' "$src_dir/build-aux/ltmain.sh" | cut -d= -f2 | tr -d '"')
     elif [ -f "$src_dir/aclocal.m4" ]; then
         # Fallback to aclocal.m4 with a more flexible search
-        src_ver=$(grep -E "LT_PACKAGE_VERSION|macro_version" "$src_dir/aclocal.m4" | sed -e 's/.*([2-9]\.[0-9]+\.[0-9]+).*/\1/' | head -n1)
+        src_ver=$(grep -E "LT_PACKAGE_VERSION|macro_version" "$src_dir/aclocal.m4" | gsed -e 's/.*([2-9]\.[0-9]+\.[0-9]+).*/\1/' | head -n1)
     fi
 
     # 3. If we can't find a version, it's safer to autoreconf than to fail
@@ -3860,7 +3968,7 @@ download_and_unpack_file() {
 }
 extract_tar() {
     local archive="$1"
-    local dest_dir=${2:-"$(basename "$archive" | sed -e  s/\.tar\.*//)"}
+    local dest_dir=${2:-"$(basename "$archive" | gsed -e  s/\.tar\.*//)"}
     
     # Get unique top-level items using mapfile
     local top_items
@@ -3876,7 +3984,7 @@ extract_tar() {
 }
 extract_zip() {
     local archive="$1"
-    local dest_dir=${2:-"$(basename "$archive" | sed -e  s/\.zip//)"}
+    local dest_dir=${2:-"$(basename "$archive" | gsed -e  s/\.zip//)"}
     
     # Get unique top-level items using mapfile
     local top_items
@@ -3903,7 +4011,7 @@ extract_zip() {
 # 3. extra_configure_options
 generic_download_and_make_and_install() {
 	local url="$1"
-	local to_dir=${2:-"$(basename "$url" | sed -e  s/\.tar\.*//)"}
+	local to_dir=${2:-"$(basename "$url" | gsed -e  s/\.tar\.*//)"}
 	local extra_configure_options="$3"
 	change_dir "$src_dir"
   download_and_unpack_file "$url" "$to_dir"
@@ -3933,7 +4041,7 @@ generic_configure_make_install() {
 # 3. version
 do_git_checkout_and_make_install() {
 	local url=$1
-	local git_checkout_name=${2:-"$(basename "$url" | sed -e  s/\.git//)"} # http://y/abc.git -> abc
+	local git_checkout_name=${2:-"$(basename "$url" | gsed -e  s/\.git//)"} # http://y/abc.git -> abc
   local git_version="$3"
   change_dir "$src_dir"
 	do_git_checkout "$url" "$git_checkout_name" "$git_version"
@@ -4021,7 +4129,7 @@ generate_pkg_config() {
           filename=$(basename "$file_path")
           local name=$(basename "$file_path")
           name="${name#lib}"
-          name=$(echo "$name" | sed -e 's/\.(dll\.a|so|a|dll|dylib)(\.[0-9.]+)?$//')
+          name=$(echo "$name" | gsed -e 's/\.(dll\.a|so|a|dll|dylib)(\.[0-9.]+)?$//')
           # Avoid duplicates in the list
           # shellcheck disable=2076
           if [[ ! " ${libs_list[*]} " =~ " ${name} " ]]; then
@@ -4742,15 +4850,17 @@ configure_ffmpeg() {
     # SVT-JPEGXS is not supported on arm architectures
     config_options+=" --disable-libsvtjpegxs"
   fi
-  truthy "$enable_libopencolorio" && { config_options+=" --enable-libopencolorio" \
-  && add_extra_libs "-lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"; }                                                # enable OpenColorIO code [autodetect]
+  truthy "$enable_libopencolorio" && {
+    config_options+=" --enable-libopencolorio"
+    ! isios && add_extra_libs "-lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"
+  }                                                                                   # enable OpenColorIO code [autodetect]
   truthy "$enable_libmpeghdec" && config_options+=" --enable-libmpeghdec"             # enable MPEG-H 3D Audio decoder code [autodetect]
   if truthy "$enable_opengl" && ismacos ; then
     add_extra_libs "-framework OpenGL -framework CoreVideo"
   fi
   if isios && truthy "$enable_opengl"; then
     add_extra_libs "-framework OpenGLES -framework CoreVideo -framework VideoToolbox -framework CoreMedia -framework CoreFoundation"
-    sed -i'.bak' \
+    gsed -i \
     -e "s|check_lib opengl ES2/gl.h glGetError \"-isysroot=\${sysroot} -framework OpenGLES\"|check_lib opengl OpenGLES/ES2/gl.h glGetError \"-F${IOS_SYSROOT}/System/Library/Frameworks -framework OpenGLES\"|g" \
     configure
   fi
@@ -4759,8 +4869,8 @@ configure_ffmpeg() {
     config_options+=" --extra-cflags=\"-I$toolchain_include_path\""
     config_options+=" --extra-cflags=\"-DglXGetProcAddress=eglGetProcAddress\""
     # patch ffmpeg configure for Android
-    sed -i'' -e 's|check_lib opengl ES2/gl.h glGetError "-isysroot=${sysroot} -framework OpenGLES"|check_lib opengl GLES2/gl2.h glGetError "-lGLESv2 -lEGL"|g' configure
-    sed -i'' -e 's|check_lib opencl OpenCL/cl.h clEnqueueNDRangeKernel "-framework OpenCL"|check_lib opencl CL/cl.h clEnqueueNDRangeKernel "-lOpenCL"|g' configure
+    gsed -i -e 's|check_lib opengl ES2/gl.h glGetError "-isysroot=${sysroot} -framework OpenGLES"|check_lib opengl GLES2/gl2.h glGetError "-lGLESv2 -lEGL"|g' configure
+    gsed -i -e 's|check_lib opencl OpenCL/cl.h clEnqueueNDRangeKernel "-framework OpenCL"|check_lib opencl CL/cl.h clEnqueueNDRangeKernel "-lOpenCL"|g' configure
   fi
   truthy "$enable_openssl" && config_options+=" --enable-openssl"                     # enable openssl, needed for https support if gnutls, libtls or mbedtls is not used [no]
   truthy "$enable_pocketsphinx" && config_options+=" --enable-pocketsphinx"           # enable PocketSphinx, needed for asr filter [no]
@@ -4796,9 +4906,9 @@ configure_ffmpeg() {
     truthy "$enable_videotoolbox" && config_options+=" --enable-videotoolbox"           # enable VideoToolbox code [autodetect]
     truthy "$enable_videotoolbox" && add_extra_libs "-framework VideoToolbox"
     if isios; then
-      sed -i'.bak' 's/framework="$1"/framework="$1"\n\theader_file="${2:-$1}"/' configure
-      sed -i'.bak' 's/${framework}\.h/${header_file}\.h/g' configure
-      sed -i'.bak' 's/check_apple_framework CoreAudio/check_apple_framework CoreAudio CoreAudioTypes/g' configure
+      gsed -i 's/framework="$1"/framework="$1"\n\theader_file="${2:-$1}"/' configure
+      gsed -i 's/${framework}\.h/${header_file}\.h/g' configure
+      gsed -i 's/check_apple_framework CoreAudio/check_apple_framework CoreAudio CoreAudioTypes/g' configure
     fi
   fi
 
@@ -4919,7 +5029,7 @@ install_ffmpeg() {
     export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
     local bin2c_py=$(create_bin2c_py)
     setup_default_python
-    sed -i '.bak' 's|RUN_BIN2C = $(BIN2C)|RUN_BIN2C = python3 ffbuild/bin2c.py|' "$ffmpeg_source_dir/ffbuild/common.mak"
+    gsed -i 's|RUN_BIN2C = $(BIN2C)|RUN_BIN2C = python3 ffbuild/bin2c.py|' "$ffmpeg_source_dir/ffbuild/common.mak"
   fi
 	do_make "AS=\"$AS\" PREFIX=\"$ffmpeg_install_prefix\"" "${touch_postfix}" 1 || exit_message 1 "install_ffmpeg: unable to make ffmpeg. see $LOG_FILE for details."
   do_make_install "PREFIX=\"$ffmpeg_install_prefix\"" "" "${touch_postfix}" 1 || exit_message 1 "install_ffmpeg: unable to make install ffmpeg. see $LOG_FILE for details."
@@ -5011,7 +5121,7 @@ install_ffmpeg_kit() {
   elif isandroid; then
     CLANG_RT_DIR=$($CC -print-libgcc-file-name | xargs dirname)
     export LDFLAGS="${LDFLAGS} -Wl,--allow-multiple-definition -L$CLANG_RT_DIR -lclang_rt.builtins-$host_arch-android -Wl,--exclude-libs,libunwind.a"
-    export LDFLAGS=$(echo "${LDFLAGS}" | sed -e 's/-Wl,--fatal-warnings//g')
+    export LDFLAGS=$(echo "${LDFLAGS}" | gsed -e 's/-Wl,--fatal-warnings//g')
   fi
   
   change_dir "${ffmpeg_kit_src_dir}/build" 1
@@ -5042,13 +5152,13 @@ install_pkg_config_file() {
 	fi
 
 	# UPDATE PATHS
-	sed -i'.bak' -e "s|${ffmpeg_kit_install}|${location_prefix}|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|libdir=${ffmpeg_kit_install}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|includedir=${ffmpeg_kit_install}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
+	gsed -i -e "s|${ffmpeg_kit_install}|${location_prefix}|g" "$DESTINATION" || return 1
+  gsed -i -e "s|libdir=${ffmpeg_kit_install}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
+  gsed -i -e "s|includedir=${ffmpeg_kit_install}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
 
-	sed -i'.bak' -e "s|${ffmpeg_source_dir}|${location_prefix}|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|libdir=${ffmpeg_source_dir}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|includedir=${ffmpeg_source_dir}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
+	gsed -i -e "s|${ffmpeg_source_dir}|${location_prefix}|g" "$DESTINATION" || return 1
+  gsed -i -e "s|libdir=${ffmpeg_source_dir}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
+  gsed -i -e "s|includedir=${ffmpeg_source_dir}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
 
   chmod -R a+rwx "$work_dir"
 }
@@ -5085,7 +5195,7 @@ create_ffmpeg_kit_bundle() {
       [[  -f "$ffmpeg_kit_src_dir/build/libffmpegkit.map" ]] && cp -rP "$ffmpeg_kit_src_dir/build/libffmpegkit.map" "${ffmpeg_kit_bundle}/bin"
     } > >(redirect_output) 2>&1
 
-    find "${ffmpeg_kit_bundle}/lib/pkgconfig" -type f -name "*.pc" -exec sed -i'.bak' \
+    find "${ffmpeg_kit_bundle}/lib/pkgconfig" -type f -name "*.pc" -exec gsed -i \
     -e "s|prefix=.*|prefix=${ffmpeg_kit_bundle}|g" \
     -e "s|exec_prefix=.*|exec_prefix=\${prefix}|g" \
     -e "s|libdir=.*|libdir=\${prefix}/lib|g" \
@@ -5127,7 +5237,7 @@ uninstall_manifest() {
   local manifest="$1"
   if [[ -f "$manifest" ]]; then
     echo "WARNING: found $manifest. Uninstalling files from $manifest if installed"
-    sed -i'' -e '/^$/d' "$manifest" | xargs --verbose -r -d '\n' rm -rf
+    gsed -i -e '/^$/d' "$manifest" | xargs --verbose -r -d '\n' rm -rf
     echo
     remove_path -f "$manifest"
   else
@@ -6038,7 +6148,7 @@ unversion_library() {
   find "$TARGET_DIR" -maxdepth 1 \( -name "*.so.*" -o -name "*.a.*" \) | sort -Vr | while read -r full_path; do
     filename=$(basename "$full_path")
     # shellcheck disable=2001
-    base_name=$(echo "$filename" | sed -e 's/\.so\..*/.so/')
+    base_name=$(echo "$filename" | gsed -e 's/\.so\..*/.so/')
     # check if excluded
     excluded=false
     for exclude_pattern in "${excludes[@]}"; do
@@ -6104,16 +6214,16 @@ add_src_dir() {
     create_touch_file 0 "$dir/$host_touch"
     if iswindows; then
       find "$dependency_install_prefix/lib" -name "*.la" -delete
-      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec sed -i'.bak' -e -E 's/[[:space:]]-lm\b//g' \
+      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i -e -E 's/[[:space:]]-lm\b//g' \
         -e 's|/usr/local/mingw-w64/[^ ]+/lib/lib([a-zA-Z0-9]+)\.a|-l\1|g' \
         -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' \
         -e 's|-Wl,--export-dynamic||g' {} +
     elif ismacos || isios || isiossimulator; then
       find "$dependency_install_prefix/lib" -name "*.la" -delete
-      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec sed -i'.bak' -e 's|-Wl,--export-dynamic||g' \
+      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i -e 's|-Wl,--export-dynamic||g' \
         -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' {} +
     else
-      find "$dependency_install_prefix/lib" -type f -name "*.la" -exec sed -i'.bak' -e 's|=\/|/|g' {} +
+      find "$dependency_install_prefix/lib" -type f -name "*.la" -exec gsed -i -e 's|=\/|/|g' {} +
     fi
     if [[ -f "$dir_file" ]]; then
       if ! grep -q "$dir" "$dir_file"; then
@@ -6874,7 +6984,7 @@ static_link_check() {
             local resolved_libs=""
             local -a stats=(0 0 0)
             if ! _slc_resolve_libs "$target" "$log_file" resolved_libs stats; then
-                local err=$(sed -i'' -e 's|.*libraries/lib|...libraries/lib|' \
+                local err=$(gsed -i -e 's|.*libraries/lib|...libraries/lib|' \
                 -e 's/^/        | /' "$log_file")
                 a_failed+=("  [FAIL] $pkg_name (Config Parse Error)\n$err")
                 continue
@@ -6895,7 +7005,7 @@ static_link_check() {
                 a_success+=("$(printf "  %-8s %-30s %-12d %-12d %-12d" "$bin_size" "$pkg_name" "${stats[0]}" "${stats[1]}" "${stats[2]}")")
             else
                 local reason="${verify_result#fail:}"
-                local err=$(sed -i'' -e 's|.*libraries/lib|...libraries/lib|' \
+                local err=$(gsed -i -e 's|.*libraries/lib|...libraries/lib|' \
                 -e 's/^/        | /' "$log_file")
                 a_failed+=("  [FAIL] $pkg_name ($reason)\n        Libraries: $resolved_libs\n$err")
             fi
@@ -6959,18 +7069,18 @@ add_libs_to_pkg() {
                 token="-l$name"
             fi
             # shellcheck disable=2001
-            local regex_token=$(echo "$token" | sed -e  's/[][()\.^$?*+{|}]/\\&/g')
+            local regex_token=$(echo "$token" | gsed -e  's/[][()\.^$?*+{|}]/\\&/g')
             local sed_pattern="${regex_token//#/\\#}"
             if grep "^$field:" "$pc" | grep -E -q "(^|[[:space:]])${sed_pattern}($|[[:space:]])"; then
-                sed -i'.bak' -e -E "s#([[:space:]]|^)${sed_pattern}([[:space:]]|$)# #g" "$pc"
+                gsed -i -e -E "s#([[:space:]]|^)${sed_pattern}([[:space:]]|$)# #g" "$pc"
             fi
             insertion_buffer="${insertion_buffer} ${token}"
         done
         if [[ -n "$insertion_buffer" ]]; then
             if [[ "$mode" == "prepend" ]]; then
-                sed -i'.bak' -e "s|^$field:|&${insertion_buffer}|" "$pc"
+                gsed -i -e "s|^$field:|&${insertion_buffer}|" "$pc"
             else
-                sed -i'.bak' -e "s|^$field:.*|&${insertion_buffer}|" "$pc"
+                gsed -i -e "s|^$field:.*|&${insertion_buffer}|" "$pc"
             fi
         fi
     }
@@ -7248,7 +7358,7 @@ set_version() {
 
 get_latest_version_from_changelog() {
   local version_file="$BASEDIR/CHANGELOG.md"
-  local version=$(awk '/## Version / && ++c==1 {print; exit}' "$version_file" | sed -e 's/## Version //')
+  local version=$(awk '/## Version / && ++c==1 {print; exit}' "$version_file" | gsed -e 's/## Version //')
   set_version "$version"
   echo "$version"
 }
@@ -7258,7 +7368,7 @@ get_previous_version_from_changelog() {
   if [[ ! -f "$version_file" ]]; then
     exit_message 1 "Changelog file not found" | tee -a "$LOG_FILE"
   fi
-  local version=$(awk '/## Version / && ++c==2 {print; exit}' "$version_file" | sed -e 's/## Version //')
+  local version=$(awk '/## Version / && ++c==2 {print; exit}' "$version_file" | gsed -e 's/## Version //')
   echo "$version"
 }
 
@@ -7273,20 +7383,20 @@ get_changes_from_changelog() {
   fi
 
   # Escape dots so they are treated literally in regex
-  local cur_esc=$(echo "$cur_version" | sed 's/\./\\./g')
-  local prev_esc=$(echo "$prev_version" | sed 's/\./\\./g')
+  local cur_esc=$(echo "$cur_version" | gsed 's/\./\\./g')
+  local prev_esc=$(echo "$prev_version" | gsed 's/\./\\./g')
 
   # Extract from current version header to line before previous version header
-  # sed -n:    suppress automatic printing
+  # gsed -n:    suppress automatic printing
   # /pat1/,/pat2/p: print the range (both headers included)
-  # sed '$d':  delete last line (the previous version header) – works on macOS
-  local changes=$(sed -n "/^## Version $cur_esc/,/^## Version $prev_esc/p" "$changelog_file" | sed '$d')
+  # gsed '$d':  delete last line (the previous version header) – works on macOS
+  local changes=$(gsed -n "/^## Version $cur_esc/,/^## Version $prev_esc/p" "$changelog_file" | gsed '$d')
 
   # (Optional) Remove the current version header line if you only want the bullet points:
-  # changes=$(echo "$changes" | sed '1d')
+  # changes=$(echo "$changes" | gsed '1d')
 
   # Trim leading/trailing blank lines (preserve your original trimming logic)
-  echo "$changes" | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+  echo "$changes" | gsed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}'
 }
 
 get_keystore(){

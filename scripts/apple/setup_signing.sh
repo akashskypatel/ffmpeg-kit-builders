@@ -232,7 +232,7 @@ sign_and_notarize() {
   fi
   
   echo "Available bundles:"
-  ls -1 prebuilt/apple/xcframeworks/ | grep "\.xcframework$" | sed 's/\.xcframework$//' | sed 's/^ffmpegkit-//' | sort -u
+  ls -1 prebuilt/apple/xcframeworks/ | grep "\.xcframework$" | gsed 's/\.xcframework$//' | gsed 's/^ffmpegkit-//' | sort -u
   
   echo ""
   read -p "Bundles to sign (comma-separated, or 'all'): " bundle_input

@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2312,2250,2292,2249
 
 find_all_build_exes() {
@@ -60,7 +71,7 @@ install_cross_compiler() {
 		echo -e "Building win32 cross compiler..." >>"$LOG_FILE"
 		download_gcc_build_script "$zeranoe_script_name"
 		if [[ "$(uname)" =~ (5.1) ]]; then # Avoid using secure API functions for compatibility with msvcrt.dll on Windows XP.
-			sed -i "s/ --enable-secure-api//" "$zeranoe_script_name"
+			gsed -i "s/ --enable-secure-api//" "$zeranoe_script_name"
 		fi
 		# shellcheck disable=SC2086
 		CFLAGS='-O2 -pipe' CXXFLAGS='-O2 -pipe' nice ./"$zeranoe_script_name" "$zeranoe_script_options" i686 || exit_message 1 "cannot set up i686 cross compiler script" # i686 option needs work to implement
@@ -178,8 +189,8 @@ get_static_macro_from_header() {
 						\( -name "${base_name}.h" -o -name "lib${base_name}.h" \) | head -n 1)
 				if [[ -n "$header_found" ]]; then
 						# 2a. Check for 'defined(MACRO)'
-						# We use sed -nE to match the pattern and print ONLY the capture group (\1)
-						local macro=$(sed -nE 's/.*defined\(([A-Z0-9_]+_(NODLL|STATIC|STATICLIB|STATIC_LIB))\).*/\1/p' "$header_found" | head -n 1)
+						# We use gsed -nE to match the pattern and print ONLY the capture group (\1)
+						local macro=$(gsed -nE 's/.*defined\(([A-Z0-9_]+_(NODLL|STATIC|STATICLIB|STATIC_LIB))\).*/\1/p' "$header_found" | head -n 1)
 						if [[ -n "$macro" ]]; then
 								echo "-D${macro}"
 								return 0
@@ -187,7 +198,7 @@ get_static_macro_from_header() {
 						# 2b. Fallback: Check for '#ifdef MACRO'
 						# Matches: #ifdef MACRO, # ifdef MACRO, etc.
 						# Captures the MACRO name into \1 and prints it.
-						local ifdef_macro=$(sed -nE 's/^\s*#\s*ifdef\s+([A-Z0-9_]+_(NODLL|STATIC|STATICLIB|STATIC_LIB)).*/\1/p' "$header_found" | head -n 1)
+						local ifdef_macro=$(gsed -nE 's/^\s*#\s*ifdef\s+([A-Z0-9_]+_(NODLL|STATIC|STATICLIB|STATIC_LIB)).*/\1/p' "$header_found" | head -n 1)
 						if [[ -n "$ifdef_macro" ]]; then
 								 echo "-D${ifdef_macro}"
 								 return 0
@@ -220,29 +231,29 @@ fix_pkgconfig_flags() {
 		if grep -q "whole-archive" "$file" >/dev/null || \
 		grep -q "no-whole-archive" "$file" >/dev/null || \
 		grep -oE '/[^[:space:]]*/lib[a-zA-Z0-9_+.-]+\.a' "$file" >/dev/null; then
-			sed -i'.bak' -E 's/-Wl,(--whole-archive|--no-whole-archive)//g; s|[[:space:]]*/[^[:space:]]*/lib([a-zA-Z0-9_+.-]+)\.a| -l\1|g' "$file"
+			gsed -i -E 's/-Wl,(--whole-archive|--no-whole-archive)//g; s|[[:space:]]*/[^[:space:]]*/lib([a-zA-Z0-9_+.-]+)\.a| -l\1|g' "$file"
 		fi
 	done < <(find "$ffmpeg_install_prefix/lib/pkgconfig" -name "*.pc" -print0)
 
 	for pc_file in "$PKG_CONFIG_LIBDIR"/*.pc; do
-			sed -i "s|-l/|/|g" "$pc_file"
-			sed -i "s|-lstdc++||g" "$pc_file"
-			sed -i "s|-lgcc_s||g" "$pc_file"
-			sed -i "s|-lgcc||g" "$pc_file"
-			sed -i 's|\b-lwinpthread\b|-lpthreadwin32|g' "$pc_file"
-			sed -i 's|\b-lpthread\b|-lpthreadwin32|g' "$pc_file"
-			sed -i "s|-latomic|$(realpath "$("$CXX" -print-file-name=libatomic.a)")|g" "$pc_file"
-			sed -i "s|/usr/local/mingw-w64/[^ ]*libstdc++[^ ]*|${stdcpp_path}|g" "$pc_file"
-			sed -i 's|/usr/local/mingw-w64/[^ ]*libstdc++\.a||g' "$pc_file"
-			sed -i "s|/usr/local/mingw-w64/[^ ]*libgcc[^ ]*|${stdgcc_path}|g" "$pc_file"
-			sed -i 's|/usr/local/mingw-w64/[^ ]*libgcc[^ ]*||g' "$pc_file"
-			sed -i 's|-static-libgcc||g' "$pc_file"
-			sed -i 's|-static-libstdc++||g' "$pc_file"
+			gsed -i "s|-l/|/|g" "$pc_file"
+			gsed -i "s|-lstdc++||g" "$pc_file"
+			gsed -i "s|-lgcc_s||g" "$pc_file"
+			gsed -i "s|-lgcc||g" "$pc_file"
+			gsed -i 's|\b-lwinpthread\b|-lpthreadwin32|g' "$pc_file"
+			gsed -i 's|\b-lpthread\b|-lpthreadwin32|g' "$pc_file"
+			gsed -i "s|-latomic|$(realpath "$("$CXX" -print-file-name=libatomic.a)")|g" "$pc_file"
+			gsed -i "s|/usr/local/mingw-w64/[^ ]*libstdc++[^ ]*|${stdcpp_path}|g" "$pc_file"
+			gsed -i 's|/usr/local/mingw-w64/[^ ]*libstdc++\.a||g' "$pc_file"
+			gsed -i "s|/usr/local/mingw-w64/[^ ]*libgcc[^ ]*|${stdgcc_path}|g" "$pc_file"
+			gsed -i 's|/usr/local/mingw-w64/[^ ]*libgcc[^ ]*||g' "$pc_file"
+			gsed -i 's|-static-libgcc||g' "$pc_file"
+			gsed -i 's|-static-libstdc++||g' "$pc_file"
 			[[ -e "$pc_file" ]] || continue
 			pkg_name=$(basename "$pc_file" .pc)
 			# Get Libs
 			lib_flags=$(pkg-config --static --libs-only-l "$pkg_name" 2>/dev/null)
-			clean_lib_name=$(echo "$lib_flags" | awk '{print $1}' | sed 's/^-l//')
+			clean_lib_name=$(echo "$lib_flags" | awk '{print $1}' | gsed 's/^-l//')
 			[[ -z "$clean_lib_name" ]] && continue
 			# Get Cflags (Include Paths)
 			inc_flags=$(pkg-config --static --cflags-only-I "$pkg_name" 2>/dev/null)
@@ -414,9 +425,9 @@ EOF
 ffmpeg_patches() {
 	if iswindows; then
 		echo "INFO: Patching ffmpeg for windows Mingw quirks..." >>"$LOG_FILE"
-		sed -i 's/#define HAVE_SCHED_GETAFFINITY 1/#define HAVE_SCHED_GETAFFINITY 0/g' "$ffmpeg_source_dir/config.h"
+		gsed -i 's/#define HAVE_SCHED_GETAFFINITY 1/#define HAVE_SCHED_GETAFFINITY 0/g' "$ffmpeg_source_dir/config.h"
 		if [[ -f "$ffmpeg_source_dir/libavfilter/dnn/dnn_backend_tf.c" ]]; then
-			sed -i 's/ctx->options.async/ctx->async/g' "$ffmpeg_source_dir/libavfilter/dnn/dnn_backend_tf.c"
+			gsed -i 's/ctx->options.async/ctx->async/g' "$ffmpeg_source_dir/libavfilter/dnn/dnn_backend_tf.c"
 		fi
 		echo "INFO: Done patching ffmpeg for windows Mingw quirks." >>"$LOG_FILE"
 	fi
@@ -432,14 +443,14 @@ disable_windows_rsrc() {
       for file do
         if grep -qE "(\.res(\.lo)?|w32res\.lo|version(info|-metadata)\.(lo|res|o)|version\.rc\.(lo|res|o))" "$file"; then
           echo "  PATCHING MAKE: $file" >>"$LOG_FILE"
-          sed -i'.bak' -e -E "/=/ { 
+          gsed -i -e -E "/=/ { 
             w /tmp/sed_before
             s|[^ ]*/version(info|-metadata|info\.rc|info\.res)?\.(lo|res|o)\b||g
             s|[^ ]*/version\.rc\.(lo|res|o)\b||g
             s|[^ ]*\.res(\.lo)?\b||g
             w /tmp/sed_after
           }" "$file"
-          diff /tmp/sed_before /tmp/sed_after | grep "^<" | sed -e "s/^</    REMOVED: /" >>"$LOG_FILE"
+          diff /tmp/sed_before /tmp/sed_after | grep "^<" | gsed -e "s/^</    REMOVED: /" >>"$LOG_FILE"
         fi
       done
     ' sh {} +
@@ -449,7 +460,7 @@ disable_windows_rsrc() {
       for file do
         if grep -qE "version\.rc\.res" "$file"; then
           echo "  PATCHING CMAKE: $file" >>"$LOG_FILE"
-          sed -i'' -e -E "s/\"[^\"]*version\.rc\.res\"//g; s/[^ ]*version\.rc\.res//g" "$file"
+          gsed -i -e -E "s/\"[^\"]*version\.rc\.res\"//g; s/[^ ]*version\.rc\.res//g" "$file"
         fi
       done
     ' sh {} +
@@ -459,8 +470,8 @@ disable_windows_rsrc() {
       for file do
         if grep -q "windows.compile_resources" "$file"; then
           echo "  PATCHING MESON: $file" >>"$LOG_FILE"
-          sed -i -e "/windows\.compile_resources(/,/)/ s/^/# /" "$file"
-          sed -i -e -E "/(libplacebo_rc|demos_rc|ft2_res|version_res)\s*=\s*configure_file/,/)/ s/^/# /" "$file"
+          gsed -i -e "/windows\.compile_resources(/,/)/ s/^/# /" "$file"
+          gsed -i -e -E "/(libplacebo_rc|demos_rc|ft2_res|version_res)\s*=\s*configure_file/,/)/ s/^/# /" "$file"
         fi
       done
     ' sh {} +

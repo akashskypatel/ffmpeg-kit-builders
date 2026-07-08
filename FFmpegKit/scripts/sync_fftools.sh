@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 SCRIPT_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")" # FFmpegKit/scripts
 PROJECT_ROOT="$(realpath "$(dirname "$SCRIPT_DIR")")" # FFmpegKit
 FFMPEG_KIT_ROOT="$(realpath "$(dirname "$PROJECT_ROOT")")" # ffmpeg-kit-builders
@@ -41,7 +52,7 @@ rsync -am --include='*/' \
 "$FFMPEG_SRC_DIR/fftools/" "$CURRENT_SOURCE_DIR/fftools.tmp"
 
 # remove "fftools/" from includes
-find "$CURRENT_SOURCE_DIR/fftools.tmp" -type f -name "*.c" -o -name "*.h" -exec sed -i'' 's|#include "fftools/|#include "|g' {} +
+find "$CURRENT_SOURCE_DIR/fftools.tmp" -type f -name "*.c" -o -name "*.h" -exec gsed -i 's|#include "fftools/|#include "|g' {} +
 
 # move from fftools to src
 cp -r "$CURRENT_SOURCE_DIR/fftools.tmp/"* "$CURRENT_SOURCE_DIR/src/"

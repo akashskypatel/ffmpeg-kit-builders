@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 5+ is required." >&2
+    exit 1
+fi
+
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034
 
 # required for ffmpeg-kit
@@ -634,7 +645,7 @@ build_libpng() {
   export CPPFLAGS=" $CPPFLAGS -I${dependency_install_prefix}/include"
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -lz"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  sed -i'.bak' 's/^if(UNIX$/if(UNIX OR APPLE/' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/^if(UNIX$/if(UNIX OR APPLE/' "$src_dir/$lib/CMakeLists.txt"
   change_dir "$src_dir/$lib/build" 1
   local cmake_args="-DPNG_SHARED=OFF \
 -DPNG_STATIC=ON \
@@ -726,7 +737,7 @@ build_libass() {
 -Dcheckasm=disabled \
 -Dcoretext=enabled \
 -Dasm=enabled"
-  sed -i'.bak' -e "s/== 'darwin'/ in ['darwin', 'tvos', 'tvos-simulator']/g" "$src_dir/$lib/meson.build"
+  gsed -i -e "s/== 'darwin'/ in ['darwin', 'tvos', 'tvos-simulator']/g" "$src_dir/$lib/meson.build"
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -748,7 +759,7 @@ build_libbs2b() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  sed -i'.bak' "s/dist-lzma//" configure.ac
+  gsed -i "s/dist-lzma//" configure.ac
   export LIBS="-lm"                              # avoid pow failure linux native
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include"
   export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include"
@@ -775,7 +786,7 @@ build_libcaca() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i'.bak' 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
+  gsed -i 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
   apply_patch "$PATCHDIR/caca_dither_c.patch"
   local ffi_host="$host_target"
   if istvossimulator; then
@@ -826,7 +837,7 @@ build_libcodec2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build_native" 1
-  sed -i'.bak' -E "s/set\(CMAKE_OSX_DEPLOYMENT_TARGET.*//g" "$src_dir/$lib/CMakeLists.txt"
+  gsed -i -E "s/set\(CMAKE_OSX_DEPLOYMENT_TARGET.*//g" "$src_dir/$lib/CMakeLists.txt"
   native_cross_vars
   do_cmake_from_build_dir "$src_dir/$lib" "-DUNITTEST=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_OSX_ARCHITECTURES=$BUILD_ARCH -DCMAKE_INSTALL_PREFIX=\"$src_dir/$lib/build_native/install\""
   disable_nonessential "$src_dir/$lib/build_native"
@@ -856,7 +867,7 @@ build_libdav1d() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   if istvossimulator; then
-  sed -i'.bak' -e "s/'tvos'/'tvos', 'tvos-simulator'/g" "$src_dir/$lib/meson.build"
+  gsed -i -e "s/'tvos'/'tvos', 'tvos-simulator'/g" "$src_dir/$lib/meson.build"
   fi
   local meson_options=" -Denable_tools=false -Denable_examples=false -Denable_tests=false"
   generic_meson "$meson_options"
@@ -876,19 +887,19 @@ build_libdavs2() {
   get_config_sub "$src_dir/$lib/build/linux"
   touch "no.autoreconf"
   if [[ $host_arch == "arm64" ]]; then
-    sed -i'.bak' 's/arch=armv7/arch=arm64/g' configure
+    gsed -i 's/arch=armv7/arch=arm64/g' configure
   elif [[ $host_arch == "x86_64" ]]; then
     export AS=nasm
   fi
   do_configure "--host=arm64-apple-darwin --enable-pic --disable-cli --enable-static --disable-shared --prefix=$dependency_install_prefix"
-  sed -i'.bak' 's/^SYS_ARCH=AARCH64/SYS_ARCH=/' "config.mak"
-  sed -i'.bak' -E 's/\$\(AR\)\$@/\$\(AR\) rc \$@/g' Makefile
+  gsed -i 's/^SYS_ARCH=AARCH64/SYS_ARCH=/' "config.mak"
+  gsed -i -E 's/\$\(AR\)\$@/\$\(AR\) rc \$@/g' Makefile
   disable_nonessential "$src_dir/$lib/build/linux"
   do_make_and_make_install ""
   if [[ ! -f "$install_pkgconfig_dir/davs2.pc" && -f "$src_dir/$lib/build/linux/davs2.pc" ]]; then
     copy_path "$src_dir/$lib/build/linux/davs2.pc" "$install_pkgconfig_dir/davs2.pc" "-f"
   fi
-  sed -i'.bak' "s/Version:.*/Version: ${repo_ver}.0/g" "$install_pkgconfig_dir/davs2.pc"
+  gsed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$install_pkgconfig_dir/davs2.pc"
   change_dir "$src_dir"
   set_toolchain_paths
 }
@@ -924,7 +935,7 @@ build_libflite() {
   get_config_guess "$src_dir/$lib"
   generic_configure "--disable-shared --with-pic"
   disable_nonessential "$src_dir/$lib"
-  find . -name "Makefile" -exec sed -i'.bak' 's/cp -pd/cp -p/' {} \;
+  find . -name "Makefile" -exec gsed -i 's/cp -pd/cp -p/' {} \;
   do_make_and_make_install
   change_dir "$src_dir"
   reset_ldflags
@@ -1144,7 +1155,7 @@ build_libgsm() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  sed -i'.bak' -e "s|^INSTALL_ROOT.*|INSTALL_ROOT = $dependency_install_prefix|g" \
+  gsed -i -e "s|^INSTALL_ROOT.*|INSTALL_ROOT = $dependency_install_prefix|g" \
   -e "s|^GSM_INSTALL_LIB.*|GSM_INSTALL_LIB = $dependency_install_prefix/lib|g" \
   -e "s|^GSM_INSTALL_INC.*|GSM_INSTALL_INC = $dependency_install_prefix/include|g" \
   -e "s|^GSM_INSTALL_MAN.*|GSM_INSTALL_MAN = $dependency_install_prefix/man|g" \
@@ -1173,10 +1184,10 @@ build_graphite() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i'.bak' "s/add_subdirectory(tests)/#add_subdirectory(tests)/g" "$src_dir/$lib/CMakeLists.txt"
-  sed -i'.bak' "s/add_subdirectory(doc)/#add_subdirectory(doc)/g" "$src_dir/$lib/CMakeLists.txt"
-  sed -i'.bak' "s/add_subdirectory(gr2fonttest)/#add_subdirectory(gr2fonttest)/g" "$src_dir/$lib/CMakeLists.txt"
-  sed -i'.bak' "s/nolib_test(stdc++ $<TARGET_SONAME_FILE:graphite2>)/#nolib_test(stdc++ $<TARGET_SONAME_FILE:graphite2>)/g" "$src_dir/$lib/src/CMakeLists.txt"
+  gsed -i "s/add_subdirectory(tests)/#add_subdirectory(tests)/g" "$src_dir/$lib/CMakeLists.txt"
+  gsed -i "s/add_subdirectory(doc)/#add_subdirectory(doc)/g" "$src_dir/$lib/CMakeLists.txt"
+  gsed -i "s/add_subdirectory(gr2fonttest)/#add_subdirectory(gr2fonttest)/g" "$src_dir/$lib/CMakeLists.txt"
+  gsed -i "s/nolib_test(stdc++ $<TARGET_SONAME_FILE:graphite2>)/#nolib_test(stdc++ $<TARGET_SONAME_FILE:graphite2>)/g" "$src_dir/$lib/src/CMakeLists.txt"
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
 -DGRAPHITE2_TESTS=OFF \
@@ -1223,7 +1234,7 @@ build_libilbc() {
   local repo_ver="v3.0.4"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i'.bak' -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/CMakeLists.txt"
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DABSL_USE_EXTERNAL_GOOGLETEST=ON \
@@ -1293,15 +1304,15 @@ build_libjxl() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  sed -i'.bak' -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/CMakeLists.txt"
-  sed -i'.bak' -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/third_party/highway/CMakeLists.txt"
-  sed -i'.bak' -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/third_party/brotli/CMakeLists.txt"
-  sed -i'.bak' -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/CMakeLists.txt"
-  sed -i'.bak' -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION (\"?)\\$\{CMAKE_INSTALL_BINDIR\}(\"?)/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/tools/CMakeLists.txt"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
@@ -1350,7 +1361,7 @@ BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/tools/CMakeLists.tx
 -DBROTLIDEC_LIBRARY=$dependency_install_prefix/lib/libbrotlidec.a \
 -DJPEGXL_FORCE_SYSTEM_LCMS2=ON"
   # force third party PIC
-  sed -i'.bak' '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
+  gsed -i '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
@@ -1541,7 +1552,7 @@ am_cv_lib_iconv=yes \
 LIBICONV=-liconv \
 LTLIBICONV=-liconv \
 LIBS=-liconv"
-  find "$src_dir/$lib" -type f -name configure -exec sed -i \
+  find "$src_dir/$lib" -type f -name configure -exec gsed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   touch "no.autoreconf"
@@ -1637,7 +1648,7 @@ build_pcre2() {
 -DPCRE2_BUILD_STATIC_LIB=ON \
 -DPCRE2_BUILD_SHARED_LIB=ON \
 -DPCRE2_BUILD_PCRE2_8=ON"
-  sed -i'.bak' -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/CMakeLists.txt"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
@@ -1738,8 +1749,8 @@ build_liboapv() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  sed -i'.bak' 's|libdir=.*|libdir=\${prefix}/lib/oapv|g' "$install_pkgconfig_dir/oapv.pc"
-  sed -i'.bak' 's|includedir=.*|includedir=\${prefix}/include|g' "$install_pkgconfig_dir/oapv.pc"
+  gsed -i 's|libdir=.*|libdir=\${prefix}/lib/oapv|g' "$install_pkgconfig_dir/oapv.pc"
+  gsed -i 's|includedir=.*|includedir=\${prefix}/include|g' "$install_pkgconfig_dir/oapv.pc"
   ln -sf "$dependency_install_prefix/lib/oapv/liboapv.a" "$dependency_install_prefix/lib/liboapv.a"
   change_dir "$src_dir"
 }
@@ -1753,7 +1764,7 @@ build_libopencv() {
   local repo_ver="4.12.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  sed -i'.bak' \
+  gsed -i \
     -e 's/if(IOS OR XROS)/if(IOS OR XROS OR CMAKE_SYSTEM_NAME STREQUAL "tvOS")/' \
     -e 's/if(APPLE AND (NOT IOS) AND (NOT XROS))/if(APPLE AND (NOT IOS) AND (NOT XROS) AND NOT CMAKE_SYSTEM_NAME STREQUAL "tvOS")/' \
     "$src_dir/$lib/modules/imgcodecs/CMakeLists.txt"
@@ -1824,7 +1835,7 @@ build_libopenh264() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i'.bak' "s/'ios',/'ios', 'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
+  gsed -i "s/'ios',/'ios', 'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
   local meson_options="-Dtests=disabled"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
@@ -1843,7 +1854,7 @@ build_libopenjpeg() {
   do_make_and_make_install
   change_dir "$src_dir"
   if [[ -f "$install_pkgconfig_dir/libopenjp2.pc" ]]; then
-    sed -i'.bak' 's/-l-lpthread/-lpthread/g' "$install_pkgconfig_dir/libopenjp2.pc"
+    gsed -i 's/-l-lpthread/-lpthread/g' "$install_pkgconfig_dir/libopenjp2.pc"
   fi
 }
 build_libogg() {
@@ -2056,11 +2067,11 @@ build_libplacebo() {
 $config_options" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined
   generic_meson "$meson_options"
   # Fix Python 3.14 ElementTree compatibility in libplacebo
-  sed -i'.bak' 's/ET.parse(xmlfile)/ET.parse(xmlfile).getroot()/g' \
+  gsed -i 's/ET.parse(xmlfile)/ET.parse(xmlfile).getroot()/g' \
     "$src_dir/$lib/src/vulkan/utils_gen.py"
   # disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i'.bak' 's/-lplacebo.*$/-lplacebo -lm -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
+  gsed -i 's/-lplacebo.*$/-lplacebo -lm -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
 }
 build_libid3tag() {
   # run_valid_function "build_zlib" 1
@@ -2111,16 +2122,16 @@ build_libquirc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   create_dir "$src_dir/$lib/build"
-  sed -i'.bak' 's/all: libquirc.$(LIB_SUFFIX) qrtest/all: libquirc.$(LIB_SUFFIX)/g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's|install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's|install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's|install: libquirc.a libquirc.$(LIB_SUFFIX) quirc-demo quirc-scanner|install: libquirc.a libquirc.$(LIB_SUFFIX)|g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's/SDL_CFLAGS := .*/SDL_CFLAGS := /g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's/SDL_LIBS = .*/SDL_LIBS = /g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's/OPENCV_CFLAGS := .*/OPENCV_CFLAGS := /g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's/OPENCV_LIBS = .*/OPENCV_LIBS = /g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's/-o root -g root//g' "$src_dir/$lib/Makefile"
-  sed -i'.bak' 's/cp -d/cp -P/g' "$src_dir/$lib/Makefile"
+  gsed -i 's/all: libquirc.$(LIB_SUFFIX) qrtest/all: libquirc.$(LIB_SUFFIX)/g' "$src_dir/$lib/Makefile"
+  gsed -i 's|install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
+  gsed -i 's|install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
+  gsed -i 's|install: libquirc.a libquirc.$(LIB_SUFFIX) quirc-demo quirc-scanner|install: libquirc.a libquirc.$(LIB_SUFFIX)|g' "$src_dir/$lib/Makefile"
+  gsed -i 's/SDL_CFLAGS := .*/SDL_CFLAGS := /g' "$src_dir/$lib/Makefile"
+  gsed -i 's/SDL_LIBS = .*/SDL_LIBS = /g' "$src_dir/$lib/Makefile"
+  gsed -i 's/OPENCV_CFLAGS := .*/OPENCV_CFLAGS := /g' "$src_dir/$lib/Makefile"
+  gsed -i 's/OPENCV_LIBS = .*/OPENCV_LIBS = /g' "$src_dir/$lib/Makefile"
+  gsed -i 's/-o root -g root//g' "$src_dir/$lib/Makefile"
+  gsed -i 's/cp -d/cp -P/g' "$src_dir/$lib/Makefile"
   do_make "libquirc.a PREFIX=${dependency_install_prefix}"
   disable_nonessential "$src_dir/$lib"
   do_make_install "PREFIX=${dependency_install_prefix} INSTALL=\"install -m 0644\""
@@ -2148,7 +2159,7 @@ build_librabbitmq() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  sed -i'.bak' 's/Libs.private:.*//g' "$dependency_install_prefix/lib/pkgconfig/librabbitmq.pc"
+  gsed -i 's/Libs.private:.*//g' "$dependency_install_prefix/lib/pkgconfig/librabbitmq.pc"
   change_dir "$src_dir"
 }
 # build_librav1e          # config_options+= --enable-librav1e            # enable AV1 encoding via rav1e [no]
@@ -2206,7 +2217,7 @@ build_libexpat() {
   export automake="/usr/local/bin/automake"
   export ACLOCAL="$aclocal"
   export AUTOMAKE="$automake"
-  find "$src_dir/$lib/expat" -type f -name configure -exec sed -i \
+  find "$src_dir/$lib/expat" -type f -name configure -exec gsed -i \
     -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
     -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   get_config_sub "$src_dir/$lib/expat/conftools"
@@ -2287,7 +2298,7 @@ build_librubberband() {
   local FILE_PATH="$src_dir/$lib/src/common/mathmisc.cpp"
   if ! grep -q "<cstddef>" "$FILE_PATH"; then
     # Create a temporary file and add the include after the first line (or at the top)
-    sed -i'.bak' '1i\
+    gsed -i '1i\
 #include <cstddef>' "$FILE_PATH"
   fi
   disable_nonessential "$src_dir/$lib"
@@ -2324,9 +2335,9 @@ build_libshaderc() {
   if [[ -f "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" ]] ; then
     copy_path "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" "$dependency_install_prefix/lib/libshaderc_util.a" >>"$LOG_FILE"
   fi
-  sed -i'.bak' "s/Libs: .*/& -lstdc++/g" "$install_pkgconfig_dir/shaderc_combined.pc"
-  sed -i'.bak' "s/Libs: .*/& -lstdc++/g" "$install_pkgconfig_dir/shaderc_static.pc"
-  sed -i'.bak' "s/-lshaderc_shared/-lshaderc -lshaderc_util/g" "$install_pkgconfig_dir/shaderc.pc"
+  gsed -i "s/Libs: .*/& -lstdc++/g" "$install_pkgconfig_dir/shaderc_combined.pc"
+  gsed -i "s/Libs: .*/& -lstdc++/g" "$install_pkgconfig_dir/shaderc_static.pc"
+  gsed -i "s/-lshaderc_shared/-lshaderc -lshaderc_util/g" "$install_pkgconfig_dir/shaderc.pc"
   add_libs_to_pkg -t="$install_pkgconfig_dir/shaderc.pc" -l="-lglslang -lSPIRV -lSPIRV-Tools -lSPIRV-Tools-opt"
   find "$dependency_install_prefix/lib" -name 'libshaderc*.dylib' -delete
   change_dir "$src_dir"
@@ -2344,7 +2355,7 @@ build_libshine() {
     ffi_host="${host_arch}-apple-darwin"
   fi
   generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared"
-  sed -i'.bak' -E 's/void shine_mdct_initialise.*/void shine_mdct_initialise(shine_global_config *config);/' "$src_dir/$lib/src/lib/l3mdct.h"
+  gsed -i -E 's/void shine_mdct_initialise.*/void shine_mdct_initialise(shine_global_config *config);/' "$src_dir/$lib/src/lib/l3mdct.h"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -2399,10 +2410,10 @@ build_libsoxr() {
     # 32-bit ARM-only NEON flags. Apple Silicon needs a small source patch.
     perl -0pi -e 's/elseif \(CMAKE_SYSTEM_PROCESSOR MATCHES "\^arm"\)/elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)")\n  set (TRIAL_C_FLAGS\n    " "\n  )\n  set (TEST_C_SOURCE "\n    #include <arm_neon.h>\n    int main(int c, char * * v) {\n      float32x4_t a = vdupq_n_f32((float)c), b = vdupq_n_f32((float)!!v);\n      return !vgetq_lane_u32(vceqq_f32(a,b),0);\n    }\n  ")\nelseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")/' \
       cmake/Modules/FindSIMD32.cmake
-    sed -i '.bak' 's/#elif !defined(PFFFT_SIMD_DISABLE) && defined(__arm__)/#elif !defined(PFFFT_SIMD_DISABLE) \&\& (defined(__arm__) || defined(__aarch64__) || defined(__arm64__))/g' src/pffft.c
-    sed -i '.bak' 's/#ifdef __arm__/#if defined(__arm__) || defined(__aarch64__) || defined(__arm64__)/g' src/pffft.c src/pffft-wrap.c
-    sed -i '.bak' 's/#elif defined __arm__/#elif defined __arm__ || defined __aarch64__ || defined __arm64__/g' src/dev32s.h
-    sed -i '.bak' 's/#if defined __arm__/#if defined __arm__ || defined __aarch64__ || defined __arm64__/g' src/cr-core.c
+    gsed -i 's/#elif !defined(PFFFT_SIMD_DISABLE) && defined(__arm__)/#elif !defined(PFFFT_SIMD_DISABLE) \&\& (defined(__arm__) || defined(__aarch64__) || defined(__arm64__))/g' src/pffft.c
+    gsed -i 's/#ifdef __arm__/#if defined(__arm__) || defined(__aarch64__) || defined(__arm64__)/g' src/pffft.c src/pffft-wrap.c
+    gsed -i 's/#elif defined __arm__/#elif defined __arm__ || defined __aarch64__ || defined __arm64__/g' src/dev32s.h
+    gsed -i 's/#if defined __arm__/#if defined __arm__ || defined __aarch64__ || defined __arm64__/g' src/cr-core.c
   fi
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
@@ -2507,7 +2518,7 @@ build_cpuinfo() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "main"
   change_dir "$src_dir/$lib/build" 1
-  sed -i'.bak' -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/CMakeLists.txt"
   do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release \
 -DCPUINFO_LIBRARY_TYPE=static \
@@ -2560,7 +2571,7 @@ build_libsvtav1() {
     change_dir "$src_dir"
       do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
       change_dir "$src_dir/$lib/build" 1
-      sed -i'.bak' -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_FULL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_FULL_BINDIR\}\\
+      gsed -i -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_FULL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_FULL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/Source/App/CMakeLists.txt"
       do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_CPUINFO=SYSTEM -DENABLE_NEON=ON -DENABLE_NEON_DOTPROD=OFF -DENABLE_NEON_I8MM=OFF -DENABLE_SVE=OFF -DENABLE_SVE2=OFF" # -DSVT_AV1_LTO=OFF if fails try adding this
       disable_nonessential "$src_dir/$lib"
@@ -2606,7 +2617,7 @@ build_jbig() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i'.bak' "s|CCFLAGS = -O2 -W|CCFLAGS = -O2 -W ${CFLAGS}|g" Makefile
+  gsed -i "s|CCFLAGS = -O2 -W|CCFLAGS = -O2 -W ${CFLAGS}|g" Makefile
   do_make
   cp -fv "$src_dir/$lib/libjbig/libjbig.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"
   cp -fv "$src_dir/$lib/libjbig/jbig.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"
@@ -2812,7 +2823,7 @@ build_libpsl() {
 --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i'.bak' "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
+  gsed -i "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
   reset_cflags
   change_dir "$src_dir"
 }
@@ -2919,7 +2930,7 @@ build_libtesseract() {
 --disable-doc \
 LIBLEPT_HEADERSDIR=$dependency_install_prefix/include \
 --datadir=$dependency_install_prefix/bin"
-  sed -i'.bak' 's/-lrt//g' "$src_dir/$lib/Makefile"
+  gsed -i 's/-lrt//g' "$src_dir/$lib/Makefile"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   # TODO: add ability to download tessdata
@@ -2933,7 +2944,7 @@ LIBLEPT_HEADERSDIR=$dependency_install_prefix/include \
         -ljpeg -lgif -lwebpmux -lwebp -lopenjp2 -ljbig -lLerc \
         -lsharpyuv -llzma -lzstd -ldeflate" \
    -rp="lept libarchive liblzma libtiff-4"
-   sed -i'.bak' 's/-ltesseract/-ltesseract -framework Accelerate /g' "$install_pkgconfig_dir/tesseract.pc"
+   gsed -i 's/-ltesseract/-ltesseract -framework Accelerate /g' "$install_pkgconfig_dir/tesseract.pc"
 }
 # build_libtheora         # config_options+= --enable-libtheora           # enable Theora encoding via libtheora [no]
 build_libtheora() {
@@ -2984,7 +2995,7 @@ build_libtwolame() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
-    sed -i'.bak' "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
+    gsed -i "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
   touch "no.autogen"
   local ffi_host="$host_target"
@@ -2992,7 +3003,7 @@ build_libtwolame() {
     ffi_host="${host_arch}-apple-darwin"
   fi
   generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --enable-static --disable-shared"
-  find . -name "Makefile" -exec sed -i'.bak' 's/-std=gnu23/-std=gnu99/g' {} +
+  find . -name "Makefile" -exec gsed -i 's/-std=gnu23/-std=gnu99/g' {} +
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -3008,9 +3019,9 @@ build_libuavs3d() {
   chmod -R a+rwx "$src_dir/$lib/version.sh"
   eval "$src_dir/$lib/version.sh" > >(redirect_output) 2>&1
   change_dir "$src_dir/$lib/build" 1
-  sed -i'.bak' 's/add_executable(uavs3dec/#add_executable(uavs3dec/g' "$src_dir/$lib/CMakeLists.txt"
-  sed -i'.bak' 's/target_link_libraries(uavs3dec/#target_link_libraries(uavs3dec/g' "$src_dir/$lib/CMakeLists.txt"
-  sed -i'.bak' 's|aux_source_directory(./test|#aux_source_directory(./test|g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/add_executable(uavs3dec/#add_executable(uavs3dec/g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/target_link_libraries(uavs3dec/#target_link_libraries(uavs3dec/g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's|aux_source_directory(./test|#aux_source_directory(./test|g' "$src_dir/$lib/CMakeLists.txt"
   local cmake_params="-DCOMPILE_10BIT=0 \
 -DBUILD_SHARED_LIBS=0 \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -3056,7 +3067,7 @@ build_libvmaf() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i'.bak' "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
+  gsed -i "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
   change_dir "$src_dir"
 }
 # build_libvorbis         # config_options+= --enable-libvorbis           # enable Vorbis en/decoding via libvorbis, native implementation exists [no]
@@ -3068,7 +3079,7 @@ build_libvorbis() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   generic_configure "--disable-docs --disable-examples --disable-oggtest --enable-static --disable-shared"
-  find . -name "Makefile" -exec sed -i'.bak' 's/-force_cpusubtype_ALL//g' {} +
+  find . -name "Makefile" -exec gsed -i 's/-force_cpusubtype_ALL//g' {} +
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -3120,16 +3131,16 @@ build_libvpx() {
         ' "$toolchain_file" > "${toolchain_file}.tmp" && mv -f "${toolchain_file}.tmp" "$toolchain_file"
       fi
     done
-    sed -i '' 's/-mtvos-version-min=\${TVOS_VERSION_MIN}"$/-mtvos-simulator-version-min=${TVOS_VERSION_MIN}"/g' "$src_dir/$lib/build/make/configure.sh"
+    gsed -i 's/-mtvos-version-min=\${TVOS_VERSION_MIN}"$/-mtvos-simulator-version-min=${TVOS_VERSION_MIN}"/g' "$src_dir/$lib/build/make/configure.sh"
     vpx_target="arm64-appletvsimulator-gcc"
   else
     vpx_target="arm64-darwin-gcc"
   fi
-  sed -i'.bak' \
+  gsed -i \
     -e "s/TVOS_VERSION_MIN=\"12.0\"/TVOS_VERSION_MIN=\"${MIN_TVOS_VERSION}\"/g" \
     -e "s/TVOS_VERSION_MIN=\"11.0\"/TVOS_VERSION_MIN=\"${MIN_TVOS_VERSION}\"/g" \
     "$src_dir/$lib/build/make/configure.sh"
-  sed -i'.bak' \
+  gsed -i \
     -e 's/[[:space:]]*check_add_cflags -fembed-bitcode/:/' \
     -e '/check_add_asflags -fembed-bitcode/d' \
     -e '/check_add_ldflags -fembed-bitcode/d' \
@@ -3153,13 +3164,13 @@ build_libvvenc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  sed -i'.bak' -E "s/RUNTIME DESTINATION \\$\{RUNTIME_DEST\}/RUNTIME DESTINATION \\$\{RUNTIME_DEST\}\\
+  gsed -i -E "s/RUNTIME DESTINATION \\$\{RUNTIME_DEST\}/RUNTIME DESTINATION \\$\{RUNTIME_DEST\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$lib/cmake/modules/vvencInstall.cmake"
   do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DVVENC_ENABLE_LINK_TIME_OPT=OFF -DBUILD_SHARED_LIBS=0 -DVVENC_INSTALL_FULLFEATURE_APP=ON"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   # Fix corrupted pkg-config file generated by static libvvenc install
-  sed -i'.bak' 's/interface_libs-NOTFOUND//g' "$install_pkgconfig_dir/libvvenc.pc"
+  gsed -i 's/interface_libs-NOTFOUND//g' "$install_pkgconfig_dir/libvvenc.pc"
   change_dir "$src_dir"
 }
 # build_libwebp           # config_options+= --enable-libwebp             # enable WebP encoding via libwebp [no]
@@ -3213,8 +3224,8 @@ build_libx265() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/12bit" 1
   # Fix for CMake > 3.0 dropping support for OLD policy behaviors
-  sed -i'.bak' 's/cmake_policy(SET CMP0025 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
-  sed -i'.bak' 's/cmake_policy(SET CMP0054 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/cmake_policy(SET CMP0025 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/cmake_policy(SET CMP0054 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
   local cmake_args="-DENABLE_ASSEMBLY=OFF \
 -DHIGH_BIT_DEPTH=ON \
 -DENABLE_CLI=OFF \
@@ -3264,7 +3275,7 @@ build_libxavs() {
   change_dir "$src_dir/$lib"
   get_config_sub "$src_dir/$lib"
   get_config_guess "$src_dir/$lib"
-  LC_ALL=C sed -i'.bak' 's/-lm -lmx/-lm/g' "$src_dir/$lib/configure"
+  LC_ALL=C gsed -i 's/-lm -lmx/-lm/g' "$src_dir/$lib/configure"
   generic_configure "--host=arm64-apple-darwin \
 --enable-static \
 --disable-shared \
@@ -3272,18 +3283,18 @@ build_libxavs() {
 --with-pic \
 --disable-asm \
 --extra-cflags=\"-fPIC\""
-  LC_ALL=C sed -i'.bak' 's/, tmp\[0\]);/, \&tmp[0]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  LC_ALL=C sed -i'.bak' 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  LC_ALL=C sed -i'.bak' 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  LC_ALL=C sed -i'.bak' 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  LC_ALL=C sed -i'.bak' -E 's/extern void predict_8x8c_p_core_mmxext.*/extern void predict_8x8c_p_core_mmxext\( uint8_t \*src, int i00, int b, int c \);/' common/i386/predict-c.c
+  LC_ALL=C gsed -i 's/, tmp\[0\]);/, \&tmp[0]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  LC_ALL=C gsed -i 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  LC_ALL=C gsed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  LC_ALL=C gsed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  LC_ALL=C gsed -i -E 's/extern void predict_8x8c_p_core_mmxext.*/extern void predict_8x8c_p_core_mmxext\( uint8_t \*src, int i00, int b, int c \);/' common/i386/predict-c.c
   if [[ $host_arch == "x86_64" ]]; then
     # Remove unsupported -m amd64 flag if it exists
-    LC_ALL=C sed -i'.bak' 's/-m amd64//g' "$src_dir/$lib/config.mak"
+    LC_ALL=C gsed -i 's/-m amd64//g' "$src_dir/$lib/config.mak"
     # Nullify AS to prevent NASM execution
-    LC_ALL=C sed -i'.bak' 's/^AS=.*/AS=/g' "$src_dir/$lib/config.mak"
+    LC_ALL=C gsed -i 's/^AS=.*/AS=/g' "$src_dir/$lib/config.mak"
     # Remove assembly files from the source list to prevent them being built as dependencies
-    LC_ALL=C sed -i'.bak' 's/[^ ]*\.asm//g' "$src_dir/$lib/config.mak"
+    LC_ALL=C gsed -i 's/[^ ]*\.asm//g' "$src_dir/$lib/config.mak"
     export CFLAGS="$CFLAGS -Wno-error=strict-prototypes"
     export AS=
   fi
@@ -3303,7 +3314,7 @@ build_libxavs2() {
   change_dir "$src_dir/$lib/build/linux"
   get_config_sub "$src_dir/$lib/build/linux"
   get_config_guess "$src_dir/$lib/build/linux"
-  LC_ALL=C sed -i'.bak' 's/-lm -lmx/-lm/g' "$src_dir/$lib/build/linux/configure"
+  LC_ALL=C gsed -i 's/-lm -lmx/-lm/g' "$src_dir/$lib/build/linux/configure"
   generic_configure "--host=arm64-apple-darwin \
 --disable-cli \
 --enable-static \
@@ -3315,11 +3326,11 @@ build_libxavs2() {
   if [[ $host_arch == "x86_64" ]]; then
     export AS=nasm
   fi
-  sed -i'.bak' 's/^SYS_ARCH=AARCH64/SYS_ARCH=/' "$src_dir/$lib/build/linux/config.mak"
-  sed -i'.bak' -E 's/\$\(AR\)\$@/\$\(AR\) rc \$@/g' Makefile
+  gsed -i 's/^SYS_ARCH=AARCH64/SYS_ARCH=/' "$src_dir/$lib/build/linux/config.mak"
+  gsed -i -E 's/\$\(AR\)\$@/\$\(AR\) rc \$@/g' Makefile
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i'.bak' "s/Version:.*/Version: ${repo_ver}.0/g" "$dependency_install_prefix"/lib/pkgconfig/xavs2.pc
+  gsed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$dependency_install_prefix"/lib/pkgconfig/xavs2.pc
   change_dir "$src_dir"
   set_toolchain_paths
 }
@@ -3352,17 +3363,17 @@ EOF
     cmake_args+=" -DARM=TRUE -DSET_PROF=MAIN"
 
     # Remove the -static linker flag that breaks tvOS builds
-    sed -i'.bak' 's/set(CMAKE_EXE_LINKER_FLAGS "-static")//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/set(CMAKE_EXE_LINKER_FLAGS "-static")//g' "$src_dir/$lib/CMakeLists.txt"
   fi
-  sed -i '.bak' 's/_XEVD_DBK_NOEN_H_/_XEVD_DBK_NEON_H_/g' "$src_dir/$lib/src_base/neon/xevd_dbk_neon.h"
-  sed -i '.bak' 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
-  sed -i '.bak' 's/add_subdirectory(app)//g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/_XEVD_DBK_NOEN_H_/_XEVD_DBK_NEON_H_/g' "$src_dir/$lib/src_base/neon/xevd_dbk_neon.h"
+  gsed -i 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/add_subdirectory(app)//g' "$src_dir/$lib/CMakeLists.txt"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
   disable_nonessential "$src_dir/$lib/build"
   # do_make "xevd"
   do_make_and_make_install
   # XXX replace version if repo_ver is changed
-  sed -i'.bak' "s/Version:.*/Version: 1.5.0/g" "$src_dir/$lib/build/xevd.pc"
+  gsed -i "s/Version:.*/Version: 1.5.0/g" "$src_dir/$lib/build/xevd.pc"
   # manually install static library only
   { cp -fv "$src_dir/$lib/build/src_main/libxevd.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib static lib"
   { cp -fv "$src_dir/$lib/inc/xevd.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib headers"
@@ -3400,17 +3411,17 @@ EOF
     cmake_args+=" -DARM=TRUE -DSET_PROF=MAIN"
 
     # Remove the -static linker flag that breaks tvOS builds
-    sed -i'.bak' 's/set(CMAKE_EXE_LINKER_FLAGS "-static")//g' "$src_dir/$lib/CMakeLists.txt"
+    gsed -i 's/set(CMAKE_EXE_LINKER_FLAGS "-static")//g' "$src_dir/$lib/CMakeLists.txt"
     wget https://raw.githubusercontent.com/DLTcollab/sse2neon/master/sse2neon.h -O "$src_dir/$lib/src_base/neon/sse2neon.h" > >(redirect_output) 2>&1
   fi
-  sed -i '.bak' 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
-  sed -i '.bak' 's/add_subdirectory(app)//g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/-Werror//g' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/add_subdirectory(app)//g' "$src_dir/$lib/CMakeLists.txt"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
   disable_nonessential "$src_dir/$lib/build"
   # do_make "xevd"
   do_make_and_make_install
   # XXX replace version if repo_ver is changed
-  sed -i'.bak' "s/Version:.*/Version: 0.5.1/g" "$src_dir/$lib/build/xeve.pc"
+  gsed -i "s/Version:.*/Version: 0.5.1/g" "$src_dir/$lib/build/xeve.pc"
   # manually install static library only
   { cp -fv "$src_dir/$lib/build/src_main/libxeve.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"; } || exit_message 1 "build_libxeve: could not install $lib static lib"
   { cp -fv "$src_dir/$lib/inc/xeve.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxeve: could not install $lib headers"
@@ -3669,7 +3680,7 @@ build_lv2_headers() {
 # build_lv2               # config_options+= --enable-lv2                 # enable LV2 audio filtering [no]
 build_lv2() {
   # run_valid_function "build_lilv"
-  find "$install_pkgconfig_dir" -type f -name "*.pc" -exec sed -i'.bak' \
+  find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i \
   -e 's/-lsratom-0\b/-lsratom/g' \
   -e 's/-lsord-0\b/-lsord/g' \
   -e 's/-lserd-0\b/-lserd/g' \
@@ -3741,8 +3752,8 @@ build_opencl() {
   disable_nonessential "$src_dir/$parentlib/$lib/build"
   do_make_and_make_install
   cp -f "$src_dir/$parentlib/$lib/OpenCL-Headers.pc.in" "$install_pkgconfig_dir/OpenCL-Headers.pc"
-  sed -i'.bak' "s|@PKGCONFIG_PREFIX@|${dependency_install_prefix}|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
-  sed -i'.bak' "s|@OPENCL_INCLUDEDIR_PC@|\${prefix}/include|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
+  gsed -i "s|@PKGCONFIG_PREFIX@|${dependency_install_prefix}|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
+  gsed -i "s|@OPENCL_INCLUDEDIR_PC@|\${prefix}/include|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
   ln -sf "$dependency_install_prefix/include/CL" "$dependency_install_prefix/include/OpenCL"
   local lib="OpenCL-ICD-Loader"
   local repo="https://github.com/KhronosGroup/OpenCL-ICD-Loader"
@@ -3750,8 +3761,8 @@ build_opencl() {
   change_dir "$src_dir/$parentlib"
   do_git_checkout "$repo" "$lib" "$repo_ver"
   change_dir "$src_dir/$parentlib/$lib/build" 1
-  sed -i '' '/RUNTIME$/{N;s/RUNTIME\n[[:space:]]*/RUNTIME /;}' "$src_dir/$parentlib/$lib/CMakeLists.txt"
-  sed -i'.bak' -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
+  gsed -i '/RUNTIME$/{N;s/RUNTIME\n[[:space:]]*/RUNTIME /;}' "$src_dir/$parentlib/$lib/CMakeLists.txt"
+  gsed -i -E "s/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}/RUNTIME DESTINATION \\$\{CMAKE_INSTALL_BINDIR\}\\
 BUNDLE DESTINATION \\$\{CMAKE_SOURCE_DIR\}/g" "$src_dir/$parentlib/$lib/CMakeLists.txt"
   local cmake_params="-DCMAKE_INSTALL_PREFIX=${dependency_install_prefix} \
 -DCMAKE_BUILD_TYPE=Release \
@@ -3824,21 +3835,21 @@ build_openssl() {
     cp -f "$rel" "$backup_root/$rel"
   done
 
-  sed -i'.bak' 's/define HAVE_FORK 1/define HAVE_FORK 0/' "./apps/speed.c"
-  sed -i'.bak' 's/fork()/-1/' "./apps/speed.c"
-  sed -i'.bak' 's/fork()/-1/' "./apps/lib/http_server.c"
-  sed -i'.bak' 's/fork()/-1/' "./test/drbgtest.c"
-  sed -i'.bak' 's/undef NO_FORK/define NO_FORK/' "./crypto/async/arch/async_posix.h"
-  sed -i'.bak' 's/static volatile intr_signal/static volatile int intr_signal/' "./crypto/ui/ui_openssl.c"
+  gsed -i 's/define HAVE_FORK 1/define HAVE_FORK 0/' "./apps/speed.c"
+  gsed -i 's/fork()/-1/' "./apps/speed.c"
+  gsed -i 's/fork()/-1/' "./apps/lib/http_server.c"
+  gsed -i 's/fork()/-1/' "./test/drbgtest.c"
+  gsed -i 's/undef NO_FORK/define NO_FORK/' "./crypto/async/arch/async_posix.h"
+  gsed -i 's/static volatile intr_signal/static volatile int intr_signal/' "./crypto/ui/ui_openssl.c"
   if grep -q 'D_REENTRANT:iOS' "./Configure"; then
-    sed -i'.bak' 's/D_REENTRANT:iOS/D_REENTRANT:tvOS/' "./Configure"
+    gsed -i 's/D_REENTRANT:iOS/D_REENTRANT:tvOS/' "./Configure"
   fi
 
   : > "$generated_patch"
   for rel in "${patch_targets[@]}"; do
     if ! cmp -s "$backup_root/$rel" "$rel"; then
       diff -u "$backup_root/$rel" "$rel" | \
-        sed -e "1s|--- .*|--- a/$rel|" -e "2s|+++ .*|+++ b/$rel|" >> "$generated_patch" || true
+        gsed -e "1s|--- .*|--- a/$rel|" -e "2s|+++ .*|+++ b/$rel|" >> "$generated_patch" || true
     fi
     cp -f "$backup_root/$rel" "$rel"
   done
@@ -3942,7 +3953,7 @@ if [[ -x "__CYTHON_VENV__/bin/python" ]]; then
 fi
 exec python3 -m cython "$@"
 EOF
-  sed -i'.bak' "s|__CYTHON_VENV__|$cython_venv_dir|g" "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
+  gsed -i "s|__CYTHON_VENV__|$cython_venv_dir|g" "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
   chmod +x "$cython_shim_dir/cython" "$cython_shim_dir/cython3"
   prepend_path_once "$cython_shim_dir"
   generic_meson "-Denable_vspipe=false -Denable_python_module=false"
@@ -4004,7 +4015,7 @@ build_whisper() {
   do_make_and_make_install
   while IFS= read -r -d '' file; do
     add_libs_to_pkg -t="$file" -l="-lwhisper -lggml -lggml-base -lggml-cpu -lggml-blas -lggml-metal -lomp -lpthread"
-    sed -i'.bak' 's/-lwhisper/-lwhisper -framework Accelerate -framework Metal -framework MetalKit -framework Foundation /g' "$file"
+    gsed -i 's/-lwhisper/-lwhisper -framework Accelerate -framework Metal -framework MetalKit -framework Foundation /g' "$file"
   done < <(find "$install_pkgconfig_dir" -name "whisper*.pc" -print0)
   change_dir "$src_dir"
 }
@@ -4084,18 +4095,35 @@ build_libopencolorio() {
     lib_flag="-l${file_noext#lib}"
     add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag"
   done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
-  if [[ -d "$src_dir/$lib/build/ext/dist/include" ]]; then
-    cp -rfv "$src_dir/$lib/build/ext/dist/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
+  
+  local ocio_ext_dist_dir="$src_dir/$lib/build/ext/dist"
+  
+  if [[ -d "$ocio_ext_dist_dir" ]]; then
+    local ocio_ext_dist_dir_sed="$(
+      printf '%s\n' "$ocio_ext_dist_dir" |
+        gsed -e 's/[\/&|]/\\&/g'
+    )"
+    local dependency_install_prefix_sed="$(
+      printf '%s\n' "$dependency_install_prefix" |
+        gsed -e 's/[\/&|]/\\&/g'
+    )"
+    find "$ocio_ext_dist_dir" -type f -name "*.pc" \
+      -exec gsed -i \
+        -e "s|^prefix=.*|prefix=$dependency_install_prefix_sed|g" \
+        -e "s|$ocio_ext_dist_dir_sed|\${prefix}|g" {} \; \
+      > >(redirect_output) \
+      || exit_message 1 "Failed to update prefix in pkgconfig files for $lib"
+    
+    find "$ocio_ext_dist_dir/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
   fi
-  if [[ -d "$src_dir/$lib/build/ext/dist/lib/cmake" ]]; then
-    cp -rfv "$src_dir/$lib/build/ext/dist/lib/cmake" "$dependency_install_prefix/lib" > >(redirect_output) || exit_message 1 "Failed to copy cmake directory for $lib"
+  if [[ -d "$ocio_ext_dist_dir/include" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
   fi
-  if [[ -d "$src_dir/$lib/build/ext/dist/share" ]]; then
-    cp -rfv "$src_dir/$lib/build/ext/dist/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
+  if [[ -d "$ocio_ext_dist_dir/lib/cmake" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/lib/cmake" "$dependency_install_prefix/lib" > >(redirect_output) || exit_message 1 "Failed to copy cmake directory for $lib"
   fi
-  if [[ -d "$src_dir/$lib/build/ext/dist/lib/pkgconfig" ]]; then
-    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec sed -i '.bak' -e "s|prefix=.*|prefix=$dependency_install_prefix|g" {} \; > >(redirect_output) || exit_message 1 "Failed to update prefix in pkgconfig files for $lib"
-    find "$src_dir/$lib/build/ext/dist/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
+  if [[ -d "$ocio_ext_dist_dir/share" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
   fi
   change_dir "$src_dir"
 }
@@ -4300,18 +4328,18 @@ build_glib() {
 # -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${TVOS_SYSROOT}\" \
 # -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -lintl -lresolv -framework CoreFoundation -isysroot ${TVOS_SYSROOT}\" \
 # --wrap-mode=nofallback"
-#   sed -i'.bak' \
+#   gsed -i \
 #     -e "s|libiconv = dependency('iconv')|libiconv = declare_dependency(link_args : ['-liconv'])|" \
 #     -e "s|libiconv = cc.find_library('iconv', required : true)|libiconv = declare_dependency(link_args : ['-liconv'])|" \
 #     "$src_dir/$lib/meson.build"
-#   sed -i'.bak' \
+#   gsed -i \
 #     -e "s|libintl = dependency('intl', required: false)|libintl = declare_dependency(link_args : ['-lintl', '-liconv'])|" \
 #     -e "s|if libintl.found() and libintl.type_name() != 'internal'|if libintl.found()|g" \
 #     "$src_dir/$lib/meson.build"
-#   sed -i'.bak' '/#ifdef HAVE_PIPE2/,/#endif/d' "$src_dir/$lib/glib/glib-unixprivate.h"
+#   gsed -i '/#ifdef HAVE_PIPE2/,/#endif/d' "$src_dir/$lib/glib/glib-unixprivate.h"
 #   generic_meson "$meson_options"
 #   do_ninja_and_ninja_install
-#   sed -i'.bak' 's/-lglib-2.0.*$/-lglib-2.0 -lm -lintl/' "$install_pkgconfig_dir/glib-2.0.pc"
+#   gsed -i 's/-lglib-2.0.*$/-lglib-2.0 -lm -lintl/' "$install_pkgconfig_dir/glib-2.0.pc"
 #   change_dir "$src_dir"
 #   reset_cflags
 #   unset C_INCLUDE_PATH
@@ -4340,7 +4368,7 @@ build_liblensfun() {
 # -DINSTALL_PYTHON_MODULE=OFF" "$src_dir/$lib"
 #   disable_nonessential "$src_dir/$lib"
 #   do_make_and_make_install
-#   sed -i'.bak' 's/-llensfun/-llensfun -framework CoreText -framework CoreFoundation/' "$install_pkgconfig_dir/lensfun.pc"
+#   gsed -i 's/-llensfun/-llensfun -framework CoreText -framework CoreFoundation/' "$install_pkgconfig_dir/lensfun.pc"
 #   reset_cppflags
 #   reset_cxxflags
 #   change_dir "$src_dir"
@@ -4418,8 +4446,8 @@ build_pango() {
 # -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\" \
 # -Dcpp_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} $LIBS\""
 #   # disable tools - not needed for ffmpeg
-#   sed -i'.bak' "s/subdir('utils')/# subdir('utils')/g" meson.build
-#   sed -i'.bak' "s/ApplicationServices/CoreFoundation/g" meson.build
+#   gsed -i "s/subdir('utils')/# subdir('utils')/g" meson.build
+#   gsed -i "s/ApplicationServices/CoreFoundation/g" meson.build
 #   generic_meson "$meson_options"
 #   do_ninja_and_ninja_install
 #   change_dir "$src_dir"
@@ -4461,7 +4489,7 @@ build_librsvg() {
 #   do_ninja_and_ninja_install
 #   change_dir "$src_dir"
 #   add_libs_to_pkg -t="$install_pkgconfig_dir/librsvg-2.0.pc" -p="-lresolv"
-#   sed -i'.bak' 's/-lrsvg-2/-lrsvg-2 -framework CoreFoundation/g' "$install_pkgconfig_dir/librsvg-2.0.pc"
+#   gsed -i 's/-lrsvg-2/-lrsvg-2 -framework CoreFoundation/g' "$install_pkgconfig_dir/librsvg-2.0.pc"
 #   if [[ $host_arch == "x86_64" ]]; then
 #     # png.o always compiles to arm64 for some reason. remove png.o and thin the library
 #     if ar t "$dependency_install_prefix/lib/librsvg-2.a" | grep png.o > /dev/null; then
@@ -4534,7 +4562,7 @@ build_gstreamer() {
 # -Dc_link_args=\"-arch $host_arch -L${dependency_install_prefix}/lib -isysroot ${SDKROOT} -lresolv -framework CoreFoundation -framework Foundation -lobjc -llzma\""
 #   generic_meson "$meson_options"
 #   disable_nonessential "$src_dir/$lib"
-#   sed -i'.bak' 's/-Wl,--export-dynamic//g' "$src_dir/$lib/build/build.ninja"
+#   gsed -i 's/-Wl,--export-dynamic//g' "$src_dir/$lib/build/build.ninja"
 #   do_ninja_and_ninja_install
 #   reset_ldflags
 #   change_dir "$src_dir"

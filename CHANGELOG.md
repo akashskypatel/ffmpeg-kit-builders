@@ -1,5 +1,13 @@
 # FFmpegKit Changelog
 
+## Version 0.10.5
+
+- Fix Apple Non-public API usage issue with iOS publishing static analysis.
+- Add additional supported external libraries
+  - libsvtjpegxs
+  - libopencolorio
+  - libmpeghdec
+
 ## Version 0.10.4
 
 - Updated FFmpeg to v8.1.2
