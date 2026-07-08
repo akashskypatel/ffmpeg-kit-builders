@@ -6214,10 +6214,12 @@ add_src_dir() {
     create_touch_file 0 "$dir/$host_touch"
     if iswindows; then
       find "$dependency_install_prefix/lib" -name "*.la" -delete
-      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i -e -E 's/[[:space:]]-lm\b//g' \
-        -e 's|/usr/local/mingw-w64/[^ ]+/lib/lib([a-zA-Z0-9]+)\.a|-l\1|g' \
-        -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' \
-        -e 's|-Wl,--export-dynamic||g' {} +
+      find "$install_pkgconfig_dir" -type f -name "*.pc" \
+        -exec gsed -i -E \
+          -e 's/[[:space:]]-lm\b//g' \
+          -e 's|/usr/local/mingw-w64/[^ ]+/lib/lib([a-zA-Z0-9]+)\.a|-l\1|g' \
+          -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' \
+          -e 's|-Wl,--export-dynamic||g' {} +
     elif ismacos || isios || isiossimulator; then
       find "$dependency_install_prefix/lib" -name "*.la" -delete
       find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i -e 's|-Wl,--export-dynamic||g' \
