@@ -5005,6 +5005,12 @@ build_libopencolorio() {
   -DOCIO_BUILD_TESTS=OFF \
   -DOCIO_BUILD_GPU_TESTS=OFF \
   -DOCIO_BUILD_PYTHON=OFF \
+  -DZLIB_USE_STATIC_LIBS=ON \
+  -DZLIB_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_STATIC_LIBRARY=ON \
+  -Dexpat_LIBRARY=\"$dependency_install_prefix/lib/libexpat.a\" \
+  -Dexpat_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
   -DOCIO_INSTALL_EXT_PACKAGES=\"ALL\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
