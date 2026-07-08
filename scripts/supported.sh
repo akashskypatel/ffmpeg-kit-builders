@@ -14,3 +14,12 @@ export VALID_APPLE=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "mac
 export VALID_BUILDS=("ffmpeg" "kit" "bundle")
 export VALID_LICENSES=("lgpl" "gpl")
 export VALID_SMALL_FLAGS=("small" "")
+
+is_supported_combo() {
+  local combo="$1"
+  local valid
+  for valid in "${VALID_PLATFORM_ARCHS[@]}"; do
+    [[ "$valid" == "$combo" ]] && return 0
+  done
+  return 1
+}
