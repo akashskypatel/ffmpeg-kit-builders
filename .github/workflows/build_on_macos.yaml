@@ -64,11 +64,11 @@ jobs:
       
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh FFmpegKit/scripts/*.sh
 
       - name: Install Bash
         shell: bash
-        run: ${GITHUB_WORKSPACE}/scripts/setup-macos-tools.sh
+        run: ${GITHUB_WORKSPACE}/scripts/toolchain/setup-macos-tools.sh
 
       - name: Accept Xcode license
         shell: bash
