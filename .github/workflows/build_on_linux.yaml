@@ -1,0 +1,89 @@
+name: build_on_linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_platforms:
+        description: "Comma-separated target platforms this runner can build"
+        required: true
+        default: "linux,windows,android"
+        type: string
+      target_archs:
+        description: "Comma-separated target architectures to try for each selected platform"
+        required: true
+        default: "x86_64,aarch64,armv7a"
+        type: string
+      force:
+        description: "Force rebuild instead of using existing self release artifacts"
+        required: false
+        default: false
+        type: boolean
+      build_from:
+        description: "Specify step as starting point. Must be build_*"
+        required: false
+        default: ""
+        type: string
+      build_only:
+        description: "Only build the specified step and exit"
+        required: false
+        default: false
+        type: boolean
+      build_ffmpeg:
+        description: "Build ffmpeg binaries"
+        required: false
+        default: false
+        type: boolean
+      build_bundle:
+        description: "Build ffmpeg-kit binaries and bundle"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  WORKFLOW_FORCE_SELF: ${{ inputs.force }}
+  WORKFLOW_BUILD_FROM: ${{ inputs.build_from }}
+  WORKFLOW_BUILD_ONLY: ${{ inputs.build_only }}
+  WORKFLOW_TARGET_PLATFORMS: ${{ inputs.target_platforms }}
+  WORKFLOW_TARGET_ARCHS: ${{ inputs.target_archs }}
+  RUNNER_WORKFLOW_TARGET_PLATFORMS: "linux,windows,android"
+  WORKFLOW_BUILD_FFMPEG: ${{ inputs.build_ffmpeg }}
+  WORKFLOW_BUILD_BUNDLE: ${{ inputs.build_bundle }}
+  WORKFLOW_STEPS_BUILT: ""
+  WORKFLOW_CURRENT_STEP: ""
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build_deps:
+    name: linux targets
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+      credentials:
+        username: akashskypatel
+        password: ${{ secrets.GHCR_PAT || github.token }}
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare scripts
+        shell: bash
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
+
+      - name: Build selected dependencies
+        shell: bash
+        run: sudo -E "${GITHUB_WORKSPACE}/scripts/workflow-linux.sh"
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-artifacts-${{ github.workflow }}-${{ env.WORKFLOW_CURRENT_STEP }}-${{ github.job }}-${{ github.run_id }}
+          path: |
+            build.log
+            prebuilt
+          if-no-files-found: ignore
