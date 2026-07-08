@@ -4769,7 +4769,7 @@ build_libopencolorio() {
   -DOCIO_BUILD_TESTS=OFF \
   -DOCIO_BUILD_GPU_TESTS=OFF \
   -DOCIO_BUILD_PYTHON=OFF \
-  -DOCIO_INSTALL_EXT_PACKAGES=\"MISSING\""
+  -DOCIO_INSTALL_EXT_PACKAGES=\"ALL\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install

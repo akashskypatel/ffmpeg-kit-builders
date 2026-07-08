@@ -4073,7 +4073,7 @@ build_libopencolorio() {
   -DCMAKE_C_FLAGS=\"-DOCIO_HEADLESS_ENABLED\" \
   -DCMAKE_CXX_FLAGS=\"-DOCIO_HEADLESS_ENABLED\" \
   -DOCIO_BUILD_PYTHON=OFF \
-  -DOCIO_INSTALL_EXT_PACKAGES=\"MISSING\""
+  -DOCIO_INSTALL_EXT_PACKAGES=\"ALL\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
