@@ -63,10 +63,10 @@ on:
         default: ""
         type: string
       build_only:
-        description: "Only build the specified step and exit"
+        description: "Comma-separated build_* dependency steps to build"
         required: false
-        default: false
-        type: boolean
+        default: ""
+        type: string
       bundles:
         description: "Comma-separated target ffmpeg-kit bundles to build"
         required: false
@@ -173,10 +173,10 @@ on:
         default: ""
         type: string
       build_only:
-        description: "Only build the specified step and exit"
+        description: "Comma-separated build_* dependency steps to build"
         required: false
-        default: false
-        type: boolean
+        default: ""
+        type: string
       bundles:
         description: "Comma-separated target ffmpeg-kit bundles to build"
         required: false

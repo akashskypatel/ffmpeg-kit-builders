@@ -81,6 +81,56 @@ contains_csv_value() {
   return 1
 }
 
+parse_build_only_steps() {
+  local build_only_csv="${WORKFLOW_BUILD_ONLY:-}"
+  local raw_step step
+  local -a raw_build_only_steps=()
+
+  build_only_enabled=false
+  build_only_steps=()
+  build_only_seen_steps=()
+
+  if [[ -z "$build_only_csv" || "$build_only_csv" == "false" ]]; then
+    return 0
+  fi
+
+  if [[ "$build_only_csv" == "true" ]]; then
+    echo "::error::build_only must be a comma-separated list of build_* steps, not a boolean"
+    exit 1
+  fi
+
+  IFS=',' read -ra raw_build_only_steps <<< "$build_only_csv"
+  for raw_step in "${raw_build_only_steps[@]}"; do
+    step="$(trim "$raw_step")"
+    [[ -z "$step" ]] && continue
+    if [[ "$step" != build_* ]]; then
+      echo "::error::build_only entries must be build_* steps, got: $step" >&2
+      exit 1
+    fi
+    if [[ -z "${build_only_seen_steps[$step]:-}" ]]; then
+      build_only_steps+=("$step")
+      build_only_seen_steps["$step"]=0
+    fi
+  done
+
+  if [[ ${#build_only_steps[@]} -gt 0 ]]; then
+    build_only_enabled=true
+  fi
+}
+
+build_only_includes_step() {
+  local step="$1"
+  local requested_step
+
+  [[ "$build_only_enabled" != "true" ]] && return 0
+
+  for requested_step in "${build_only_steps[@]}"; do
+    [[ "$requested_step" == "$step" ]] && return 0
+  done
+
+  return 1
+}
+
 run_with_runner_shell() {
   if [[ "$runner_platform" == "macos" ]]; then
     sudo -E "$HOMEBREW_BASH" "$@"
@@ -307,6 +357,11 @@ if [[ -n "${WORKFLOW_BUILD_FROM:-}" ]]; then
   fi
 fi
 
+declare -a build_only_steps=()
+declare -A build_only_seen_steps=()
+build_only_enabled=false
+parse_build_only_steps
+
 IFS=',' read -ra selected_platforms <<< "$WORKFLOW_TARGET_PLATFORMS"
 IFS=',' read -ra selected_archs <<< "$WORKFLOW_TARGET_ARCHS"
 ran_any=false
@@ -340,6 +395,11 @@ for raw_platform in "${selected_platforms[@]}"; do
 
     start_building=true
     found_build_from=false
+    if [[ "$build_only_enabled" == "true" ]]; then
+      for build in "${build_only_steps[@]}"; do
+        build_only_seen_steps["$build"]=0
+      done
+    fi
     [[ -n "${WORKFLOW_BUILD_FROM:-}" ]] && start_building=false
 
     for build in $WORKFLOW_BUILD_STEPS; do
@@ -349,6 +409,12 @@ for raw_platform in "${selected_platforms[@]}"; do
         found_build_from=true
       fi
       if [[ ${start_building} == "true" ]]; then
+        if ! build_only_includes_step "$build"; then
+          continue
+        fi
+        if [[ "$build_only_enabled" == "true" ]]; then
+          build_only_seen_steps["$build"]=1
+        fi
         echo "Running $build for $combo"
         runner_args=(--host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --build-only="$build")
         [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]] && runner_args+=(--workflow)
@@ -361,15 +427,21 @@ for raw_platform in "${selected_platforms[@]}"; do
           reset_workflow_seen_steps
         fi
         sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/src"
-        if [[ "${WORKFLOW_BUILD_ONLY}" == "true" ]]; then
-          start_building=false
-        fi
       fi
     done
 
     if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$found_build_from" != "true" ]]; then
       echo "::notice::build_from step not found in workflow build steps for $combo: $WORKFLOW_BUILD_FROM" >&2
       exit 1
+    fi
+
+    if [[ "$build_only_enabled" == "true" ]]; then
+      for build in "${build_only_steps[@]}"; do
+        if [[ "${build_only_seen_steps[$build]}" != "1" ]]; then
+          echo "::notice::build_only step not found in workflow build steps for $combo: $build" >&2
+          exit 1
+        fi
+      done
     fi
 
     if ! workflow_step_build_ffmpeg "$platform" "$arch"; then
