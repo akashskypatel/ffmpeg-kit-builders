@@ -372,8 +372,26 @@ for raw_platform in "${selected_platforms[@]}"; do
       exit 1
     fi
 
-    workflow_step_build_ffmpeg "$platform" "$arch"
-    workflow_step_build_bundle "$platform" "$arch"
+    if ! workflow_step_build_ffmpeg "$platform" "$arch"; then
+      echo "::error::Failed to build ffmpeg for $combo"
+      exit 1
+    fi
+
+    if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then
+      echo "::notice::Cleaning up prebuilt directory for $combo because ffmpeg built successfully and no bundle build was requested"
+      sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
+      continue
+    fi
+
+    if [[ "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
+      if ! workflow_step_build_bundle "$platform" "$arch"; then
+        echo "::error::Failed to build bundle for $combo"
+        exit 1
+      fi
+
+      echo "::notice::Cleaning up prebuilt directory for $combo because bundle built successfully"
+      sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
+    fi
   done
 done
 
