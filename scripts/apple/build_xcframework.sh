@@ -51,7 +51,7 @@ touch "${LOCK_FILE}"
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # Parse arguments
-# VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
+# VALID_BUNDLES=("debug" "full" "base" "audio" "video" "video_hw")
 VALID_XCF_PLATFORMS=("ios" "macos" "appletvos")
 VALID_XCF_PLATFORM_ARCHS=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64" "appletvos-aarch64" "appletvsimulator-aarch64")
 # VALID_LICENSES=("lgpl" "gpl")
@@ -155,7 +155,7 @@ parse_bundles() {
   bundles="${1}"
   # Ensure bundles is populated if empty
   if [[ -z "${bundles}" ]]; then
-    bundles=$(IFS=,; echo "${VALID_TYPES[*]}")
+    bundles=$(IFS=,; echo "${VALID_BUNDLES[*]}")
   fi
   
   IFS=',' read -ra BUNDLE_ARRAY <<< "${bundles}"
@@ -165,7 +165,7 @@ parse_bundles() {
     
     # Validate against whitelist
     local valid=false
-    for valid_b in "${VALID_TYPES[@]}"; do
+    for valid_b in "${VALID_BUNDLES[@]}"; do
       [[ "$b" == "$valid_b" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -882,7 +882,7 @@ for arg; do
       echo "                      Note: iphonesimulator is automatically added when ios is specified"
       echo "                      Note: appletvsimulator is automatically added when appletvos is specified"
       echo "  --bundle=*          Comma separated (without spaces) list of bundles to build"
-      echo "                      Valid bundles: ${VALID_TYPES[*]}"
+      echo "                      Valid bundles: ${VALID_BUNDLES[*]}"
       echo "  --license=*         Comma separated (without spaces) list of licenses to build"
       echo "                      Valid licenses: ${VALID_LICENSES[*]}"
       echo "  --small             Build with small flags (reduces binary size)."

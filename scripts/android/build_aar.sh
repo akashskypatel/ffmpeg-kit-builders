@@ -20,6 +20,7 @@ STATE_FILE="${STATE_DIR}/build_aar.state"
 LOCK_FILE="${STATE_DIR}/build_aar.lock"
 
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true;
@@ -51,9 +52,9 @@ p=""
 p_args=""
 deps=""
 reset_state=false
-VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
-VALID_ARCHS=("x86_64" "aarch64" "armv7a")
-VALID_PLATFORM_ARCHS=("android-aarch64" "android-armv7a" "android-x86_64")
+# VALID_BUNDLES=("debug" "full" "base" "audio" "video" "video_hw")
+# VALID_ARCHS=("x86_64" "aarch64" "armv7a")
+# VALID_ANDROID=("android-aarch64" "android-armv7a" "android-x86_64")
 LICENSE_ARRAY=(" " "gpl")
 SMALL_FLAGS=(" " "small")
 VALID_LICENSES=("lgpl" "gpl")
@@ -87,7 +88,7 @@ parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
   if [[ -z "${p_args}" ]]; then
-    p_args=$(IFS=,; echo "${VALID_PLATFORM_ARCHS[*]}")
+    p_args=$(IFS=,; echo "${VALID_ANDROID[*]}")
   fi
   echo "DEBUG: p_args: ${p_args}"
   # Use IFS local to the read command
@@ -97,7 +98,7 @@ parse_platforms() {
     [[ -z "$p" ]] && continue
     # Validate against whitelist
     local valid=false
-    for valid_p in "${VALID_PLATFORM_ARCHS[@]}"; do
+    for valid_p in "${VALID_ANDROID[@]}"; do
       [[ "$p" == "$valid_p" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -120,7 +121,7 @@ parse_bundles() {
   bundles="${1}"
   # Ensure bundles is populated if empty
   if [[ -z "${bundles}" ]]; then
-    bundles=$(IFS=,; echo "${VALID_TYPES[*]}")
+    bundles=$(IFS=,; echo "${VALID_BUNDLES[*]}")
   fi
   echo "DEBUG: bundles: ${bundles}"
   # Use IFS local to the read command
@@ -130,7 +131,7 @@ parse_bundles() {
     [[ -z "$b" ]] && continue
     # Validate against whitelist
     local valid=false
-    for valid_b in "${VALID_TYPES[@]}"; do
+    for valid_b in "${VALID_BUNDLES[@]}"; do
       [[ "$b" == "$valid_b" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -317,10 +318,10 @@ for arg; do
       echo "  --platform=*      Comma separated (without spaces) list of platforms and architectures (e.g. --platform=linux-x86_64,windows-x86_64,android-aarch64,android-armv7a,android-x86_64)"
       echo "                    Valid platforms: ${VALID_PLATFORMS[*]}"
       echo "                    Valid architectures: ${VALID_ARCHS[*]}"
-      echo "                    Valid platform and arch combinations: ${VALID_PLATFORM_ARCHS[*]}"
+      echo "                    Valid platform and arch combinations: ${VALID_ANDROID[*]}"
       echo "  --reset           Reset build state and start from beginning"
       echo "  --bundle=*        Comma separated (without spaces) list of bundles to build (e.g. --bundle=debug,full,base,audio,video,video_hw)"
-      echo "                    Valid bundles: ${VALID_TYPES[*]}"
+      echo "                    Valid bundles: ${VALID_BUNDLES[*]}"
       echo "                    Note: Not including one of below flags will create all of artifacts: AAR, and release"
       echo "                    Do not specify if you want to create all artifacts."
       echo "  --license=*       Comma separated (without spaces) list of licenses to build"

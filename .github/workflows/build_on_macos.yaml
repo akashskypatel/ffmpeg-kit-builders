@@ -6,12 +6,12 @@ on:
       target_platforms:
         description: "Comma-separated target platforms this runner can build"
         required: true
-        default: "ios,iphonesimulator,macos,appletvos,appletvsimulator"
+        default: "ios,iphonesimulator,appletvos,appletvsimulator,macos"
         type: string
       target_archs:
         description: "Comma-separated target architectures to try for each selected platform"
         required: true
-        default: "x86_64,aarch64"
+        default: "aarch64,x86_64"
         type: string
       force:
         description: "Force rebuild instead of using existing self release artifacts"
@@ -28,6 +28,11 @@ on:
         required: false
         default: false
         type: boolean
+      bundles:
+        description: "Comma-separated target ffmpeg-kit bundles to build"
+        required: false
+        default: "full,video_hw,video,audio,base,debug"
+        type: string
       build_ffmpeg:
         description: "Build ffmpeg binaries"
         required: false
@@ -46,9 +51,10 @@ env:
   WORKFLOW_BUILD_ONLY: ${{ inputs.build_only }}
   WORKFLOW_TARGET_PLATFORMS: ${{ inputs.target_platforms }}
   WORKFLOW_TARGET_ARCHS: ${{ inputs.target_archs }}
-  RUNNER_WORKFLOW_TARGET_PLATFORMS: "ios,iphonesimulator,macos,appletvos,appletvsimulator"
   WORKFLOW_BUILD_FFMPEG: ${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: ${{ inputs.build_bundle }}
+  WORKFLOW_CURRENT_STEP: ""
+  WORKFLOW_BUNDLES: ${{ inputs.bundles }}
 
 permissions:
   contents: write

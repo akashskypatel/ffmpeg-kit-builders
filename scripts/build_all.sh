@@ -64,7 +64,7 @@ p_args=""
 deps=""
 bundles=""
 reset_state=false
-# VALID_TYPES=("full" "video_hw" "video" "audio" "base" "debug")
+# VALID_BUNDLES=("full" "video_hw" "video" "audio" "base" "debug")
 # VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
 # VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
 # VALID_BUILDS=("ffmpeg" "kit" "bundle")
@@ -157,7 +157,7 @@ parse_bundles() {
   local b_arr="${1}"
   # Ensure bundles is populated if empty
   if [[ -z "${b_arr}" ]]; then
-    b_arr=$(IFS=,; echo "${VALID_TYPES[*]}")
+    b_arr=$(IFS=,; echo "${VALID_BUNDLES[*]}")
   fi
   # Use IFS local to the read command
   bundles="$b_arr"
@@ -167,7 +167,7 @@ parse_bundles() {
     [[ -z "$b" ]] && continue
     # Validate against whitelist
     local valid=false
-    for valid_b in "${VALID_TYPES[@]}"; do
+    for valid_b in "${VALID_BUNDLES[@]}"; do
       [[ "$b" == "$valid_b" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -270,7 +270,7 @@ for arg; do
       echo "  --deps        Build dependencies first"
       echo "  --reset       Reset build state and start from beginning"
       echo "  --bundle=*    Comma separated (without spaces) list of bundles to build (e.g. --bundle=debug,full,base,audio,video,video_hw)"
-      echo "                Valid bundles: ${VALID_TYPES[*]}"
+      echo "                Valid bundles: ${VALID_BUNDLES[*]}"
       echo "  --build=*     Comma separated (without spaces) list of builds to build (e.g. --build=ffmpeg,kit,bundle)"
       echo "                Valid builds: ${VALID_BUILDS[*]}"
       echo "  --clean=*     Comma separated (without spaces) list of components to clean (e.g. --clean=ffmpeg,kit,bundle)"

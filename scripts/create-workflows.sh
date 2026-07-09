@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKFLOW_DIR="$(dirname "$SCRIPT_DIR")/.github/workflows"
 
 source "$SCRIPT_DIR/function.sh"
+source "$SCRIPT_DIR/supported.sh"
 
 OWNER="$(get_github_owner)"
 
@@ -66,6 +67,11 @@ on:
         required: false
         default: false
         type: boolean
+      bundles:
+        description: "Comma-separated target ffmpeg-kit bundles to build"
+        required: false
+        default: "${bundles}"
+        type: string
       build_ffmpeg:
         description: "Build ffmpeg binaries"
         required: false
@@ -84,9 +90,10 @@ env:
   WORKFLOW_BUILD_ONLY: \${{ inputs.build_only }}
   WORKFLOW_TARGET_PLATFORMS: \${{ inputs.target_platforms }}
   WORKFLOW_TARGET_ARCHS: \${{ inputs.target_archs }}
-  RUNNER_WORKFLOW_TARGET_PLATFORMS: "${platform_list}"
   WORKFLOW_BUILD_FFMPEG: \${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: \${{ inputs.build_bundle }}
+  WORKFLOW_CURRENT_STEP: ""
+  WORKFLOW_BUNDLES: \${{ inputs.bundles }}
 
 permissions:
   contents: write
@@ -169,6 +176,11 @@ on:
         required: false
         default: false
         type: boolean
+      bundles:
+        description: "Comma-separated target ffmpeg-kit bundles to build"
+        required: false
+        default: "${bundles}"
+        type: string
       build_ffmpeg:
         description: "Build ffmpeg binaries"
         required: false
@@ -187,9 +199,10 @@ env:
   WORKFLOW_BUILD_ONLY: \${{ inputs.build_only }}
   WORKFLOW_TARGET_PLATFORMS: \${{ inputs.target_platforms }}
   WORKFLOW_TARGET_ARCHS: \${{ inputs.target_archs }}
-  RUNNER_WORKFLOW_TARGET_PLATFORMS: "${platform_list}"
   WORKFLOW_BUILD_FFMPEG: \${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: \${{ inputs.build_bundle }}
+  WORKFLOW_CURRENT_STEP: ""
+  WORKFLOW_BUNDLES: \${{ inputs.bundles }}
 
 permissions:
   contents: write
@@ -247,19 +260,26 @@ done
 # remove duplicates
 builds=($(printf "%s\n" "${builds[@]}" | sort -u))
 
-# for each build step in builds, create a workflow by running workflow.sh with the build step as argument
-# for build in "${builds[@]}"; do
-# 	"$SCRIPT_DIR/workflow.sh" "$build"
-# done
+# combine VALID_BUNDLES delimited by comma
+bundles=$(printf "%s," "${VALID_BUNDLES[@]}")
+bundles=${bundles%,}
 
-# rm -f \
-# 	"$WORKFLOW_DIR/build_on_android.yaml" \
-# 	"$WORKFLOW_DIR/build_on_windows.yaml" \
-# 	"$WORKFLOW_DIR/build_on_ios.yaml" \
-# 	"$WORKFLOW_DIR/build_on_iphonesimulator.yaml"
+# combine VALID_LINUX_ARCHS, VALID_WINDOWS_ARCHS, VALID_ANDROID_ARCHS delimited by comma, deduplicated
+archs=$(printf '%s\n' "${VALID_LINUX_ARCHS[@]}" "${VALID_WINDOWS_ARCHS[@]}" "${VALID_ANDROID_ARCHS[@]}" | awk '!seen[$0]++' | paste -sd,)
+archs=${archs%,}
 
-rm -f "$WORKFLOW_DIR/build_all_macos.yaml" \
-	"$WORKFLOW_DIR/build_all_linux.yaml"
+# combine VALID_BUILD_ON_LINUX
+build_on_linux=$(printf "%s," "${VALID_BUILD_ON_LINUX[@]}")
+build_on_linux=${build_on_linux%,}
 
-write_linux_orchestrator "linux" "linux,windows,android" "x86_64,aarch64,armv7a"
-write_macos_orchestrator "macos" "ios,iphonesimulator,macos,appletvos,appletvsimulator" "x86_64,aarch64"
+write_linux_orchestrator "linux" "$build_on_linux" "$archs"
+
+# combine VALID_IOS_ARCHS, VALID_IPHONESIMULATOR_ARCHS, VALID_MACOS_ARCHS, VALID_APPLETvos_ARCHS, VALID_APPLETVSIMULATOR_ARCHS delimited by comma
+macos_archs=$(printf '%s\n' "${VALID_IOS_ARCHS[@]}" "${VALID_IPHONESIMULATOR_ARCHS[@]}" "${VALID_MACOS_ARCHS[@]}" "${VALID_APPLETVOS_ARCHS[@]}" "${VALID_APPLETVSIMULATOR_ARCHS[@]}" | awk '!seen[$0]++' | paste -sd,)
+macos_archs=${macos_archs%,}
+
+# combine VALID_BUILD_ON_MACOS
+build_on_macos=$(printf "%s," "${VALID_BUILD_ON_MACOS[@]}")
+build_on_macos=${build_on_macos%,}
+
+write_macos_orchestrator "macos" "$build_on_macos" "$macos_archs"

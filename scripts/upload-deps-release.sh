@@ -15,18 +15,69 @@ fi
 
 set -euo pipefail
 
-source "${SCRIPTDIR}/function.sh"
-
-platform="$1"
-arch="$2"
-dep="${3:-${GITHUB_WORKFLOW#build_}}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-workspace="${4:-${GITHUB_WORKSPACE:-$repo_root}}"
-archive_name="${platform}-${arch}-${dep}.zip"
+SCRIPTDIR="${SCRIPTDIR:-$script_dir}"
+
+source "${SCRIPTDIR}/function.sh"
+platform="${1:?platform is required}"
+arch="${2:?arch is required}"
+shift 2
+if [[ $# -gt 0 && "$1" != --* ]]; then
+  dep="$1"
+  shift
+else
+  dep="${GITHUB_WORKFLOW:-artifact}"
+  dep="${dep#build_}"
+fi
+workspace="${GITHUB_WORKSPACE:-$repo_root}"
+artifact_dir=""
+archive_name=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --workspace=*)
+      workspace="${1#*=}"
+      shift
+      ;;
+    --workspace)
+      workspace="${2:?--workspace requires a value}"
+      shift 2
+      ;;
+    --artifact-dir=*)
+      artifact_dir="${1#*=}"
+      shift
+      ;;
+    --artifact-dir)
+      artifact_dir="${2:?--artifact-dir requires a value}"
+      shift 2
+      ;;
+    --archive-name=*)
+      archive_name="${1#*=}"
+      shift
+      ;;
+    --archive-name)
+      archive_name="${2:?--archive-name requires a value}"
+      shift 2
+      ;;
+    *)
+      if [[ -z "${workspace_arg_seen:-}" ]]; then
+        workspace="$1"
+        workspace_arg_seen=1
+        shift
+      else
+        echo "Unknown argument: $1" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+archive_name="${archive_name:-${platform}-${arch}-${dep}.zip}"
 release_tag="${platform}-${arch}-deps"
 release_name="${platform}-${arch}-dependencies"
 libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
+artifact_dir="${artifact_dir:-$libraries_dir}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
 repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
 
@@ -55,16 +106,17 @@ echo "archive_name: $archive_name"
 echo "release_tag: $release_tag"
 echo "release_name: $release_name"
 echo "libraries_dir: $libraries_dir"
+echo "artifact_dir: $artifact_dir"
 echo "repo: $repo"
 echo "==================================="
 
-if [[ ! -d "$libraries_dir" ]]; then
-  echo "Missing libraries directory: $libraries_dir" >&2
+if [[ ! -d "$artifact_dir" ]]; then
+  echo "Missing artifact directory: $artifact_dir" >&2
   exit 1
 fi
 
 rm -f "${workspace}/${archive_name}"
-(cd "$libraries_dir" && zip -qry "${workspace}/${archive_name}" .)
+(cd "$artifact_dir" && zip -qry "${workspace}/${archive_name}" .)
 
 if ! authorize_github "$token" "${repo#*/}" "${repo%/*}"; then
   exit 1

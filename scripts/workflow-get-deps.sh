@@ -15,19 +15,21 @@ fi
 
 set -euo pipefail
 
-source "${SCRIPTDIR}/function.sh"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+SCRIPTDIR="${SCRIPTDIR:-$script_dir}"
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
-	echo "Usage: $0 <platform> <arch> <workflow_name> [--self]" >&2
+	echo "Usage: $0 <platform> <arch> <workflow_name> [--self|--artifact|--artifact-pattern]" >&2
 	exit 2
 fi
+
+source "${SCRIPTDIR}/function.sh"
 
 platform="$1"
 arch="$2"
 workflow_name="$3"
 mode="${4:-}"
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/.." && pwd)"
 workspace="${GITHUB_WORKSPACE:-$repo_root}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
 build_force="${WORKFLOW_FORCE_SELF:-false}"
@@ -87,7 +89,85 @@ fi
 # shellcheck source=/dev/null
 source "$deps_file"
 
-if [[ "$mode" == "--self" ]]; then
+if [[ "$mode" == "--artifact-pattern" ]]; then
+	release_tag="${platform}-${arch}-deps"
+	release_name="${platform}-${arch}-dependencies"
+	asset_prefix="${platform}-${arch}-"
+	dependencies="$(python3 - "$repo" "$release_tag" "$release_name" "$asset_prefix" "$workflow_name" "$token" <<'PY'
+import fnmatch
+import json
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+repo, tag, release_name, asset_prefix, pattern, token = sys.argv[1:]
+api = "https://api.github.com"
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
+def request_json(method, url, allow_404=False):
+    req = urllib.request.Request(url, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req) as response:
+            content = response.read()
+            return response.status, json.loads(content) if content else None
+    except urllib.error.HTTPError as exc:
+        if allow_404 and exc.code == 404:
+            return exc.code, None
+        raise
+
+status, release = request_json(
+    "GET",
+    f"{api}/repos/{repo}/releases/tags/{urllib.parse.quote(tag, safe='')}",
+    allow_404=True,
+)
+if status == 404:
+    raise SystemExit(
+        f"Missing release for dependency artifact pattern: tag='{tag}' name='{release_name}' pattern='{pattern}'"
+    )
+if status == 401:
+    raise SystemExit(
+        f"Unauthorized to access release for dependency artifact pattern: tag='{tag}' name='{release_name}' pattern='{pattern}' in repo '{repo}'. Please check your GH_TOKEN/GITHUB_TOKEN."
+    )
+if status >= 400:
+    raise SystemExit(
+        f"Failed to access release for dependency artifact pattern: tag='{tag}' name='{release_name}' pattern='{pattern}' in repo '{repo}'. Status: {status}"
+    )
+
+matched = []
+page = 1
+while True:
+    _, assets = request_json("GET", f"{release['assets_url']}?per_page=100&page={page}")
+    if not assets:
+        break
+    for asset in assets:
+        name = asset["name"]
+        if not name.startswith(asset_prefix) or not name.endswith(".zip"):
+            continue
+        dep = name[len(asset_prefix):-4]
+        if dep.startswith("ffmpeg-kit-"):
+            continue
+        if fnmatch.fnmatchcase(dep, pattern):
+            matched.append(dep)
+    if len(assets) < 100:
+        break
+    page += 1
+
+if not matched:
+    raise SystemExit(
+        f"Missing dependency artifacts: tag='{tag}' name='{release_name}' pattern='{pattern}'"
+    )
+
+print(" ".join(sorted(set(matched))))
+PY
+)"
+elif [[ "$mode" == "--artifact" ]]; then
+	dependencies="$workflow_name"
+elif [[ "$mode" == "--self" ]]; then
 	if truthy "$build_force" && [[ -n "$requested_step" && "$workflow_name" == "$requested_step" ]]; then
 		echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
 		exit 4
@@ -111,6 +191,13 @@ for dependency in $dependencies; do
 	release_tag="${platform}-${arch}-deps"
 	release_name="${platform}-${arch}-dependencies"
 	archive_path="${RUNNER_TEMP:-/tmp}/${asset_name}"
+	extract_dir="$libraries_dir"
+
+	if [[ "$mode" == "--artifact" || "$mode" == "--artifact-pattern" ]]; then
+		extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dep}"
+		rm -rf "$extract_dir"
+		mkdir -p "$extract_dir"
+	fi
 
 	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
 
@@ -189,6 +276,18 @@ PY
 		exit 3
 	fi
 
-	unzip -oq "$archive_path" -d "$libraries_dir"
+	unzip -oq "$archive_path" -d "$extract_dir"
 	rm -f "$archive_path"
+    # libraries_dir_sed="$(
+    #   printf '%s\n' "$libraries_dir" |
+    #     gsed -e 's/[\/&|]/\\&/g'
+    # )"
+    # find "$libraries_dir" -type f -name "*.pc" -exec gsed -i \
+    # -e "s|^prefix=.*|prefix=$libraries_dir_sed|g" \
+    # -e "s|^exec_prefix=.*|exec_prefix=\${prefix}|g" \
+    # -e "s|^libdir=.*|libdir=\${prefix}/lib|g" \
+    # -e "s|^sharedlibdir=.*|sharedlibdir=\${prefix}/lib|g" \
+    # -e "s|^includedir=.*|includedir=\${prefix}/include|g" \
+    # -e "s|$libraries_dir_sed|\${prefix}|g" \
+    # {} +
 done

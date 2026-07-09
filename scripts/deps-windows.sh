@@ -17,7 +17,7 @@ fi
 
 declare -A SUB_DEPENDENCIES
 
-SUB_DEPENDENCIES[build_pthread_win32]=""
+# SUB_DEPENDENCIES[build_pthread_win32]=""
 SUB_DEPENDENCIES[build_dlfcn]=""
 SUB_DEPENDENCIES[build_libxavs]=""
 SUB_DEPENDENCIES[build_libdavs2]=""

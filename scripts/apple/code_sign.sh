@@ -20,6 +20,7 @@ LOCK_FILE="${STATE_DIR}/build_signing.lock"
 
 # Source common functions
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true
@@ -47,7 +48,7 @@ touch "${LOCK_FILE}"
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # Parse arguments
-VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
+# VALID_BUNDLES=("debug" "full" "base" "audio" "video" "video_hw")
 LICENSE_FLAGS=("lgpl" "gpl")
 SMALL_FLAGS=("" "small")
 reset_state=false
@@ -472,7 +473,7 @@ for arg; do
       echo ""
       echo "Options:"
       echo "  --bundles=*                   Comma separated list of bundles to sign"
-      echo "                                Valid bundles: ${VALID_TYPES[*]}"
+      echo "                                Valid bundles: ${VALID_BUNDLES[*]}"
       echo "  --signing-identity=*          Code signing identity (e.g., 'Developer ID Application: Company (TEAMID)')"
       echo "  --team-id=*                   Apple Developer Team ID"
       echo "  --apple-id=*                  Apple ID for notarization"
@@ -503,7 +504,7 @@ for arg; do
 done
 
 if [[ ${#BUNDLE_ARRAY[@]} -eq 0 ]]; then
-  BUNDLE_ARRAY=("${VALID_TYPES[@]}")
+  BUNDLE_ARRAY=("${VALID_BUNDLES[@]}")
 fi
 
 # Reset state if requested

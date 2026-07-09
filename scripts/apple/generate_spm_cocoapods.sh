@@ -12,9 +12,10 @@ export LOG_FILE="${BASEDIR}/build.log"
 
 # Source common functions
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 # Parse arguments
-VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
+# VALID_BUNDLES=("debug" "full" "base" "audio" "video" "video_hw")
 LICENSE_FLAGS=("lgpl" "gpl")
 SMALL_FLAGS=("" "small")
 reset_state=false
@@ -30,7 +31,7 @@ for arg; do
       echo ""
       echo "Options:"
       echo "  --bundles=*   Comma separated (without spaces) list of bundles"
-      echo "                Valid bundles: ${VALID_TYPES[*]}"
+      echo "                Valid bundles: ${VALID_BUNDLES[*]}"
       echo "  --help        Show this help message"
       exit 0;;
     *)
@@ -41,7 +42,7 @@ for arg; do
 done
 
 if [[ ${#BUNDLE_ARRAY[@]} -eq 0 ]]; then
-  BUNDLE_ARRAY=("${VALID_TYPES[@]}")
+  BUNDLE_ARRAY=("${VALID_BUNDLES[@]}")
 fi
 
 # Version information
