@@ -64,9 +64,33 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     sudo \
     texinfo \
     unzip \
+    valgrind-devel \
     wget \
     which \
     xorg-x11-util-macros \
+    xorg-x11-xtrans-devel \
+    xorg-x11-proto-devel \
+    libXext-devel \
+    libXdmcp-devel \
+    libXrender-devel \
+    libXft-devel \
+    libX11-devel \
+    libXau-devel \
+    libxcb-devel \
+    libpciaccess-devel \
+    dbus-devel \
+    libsmbclient-devel \
+    ocl-icd-devel \
+    wayland-devel \
+    wayland-protocols-devel \
+    libxkbcommon-devel \
+    libXcursor-devel \
+    libXi-devel \
+    libXinerama-devel \
+    libXrandr-devel \
+    mesa-libGL-devel \
+    mesa-libGLU-devel \
+    libXmu-devel \
     xz \
     yasm \
     zip \
