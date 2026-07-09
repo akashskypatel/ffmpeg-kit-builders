@@ -93,6 +93,7 @@ env:
   WORKFLOW_BUILD_FFMPEG: \${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: \${{ inputs.build_bundle }}
   WORKFLOW_CURRENT_STEP: ""
+  WORKFLOW_SEEN_STEPS: ""
   WORKFLOW_BUNDLES: \${{ inputs.bundles }}
 
 permissions:
@@ -202,6 +203,7 @@ env:
   WORKFLOW_BUILD_FFMPEG: \${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: \${{ inputs.build_bundle }}
   WORKFLOW_CURRENT_STEP: ""
+  WORKFLOW_SEEN_STEPS: ""
   WORKFLOW_BUNDLES: \${{ inputs.bundles }}
 
 permissions:

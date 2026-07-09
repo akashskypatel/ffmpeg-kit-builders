@@ -60,6 +60,15 @@ set_workflow_current_step() {
   export WORKFLOW_CURRENT_STEP="$step"
 }
 
+reset_workflow_seen_steps() {
+  local seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${RUNNER_TEMP:-/tmp}/workflow-seen-steps.txt}"
+  export WORKFLOW_SEEN_STEPS=""
+  rm -f "$seen_steps_file"
+  if [[ -n "${GITHUB_ENV:-}" ]]; then
+    echo "WORKFLOW_SEEN_STEPS=" >> "$GITHUB_ENV"
+  fi
+}
+
 read_workflow_bundles() {
   local bundle_csv="${WORKFLOW_BUNDLES:-}"
   if [[ -z "$bundle_csv" ]]; then
@@ -203,6 +212,7 @@ for raw_platform in "${selected_platforms[@]}"; do
         sudo -E "$HOMEBREW_BASH" ./runner.sh "${runner_args[@]}"
         if [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then
           sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
+          reset_workflow_seen_steps
         fi
         sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/src"
         if [[ "${WORKFLOW_BUILD_ONLY}" == "true" ]]; then

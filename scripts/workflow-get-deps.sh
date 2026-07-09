@@ -34,6 +34,7 @@ workspace="${GITHUB_WORKSPACE:-$repo_root}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
 build_force="${WORKFLOW_FORCE_SELF:-false}"
 requested_step="${WORKFLOW_REQUESTED_STEP:-}"
+seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${RUNNER_TEMP:-/tmp}/workflow-seen-steps.txt}"
 
 if [[ -z "$token" ]]; then
 	echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
@@ -59,8 +60,40 @@ echo "mode: $mode"
 echo "workspace: $workspace"
 echo "build_force: $build_force"
 echo "requested_step: $requested_step"
+echo "seen_steps_file: $seen_steps_file"
 echo "repo: $repo"
 echo "==================================="
+
+get_workflow_seen_steps() {
+	local seen="${WORKFLOW_SEEN_STEPS:-}"
+	if [[ -f "$seen_steps_file" ]]; then
+		seen="${seen} $(tr '\n' ' ' < "$seen_steps_file")"
+	fi
+	seen="${seen//,/ }"
+	printf '%s\n' "$seen"
+}
+
+workflow_step_seen() {
+	local key="$1"
+	local raw="${2:-$key}"
+	local seen
+	seen="$(get_workflow_seen_steps)"
+	[[ " $seen " == *" $key "* || " $seen " == *" $raw "* ]]
+}
+
+mark_workflow_step_seen() {
+	local key="$1"
+	local seen
+	mkdir -p "$(dirname "$seen_steps_file")"
+	if [[ ! -f "$seen_steps_file" ]] || ! grep -Fxq "$key" "$seen_steps_file"; then
+		printf '%s\n' "$key" >> "$seen_steps_file"
+	fi
+	seen="$(get_workflow_seen_steps | xargs)"
+	export WORKFLOW_SEEN_STEPS="$seen"
+	if [[ -n "${GITHUB_ENV:-}" ]]; then
+		printf 'WORKFLOW_SEEN_STEPS=%s\n' "$seen" >> "$GITHUB_ENV"
+	fi
+}
 
 # repo = owner/repo_name
 # authorize_github token repo_name owner
@@ -187,6 +220,7 @@ mkdir -p "$libraries_dir"
 
 for dependency in $dependencies; do
 	dep="${dependency#build_}"
+	seen_key="${platform}-${arch}:${dependency}"
 	asset_name="${platform}-${arch}-${dep}.zip"
 	release_tag="${platform}-${arch}-deps"
 	release_name="${platform}-${arch}-dependencies"
@@ -197,6 +231,11 @@ for dependency in $dependencies; do
 		extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dep}"
 		rm -rf "$extract_dir"
 		mkdir -p "$extract_dir"
+	fi
+
+	if workflow_step_seen "$seen_key" "$dependency"; then
+		echo "Skipping dependency ${dependency} for ${platform}-${arch}; already present in WORKFLOW_SEEN_STEPS"
+		continue
 	fi
 
 	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
@@ -278,6 +317,7 @@ PY
 
 	unzip -oq "$archive_path" -d "$extract_dir"
 	rm -f "$archive_path"
+	mark_workflow_step_seen "$seen_key"
     # libraries_dir_sed="$(
     #   printf '%s\n' "$libraries_dir" |
     #     gsed -e 's/[\/&|]/\\&/g'
