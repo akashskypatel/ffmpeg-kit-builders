@@ -183,6 +183,31 @@ ffmpeg_pattern_for_bundle() {
   fi
 }
 
+upload_ffmpeg_bundle_artifacts() {
+  local platform="$1"
+  local arch="$2"
+  local bundle="$3"
+  local combo="${platform}-${arch}"
+  local build_dir="${GITHUB_WORKSPACE}/prebuilt/${combo}"
+  local pattern
+  local found_artifact=false
+
+  pattern="$(ffmpeg_pattern_for_bundle "$platform" "$arch" "$bundle")"
+  while IFS= read -r dir; do
+    found_artifact=true
+    echo "Found ffmpeg directory for bundle '$bundle': $dir"
+    if ! run_with_runner_shell ./scripts/upload-deps-release.sh "$platform" "$arch" "$(basename "$dir")" --artifact-dir "$dir"; then
+      echo "::error::Failed to upload ffmpeg artifacts for $combo bundle $bundle"
+      exit 1
+    fi
+  done < <(find "$build_dir" -type d -name "$pattern" ! -name "ffmpeg-kit-*")
+
+  if [[ "$found_artifact" != "true" ]]; then
+    echo "::error::No ffmpeg artifacts found for $combo bundle $bundle using pattern '$pattern'"
+    exit 1
+  fi
+}
+
 ensure_target_toolchain() {
   local platform="$1"
   local arch="$2"
@@ -226,32 +251,22 @@ workflow_build_ffmpeg() {
   local platform="$1"
   local arch="$2"
   local combo="${platform}-${arch}"
+  local bundle
 
   if [[ -z "$platform" || -z "$arch" ]]; then
     echo "build_ffmpeg: platform and arch must be provided" >&2
     return 1
   fi
 
-  if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
-    if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=ffmpeg --bundle="${WORKFLOW_BUNDLES}"; then
-      echo "::error::Failed to build ffmpeg for $combo"
+  while IFS= read -r bundle; do
+    [[ -z "$bundle" ]] && continue
+    echo "::notice::Building ffmpeg for $combo bundle $bundle"
+    if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=ffmpeg --bundle="$bundle"; then
+      echo "::error::Failed to build ffmpeg for $combo bundle $bundle"
       exit 1
     fi
-  else
-    if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=ffmpeg; then
-      echo "::error::Failed to build ffmpeg for $combo"
-      exit 1
-    fi
-  fi
-
-  local build_dir="${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
-  while IFS= read -r dir; do
-    echo "Found ffmpeg directory: $dir"
-    if ! run_with_runner_shell ./scripts/upload-deps-release.sh "$platform" "$arch" "$(basename "$dir")" --artifact-dir "$dir"; then
-      echo "::error::Failed to upload ffmpeg artifacts for $combo"
-      exit 1
-    fi
-  done < <(find "$build_dir" -type d -name "ffmpeg-*-${platform}-${arch}-*" ! -name "ffmpeg-kit-*")
+    upload_ffmpeg_bundle_artifacts "$platform" "$arch" "$bundle"
+  done < <(read_workflow_bundles)
 }
 
 ensure_ffmpeg_artifacts() {
