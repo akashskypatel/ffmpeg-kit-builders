@@ -265,6 +265,20 @@ YAML
 	echo "Wrote $file"
 }
 
+join_by_comma() {
+    local first=1
+    local item
+    while IFS= read -r item; do
+        [[ -z "$item" ]] && continue
+        if (( first )); then
+            printf '%s' "$item"
+            first=0
+        else
+            printf ',%s' "$item"
+        fi
+    done
+}
+
 # find all files with pattern deps-*.sh in SCRIPT_DIR
 deps_files=("$SCRIPT_DIR"/deps-*.sh)
 
@@ -282,8 +296,7 @@ bundles=$(printf "%s," "${VALID_BUNDLES[@]}")
 bundles=${bundles%,}
 
 # combine VALID_LINUX_ARCHS, VALID_WINDOWS_ARCHS, VALID_ANDROID_ARCHS delimited by comma, deduplicated
-archs=$(printf '%s\n' "${VALID_LINUX_ARCHS[@]}" "${VALID_WINDOWS_ARCHS[@]}" "${VALID_ANDROID_ARCHS[@]}" | awk '!seen[$0]++' | paste -sd,)
-archs=${archs%,}
+archs=$(printf '%s\n' "${VALID_LINUX_ARCHS[@]}" "${VALID_WINDOWS_ARCHS[@]}" "${VALID_ANDROID_ARCHS[@]}" | awk '!seen[$0]++' | join_by_comma)
 
 # combine VALID_BUILD_ON_LINUX
 build_on_linux=$(printf "%s," "${VALID_BUILD_ON_LINUX[@]}")
@@ -292,8 +305,7 @@ build_on_linux=${build_on_linux%,}
 write_linux_orchestrator "linux" "$build_on_linux" "$archs"
 
 # combine VALID_IOS_ARCHS, VALID_IPHONESIMULATOR_ARCHS, VALID_MACOS_ARCHS, VALID_APPLETvos_ARCHS, VALID_APPLETVSIMULATOR_ARCHS delimited by comma
-macos_archs=$(printf '%s\n' "${VALID_IOS_ARCHS[@]}" "${VALID_IPHONESIMULATOR_ARCHS[@]}" "${VALID_MACOS_ARCHS[@]}" "${VALID_APPLETVOS_ARCHS[@]}" "${VALID_APPLETVSIMULATOR_ARCHS[@]}" | awk '!seen[$0]++' | paste -sd,)
-macos_archs=${macos_archs%,}
+macos_archs=$(printf '%s\n' "${VALID_IOS_ARCHS[@]}" "${VALID_IPHONESIMULATOR_ARCHS[@]}" "${VALID_MACOS_ARCHS[@]}" "${VALID_APPLETVOS_ARCHS[@]}" "${VALID_APPLETVSIMULATOR_ARCHS[@]}" | awk '!seen[$0]++' | join_by_comma)
 
 # combine VALID_BUILD_ON_MACOS
 build_on_macos=$(printf "%s," "${VALID_BUILD_ON_MACOS[@]}")

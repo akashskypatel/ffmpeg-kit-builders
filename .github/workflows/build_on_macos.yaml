@@ -54,6 +54,7 @@ env:
   WORKFLOW_BUILD_FFMPEG: ${{ inputs.build_ffmpeg }}
   WORKFLOW_BUILD_BUNDLE: ${{ inputs.build_bundle }}
   WORKFLOW_CURRENT_STEP: ""
+  WORKFLOW_SEEN_STEPS: ""
   WORKFLOW_BUNDLES: ${{ inputs.bundles }}
 
 permissions:
@@ -75,6 +76,21 @@ jobs:
       - name: Install Bash
         shell: bash
         run: ${GITHUB_WORKSPACE}/scripts/toolchain/setup-macos-tools.sh
+
+      - name: Cache Apple Rust toolchains
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.rustup/toolchains
+            ~/.rustup/update-hashes
+            ~/.rustup/settings.toml
+          key: apple-rust-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target_platforms }}-${{ inputs.target_archs }}-${{ hashFiles('scripts/toolchain/setup-apple-rust.sh') }}
+          restore-keys: |
+            apple-rust-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target_platforms }}-
+            apple-rust-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Accept Xcode license
         shell: bash
