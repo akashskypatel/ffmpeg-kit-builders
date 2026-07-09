@@ -17,12 +17,41 @@ set -euo pipefail
 
 source "${GITHUB_WORKSPACE}/scripts/supported.sh"
 
-runner_platform="macos"
-RUNNER_WORKFLOW_TARGET_PLATFORMS=$(printf "%s," "${VALID_BUILD_ON_MACOS[@]}")
+runner_platform=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --runner-platform=*)
+      runner_platform="${1#*=}"
+      shift
+      ;;
+    --runner-platform)
+      runner_platform="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "$runner_platform" != "linux" && "$runner_platform" != "macos" ]]; then
+  echo "runner_platform must be one of: linux, macos" >&2
+  exit 1
+fi
+
+case "$runner_platform" in
+  linux)
+    RUNNER_WORKFLOW_TARGET_PLATFORMS=$(printf "%s," "${VALID_BUILD_ON_LINUX[@]}")
+    ;;
+  macos)
+    RUNNER_WORKFLOW_TARGET_PLATFORMS=$(printf "%s," "${VALID_BUILD_ON_MACOS[@]}")
+    ;;
+esac
 RUNNER_WORKFLOW_TARGET_PLATFORMS=${RUNNER_WORKFLOW_TARGET_PLATFORMS%,}
 
 echo "==================================="
-echo "macOS Orchestrator"
+echo "${runner_platform} Orchestrator"
 echo "workflow-force-self: ${WORKFLOW_FORCE_SELF}"
 echo "workflow-build-from: ${WORKFLOW_BUILD_FROM}"
 echo "workflow-build-only: ${WORKFLOW_BUILD_ONLY}"
@@ -50,6 +79,14 @@ contains_csv_value() {
     [[ "$item" == "$needle" ]] && return 0
   done
   return 1
+}
+
+run_with_runner_shell() {
+  if [[ "$runner_platform" == "macos" ]]; then
+    sudo -E "$HOMEBREW_BASH" "$@"
+  else
+    sudo -E "$@"
+  fi
 }
 
 set_workflow_current_step() {
@@ -99,17 +136,38 @@ ffmpeg_pattern_for_bundle() {
 ensure_target_toolchain() {
   local platform="$1"
   local arch="$2"
-  local key="${platform}-${arch}"
+  local key="$platform"
+  [[ "$runner_platform" == "macos" || "$platform" == "linux" ]] && key="${platform}-${arch}"
 
   if [[ -n "${installed_toolchains[$key]:-}" ]]; then
     return 0
   fi
 
-  case "$platform" in
-    ios|iphonesimulator|macos|appletvos|appletvsimulator)
-      "${GITHUB_WORKSPACE}/scripts/toolchain/setup-apple-rust.sh" "$platform" "$arch"
-      ;;
-  esac
+  if [[ "$runner_platform" == "macos" ]]; then
+    case "$platform" in
+      ios|iphonesimulator|macos|appletvos|appletvsimulator)
+        "${GITHUB_WORKSPACE}/scripts/toolchain/setup-apple-rust.sh" "$platform" "$arch"
+        ;;
+    esac
+  else
+    case "$platform" in
+      windows)
+        sudo -E "${GITHUB_WORKSPACE}/scripts/toolchain/setup-mingw-w64.sh"
+        [[ -f /etc/profile.d/mingw-w64.sh ]] && source /etc/profile.d/mingw-w64.sh
+        ;;
+      android)
+        sudo -E "${GITHUB_WORKSPACE}/scripts/toolchain/setup-android.sh"
+        [[ -f /etc/profile.d/android-sdk.sh ]] && source /etc/profile.d/android-sdk.sh
+        [[ -f /etc/profile.d/sdkman.sh ]] && source /etc/profile.d/sdkman.sh
+        ;;
+      linux)
+        if [[ "$arch" == "aarch64" || "$arch" == "arm64" || "$arch" == "arm64-v8a" ]]; then
+          sudo -E "${GITHUB_WORKSPACE}/scripts/toolchain/setup-linux-arm64.sh"
+          [[ -f /etc/profile.d/linux-arm64-toolchain.sh ]] && source /etc/profile.d/linux-arm64-toolchain.sh
+        fi
+        ;;
+    esac
+  fi
 
   installed_toolchains["$key"]=1
 }
@@ -125,15 +183,24 @@ workflow_build_ffmpeg() {
   fi
 
   if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
-    sudo -E "$HOMEBREW_BASH" ./scripts/build_all.sh --platform="${combo}" --build=ffmpeg --bundle="${WORKFLOW_BUNDLES}"
+    if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=ffmpeg --bundle="${WORKFLOW_BUNDLES}"; then
+      echo "::error::Failed to build ffmpeg for $combo"
+      exit 1
+    fi
   else
-    sudo -E "$HOMEBREW_BASH" ./scripts/build_all.sh --platform="${combo}" --build=ffmpeg
+    if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=ffmpeg; then
+      echo "::error::Failed to build ffmpeg for $combo"
+      exit 1
+    fi
   fi
 
   local build_dir="${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
   while IFS= read -r dir; do
     echo "Found ffmpeg directory: $dir"
-    sudo -E "$HOMEBREW_BASH" ./scripts/upload-deps-release.sh "$platform" "$arch" "$(basename "$dir")" --artifact-dir "$dir"
+    if ! run_with_runner_shell ./scripts/upload-deps-release.sh "$platform" "$arch" "$(basename "$dir")" --artifact-dir "$dir"; then
+      echo "::error::Failed to upload ffmpeg artifacts for $combo"
+      exit 1
+    fi
   done < <(find "$build_dir" -type d -name "ffmpeg-*-${platform}-${arch}-*" ! -name "ffmpeg-kit-*")
 }
 
@@ -150,7 +217,7 @@ ensure_ffmpeg_artifacts() {
   while IFS= read -r bundle; do
     [[ -z "$bundle" ]] && continue
     pattern="$(ffmpeg_pattern_for_bundle "$platform" "$arch" "$bundle")"
-    if ! sudo -E "$HOMEBREW_BASH" ./scripts/workflow-get-deps.sh "$platform" "$arch" "$pattern" --artifact-pattern; then
+    if ! run_with_runner_shell ./scripts/workflow-get-deps.sh "$platform" "$arch" "$pattern" --artifact-pattern; then
       echo "::notice::Failed to get ffmpeg artifacts matching '$pattern' for ${platform}-${arch}; building locally"
       workflow_build_ffmpeg "$platform" "$arch"
       return
@@ -158,9 +225,84 @@ ensure_ffmpeg_artifacts() {
   done < <(read_workflow_bundles)
 }
 
+
+workflow_step_build_ffmpeg() {
+  local platform="$1"
+  local arch="$2"
+  local combo="${platform}-${arch}"
+  if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" ]]; then
+    echo "::notice::Building ffmpeg for selected platforms and architectures"
+    [[ -z "$platform" ]] && return 1
+
+    if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
+      echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
+      return 1
+    fi
+
+    [[ -z "$arch" ]] && return 1
+
+    if ! is_supported_combo "$combo"; then
+      echo "::notice::Skipping unsupported target $combo"
+      return 1
+    fi
+
+    set_workflow_current_step "build_ffmpeg"
+    if ! ensure_ffmpeg_artifacts "$platform" "$arch"; then
+      echo "::error::Failed to prepare ffmpeg artifacts for ${platform}-${arch}"
+      return 1
+    fi
+  fi
+}
+
+workflow_step_build_bundle() {
+  local platform="$1"
+  local arch="$2"
+  local combo="${platform}-${arch}"
+  if [[ "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
+    echo "::notice::Building bundle for selected platforms and architectures"
+    [[ -z "$platform" ]] && return 1
+
+    if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
+      echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
+      return 1
+    fi
+
+    [[ -z "$arch" ]] && return 1
+
+    if ! is_supported_combo "$combo"; then
+      echo "::notice::Skipping unsupported target $combo"
+      return 1
+    fi
+
+    set_workflow_current_step "build_bundle"
+
+    if [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" ]]; then
+      if ! ensure_ffmpeg_artifacts "$platform" "$arch"; then
+        echo "::error::Failed to prepare ffmpeg artifacts for ${platform}-${arch}"
+        return 1
+      fi
+    fi
+
+    if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
+      echo "::notice::Building bundle for $combo with bundles: $WORKFLOW_BUNDLES"
+      if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=kit,bundle --remote --bundle="${WORKFLOW_BUNDLES}"; then
+        echo "::error::Failed to build bundle for $combo"
+        return 1
+      fi
+    else
+      echo "::notice::Building bundle for $combo"
+      if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=kit,bundle --remote; then
+        echo "::error::Failed to build bundle for $combo"
+        return 1
+      fi
+    fi
+  fi
+}
+
+
 if [[ -n "${WORKFLOW_BUILD_FROM:-}" ]]; then
   if [[ "$WORKFLOW_BUILD_FROM" != build_* ]]; then
-    echo "build_from must be a build_* step, got: $WORKFLOW_BUILD_FROM" >&2
+    echo "::notice::build_from must be a build_* step, got: $WORKFLOW_BUILD_FROM" >&2
     exit 1
   fi
 fi
@@ -170,6 +312,7 @@ IFS=',' read -ra selected_archs <<< "$WORKFLOW_TARGET_ARCHS"
 ran_any=false
 declare -A installed_toolchains=()
 
+echo "::notice::Starting workflow for platforms: $WORKFLOW_TARGET_PLATFORMS and architectures: $WORKFLOW_TARGET_ARCHS"
 for raw_platform in "${selected_platforms[@]}"; do
   platform="$(trim "$raw_platform")"
   [[ -z "$platform" ]] && continue
@@ -192,7 +335,7 @@ for raw_platform in "${selected_platforms[@]}"; do
     ran_any=true
     ensure_target_toolchain "$platform" "$arch"
     echo "Preparing build steps for $combo"
-    WORKFLOW_BUILD_STEPS="$(sudo -E "$HOMEBREW_BASH" ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+    WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
     echo "WORKFLOW_BUILD_STEPS for $combo: $WORKFLOW_BUILD_STEPS"
 
     start_building=true
@@ -209,7 +352,10 @@ for raw_platform in "${selected_platforms[@]}"; do
         echo "Running $build for $combo"
         runner_args=(--host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --build-only="$build")
         [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]] && runner_args+=(--workflow)
-        sudo -E "$HOMEBREW_BASH" ./runner.sh "${runner_args[@]}"
+        if ! run_with_runner_shell ./runner.sh "${runner_args[@]}"; then
+          echo "::error::Failed to run $build for $combo"
+          exit 1
+        fi
         if [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then
           sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
           reset_workflow_seen_steps
@@ -222,76 +368,14 @@ for raw_platform in "${selected_platforms[@]}"; do
     done
 
     if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$found_build_from" != "true" ]]; then
-      echo "build_from step not found in workflow build steps for $combo: $WORKFLOW_BUILD_FROM" >&2
+      echo "::notice::build_from step not found in workflow build steps for $combo: $WORKFLOW_BUILD_FROM" >&2
       exit 1
     fi
+
+    workflow_step_build_ffmpeg "$platform" "$arch"
+    workflow_step_build_bundle "$platform" "$arch"
   done
 done
-
-if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" ]]; then
-  for raw_platform in "${selected_platforms[@]}"; do
-    platform="$(trim "$raw_platform")"
-    [[ -z "$platform" ]] && continue
-
-    if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
-      echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
-      continue
-    fi
-
-    for raw_arch in "${selected_archs[@]}"; do
-      arch="$(trim "$raw_arch")"
-      [[ -z "$arch" ]] && continue
-      combo="${platform}-${arch}"
-
-      if ! is_supported_combo "$combo"; then
-        echo "::notice::Skipping unsupported target $combo"
-        continue
-      fi
-
-      set_workflow_current_step "build_ffmpeg"
-      if ! ensure_ffmpeg_artifacts "$platform" "$arch"; then
-        echo "::error::Failed to prepare ffmpeg artifacts for ${platform}-${arch}"
-        exit 1
-      fi
-    done
-  done
-fi
-
-if [[ "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
-  for raw_platform in "${selected_platforms[@]}"; do
-    platform="$(trim "$raw_platform")"
-    [[ -z "$platform" ]] && continue
-
-    if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
-      echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
-      continue
-    fi
-
-    for raw_arch in "${selected_archs[@]}"; do
-      arch="$(trim "$raw_arch")"
-      [[ -z "$arch" ]] && continue
-      combo="${platform}-${arch}"
-
-      if ! is_supported_combo "$combo"; then
-        echo "::notice::Skipping unsupported target $combo"
-        continue
-      fi
-
-      set_workflow_current_step "build_bundle"
-
-      if [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" ]]; then
-        ensure_ffmpeg_artifacts "$platform" "$arch"
-      fi
-
-      if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
-        sudo -E "$HOMEBREW_BASH" ./scripts/build_all.sh --platform="${combo}" --build=kit,bundle --remote --bundle="${WORKFLOW_BUNDLES}"
-      else
-        sudo -E "$HOMEBREW_BASH" ./scripts/build_all.sh --platform="${combo}" --build=kit,bundle --remote
-      fi
-
-    done
-  done
-fi
 
 if [[ "$ran_any" != "true" ]]; then
   echo "::notice::No supported platform-arch combinations selected for this runner"

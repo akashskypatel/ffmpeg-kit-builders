@@ -120,7 +120,7 @@ jobs:
 
       - name: Build selected dependencies
         shell: bash
-        run: sudo -E "\${GITHUB_WORKSPACE}/scripts/workflow-linux.sh"
+        run: sudo -E "\${GITHUB_WORKSPACE}/scripts/workflow-runner.sh" --runner-platform=linux
 
       - name: Upload failure artifacts
         if: failure()
@@ -247,7 +247,7 @@ jobs:
 
       - name: Build selected dependencies
         shell: bash
-        run: sudo -E "\$HOMEBREW_BASH" "\${GITHUB_WORKSPACE}/scripts/workflow-macos.sh"
+        run: sudo -E "\$HOMEBREW_BASH" "\${GITHUB_WORKSPACE}/scripts/workflow-runner.sh" --runner-platform=macos
 
       - name: Upload failure artifacts
         if: failure()
