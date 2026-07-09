@@ -4150,30 +4150,35 @@ generate_pkg_config() {
 
     local libs_list=()
     local found_files
+    _pkg_config_lib_flag() {
+        local name
+        name=$(basename "$1")
+        name="${name#lib}"
+        name=$(printf '%s\n' "$name" | gsed -E 's/\.(dll\.a|so|a|dll|dylib)(\.[0-9.]+)?$//')
+        [[ -n "$name" ]] && printf '%s\n' "-l$name"
+    }
 
     if [[ -n "$EXTRA_LIBS" ]]; then
-      while IFS= read -r lib_name; do
-          if [[ "$lib_name" == -l* ]]; then
-              libs_list+=("${lib_name//lib/}")
-          else
-              libs_list+=("-l${lib_name//lib/}")
-          fi
+      while IFS= read -r libs_line; do
+          local extra_lib_tokens=()
+          read -r -a extra_lib_tokens <<< "$libs_line"
+          for lib_name in "${extra_lib_tokens[@]}"; do
+              [[ -z "$lib_name" ]] && continue
+              if [[ "$lib_name" == -l* ]]; then
+                  libs_list+=("$lib_name")
+              else
+                  libs_list+=("$(_pkg_config_lib_flag "$lib_name")")
+              fi
+          done
       done <<< "$EXTRA_LIBS"
     fi
 
     if [[ -n "$TARGET_SCAN_DIR" ]]; then
       # Use process substitution to avoid subshell variable scope issues
       while IFS= read -r -d '' file_path; do
-          local filename
-          filename=$(basename "$file_path")
-          local name=$(basename "$file_path")
-          name="${name#lib}"
-          name=$(echo "$name" | gsed -e 's/\.(dll\.a|so|a|dll|dylib)(\.[0-9.]+)?$//')
-          # Avoid duplicates in the list
-          # shellcheck disable=2076
-          if [[ ! " ${libs_list[*]} " =~ " ${name} " ]]; then
-              libs_list+=("-l${name//lib/}")
-          fi
+          local lib_flag
+          lib_flag=$(_pkg_config_lib_flag "$file_path")
+          [[ -n "$lib_flag" ]] && libs_list+=("$lib_flag")
       done < <(find "$TARGET_SCAN_DIR" -maxdepth 1 -type f \( -name "*.dll*" -o -name "*.dll.a*" -o -name "*.a*" -o -name "*.so*" -o -name "*.dylib" \) -print0)
     fi
     [[ ! -d "$(dirname "$OUTPUT_FILE")" ]] && create_dir "$(dirname "$OUTPUT_FILE")"
@@ -4181,7 +4186,9 @@ generate_pkg_config() {
     # Generate .pc File Content
     # ---------------------------------------------------------
     # de-duplicate libs_list
-    libs_list=("$(echo "${libs_list[*]}" | tr " " "\n" | sort -u)")
+    if [[ ${#libs_list[@]} -gt 0 ]]; then
+        mapfile -t libs_list < <(printf '%s\n' "${libs_list[@]}" | sort -u)
+    fi
     cat > "$OUTPUT_FILE" <<EOF
 prefix=${INSTALL_PREFIX}
 exec_prefix=\${prefix}
