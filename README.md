@@ -3,7 +3,17 @@
 
 <img src="./assets/banner.png"/>
 
-[![Stars](https://img.shields.io/github/stars/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/stargazers) [![Watchers](https://img.shields.io/github/watchers/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/watchers) [![Forks](https://img.shields.io/github/forks/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/fork) [![Issues](https://img.shields.io/github/issues/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/issues) [![Commit](https://img.shields.io/github/last-commit/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/commits) [![Downloads](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases) [![GitHub release](https://img.shields.io/github/v/release/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases) [![License](https://img.shields.io/github/license/akashskypatel/ffmpeg-kit-builders?color=144DB3)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/stargazers) [![Watchers](https://img.shields.io/github/watchers/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/watchers) [![Forks](https://img.shields.io/github/forks/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/fork) [![Issues](https://img.shields.io/github/issues/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/issues) [![Commit](https://img.shields.io/github/last-commit/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/commits) [![GitHub release](https://img.shields.io/github/v/release/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases) [![License](https://img.shields.io/github/license/akashskypatel/ffmpeg-kit-builders?color=144DB3)](LICENSE)
+
+</div>
+
+<div align="center">
+
+[![v0.10.4-android](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-android/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-android)
+[![v0.10.4-ios](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-ios/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-ios)
+[![v0.10.4-linux](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-linux/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-linux)
+[![v0.10.4-macos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-macos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-macos)
+[![v0.10.4-windows](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-windows/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-windows)
 
 </div>
 
