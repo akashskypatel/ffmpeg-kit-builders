@@ -3213,7 +3213,23 @@ build_libx264() {
       CFLAGS="$CFLAGS -mfpu=neon" ./build-x264.sh "$host_arch"
     fi
   } > >(redirect_output) 2>&1 || exit_message 1 "build_libx264: Failed to build x264"
-  copy_path "$src_dir/$lib/thin-x264/$host_arch/lib/libx264.a" "$dependency_install_prefix/lib/libx264.a" "-f"
+  if [[ -f "$src_dir/$lib/thin-x264/$host_arch/lib/libx264.a" ]]; then
+    copy_path "$src_dir/$lib/thin-x264/$host_arch/lib/libx264.a" "$dependency_install_prefix/lib/libx264.a" "-f" || exit_message 1 "build_libx264: Failed to copy libx264.a"
+  else
+    exit_message 1 "build_libx264: Failed to find libx264.a"
+  fi
+  if [[ -f "$src_dir/$lib/scratch-x264/$host_arch/x264.pc" ]]; then
+    gsed -i "s|^prefix=.*|prefix=${dependency_install_prefix}|" "$src_dir/$lib/scratch-x264/$host_arch/x264.pc" || exit_message 1 "build_libx264: Failed to update x264.pc"
+  fi
+  if [[ -f "$src_dir/$lib/scratch-x264/$host_arch/x264.pc" ]]; then
+    copy_path "$src_dir/$lib/scratch-x264/$host_arch/x264.pc" "$install_pkgconfig_dir/x264.pc" "-f" || exit_message 1 "build_libx264: Failed to copy x264.pc"
+  fi
+  if [[ -f "$src_dir/$lib/scratch-x264/$host_arch/x264_config.h" ]]; then
+    copy_path "$src_dir/$lib/scratch-x264/$host_arch/x264_config.h" "$dependency_install_prefix/include/x264_config.h" "-f" || exit_message 1 "build_libx264: Failed to copy x264_config.h"
+  fi
+  if [[ -f "$src_dir/$lib/x264.h" ]]; then
+    copy_path "$src_dir/$lib/x264.h" "$dependency_install_prefix/include/x264.h" "-f" || exit_message 1 "build_libx264: Failed to copy x264.h"
+  fi
   change_dir "$src_dir"
   reset_allflags
   reset_cross_vars
