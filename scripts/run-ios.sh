@@ -1720,7 +1720,7 @@ build_glib() {
   gsed -i '/#ifdef HAVE_PIPE2/,/#endif/d' "$src_dir/$lib/glib/glib-unixprivate.h"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  gsed -i 's/-lglib-2.0.*$/-lglib-2.0 -lm -lintl/' "$install_pkgconfig_dir/glib-2.0.pc"
+  gsed -i 's/-lglib-2.0.*$/-lglib-2.0 -lm -lintl -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
   change_dir "$src_dir"
   reset_cflags
   unset C_INCLUDE_PATH

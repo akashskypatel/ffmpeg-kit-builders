@@ -1691,7 +1691,7 @@ build_glib() {
     "$src_dir/$lib/meson.build"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  add_libs_to_pkg -t="$install_pkgconfig_dir/glib-2.0.pc" -l="-lm -lintl -lresolv"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/glib-2.0.pc" -l="-lm -lintl -liconv -lresolv"
   change_dir "$src_dir"
   reset_cflags
   unset C_INCLUDE_PATH
