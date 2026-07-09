@@ -68,6 +68,44 @@ apply_apple_rust_environment() {
   fi
 }
 
+find_homebrew_cargo_cinstall() {
+  local brew_prefix="${HOMEBREW_PREFIX:-}"
+  local candidate
+
+  if [[ -z "$brew_prefix" ]] && command -v brew >/dev/null 2>&1; then
+    brew_prefix="$(brew --prefix 2>/dev/null || true)"
+  fi
+
+  for candidate in \
+    "${brew_prefix}/bin/cargo-cinstall" \
+    /opt/homebrew/bin/cargo-cinstall \
+    /usr/local/bin/cargo-cinstall \
+    "${brew_prefix}/opt/cargo-c/bin/cargo-cinstall" \
+    /opt/homebrew/opt/cargo-c/bin/cargo-cinstall \
+    /usr/local/opt/cargo-c/bin/cargo-cinstall; do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+ensure_cargo_c_path() {
+  local cargo_cinstall
+  local cargo_c_bin
+  if cargo_cinstall="$(find_homebrew_cargo_cinstall)"; then
+    cargo_c_bin="$(dirname "$cargo_cinstall")"
+    if [[ ":${PATH}:" != *":${cargo_c_bin}:"* ]]; then
+      export PATH="${cargo_c_bin}:${PATH}"
+    fi
+    if [[ -n "${GITHUB_PATH:-}" ]]; then
+      grep -qxF "${cargo_c_bin}" "${GITHUB_PATH}" 2>/dev/null || echo "${cargo_c_bin}" >>"${GITHUB_PATH}"
+    fi
+  fi
+}
+
 rust_target_for_combo() {
   local target_combo="$1"
   case "${target_combo}" in
@@ -101,6 +139,7 @@ rust_target_installed() {
 }
 
 apply_apple_rust_environment
+ensure_cargo_c_path
 
 rust_target="$(rust_target_for_combo "${combo}")"
 

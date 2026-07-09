@@ -518,6 +518,49 @@ apply_apple_homebrew_environment() {
     hash -r 2>/dev/null || true
 }
 
+find_cargo_cinstall() {
+    local brew_prefix="${HOMEBREW_PREFIX:-}"
+    local candidate
+
+    if command -v cargo-cinstall >/dev/null 2>&1; then
+        command -v cargo-cinstall
+        return 0
+    fi
+
+    if [[ -z "$brew_prefix" ]] && command -v brew >/dev/null 2>&1; then
+        brew_prefix="$(brew --prefix 2>/dev/null || true)"
+    fi
+
+    for candidate in \
+        "${brew_prefix}/bin/cargo-cinstall" \
+        /opt/homebrew/bin/cargo-cinstall \
+        /usr/local/bin/cargo-cinstall \
+        "${brew_prefix}/opt/cargo-c/bin/cargo-cinstall" \
+        /opt/homebrew/opt/cargo-c/bin/cargo-cinstall \
+        /usr/local/opt/cargo-c/bin/cargo-cinstall; do
+        if [[ -x "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+ensure_cargo_cinstall_available() {
+    local cargo_cinstall
+    local cargo_c_bin
+
+    if cargo_cinstall="$(find_cargo_cinstall)"; then
+        cargo_c_bin="$(dirname "$cargo_cinstall")"
+        prepend_path_once "$cargo_c_bin"
+        hash -r 2>/dev/null || true
+        return 0
+    fi
+
+    return 1
+}
+
 configure_apple_pkg_config_environment() {
     local apple_pkg_config_path="$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/pkgconfig:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
     export PKG_CONFIG_PATH="$apple_pkg_config_path"
@@ -3028,8 +3071,11 @@ do_cargo_install() {
     echo "INFO: (Re-)do_cargo_install() because $touch_name not found with \"cargo install $extra_install_args\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_install"*
     ensure_rust_target_ready "$rust_target"
+    if ismacos || isios || isiossimulator || istvos || istvossimulator; then
+      apply_apple_homebrew_environment
+    fi
     prepend_path_once "${cargo_home_dir}/bin"
-    if ! command -v cargo-cinstall >/dev/null 2>&1; then
+    if ! ensure_cargo_cinstall_available; then
       echo -e "INFO: cargo-cinstall not found. Installing cargo-c..." >>"$LOG_FILE"
       cargo install --locked cargo-c > >(redirect_output) 2>&1 || exit_message 1 "do_cargo_install: failed to install cargo-c"
     fi
