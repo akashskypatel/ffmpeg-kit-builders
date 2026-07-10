@@ -7144,10 +7144,10 @@ add_libs_to_pkg() {
                 token="-l$name"
             fi
             # shellcheck disable=2001
-            local regex_token=$(echo "$token" | gsed -e  's/[][()\.^$?*+{|}]/\\&/g')
+            local regex_token=$(echo "$token" | gsed -e 's/[][()\.^$?*+{|}]/\\&/g')
             local sed_pattern="${regex_token//#/\\#}"
             if grep "^$field:" "$pc" | grep -E -q "(^|[[:space:]])${sed_pattern}($|[[:space:]])"; then
-                gsed -i -e -E "s#([[:space:]]|^)${sed_pattern}([[:space:]]|$)# #g" "$pc"
+                gsed -i -E -e "s#([[:space:]]|^)${sed_pattern}([[:space:]]|$)# #g" "$pc"
             fi
             insertion_buffer="${insertion_buffer} ${token}"
         done

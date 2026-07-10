@@ -2241,12 +2241,10 @@ build_libopencv() {
   do_make_and_make_install
   copy_path "$src_dir/$lib/build/unix-install/opencv4.pc" "$install_pkgconfig_dir/opencv.pc" -f
   copy_path "$src_dir/$lib/build/unix-install/opencv4.pc" "$install_pkgconfig_dir/opencv4.pc" -f
-  add_libs_to_pkg -t="$install_pkgconfig_dir/opencv.pc" -p="-lopencv_imgproc -lopencv_core -lkleidicv_hal -lkleidicv_thread -lkleidicv -ltegra_hal -lcarotene_objs -lz -lm -llog"
-  add_libs_to_pkg -t="$install_pkgconfig_dir/opencv4.pc" -p="-lopencv_imgproc -lopencv_core -lkleidicv_hal -lkleidicv_thread -lkleidicv -ltegra_hal -lcarotene_objs -lz -lm -llog"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/opencv.pc" -p="-lopencv_imgproc -lopencv_core -lkleidicv_hal -lkleidicv_thread -lkleidicv -ltegra_hal -lz -lm -llog"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/opencv4.pc" -p="-lopencv_imgproc -lopencv_core -lkleidicv_hal -lkleidicv_thread -lkleidicv -ltegra_hal -lz -lm -llog"
   find "$install_pkgconfig_dir" -name "opencv*.pc" -exec gsed -i -E \
-  -e 's/(^|[[:space:]])-ldl([[:space:]]|$)/ /g' \
-  -e 's/(^|[[:space:]])-lpthread([[:space:]]|$)/ /g' \
-  -e 's/(^|[[:space:]])-l3rdparty([[:space:]]|$)/ /g' {} +
+  -e 's/(^|[[:space:]])\-(ldl|lpthread|l3rdparty)([[:space:]]|$)/ /g' {} + > >(redirect_output) 2>&1
   export PKG_CONFIG_PATH=$original_pkg_path
   mapfile -t files < <(find "$dependency_install_prefix/sdk/native/staticlibs" "$dependency_install_prefix/sdk/native/3rdparty/libs" -type f -name "*.a*")
   for file in "${files[@]}"; do
