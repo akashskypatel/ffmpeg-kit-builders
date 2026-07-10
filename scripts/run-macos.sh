@@ -4289,7 +4289,7 @@ build_whisper() {
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   while IFS= read -r -d '' file; do
-    add_libs_to_pkg -t="$file" -l="-lwhisper -lggml -lggml-base -lggml-cpu -lggml-blas -lggml-metal lomp -lpthread"
+    add_libs_to_pkg -t="$file" -l="-lwhisper -lggml -lggml-base -lggml-cpu -lggml-blas -lggml-metal -lomp -lpthread"
     gsed -i 's/-lwhisper/-lwhisper -framework Accelerate -framework Metal -framework MetalKit -framework Foundation /g' "$file"
   done < <(find "$install_pkgconfig_dir" -name "whisper*.pc" -print0)
   change_dir "$src_dir"
