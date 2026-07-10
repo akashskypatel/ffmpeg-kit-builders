@@ -1747,7 +1747,7 @@ build_liblensfun() {
 -DINSTALL_PYTHON_MODULE=OFF" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  gsed -i 's/-llensfun/-llensfun -framework CoreText -framework CoreFoundation/' "$install_pkgconfig_dir/lensfun.pc"
+  gsed -i 's/-llensfun/-llensfun -lglib-2.0 -liconv -framework CoreText -framework CoreFoundation/' "$install_pkgconfig_dir/lensfun.pc"
   reset_cppflags
   reset_cxxflags
   change_dir "$src_dir"

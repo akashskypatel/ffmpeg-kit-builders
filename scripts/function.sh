@@ -4823,7 +4823,10 @@ configure_ffmpeg() {
   truthy "$enable_libkvazaar" && config_options+=" --enable-libkvazaar"               # enable HEVC encoding via libkvazaar [no]
   truthy "$enable_liblc3" && config_options+=" --enable-liblc3"                       # enable LC3 de/encoding via liblc3 [no]
   truthy "$enable_liblc3" && add_extra_libs "-llc3"                                   # enable LC3 de/encoding via liblc3 [no]
-  truthy "$enable_liblensfun" && config_options+=" --enable-liblensfun"               # enable lensfun lens correction [no]
+  truthy "$enable_liblensfun" && { 
+    config_options+=" --enable-liblensfun"
+    isios && add_extra_libs "-lglib-2.0 -liconv"
+  }              # enable lensfun lens correction [no]
   truthy "$enable_libmodplug" && config_options+=" --enable-libmodplug"               # enable ModPlug via libmodplug [no]
   truthy "$enable_libmp3lame" && config_options+=" --enable-libmp3lame"               # enable MP3 encoding via libmp3lame [no]
   truthy "$enable_libmysofa" && config_options+=" --enable-libmysofa"                 # enable libmysofa, needed for sofalizer filter [no]
