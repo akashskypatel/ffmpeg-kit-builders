@@ -4442,6 +4442,7 @@ run_valid_build_functions() {
   # should only upload deps when running in "multi-step with requested build_only step and its dependencies" mode, ideally only from workflow-runner.sh, but optionally can be run from local runner.
   # upload script uploads everything in prebuilt/${platform}-${arch}/libraries directory so it packages the final step as well as its dependencies into a neat self contained package.
   if truthy "$upload_deps" && [[ -n "$last_built_step" ]] && [[ "$last_built_step" == "$build_only" ]]; then
+    echo "INFO: Uploading dependencies for $host_platform-$platform_arch-$last_built_step" | tee -a "$LOG_FILE"
     sudo -E "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${last_built_step#build_}"
   fi
   static_link_check "$install_pkgconfig_dir"
