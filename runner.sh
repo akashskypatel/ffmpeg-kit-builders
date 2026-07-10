@@ -191,7 +191,7 @@ while [ $# -gt 0 ]; do
     echo "Skipping interactive. Accepting defult selections."
     shift
     ;;
-  --debug-build|--build-debug)
+  --debug-build|--build-debug|--enable-debug)
     export do_debug_build=y
     shift
     ;;
@@ -470,7 +470,7 @@ while [ $# -gt 0 ]; do
     pick_gpu_type "rocm"
     shift
     ;;
-  --enable-hardware|--enable-hw)
+  --enable-hardware|--enable-hw|--enable-video_hw)
     export enable_hardware=y
     shift
     ;;

@@ -177,9 +177,9 @@ ffmpeg_pattern_for_bundle() {
   local bundle="$3"
 
   if [[ "$bundle" == "debug" ]]; then
-    printf 'ffmpeg-base-%s-%s-static-debug*' "$platform" "$arch"
+    printf '%s-%s-ffmpeg-base-%s-%s-static-debug*' "$platform" "$arch" "$platform" "$arch"
   else
-    printf 'ffmpeg-%s-%s-%s-static*' "$bundle" "$platform" "$arch"
+    printf '%s-%s-ffmpeg-%s-%s-%s-static*' "$platform" "$arch" "$bundle" "$platform" "$arch"
   fi
 }
 
@@ -431,8 +431,15 @@ for raw_platform in "${selected_platforms[@]}"; do
           build_only_seen_steps["$build"]=1
         fi
         echo "Running $build for $combo"
-        runner_args=(--host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --build-only="$build")
+        runner_args=(--host="$platform" --arch="$arch" --gpl -y --no-bundle --skip --build-only="$build")
         [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]] && runner_args+=(--upload-deps) # dependency build mode
+        while IFS= read -r bundle; do
+          [[ -z "$bundle" ]] && continue
+          if [[ "$bundle" == "debug" ]]; then
+            runner_args+=("--enable-base")
+          else
+          runner_args+=("--enable-$bundle")
+        done < <(read_workflow_bundles)
         if ! run_with_runner_shell ./runner.sh "${runner_args[@]}"; then
           echo "::error::Failed to run $build for $combo"
           exit 1
