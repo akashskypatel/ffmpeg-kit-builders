@@ -27,8 +27,8 @@ source "${SCRIPTDIR}/function.sh"
 require_sudo
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
-
-echo -e "INFO: Build options: ${RUN_ARGS[*]}\n" 1>>"$LOG_FILE" 2>&1
+touch "$LOG_FILE"
+echo -e "INFO: Build options: ${RUN_ARGS[*]}\n" | tee -a "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true;
 
 ff_flags_raw=()    # Original arguments: --ff-something
