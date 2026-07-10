@@ -437,7 +437,7 @@ for raw_platform in "${selected_platforms[@]}"; do
           [[ -z "$bundle" ]] && continue
           if [[ "$bundle" == "debug" ]]; then
             runner_args+=("--enable-base")
-          else
+          fi
           runner_args+=("--enable-$bundle")
         done < <(read_workflow_bundles)
         if ! run_with_runner_shell ./runner.sh "${runner_args[@]}"; then
