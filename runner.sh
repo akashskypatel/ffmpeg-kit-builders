@@ -568,8 +568,8 @@ while [ $# -gt 0 ]; do
     export create_bundle=n
     shift
     ;;
-  --workflow)
-    export workflow=y
+  --upload-deps)
+    export upload_deps=y
     shift
     ;;
 	--enable-*)
@@ -915,6 +915,7 @@ done
 check_missing_packages
 
 main() {
+  # single step with no dependency built mode
   if [[ -n $run_only ]]; then
     echo -e "INFO: --- Executing single function: $run_only ---" | tee -a "$LOG_FILE"
     if [[ "$run_only" == build_* ]]; then
@@ -927,6 +928,7 @@ main() {
     fi
     echo | tee -a "$LOG_FILE"
     echo -e "INFO: --- Done executing single function: $run_only ---" | tee -a "$LOG_FILE"
+  # multi-step with requested build_only step and its dependencies
   elif [[ -n "$build_only" ]]; then
     if [[ "$build_only" == build_* ]]; then
       if ! declare -F "$build_only" >/dev/null; then
@@ -938,11 +940,12 @@ main() {
     else
       exit_message 1 "Invalid build function $build_only"
     fi
-    echo -e "INFO: --- Executing single build step: $step_name ---" | tee -a "$LOG_FILE"
+    echo -e "INFO: --- Executing single build step: $build_only ---" | tee -a "$LOG_FILE"
     echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
     run_valid_build_functions
     echo | tee -a "$LOG_FILE"
     echo -e "INFO: --- Done building single build step: $step_name ---" | tee -a "$LOG_FILE"
+  # multi-step build all starting from build_from
   elif [[ -n "$build_from" ]]; then
     if ! declare -F "$build_from" >/dev/null; then
       exit_message 1 "DEBUG: Invalid function: $build_from (not defined on $host_platform)"
@@ -957,15 +960,24 @@ main() {
     else
       exit_message 1 "Invalid step $build_from"
     fi
+  # default mode
   else
     change_dir "$work_dir" || exit_message 1 "unable to change directory to $work_dir"
     optimize_dependencies
+    # builds all dependencies
     truthy "$build_dependencies" && run_valid_build_functions
-    truthy "$build_ffmpeg" && download_ffmpeg
-    truthy "$build_ffmpeg" && configure_ffmpeg
-    truthy "$build_ffmpeg" && install_ffmpeg
-    truthy "$build_ffmpeg_kit" && configure_ffmpeg_kit
-    truthy "$build_ffmpeg_kit" && install_ffmpeg_kit
+    # build ffmpeg mode
+    truthy "$build_ffmpeg" && { 
+      download_ffmpeg
+      configure_ffmpeg
+      install_ffmpeg
+    }
+    # build ffmpeg-kit mode
+    truthy "$build_ffmpeg_kit" && {
+     configure_ffmpeg_kit
+     install_ffmpeg_kit
+     }
+     # build ffmpeg-kit bundle mode
     truthy "$create_bundle" && create_ffmpeg_kit_bundle
   fi
 }

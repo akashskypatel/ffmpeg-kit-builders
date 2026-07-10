@@ -1532,10 +1532,11 @@ int iconv_close(iconv_t cd) {
   return libiconv_close(cd);
 }
 EOF
-  "$CC" $CFLAGS -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o"
-  ar -q "$dependency_install_prefix/lib/libiconv.a" "$src_dir/$lib/iconv-compat.o"
-  ranlib "$dependency_install_prefix/lib/libiconv.a"
+  "$CC" $CFLAGS -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o" > >(redirect_output) || exit_message 1 "Failed to compile iconv-compat.c"
+  ar -q "$dependency_install_prefix/lib/libiconv.a" "$src_dir/$lib/iconv-compat.o" > >(redirect_output) || exit_message 1 "Failed to add iconv-compat.o to libiconv.a"
+  ranlib "$dependency_install_prefix/lib/libiconv.a" > >(redirect_output) || exit_message 1 "Failed to ranlib libiconv.a"
   remove_path -f "$dependency_install_prefix/include/iconv.h"
+  remove_path -f "$dependency_install_prefix/lib/libiconv_real.a"
   cat > "$install_pkgconfig_dir/iconv.pc" << EOF
 prefix=$dependency_install_prefix
 exec_prefix=\${prefix}

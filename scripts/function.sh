@@ -4387,7 +4387,19 @@ run_valid_build_functions() {
       ((steps++))
     fi
   done
-
+  if [[ -n "$start_from" ]]; then
+    # check if start_from is in OPTIMIZED_BUILD_STEPS
+    local found=false
+    for step_name in "${OPTIMIZED_BUILD_STEPS[@]}"; do
+      if [[ -n "${step_name// /}" ]] && [[ "$step_name" == "$start_from" ]]; then
+        found=true
+        break
+      fi
+    done
+    if [[ "$found" == false ]]; then
+      exit_message 1 "Invalid start_from value: $start_from. Must be one of: ${OPTIMIZED_BUILD_STEPS[*]}"
+    fi
+  fi
   # If start_from is empty, start from beginning
   if [[ -z "$start_from" ]]; then
     skip_mode=false
@@ -4412,6 +4424,9 @@ run_valid_build_functions() {
     fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
+    # download prebuilt dependency if build_force is not requested OR start_from requested and step_name not already built
+    # should rebuild dependencies from scratch if build_force is true and prevent depedencies from being downloaded since they are being built from scratch
+    # should prevent depedencies from being downloaded if start_from is requested but not building dependencies from scratch, in which case it should download prebuilt dependencies
     if ! truthy "$build_force"; then
       if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
         echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
@@ -4419,13 +4434,14 @@ run_valid_build_functions() {
         continue
       fi
     fi
-    sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name"
     run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See $LOG_FILE for details"
     last_built_step="$step_name"
   done
   printf "\r\033[KAll dependencies built successfully!\n"
   change_dir "$BASEDIR"
-  if truthy "$workflow" && [[ -n "$last_built_step" ]]; then
+  # should only upload deps when running in "multi-step with requested build_only step and its dependencies" mode, ideally only from workflow-runner.sh, but optionally can be run from local runner.
+  # upload script uploads everything in prebuilt/${platform}-${arch}/libraries directory so it packages the final step as well as its dependencies into a neat self contained package.
+  if truthy "$upload_deps" && [[ -n "$last_built_step" ]] && [[ "$last_built_step" == "$build_only" ]]; then
     sudo -E "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${last_built_step#build_}"
   fi
   static_link_check "$install_pkgconfig_dir"
@@ -4477,33 +4493,39 @@ run_valid_function() {
     export LDFLAGS=" $LDFLAGS -static-libstdc++ "
   fi
   iswindows && export LDFLAGS=" -static $LDFLAGS"
+  reset_and_exit() {
+    local return_code=$1
+    set_run_state
+    reset_allflags
+    return $return_code
+  }
 	if [[ -n "$step" ]]; then
     if [[ "$step" == build_* ]] && check_if_built "$step"; then
       echo "INFO: $step already built. Skipping." >>"$LOG_FILE"
-      return 0
+      reset_and_exit 0
     fi
 		change_dir "$src_dir"
 		if declare -F "$step" >/dev/null; then
 			echo -e "INFO: --- Executing step: $step ---" >>"$LOG_FILE"
       set_run_state "$step"
-			"$step" "${arg[@]}" 2>&1 || exit_message 1 "There was an error running $step.\n See $LOG_FILE for details"
+			"$step" "${arg[@]}" 2>&1
       local status=$?
 			if [[ $status -eq 0 ]]; then
          echo -e "INFO: --- Finished executing step: $step ---" >>"$LOG_FILE"
          # 2. OPTIMIZATION: Mark as built on success
          mark_as_built "$step"
-         return 0
+         reset_and_exit 0
       else
          echo -e "ERROR: Step $step failed with status $status" | tee -a "$LOG_FILE"
-         return "$status"
+         reset_and_exit $status
       fi
 		else
 			echo -e "WARNING: Function '$step' not found. Attempting eval..." >>"$LOG_FILE"
-      eval "$step ${arg[*]}" || return 1
+      eval "$step ${arg[*]}" || reset_and_exit 1
 		fi
 	else
 		echo -e "ERROR: Step argument is missing." | tee -a "$LOG_FILE"
-		return 1
+    reset_and_exit 1
 	fi
   set_run_state
   reset_allflags

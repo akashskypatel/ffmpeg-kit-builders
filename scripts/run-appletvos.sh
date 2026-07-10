@@ -1507,6 +1507,7 @@ CFLAGS=\"$CFLAGS\"" "" "full"
   ar -q "$dependency_install_prefix/lib/libiconv.a" "$iconv_shim_o" > >(redirect_output) || exit_message 1 "build_iconv: could not append simulator iconv shim to libiconv.a"
   ranlib "$dependency_install_prefix/lib/libiconv.a" > >(redirect_output) || exit_message 1 "build_iconv: could not ranlib simulator libiconv.a"
   remove_path -f "$dependency_install_prefix/include/iconv.h"
+  remove_path -f "$dependency_install_prefix/lib/libiconv_real.a"
   cat > "$install_pkgconfig_dir/iconv.pc" << EOF
 prefix=$dependency_install_prefix
 exec_prefix=\${prefix}

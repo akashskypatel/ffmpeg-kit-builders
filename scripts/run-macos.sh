@@ -1511,14 +1511,15 @@ int iconv_close(iconv_t cd) {
   return libiconv_close(cd);
 }
 EOF
-  "$CC" "$CFLAGS" -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o"
+  "$CC" $CFLAGS -c "$src_dir/$lib/iconv-compat.c" -o "$src_dir/$lib/iconv-compat.o" > >(redirect_output) || exit_message 1 "Failed to compile iconv-compat.c"
   if [[ -f "$dependency_install_prefix/lib/libiconv.a" ]]; then
     mv "$dependency_install_prefix/lib/libiconv.a" "$dependency_install_prefix/lib/libiconv_real.a"
   fi
   libtool -static -o "$dependency_install_prefix/lib/libiconv.a" \
     "$dependency_install_prefix/lib/libiconv_real.a" \
-    "$src_dir/$lib/iconv-compat.o"
+    "$src_dir/$lib/iconv-compat.o" > >(redirect_output) || exit_message 1 "Failed to create libiconv.a"
   remove_path -f "$dependency_install_prefix/include/iconv.h"
+  remove_path -f "$dependency_install_prefix/lib/libiconv_real.a"
   cat > "$install_pkgconfig_dir/iconv.pc" << EOF
 prefix=$dependency_install_prefix
 exec_prefix=\${prefix}
@@ -3069,11 +3070,12 @@ build_libarchive() {
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -L${dependency_install_prefix}/lib/${host_target}"
   do_configure "--enable-static \
 --disable-shared \
---bindir=$dependency_install_prefix/bin \
+--prefix=${dependency_install_prefix} \
+--libdir=${dependency_install_prefix}/lib \
+--bindir=${dependency_install_prefix}/bin \
 --without-lzo2 \
---without-libxml2 \
---without-cng" \
-"LIBICONV=-liconv LTLIBICONV=-liconv LIBS='-liconv' ./configure"
+--without-cng \
+LIBICONV=-liconv LTLIBICONV=-liconv LIBS='-liconv'" "./configure"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags

@@ -432,12 +432,12 @@ for raw_platform in "${selected_platforms[@]}"; do
         fi
         echo "Running $build for $combo"
         runner_args=(--host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --build-only="$build")
-        [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]] && runner_args+=(--workflow)
+        [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]] && runner_args+=(--upload-deps) # dependency build mode
         if ! run_with_runner_shell ./runner.sh "${runner_args[@]}"; then
           echo "::error::Failed to run $build for $combo"
           exit 1
         fi
-        if [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then
+        if [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then # dependency build mode
           sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
           reset_workflow_seen_steps
         fi
