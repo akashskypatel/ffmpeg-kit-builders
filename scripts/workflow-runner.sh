@@ -433,13 +433,17 @@ for raw_platform in "${selected_platforms[@]}"; do
         echo "Running $build for $combo"
         runner_args=(--host="$platform" --arch="$arch" --gpl -y --no-bundle --skip --build-only="$build")
         [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]] && runner_args+=(--upload-deps) # dependency build mode
-        while IFS= read -r bundle; do
-          [[ -z "$bundle" ]] && continue
-          if [[ "$bundle" == "debug" ]]; then
-            runner_args+=("--enable-base")
-          fi
-          runner_args+=("--enable-$bundle")
-        done < <(read_workflow_bundles)
+        if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
+          while IFS= read -r bundle; do
+            [[ -z "$bundle" ]] && continue
+            if [[ "$bundle" == "debug" ]]; then
+              runner_args+=("--enable-base")
+            fi
+            runner_args+=("--enable-$bundle")
+          done < <(read_workflow_bundles)
+        else
+          runner_args+=("--enable-full")
+        fi
         if ! run_with_runner_shell ./runner.sh "${runner_args[@]}"; then
           echo "::error::Failed to run $build for $combo"
           exit 1
