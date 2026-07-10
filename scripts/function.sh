@@ -4584,6 +4584,8 @@ configure_ffmpeg() {
     init_options+=" --ranlib=$RANLIB"
     init_options+=" --nm=$NM"
     init_options+=" --ld=$CXX"
+    init_options+=" --cc=$CC"
+    init_options+=" --cxx=$CXX"
     init_options+=" --strip=$STRIP"
 	  init_options+=" --target-os=android"
     init_options+=" --enable-jni"
