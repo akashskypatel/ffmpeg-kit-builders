@@ -177,9 +177,9 @@ ffmpeg_pattern_for_bundle() {
   local bundle="$3"
 
   if [[ "$bundle" == "debug" ]]; then
-    printf '%s-%s-ffmpeg-base-%s-%s-static-debug*' "$platform" "$arch" "$platform" "$arch"
+    printf 'ffmpeg-base-%s-%s-static-debug*' "$platform" "$arch"
   else
-    printf '%s-%s-ffmpeg-%s-%s-%s-static*' "$platform" "$arch" "$bundle" "$platform" "$arch"
+    printf 'ffmpeg-%s-%s-%s-static*' "$bundle" "$platform" "$arch"
   fi
 }
 
