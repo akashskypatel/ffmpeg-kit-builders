@@ -3092,7 +3092,7 @@ build_libvorbis() {
 build_libvpx() {
   local lib="libvpx"
   local repo="https://chromium.googlesource.com/webm/libvpx"
-  local repo_ver="v1.15.2"
+  local repo_ver="v1.17.0-rc1"
   local config="--prefix=$dependency_install_prefix \
 --enable-static \
 --disable-shared \
@@ -3119,26 +3119,11 @@ build_libvpx() {
   export CFLAGS="$original_cflags -arch $tvos_arch -I${dependency_install_prefix}/include -isysroot $TVOS_SYSROOT"
   export CXXFLAGS="$original_cxxflags -arch $tvos_arch -I${dependency_install_prefix}/include -isysroot $TVOS_SYSROOT"
   export LDFLAGS="$original_ldflags -arch $tvos_arch -L${dependency_install_prefix}/lib -isysroot $TVOS_SYSROOT"
+  apply_patch "$PATCHDIR/libvpx-tvos.patch"
   if istvossimulator; then
-    local toolchain_files=("$src_dir/$lib/configure" "$src_dir/$lib/build/make/configure.sh")
-    local toolchain_file=""
-    for toolchain_file in "${toolchain_files[@]}"; do
-      if ! grep -q 'arm64-appletvsimulator-gcc' "$toolchain_file"; then
-        awk '
-          !done && /arm64-darwin2[0-9]-gcc/ {
-            print
-            print "all_platforms=\"${all_platforms} arm64-appletvsimulator-gcc\""
-            done=1
-            next
-          }
-          { print }
-        ' "$toolchain_file" > "${toolchain_file}.tmp" && mv -f "${toolchain_file}.tmp" "$toolchain_file"
-      fi
-    done
-    gsed -i 's/-mtvos-version-min=\${TVOS_VERSION_MIN}"$/-mtvos-simulator-version-min=${TVOS_VERSION_MIN}"/g' "$src_dir/$lib/build/make/configure.sh"
     vpx_target="arm64-appletvsimulator-gcc"
   else
-    vpx_target="arm64-darwin-gcc"
+    vpx_target="arm64-appletvos-gcc"
   fi
   gsed -i \
     -e "s/TVOS_VERSION_MIN=\"12.0\"/TVOS_VERSION_MIN=\"${MIN_TVOS_VERSION}\"/g" \
