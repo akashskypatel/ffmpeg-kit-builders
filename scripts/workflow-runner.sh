@@ -49,6 +49,8 @@ case "$runner_platform" in
     ;;
 esac
 RUNNER_WORKFLOW_TARGET_PLATFORMS=${RUNNER_WORKFLOW_TARGET_PLATFORMS%,}
+export GITHUB_REPO="${GITHUB_REPOSITORY#*/}"
+export GITHUB_USERNAME="${GITHUB_REPOSITORY%%/*}"
 
 echo "==================================="
 echo "${runner_platform} Orchestrator"

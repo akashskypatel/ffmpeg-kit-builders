@@ -7713,9 +7713,20 @@ get_github_owner() {
 }
 
 authorize_github() {
-  local github_token="${1:-$(get_github_token)}"
-  local github_repo="${2:-$(get_github_repo)}"
-  local github_owner="${3:-$(get_github_owner)}"
+  local github_token="${1:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
+  local github_repo="${2:-${GITHUB_REPO:-}}"
+  local github_owner="${3:-${GITHUB_USERNAME:-}}"
+
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+  if [[ -z "$github_repo" ]]; then
+    github_repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$github_owner" ]]; then
+    github_owner="$(get_github_owner)" || return 1
+  fi
+
   if curl -f --request GET \
     --url "https://api.github.com/octocat" \
     --header "Authorization: Bearer $github_token" \
@@ -7729,16 +7740,27 @@ authorize_github() {
 }
 
 create_github_release() {
-  if ! authorize_github; then
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
-  fi
   local attachment="$1"
   local version=$(get_version)
   local tag="v$version-$host_platform"
-  local repo="${GITHUB_REPO:-$(get_github_repo)}"
-  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
   # check if tag exists
   if git show-ref --verify --tags "refs/tags/$tag"; then
     echo "Tag $tag already exists." | tee -a "$LOG_FILE"
@@ -7791,9 +7813,24 @@ upload_release_asset() {
   local asset_name=$(basename "$attachment")
   local version=$(get_version)
   local tag="v$version-$host_platform"
-  local repo="${GITHUB_REPO:-$(get_github_repo)}"
-  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   # Retrieve release metadata
   local release_json=$(curl -f -s -H "Authorization: Bearer $github_token" \
@@ -7838,9 +7875,25 @@ upload_release_asset() {
 check_existing_package() {
   local package_name="$1"
   local package_version="$2"
-  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
   local package_type="maven"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   echo "Checking for existing package $package_name version $package_version..." > >(redirect_output)
 
@@ -7876,9 +7929,25 @@ check_existing_package() {
 delete_existing_package() {
   local package_name="$1"
   local package_version="$2"
-  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
   local package_type="maven"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   # 1. Get all versions for the package
   local versions_json=$(curl -s \
@@ -7932,8 +8001,25 @@ check_maven_package_status() {
   local username="${OSSRH_USERNAME:-$(get_maven_username)}"
   local password="${OSSRH_PASSWORD:-$(get_maven_password)}"
   local endpoint="https://central.sonatype.com/api/v1/publisher/published"
-  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
   local namespace="io.github.$owner.ffmpegkit"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   echo "Checking for existing package $package_name version $package_version on Maven Central..." > >(redirect_output)
   auth_token="$(echo -n "$username:$password" | base64)"

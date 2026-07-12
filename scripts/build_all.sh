@@ -370,6 +370,7 @@ mark_completed() {
 execute_build() {
   local cmd_string="$1"
   local step_label="${2:-}"
+  local runner=()
   if is_completed "${cmd_string}"; then
     echo "[SKIP] Already completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
@@ -377,7 +378,13 @@ execute_build() {
 
   echo "[BUILD] Starting: ${cmd_string}" | tee -a "${LOG_FILE}"
 
-  if sudo -E bash -c "${cmd_string}"; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    runner=(bash -c "${cmd_string}")
+  else
+    runner=(sudo -E bash -c "${cmd_string}")
+  fi
+
+  if "${runner[@]}"; then
     mark_completed "${cmd_string}"
     echo "[DONE] Completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
