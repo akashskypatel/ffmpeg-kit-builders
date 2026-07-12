@@ -229,15 +229,15 @@ for dependency in $dependencies; do
 	archive_path="${RUNNER_TEMP:-/tmp}/${asset_name}"
 	extract_dir="$libraries_dir"
 
+	if workflow_step_seen "$seen_key" "$dependency"; then
+		echo "Skipping dependency ${dependency} for ${platform}-${arch}; already present in WORKFLOW_SEEN_STEPS"
+		continue
+	fi
+
 	if [[ "$mode" == "--artifact" || "$mode" == "--artifact-pattern" ]]; then
 		extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dep}"
 		rm -rf "$extract_dir"
 		mkdir -p "$extract_dir"
-	fi
-
-	if workflow_step_seen "$seen_key" "$dependency"; then
-		echo "Skipping dependency ${dependency} for ${platform}-${arch}; already present in WORKFLOW_SEEN_STEPS"
-		continue
 	fi
 
 	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
@@ -317,13 +317,16 @@ PY
 		exit 3
 	fi
     if [[ "$archive_path" == "${platform}-${arch}-ffmpeg-*" ]]; then
+        echo "Extracting ffmpeg archive detected: ${archive_path}"
         dir_name="${archive_path#"${platform}-${arch}-"}"
         dir_name="${dir_name%.zip}"
         extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dir_name}"
         # rm -rfv "$extract_dir"
         mkdir -p "$extract_dir"
     fi
+    echo "Unzipping archive: $archive_path to $extract_dir"
 	unzip -oq "$archive_path" -d "$extract_dir"
+    echo "Archive extracted successfully to $extract_dir"
 	# rm -fv "$archive_path"
 	mark_workflow_step_seen "$seen_key"
     # libraries_dir_sed="$(
