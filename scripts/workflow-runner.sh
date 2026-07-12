@@ -165,18 +165,33 @@ build_runner_args() {
   local platform="$1"
   local arch="$2"
   local bundle
+  local -a selected_bundles=()
+  local omit_base=false
 
   runner_args=(--host="$platform" --arch="$arch" --gpl -y --no-bundle --skip)
 
   if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
     while IFS= read -r bundle; do
       [[ -z "$bundle" ]] && continue
+      selected_bundles+=("$bundle")
+      case "$bundle" in
+        full|video_hw|video|audio)
+          omit_base=true
+          ;;
+      esac
+    done < <(read_workflow_bundles)
+
+    for bundle in "${selected_bundles[@]}"; do
+      [[ -z "$bundle" ]] && continue
+      if [[ "$omit_base" == true && ( "$bundle" == "base" || "$bundle" == "debug" ) ]]; then
+        continue
+      fi
       if [[ "$bundle" == "debug" ]]; then
         runner_args+=(--enable-base --enable-debug)
       else
         runner_args+=("--enable-$bundle")
       fi
-    done < <(read_workflow_bundles)
+    done
   else
     runner_args+=(--enable-full)
   fi

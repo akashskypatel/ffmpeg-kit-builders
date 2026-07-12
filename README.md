@@ -297,15 +297,16 @@ prebuilt/
 
 ## Bundle Matrix
 
-| Feature   | Base | Audio | Video | Video+Hardware | Full |
-| --------- | ---- | ----- | ----- | -------------- | ---- |
-| Video     |      |       | x     |                | x    |
-| Audio     |      | x     | x     |                | x    |
-| Streaming |      | x     | x     | x              | x    |
-| Hardware  |      |       |       | x              | x    |
-| AI*       |      |       |       |                |      |
-| HTTPS     | *    | x     | x     | x              | x    |
-| Platform* | x    | x     | x     | x              | x    |
+| Feature     | Base | Audio | Video | Video+Hardware | Full |
+| ----------- | ---- | ----- | ----- | -------------- | ---- |
+| Video       |      |       | x     |                | x    |
+| Audio       |      | x     | x     |                | x    |
+| Streaming   |      | x     | x     | x              | x    |
+| Hardware    |      |       |       | x              | x    |
+| AI*         |      |       |       |                |      |
+| HTTPS       | *    | x     | x     | x              | x    |
+| System      |      | x     | x     | x              | x    |
+| Platform*   | x    | x     | x     | x              | x    |
 
 1. AI features are not supported on all platforms. You must deploy your own custom build of ffmpeg-kit-extended to enable certain AI features.
    - See [Supported External Libraries](https://github.com/akashskypatel/ffmpeg-kit-builders?tab=readme-ov-file#supported-external-libraries) for more information.
