@@ -118,19 +118,6 @@ parse_build_only_steps() {
   fi
 }
 
-build_only_includes_step() {
-  local step="$1"
-  local requested_step
-
-  [[ "$build_only_enabled" != "true" ]] && return 0
-
-  for requested_step in "${build_only_steps[@]}"; do
-    [[ "$requested_step" == "$step" ]] && return 0
-  done
-
-  return 1
-}
-
 run_with_runner_shell() {
   if [[ "$runner_platform" == "macos" ]]; then
     sudo -E "$HOMEBREW_BASH" "$@"
@@ -159,7 +146,7 @@ reset_workflow_seen_steps() {
 read_workflow_bundles() {
   local bundle_csv="${WORKFLOW_BUNDLES:-}"
   if [[ -z "$bundle_csv" ]]; then
-    printf '%s\n' "full" "video_hw" "video" "audio" "base" "debug"
+    printf '%s\n' "full"
     return 0
   fi
 
@@ -171,25 +158,25 @@ read_workflow_bundles() {
   done
 }
 
-read_build_only_steps() {
-  local build_only_csv="${WORKFLOW_BUILD_ONLY:-}"
-  local raw_step step
-  local -a raw_build_only_steps=()
+build_runner_args() {
+  local platform="$1"
+  local arch="$2"
+  local bundle
 
-  if [[ -z "$build_only_csv" || "$build_only_csv" == "false" ]]; then
-    return 0
+  runner_args=(--host="$platform" --arch="$arch" --gpl -y --no-bundle --skip)
+
+  if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
+    while IFS= read -r bundle; do
+      [[ -z "$bundle" ]] && continue
+      if [[ "$bundle" == "debug" ]]; then
+        runner_args+=(--enable-base --enable-debug)
+      else
+        runner_args+=("--enable-$bundle")
+      fi
+    done < <(read_workflow_bundles)
+  else
+    runner_args+=(--enable-full)
   fi
-
-  if [[ "$build_only_csv" == "true" ]]; then
-    echo "::error::build_only must be a comma-separated list of build_* steps, not a boolean"
-    exit 1
-  fi
-
-  IFS=',' read -ra raw_build_only_steps <<< "$build_only_csv"
-  for raw_step in "${raw_build_only_steps[@]}"; do
-    step="$(trim "$raw_step")"
-    [[ -n "$step" ]] && printf '%s\n' "$step"
-  done
 }
 
 ffmpeg_pattern_for_bundle() {
@@ -386,6 +373,16 @@ workflow_step_build_bundle() {
 }
 
 
+declare -a build_only_steps=()
+declare -A build_only_seen_steps=()
+build_only_enabled=false
+parse_build_only_steps
+
+if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$build_only_enabled" == "true" ]]; then
+  echo "::error::WORKFLOW_BUILD_ONLY and WORKFLOW_BUILD_FROM cannot both be defined" >&2
+  exit 1
+fi
+
 if [[ -n "${WORKFLOW_BUILD_FROM:-}" ]]; then
   if [[ "$WORKFLOW_BUILD_FROM" != build_* ]]; then
     echo "::notice::build_from must be a build_* step, got: $WORKFLOW_BUILD_FROM" >&2
@@ -393,16 +390,26 @@ if [[ -n "${WORKFLOW_BUILD_FROM:-}" ]]; then
   fi
 fi
 
-declare -a build_only_steps=()
-declare -A build_only_seen_steps=()
-build_only_enabled=false
-parse_build_only_steps
+if [[ ( "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ) && ( -n "${WORKFLOW_BUILD_FROM:-}" || "$build_only_enabled" == "true" ) ]]; then
+  echo "::error::WORKFLOW_BUILD_FFMPEG/WORKFLOW_BUILD_BUNDLE cannot be combined with WORKFLOW_BUILD_FROM or WORKFLOW_BUILD_ONLY" >&2
+  exit 1
+fi
+
+workflow_mode="default"
+if [[ "$build_only_enabled" == "true" ]]; then
+  workflow_mode="build_only"
+elif [[ -n "${WORKFLOW_BUILD_FROM:-}" ]]; then
+  workflow_mode="build_from"
+elif [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
+  workflow_mode="ffmpeg_bundle"
+fi
 
 IFS=',' read -ra selected_platforms <<< "$WORKFLOW_TARGET_PLATFORMS"
 IFS=',' read -ra selected_archs <<< "$WORKFLOW_TARGET_ARCHS"
 ran_any=false
 declare -A installed_toolchains=()
 
+echo "::notice::Workflow mode: $workflow_mode"
 echo "::notice::Starting workflow for platforms: $WORKFLOW_TARGET_PLATFORMS and architectures: $WORKFLOW_TARGET_ARCHS"
 for raw_platform in "${selected_platforms[@]}"; do
   platform="$(trim "$raw_platform")"
@@ -426,16 +433,18 @@ for raw_platform in "${selected_platforms[@]}"; do
     ran_any=true
     ensure_target_toolchain "$platform" "$arch"
     echo "Preparing build steps for $combo"
-    WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh --host="$platform" --arch="$arch" --enable-full --gpl -y --no-bundle --skip --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+    runner_args=()
+    build_runner_args "$platform" "$arch"
+
+    if [[ "$workflow_mode" == "build_only" ]]; then
+      WORKFLOW_BUILD_STEPS="${build_only_steps[*]}"
+    else
+      WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh "${runner_args[@]}" --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+    fi
     echo "WORKFLOW_BUILD_STEPS for $combo: $WORKFLOW_BUILD_STEPS"
 
     start_building=true
     found_build_from=false
-    if [[ "$build_only_enabled" == "true" ]]; then
-      for build in "${build_only_steps[@]}"; do
-        build_only_seen_steps["$build"]=0
-      done
-    fi
     [[ -n "${WORKFLOW_BUILD_FROM:-}" ]] && start_building=false
 
     for build in $WORKFLOW_BUILD_STEPS; do
@@ -445,31 +454,14 @@ for raw_platform in "${selected_platforms[@]}"; do
         found_build_from=true
       fi
       if [[ ${start_building} == "true" ]]; then
-        if ! build_only_includes_step "$build"; then
-          continue
-        fi
-        if [[ "$build_only_enabled" == "true" ]]; then
-          build_only_seen_steps["$build"]=1
-        fi
         echo "Running $build for $combo"
-        runner_args=(--host="$platform" --arch="$arch" --gpl -y --no-bundle --skip --build-only="$build")
-        [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]] && runner_args+=(--upload-deps) # dependency build mode
-        if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
-          while IFS= read -r bundle; do
-            [[ -z "$bundle" ]] && continue
-            if [[ "$bundle" == "debug" ]]; then
-              runner_args+=("--enable-base")
-            fi
-            runner_args+=("--enable-$bundle")
-          done < <(read_workflow_bundles)
-        else
-          runner_args+=("--enable-full")
-        fi
-        if ! run_with_runner_shell ./runner.sh "${runner_args[@]}"; then
+        step_runner_args=("${runner_args[@]}" --build-only="$build")
+        [[ "$workflow_mode" != "ffmpeg_bundle" ]] && step_runner_args+=(--upload-deps)
+        if ! run_with_runner_shell ./runner.sh "${step_runner_args[@]}"; then
           echo "::error::Failed to run $build for $combo"
           exit 1
         fi
-        if [[ "${WORKFLOW_BUILD_FFMPEG}" != "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then # dependency build mode
+        if [[ "$workflow_mode" != "ffmpeg_bundle" ]]; then
           sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
           reset_workflow_seen_steps
         fi
@@ -480,15 +472,6 @@ for raw_platform in "${selected_platforms[@]}"; do
     if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$found_build_from" != "true" ]]; then
       echo "::notice::build_from step not found in workflow build steps for $combo: $WORKFLOW_BUILD_FROM" >&2
       exit 1
-    fi
-
-    if [[ "$build_only_enabled" == "true" ]]; then
-      for build in "${build_only_steps[@]}"; do
-        if [[ "${build_only_seen_steps[$build]}" != "1" ]]; then
-          echo "::notice::build_only step not found in workflow build steps for $combo: $build" >&2
-          exit 1
-        fi
-      done
     fi
 
     if ! workflow_step_build_ffmpeg "$platform" "$arch"; then
