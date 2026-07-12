@@ -966,7 +966,7 @@ FILE *get_preset_file(char *filename, size_t filename_size,
                     datadir, desired_size, sizeof *datadir);
                 if (new_datadir) {
                     datadir = new_datadir;
-                    strcpy(datadir + datadir_len, "/ffpresets");
+                    av_strlcpy(datadir + datadir_len, "/ffpresets", desired_size - datadir_len);
                     base[2] = datadir;
                 }
             }
