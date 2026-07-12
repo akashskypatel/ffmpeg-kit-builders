@@ -764,150 +764,150 @@ fi
 if truthy "$enable_base"; then
   echo -e "\n  [CONFIG] Enabling selected libraries..." >>"$LOG_FILE"
   apply_preset "$CONFIG_GENERAL"
+fi
 
-  if truthy "$audio_bundle" || truthy "$enable_full"; then
-    enable_audio=y
-    enable_https=y
-    enable_streaming=y
-  fi
-  if truthy "$audio_ai_bundle" || truthy "$enable_full"; then
-    enable_audio=y
-    enable_audio_ai=y
-    enable_https=y
-    enable_streaming=y
-  fi
-  if truthy "$video_bundle" || truthy "$enable_full"; then
-    enable_audio=y
-    enable_video=y
-    enable_https=y
-    enable_streaming=y
-  fi
-  if truthy "$video_ai_bundle" || truthy "$enable_full"; then
-    enable_audio=y
-    enable_video=y
-    enable_video_ai=y
-    enable_https=y
-    enable_streaming=y
-  fi
-  if truthy "$video_hw_bundle" || truthy "$enable_full"; then
-    enable_audio=y
-    enable_video=y
-    enable_hardware=y
-    enable_https=y
-    enable_streaming=y
-  fi
-  if truthy "$video_ai_hw_bundle" || truthy "$enable_full"; then
-    enable_audio=y
-    enable_video=y
-    enable_audio_ai=y
-    enable_video_ai=y
-    enable_hardware=y
-    enable_https=y
-    enable_streaming=y
-  fi
+if truthy "$audio_bundle" || truthy "$enable_full"; then
+  enable_audio=y
+  enable_https=y
+  enable_streaming=y
+fi
+if truthy "$audio_ai_bundle" || truthy "$enable_full"; then
+  enable_audio=y
+  enable_audio_ai=y
+  enable_https=y
+  enable_streaming=y
+fi
+if truthy "$video_bundle" || truthy "$enable_full"; then
+  enable_audio=y
+  enable_video=y
+  enable_https=y
+  enable_streaming=y
+fi
+if truthy "$video_ai_bundle" || truthy "$enable_full"; then
+  enable_audio=y
+  enable_video=y
+  enable_video_ai=y
+  enable_https=y
+  enable_streaming=y
+fi
+if truthy "$video_hw_bundle" || truthy "$enable_full"; then
+  enable_audio=y
+  enable_video=y
+  enable_hardware=y
+  enable_https=y
+  enable_streaming=y
+fi
+if truthy "$video_ai_hw_bundle" || truthy "$enable_full"; then
+  enable_audio=y
+  enable_video=y
+  enable_audio_ai=y
+  enable_video_ai=y
+  enable_hardware=y
+  enable_https=y
+  enable_streaming=y
+fi
 
-  if truthy "$build_nonfree"; then
-    echo "WARNING: Non-free licensing selected. Ffmpeg and ffmpeg-kit 
-    Binaries will be non-redistributable without proper licensing. You 
-    are responsible for making sure you have the appropriate licensing 
-    to distribute the binaries!" | tee -a "$LOG_FILE"
+if truthy "$build_nonfree"; then
+  echo "WARNING: Non-free licensing selected. Ffmpeg and ffmpeg-kit 
+  Binaries will be non-redistributable without proper licensing. You 
+  are responsible for making sure you have the appropriate licensing 
+  to distribute the binaries!" | tee -a "$LOG_FILE"
 
-    truthy "$enable_audio" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_NON_FREE"
-    truthy "$enable_video" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_NON_FREE"
-    truthy "$enable_streaming" || truthy "$enable_full" && apply_preset "$CONFIG_STREAMING_NON_FREE"
-    truthy "$enable_hardware" || truthy "$enable_full" && apply_preset "$CONFIG_HARDWARE_NON_FREE"
-    truthy "$enable_audio_ai" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_AI_NON_FREE"
-    truthy "$enable_video_ai" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_AI_NON_FREE"
-    truthy "$enable_ssh" || truthy "$enable_full" && apply_preset "$CONFIG_SSH_NON_FREE"
-
-    if ! iswindows; then
-      truthy "$enable_smb" || truthy "$enable_full" && apply_preset "$CONFIG_SMB_NON_FREE"
-    fi
-  fi
-
-  truthy "$enable_audio" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO"
-  truthy "$enable_video" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO"
-  truthy "$enable_streaming" || truthy "$enable_full" && apply_preset "$CONFIG_STREAMING"
-  truthy "$enable_hardware" || truthy "$enable_full" && apply_preset "$CONFIG_HARDWARE"
-  truthy "$enable_audio_ai" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_AI"
-  truthy "$enable_video_ai" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_AI"
-  truthy "$enable_ssh" || truthy "$enable_full" && apply_preset "$CONFIG_SSH"
+  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_NON_FREE"
+  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_NON_FREE"
+  { truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING_NON_FREE"
+  { truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE_NON_FREE"
+  { truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI_NON_FREE"
+  { truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI_NON_FREE"
+  { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH_NON_FREE"
 
   if ! iswindows; then
-    truthy "$enable_smb" || truthy "$enable_full" && apply_preset "$CONFIG_SMB"
+    { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB_NON_FREE"
   fi
-
-  if ! truthy "$build_small"; then
-    truthy "$enable_audio" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_EXTRA"
-    truthy "$enable_video" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_EXTRA"
-  fi
-
-  truthy "$enable_ssh" || truthy "$enable_full" && apply_preset "$CONFIG_SSH"
-  truthy "$enable_smb" || truthy "$enable_full" && apply_preset "$CONFIG_SMB"
-
-  if truthy "$enable_mq" || truthy "$enable_full"; then
-    pick_mq_lib
-  fi
-
-  if truthy "$gpu_support" && [[ -z "$gpu_type" ]]; then
-    pick_gpu_type
-  fi
-
-  if truthy "$enable_https"; then
-    echo -e "\n  [CONFIG] Checking https libraries..." >>"$LOG_FILE"
-    if truthy "$accept_defaults"; then
-      pick_ssl_type "openssl"
-    elif [[ -z "$ssl_type" ]]; then
-      pick_ssl_type
-      case "${ssl_type,,}" in
-        openssl)
-          disable_library "gnutls"
-          disable_library "mbedtls"
-          disable_library "libtls"
-          ;;
-        gnutls)
-          disable_library "mbedtls"
-          disable_library "libtls"
-          disable_library "openssl"
-          ;;
-        mbedtls)
-          disable_library "gnutls"
-          disable_library "libtls"
-          disable_library "openssl"
-          ;;
-        libtls)
-          disable_library "gnutls"
-          disable_library "mbedtls"
-          disable_library "openssl"
-          ;;
-      esac
-    fi
-  fi
-
-  if truthy "$enable_streaming"; then
-    if ! truthy "$enable_openssl" && truthy "$disable_openssl" && ! truthy "$enable_librtmp" && truthy "$disable_librtmp"; then
-      if [[ -z "$crypto_type" ]]; then
-        pick_cryto_lib
-      fi
-    fi
-  fi
-
-  # disable deprecated libraries
-  echo -e "\n  [CONFIG] Disabling deprecated libraries..." >>"$LOG_FILE"
-  disable_library "libnpp"
-  if ! truthy "$disable_libcelt" && truthy "$enable_libcelt"; then
-  enable_library "libopus"
-  disable_library "libcelt"
-  fi
-
-  resolve_collisions
-
-  # strict gpl libraries
-  check_gpl_libraries
-
-  # disable unsupported by platform
-  disable_unsupported
 fi
+
+{ truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO"
+{ truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO"
+{ truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING"
+{ truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE"
+{ truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI"
+{ truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI"
+{ truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
+
+if ! iswindows; then
+  { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
+fi
+
+if ! truthy "$build_small"; then
+  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_EXTRA"
+  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_EXTRA"
+fi
+
+{ truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
+{ truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
+
+if truthy "$enable_mq" || truthy "$enable_full"; then
+  pick_mq_lib
+fi
+
+if truthy "$gpu_support" && [[ -z "$gpu_type" ]]; then
+  pick_gpu_type
+fi
+
+if truthy "$enable_https"; then
+  echo -e "\n  [CONFIG] Checking https libraries..." >>"$LOG_FILE"
+  if truthy "$accept_defaults"; then
+    pick_ssl_type "openssl"
+  elif [[ -z "$ssl_type" ]]; then
+    pick_ssl_type
+    case "${ssl_type,,}" in
+      openssl)
+        disable_library "gnutls"
+        disable_library "mbedtls"
+        disable_library "libtls"
+        ;;
+      gnutls)
+        disable_library "mbedtls"
+        disable_library "libtls"
+        disable_library "openssl"
+        ;;
+      mbedtls)
+        disable_library "gnutls"
+        disable_library "libtls"
+        disable_library "openssl"
+        ;;
+      libtls)
+        disable_library "gnutls"
+        disable_library "mbedtls"
+        disable_library "openssl"
+        ;;
+    esac
+  fi
+fi
+
+if truthy "$enable_streaming"; then
+  if ! truthy "$enable_openssl" && truthy "$disable_openssl" && ! truthy "$enable_librtmp" && truthy "$disable_librtmp"; then
+    if [[ -z "$crypto_type" ]]; then
+      pick_cryto_lib
+    fi
+  fi
+fi
+
+# disable deprecated libraries
+echo -e "\n  [CONFIG] Disabling deprecated libraries..." >>"$LOG_FILE"
+disable_library "libnpp"
+if ! truthy "$disable_libcelt" && truthy "$enable_libcelt"; then
+enable_library "libopus"
+disable_library "libcelt"
+fi
+
+resolve_collisions
+
+# strict gpl libraries
+check_gpl_libraries
+
+# disable unsupported by platform
+disable_unsupported
 
 echo -e "\n  [CONFIG] Enabling explicit libraries..." >>"$LOG_FILE"
 for lib in "${explicit_enabled[@]}"; do
