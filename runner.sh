@@ -572,6 +572,10 @@ while [ $# -gt 0 ]; do
     export upload_deps=y
     shift
     ;;
+  --dry-run)
+    export dry_run=y
+    shift
+    ;;
 	--enable-*)
     lib_name="${1#--enable-}"
     explicit_enabled+=( "$lib_name" )
@@ -919,6 +923,11 @@ check_missing_packages
 
 main() {
   # single step with no dependency built mode
+  if truthy "$dry_run"; then
+    echo -e "INFO: --- Dry run mode enabled ---" | tee -a "$LOG_FILE"
+    optimize_dependencies
+    return 0
+  fi
   if [[ -n $run_only ]]; then
     echo -e "INFO: --- Executing single function: $run_only ---" | tee -a "$LOG_FILE"
     if [[ "$run_only" == build_* ]]; then

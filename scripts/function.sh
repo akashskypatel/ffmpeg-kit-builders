@@ -7424,10 +7424,10 @@ optimize_dependencies() {
     done
     # Output the final ordered array
     OPTIMIZED_BUILD_STEPS=("${sorted_order[@]}")
-    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-all-steps"($|[[:space:]]) ]]; then
+    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-all-steps"($|[[:space:]]) ]] || truthy "$dry_run"; then
       print_build_steps | tee -a "$LOG_FILE"
     fi
-    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-total-steps"($|[[:space:]]) ]]; then
+    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-total-steps"($|[[:space:]]) ]] || truthy "$dry_run"; then
       echo "INFO: Number of build steps: ${#OPTIMIZED_BUILD_STEPS[@]}" | tee -a "$LOG_FILE"
     fi
 }
