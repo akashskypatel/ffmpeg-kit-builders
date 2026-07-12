@@ -13,6 +13,8 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
+: "${LOG_FILE:=/dev/null}"
+
 # 1. exit code
 # 2. message
 # shellcheck disable=SC2244
@@ -4437,6 +4439,7 @@ run_valid_build_functions() {
     if ! truthy "$build_force"; then
       if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
         echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
+        set_run_state "$step_name"
         mark_as_built "$step_name"
         continue
       fi

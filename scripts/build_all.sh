@@ -13,6 +13,8 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
+: "${LOG_FILE:=/dev/null}"
+
 # save start time
 START_TIME=$(date +%s)
 

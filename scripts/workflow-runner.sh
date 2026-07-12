@@ -171,6 +171,27 @@ read_workflow_bundles() {
   done
 }
 
+read_build_only_steps() {
+  local build_only_csv="${WORKFLOW_BUILD_ONLY:-}"
+  local raw_step step
+  local -a raw_build_only_steps=()
+
+  if [[ -z "$build_only_csv" || "$build_only_csv" == "false" ]]; then
+    return 0
+  fi
+
+  if [[ "$build_only_csv" == "true" ]]; then
+    echo "::error::build_only must be a comma-separated list of build_* steps, not a boolean"
+    exit 1
+  fi
+
+  IFS=',' read -ra raw_build_only_steps <<< "$build_only_csv"
+  for raw_step in "${raw_build_only_steps[@]}"; do
+    step="$(trim "$raw_step")"
+    [[ -n "$step" ]] && printf '%s\n' "$step"
+  done
+}
+
 ffmpeg_pattern_for_bundle() {
   local platform="$1"
   local arch="$2"

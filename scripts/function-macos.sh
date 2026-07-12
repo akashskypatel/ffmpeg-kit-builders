@@ -13,6 +13,8 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
+: "${LOG_FILE:=/dev/null}"
+
 configure_ffmpeg_kit() {
   echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
   reset_allflags

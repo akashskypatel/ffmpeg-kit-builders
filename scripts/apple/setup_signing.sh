@@ -4,6 +4,18 @@
 
 # Helper script to set up code signing environment for iOS/macOS publishing
 # This guides users through the process of configuring signing identities and notarization credentials
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 set -e
 

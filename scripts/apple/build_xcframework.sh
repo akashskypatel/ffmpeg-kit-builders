@@ -5,6 +5,19 @@
 # Create XCFramework bundles for iOS, iOS Simulator, and macOS
 # This script mirrors the Android AAR publishing pipeline for Apple platforms
 
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
+
 # save start time
 START_TIME=$(date +%s)
 

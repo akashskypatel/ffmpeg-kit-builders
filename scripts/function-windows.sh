@@ -13,6 +13,8 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
+: "${LOG_FILE:=/dev/null}"
+
 find_all_build_exes() {
 	local found=""
 	# NB that we're currently in the prebuilt dir...

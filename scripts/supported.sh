@@ -13,6 +13,8 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
+: "${LOG_FILE:=/dev/null}"
+
 export VALID_BUNDLES=("full" "video_hw" "video" "audio" "base" "debug")
 export VALID_BUILD_ON_LINUX=("linux" "windows" "android")
 export VALID_BUILD_ON_MACOS=("ios" "iphonesimulator" "appletvos" "appletvsimulator" "macos")
