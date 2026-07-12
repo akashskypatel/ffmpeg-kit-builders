@@ -479,7 +479,7 @@ for raw_platform in "${selected_platforms[@]}"; do
       exit 1
     fi
 
-    if [[ "$workflow_mode" != "ffmpeg_bundle" ]]; then
+    if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then
       echo "::notice::Cleaning up prebuilt directory for $combo because ffmpeg built successfully and no bundle build was requested"
       sudo rm -rfv "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
       continue
