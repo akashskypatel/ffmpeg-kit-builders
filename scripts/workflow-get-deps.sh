@@ -236,7 +236,7 @@ for dependency in $dependencies; do
 
 	if [[ "$mode" == "--artifact" || "$mode" == "--artifact-pattern" ]]; then
 		extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dep}"
-		rm -rf "$extract_dir"
+		rm -rfv "$extract_dir"
 		mkdir -p "$extract_dir"
 	fi
 
@@ -321,13 +321,13 @@ PY
         dir_name="${archive_path#"${platform}-${arch}-"}"
         dir_name="${dir_name%.zip}"
         extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dir_name}"
-        # rm -rfv "$extract_dir"
+        rm -rfv "$extract_dir"
         mkdir -p "$extract_dir"
     fi
     echo "Unzipping archive: $archive_path to $extract_dir"
 	unzip -oq "$archive_path" -d "$extract_dir"
     echo "Archive extracted successfully to $extract_dir"
-	# rm -fv "$archive_path"
+	rm -fv "$archive_path"
 	mark_workflow_step_seen "$seen_key"
     # libraries_dir_sed="$(
     #   printf '%s\n' "$libraries_dir" |
