@@ -97,6 +97,9 @@ env:
   WORKFLOW_CURRENT_STEP: ""
   WORKFLOW_SEEN_STEPS: ""
   WORKFLOW_BUNDLES: \${{ inputs.bundles }}
+  OSSRH_BASE64: \${{ secrets.OSSRH_BASE64 }}
+  OSSRH_USERNAME: \${{ secrets.OSSRH_USERNAME }}
+  OSSRH_PASSWORD: \${{ secrets.OSSRH_PASSWORD }}
 
 permissions:
   contents: write

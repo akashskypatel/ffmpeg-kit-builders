@@ -199,7 +199,7 @@ execute_build() {
   
   echo "[BUILD] Starting: ${cmd_string}" | tee -a "${LOG_FILE}"
   
-  if eval "${cmd_string}" > >(redirect_output) 2>&1; then
+  if sudo -E bash -c "${cmd_string}" > >(redirect_output) 2>&1; then
     mark_completed "${cmd_string}"
     echo "[DONE] Completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
@@ -397,12 +397,15 @@ fi
 ANDROID_HOME="/usr/local/android-sdk"
 latest_ndk=$(ls -v "$ANDROID_HOME/ndk" 2>/dev/null | tail -n 1)
 ANDROID_API_LEVEL="26"
-GITHUB_USERNAME="${GITHUB_USERNAME:-"$(get_github_owner)"}"
-GITHUB_REPO="${GITHUB_REPO:-"$(get_github_repo)"}"
-GITHUB_PASSWORD="${GITHUB_PASSWORD:-"$(get_github_token)"}"
-GITHUB_PASSWORD_CLASSIC="${GITHUB_PASSWORD_CLASSIC:-"$(get_github_token_classic)"}"
-OSSRH_USERNAME="${OSSRH_USERNAME:-"$(get_maven_username)"}"
-OSSRH_PASSWORD="${OSSRH_PASSWORD:-"$(get_maven_password)"}"
+repo_path="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+repo_name="${repo_path##*/}"
+owner="${repo_path%%/*}"
+GITHUB_USERNAME="${GITHUB_USERNAME:-${owner:-$(get_github_owner)}}"
+GITHUB_REPO="${GITHUB_REPO:-${repo_name:-$(get_github_repo)}}"
+GITHUB_PASSWORD="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
+GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
+OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}"
+OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
 GRADLE_COMMAND="publishToMavenCentral"
 USER_HOME="/home/vscode"
 GRADLE_USER_HOME="${USER_HOME}/.gradle"

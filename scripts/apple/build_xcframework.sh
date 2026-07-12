@@ -234,7 +234,7 @@ execute_build() {
 
   echo "[BUILD] Starting: ${cmd_string}" | tee -a "${LOG_FILE}"
 
-  if eval "${cmd_string}" > >(redirect_output) 2>&1; then
+  if sudo -E bash -c "${cmd_string}" > >(redirect_output) 2>&1; then
     mark_completed "${cmd_string}"
     echo "[DONE] Completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
@@ -947,8 +947,10 @@ fi
 
 # Version information
 FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")"
-GITHUB_USERNAME="$(get_github_owner)"
-GITHUB_REPO="$(get_github_repo)"
+repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+owner="${repo%%/*}"
+export GITHUB_USERNAME="$owner" && \
+export GITHUB_REPO="${repo#*/}" && \
 
 echo "========================================" | tee -a "${LOG_FILE}"
 echo "XCFramework Build Pipeline" | tee -a "${LOG_FILE}"

@@ -7733,12 +7733,15 @@ create_github_release() {
     exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
     return 1
   fi
+  REPO_PATH="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+  REPO_NAME="${REPO_PATH##*/}"
+  OWNER="${REPO_PATH%%/*}"
   local attachment="$1"
   local version=$(get_version)
   local tag="v$version-$host_platform"
-  local repo="$(get_github_repo)"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token)"
+  local repo="${REPO_NAME:-$(get_github_repo)}"
+  local owner="${OWNER:-$(get_github_owner)}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
   # check if tag exists
   if git show-ref --verify --tags "refs/tags/$tag"; then
     echo "Tag $tag already exists." | tee -a "$LOG_FILE"

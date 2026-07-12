@@ -377,7 +377,7 @@ execute_build() {
 
   echo "[BUILD] Starting: ${cmd_string}" | tee -a "${LOG_FILE}"
 
-  if eval "${cmd_string}"; then
+  if sudo -E bash -c "${cmd_string}"; then
     mark_completed "${cmd_string}"
     echo "[DONE] Completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
@@ -522,13 +522,16 @@ if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
   else
     remote="--local"
   fi
-  export GITHUB_USERNAME="$(get_github_owner)" && \
-  export GITHUB_REPO="$(get_github_repo)" && \
-  export GITHUB_PASSWORD="$(get_github_token)" && \
-  export GITHUB_PASSWORD_CLASSIC="$(get_github_token_classic)" && \
-  export OSSRH_USERNAME="$(get_maven_username)" && \
-  export OSSRH_PASSWORD="$(get_maven_password)" && \
-  "${WORK_DIR}/scripts/android/build_aar.sh" --bundle="${bundles}" --reset "${remote}" "${SNAPSHOT}"
+  repo_path="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+  owner="${repo_path%%/*}"
+  export GITHUB_USERNAME="$owner" && \
+  export GITHUB_REPO="${repo_path#*/}" && \
+  export GITHUB_PASSWORD="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}" && \
+  export GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}" && \
+  export OSSRH_BASE64="${OSSRH_BASE64:-$(get_maven_base64)}" && \
+  export OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}" && \
+  export OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}" && \
+  sudo -E bash -c "${WORK_DIR}/scripts/android/build_aar.sh --bundle=${bundles} --reset ${remote} ${SNAPSHOT}"
 fi
 
 # Build XCFrameworks for Apple platforms
