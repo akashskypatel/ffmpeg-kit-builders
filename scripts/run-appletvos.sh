@@ -1197,7 +1197,7 @@ build_graphite() {
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  ln -sf "$dependency_install_prefix/lib/libgraphite2.a" "$dependency_install_prefix/lib/libgraphite2.so"
+  copy_path "$dependency_install_prefix/lib/libgraphite2.a" "$dependency_install_prefix/lib/libgraphite2.so" -f
   change_dir "$src_dir"
 }
 # build_libharfbuzz       # config_options+= --enable-libharfbuzz         # enable libharfbuzz, needed for drawtext filter [no]
@@ -1755,7 +1755,7 @@ build_liboapv() {
   do_make_and_make_install
   gsed -i 's|libdir=.*|libdir=\${prefix}/lib/oapv|g' "$install_pkgconfig_dir/oapv.pc"
   gsed -i 's|includedir=.*|includedir=\${prefix}/include|g' "$install_pkgconfig_dir/oapv.pc"
-  ln -sf "$dependency_install_prefix/lib/oapv/liboapv.a" "$dependency_install_prefix/lib/liboapv.a"
+  copy_path "$dependency_install_prefix/lib/oapv/liboapv.a" "$dependency_install_prefix/lib/liboapv.a" -f
   change_dir "$src_dir"
 }
 # build_libopencv         # config_options+= --enable-libopencv           # enable video filtering via libopencv [no]
@@ -3573,10 +3573,9 @@ build_sratom() {
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   change_dir "$dependency_install_prefix/lib"
-  # ln -sf "libsratom-0.a" "libsratom.a"
-  cp -f "libsratom-0.a" "libsratom.a"
+  copy_path "libsratom-0.a" "libsratom.a" -f
   change_dir "$install_pkgconfig_dir"
-  ln -sf "sratom-0.pc" "sratom.pc"
+  copy_path "sratom-0.pc" "sratom.pc" -f
   change_dir "$src_dir"
 }
 build_sord() {
@@ -3593,10 +3592,9 @@ build_sord() {
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   change_dir "$dependency_install_prefix/lib"
-  # ln -sf "libsord-0.a" "libsord.a"
-  cp -f "libsord-0.a" "libsord.a"
+  copy_path "libsord-0.a" "libsord.a" -f
   change_dir "$install_pkgconfig_dir"
-  ln -sf "sord-0.pc" "sord.pc"
+  copy_path "sord-0.pc" "sord.pc" -f
   change_dir "$src_dir"
 }
 build_serd() {
@@ -3612,10 +3610,9 @@ build_serd() {
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   change_dir "$dependency_install_prefix/lib"
-  # ln -sf "libserd-0.a" "libserd.a"
-  cp -f "libserd-0.a" "libserd.a"
+  copy_path "libserd-0.a" "libserd.a" -f
   change_dir "$install_pkgconfig_dir"
-  ln -sf "serd-0.pc" "serd.pc"
+  copy_path "serd-0.pc" "serd.pc" -f
   change_dir "$src_dir"
 }
 build_zix() {
@@ -3642,10 +3639,9 @@ build_zix() {
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   change_dir "$dependency_install_prefix/lib"
-  # ln -sf "libzix-0.a" "libzix.a"
-  cp -f "libzix-0.a" "libzix.a"
+  copy_path "libzix-0.a" "libzix.a" -f
   change_dir "$install_pkgconfig_dir"
-  ln -sf "zix-0.pc" "zix.pc"
+  copy_path "zix-0.pc" "zix.pc" -f
   change_dir "$src_dir"
 }
 build_lilv() {
@@ -3662,10 +3658,9 @@ build_lilv() {
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
   change_dir "$dependency_install_prefix/lib"
-  # ln -sf "liblilv-0.a" "liblilv.a"
-  cp -f "liblilv-0.a" "liblilv.a"
+  copy_path "liblilv-0.a" "liblilv.a" -f
   change_dir "$install_pkgconfig_dir"
-  ln -sf "lilv-0.pc" "lilv.pc"
+  copy_path "lilv-0.pc" "lilv.pc" -f
   change_dir "$src_dir"
 }
 build_lv2_headers() {
@@ -3759,7 +3754,7 @@ build_opencl() {
   cp -f "$src_dir/$parentlib/$lib/OpenCL-Headers.pc.in" "$install_pkgconfig_dir/OpenCL-Headers.pc"
   gsed -i "s|@PKGCONFIG_PREFIX@|${dependency_install_prefix}|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
   gsed -i "s|@OPENCL_INCLUDEDIR_PC@|\${prefix}/include|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
-  ln -sf "$dependency_install_prefix/include/CL" "$dependency_install_prefix/include/OpenCL"
+  copy_path "$dependency_install_prefix/include/CL" "$dependency_install_prefix/include/OpenCL" -rf
   local lib="OpenCL-ICD-Loader"
   local repo="https://github.com/KhronosGroup/OpenCL-ICD-Loader"
   local repo_ver="v2025.07.22"
