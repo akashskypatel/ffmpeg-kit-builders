@@ -743,7 +743,7 @@ else
       apply_preset "$CONFIG_IOS"
     fi
     if [[ "$host_platform" == "appletvos" || "$host_platform" == "appletvsimulator" ]]; then
-      apply_preset "$CONFIG_TVOS_UNSUPPORTED"
+      apply_preset "$CONFIG_TVOS"
     fi
     ;;
     rpi)
@@ -900,6 +900,9 @@ if ! truthy "$enable_base"; then
 
   # strict gpl libraries
   check_gpl_libraries
+
+  # disable unsupported by platform
+  disable_unsupported
 fi
 
 echo -e "\n  [CONFIG] Enabling explicit libraries..." >>"$LOG_FILE"

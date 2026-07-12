@@ -357,3 +357,33 @@ create_tvos_xcframework() {
   echo "INFO: Created tvOS XCFramework staging for ${platform_name}-${host_arch}"
   echo "INFO: Staging directory: ${staging_dir}"
 }
+
+create_bin2c_py() {
+	# binc2c python script because bin2c generated executable is no-op on mac due to security policy
+	setup_default_python
+	local bin2c_py_path="${ffmpeg_source_dir}/ffbuild/bin2c.py"
+	cat > "$bin2c_py_path" << 'EOF'
+#!/usr/bin/env python3
+import sys
+import os
+
+def bin2c(inf, outf, name=None):
+    if not name:
+        name = os.path.basename(inf).replace('.', '_')
+    
+    with open(inf, 'rb') as f:
+        data = f.read()
+    
+    with open(outf, 'w') as f:
+        f.write(f'const unsigned char ff_{name}_data[] = {{ ')
+        f.write(', '.join(f'0x{b:02x}' for b in data))
+        f.write(', 0x00 };\n')
+        f.write(f'const unsigned int ff_{name}_len = {len(data)};\n')
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        sys.exit(1)
+    bin2c(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)
+EOF
+	echo "$bin2c_py_path"
+}

@@ -1252,29 +1252,36 @@ ismacos() {
   return 1
 }
 
-isios() {
-  if [[ "$host_platform" == "ios" || "$host_platform" == "iphonesimulator" ]]; then
-    return 0
-  fi
-  return 1
-}
-
 isiossimulator() {
-  if [[ "$host_platform" == "iphonesimulator" ]]; then
+  if [[ "$host_platform" == "iphonesimulator" || "$host_platform" == "iossim"* || "$host_platform" == "ios-sim"* ]]; then
     return 0
   fi
   return 1
 }
 
-istvos() {
-  if [[ "$host_platform" == "tvos" || "$host_platform" == "appletvos" || "$host_platform" == "appletvsimulator" ]]; then
+isios() {
+  if [[ "$host_platform" == "ios" ]] || isiossimulator; then
     return 0
   fi
   return 1
 }
 
 istvossimulator() {
-  if [[ "$host_platform" == "appletvsimulator" ]]; then
+  if [[ "$host_platform" == "appletvsimulator" || "$host_platform" == "tvossim"* || "$host_platform" == "tvos-sim"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+istvos() {
+  if [[ "$host_platform" == "appletvos" ]] || istvossimulator; then
+    return 0
+  fi
+  return 1
+}
+
+isapple() {
+  if ismacos || isios || istvos; then
     return 0
   fi
   return 1
@@ -4580,8 +4587,9 @@ configure_ffmpeg() {
     init_options+=" --host-cc=$(command -v cc)"
   fi
   # Common compiler flags for Windows    
-  if ismacos || isios || isiossimulator; then
+  if ismacos || isios || istvos; then
     get_gas_preprocessor
+    export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
     init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
   fi
   if iswindows; then
@@ -4631,7 +4639,7 @@ configure_ffmpeg() {
       export LD="$CXX"
       init_options+=" --ld=$CXX"
     fi
-  elif isios || isiossimulator; then
+  elif isios || istvos; then
     init_options+=" --target-os=darwin"
     init_options+=" --disable-programs"
     init_options+=" --host-cc=$(xcrun --sdk macosx --find clang)"
@@ -4646,7 +4654,7 @@ configure_ffmpeg() {
     init_options+=" --extra-cflags='-isysroot $(xcrun --sdk "$toolchain_sys" --show-sdk-path)'"
     init_options+=" --extra-ldflags='-isysroot $(xcrun --sdk "$toolchain_sys" --show-sdk-path)'"
   fi
-  if ! ismacos && ! isios; then
+  if ! ismacos && ! isios && ! istvos; then
     init_options+=" --extra-ldflags=\" -Wl,--allow-multiple-definition \""
   fi
   init_options+=" --pkg-config=pkg-config"
@@ -4662,7 +4670,7 @@ configure_ffmpeg() {
 
 	if ! islinux; then
     init_options+=" --enable-cross-compile"
-    ! isandroid && ! isios && init_options+=" --cross-prefix=$cross_prefix"
+    ! isandroid && ! isios && ! istvos && init_options+=" --cross-prefix=$cross_prefix"
   fi
 
   if iswindows; then
@@ -4750,7 +4758,7 @@ configure_ffmpeg() {
   truthy "$enable_amf" && config_options+=" --enable-amf"                             # enable AMF video encoding code [autodetect]
   truthy "$enable_vulkan" && config_options+=" --enable-vulkan"                       # enable Vulkan code [autodetect]
   truthy "$enable_libmfx" && config_options+=" --enable-libmfx"                       # enable Intel MediaSDK (AKA Quick Sync Video) code via libmfx [no]
-  if ! ismacos && ! isios; then
+  if ! ismacos && ! isios && ! istvos; then
     truthy "$enable_libvpl" && config_options+=" --enable-libvpl"                     # enable Intel oneVPL code via libvpl if libmfx is not used [no]
   fi
   truthy "$enable_vulkan_static" && config_options+=" --enable-vulkan-static"         # enable statically link to libvulkan [no]
@@ -4817,7 +4825,7 @@ configure_ffmpeg() {
   truthy "$enable_libaribb24" && config_options+=" --enable-libaribb24"               # enable ARIB text and caption decoding via libaribb24 [no]
   truthy "$enable_libaribcaption" && config_options+=" --enable-libaribcaption"       # enable ARIB text and caption decoding via libaribcaption [no]
   truthy "$enable_libass" && config_options+=" --enable-libass"                       # enable libass subtitles rendering, needed for subtitles and ass filter [no]
-  if ! isandroid && ! isios; then
+  if ! isandroid && ! isios && ! istvos; then
     truthy "$enable_libbluray" && config_options+=" --enable-libbluray"                 # enable BluRay reading using libbluray [no]
     truthy "$enable_libbluray" && ismacos && add_extra_libs "-framework DiskArbitration"
     truthy "$enable_libcdio" && config_options+=" --enable-libcdio"                     # enable audio CD grabbing with libcdio [no]
@@ -4878,7 +4886,7 @@ configure_ffmpeg() {
   truthy "$enable_librtmp" && config_options+=" --enable-librtmp"                     # enable RTMP[E] support via librtmp [no]
   truthy "$enable_librubberband" && config_options+=" --enable-librubberband"         # enable rubberband needed for rubberband filter [no]
   truthy "$enable_libshaderc" && config_options+=" --enable-libshaderc"               # enable GLSL->SPIRV compilation via libshaderc [no]
-  truthy "$enable_libshaderc" && (ismacos || isios || isiossimulator) \
+  truthy "$enable_libshaderc" && (ismacos || isios || istvos) \
   && add_extra_libs "-lglslang -lSPIRV -lSPIRV-Tools -lSPIRV-Tools-opt"
   truthy "$enable_libshine" && config_options+=" --enable-libshine"                   # enable fixed-point MP3 encoding via libshine [no]
   truthy "$enable_libsnappy" && config_options+=" --enable-libsnappy"                 # enable Snappy compression, needed for hap encoding [no]
@@ -4926,13 +4934,13 @@ configure_ffmpeg() {
   fi
   truthy "$enable_libopencolorio" && {
     config_options+=" --enable-libopencolorio"
-    ! isios && add_extra_libs "-lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"
+    ! isios && ! istvos && add_extra_libs "-lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"
   }                                                                                   # enable OpenColorIO code [autodetect]
   truthy "$enable_libmpeghdec" && config_options+=" --enable-libmpeghdec"             # enable MPEG-H 3D Audio decoder code [autodetect]
   if truthy "$enable_opengl" && ismacos ; then
     add_extra_libs "-framework OpenGL -framework CoreVideo"
   fi
-  if isios && truthy "$enable_opengl"; then
+  if { isios || istvos; } && truthy "$enable_opengl"; then
     add_extra_libs "-framework OpenGLES -framework CoreVideo -framework VideoToolbox -framework CoreMedia -framework CoreFoundation"
     gsed -i \
     -e "s|check_lib opengl ES2/gl.h glGetError \"-isysroot=\${sysroot} -framework OpenGLES\"|check_lib opengl OpenGLES/ES2/gl.h glGetError \"-F${IOS_SYSROOT}/System/Library/Frameworks -framework OpenGLES\"|g" \
@@ -4952,8 +4960,8 @@ configure_ffmpeg() {
   truthy "$enable_vapoursynth" && config_options+=" --enable-vapoursynth"             # enable VapourSynth demuxer [no]
   truthy "$enable_whisper" && { config_options+=" --enable-whisper" \
   && add_extra_libs "-lwhisper -lggml -lggml-cpu -lggml-base"; }                      # enable whisper filter [no]
-  truthy "$enable_whisper" && ! isandroid && ! ismacos && ! isios && add_extra_libs "-lgomp"
-  truthy "$enable_whisper" && { ismacos || isios; } && add_extra_libs "-lomp -lresolv"
+  truthy "$enable_whisper" && ! isandroid && ! ismacos && ! isios && ! istvos && add_extra_libs "-lgomp"
+  truthy "$enable_whisper" && { ismacos || isios || istvos; } && add_extra_libs "-lomp -lresolv"
 
   # ------------------------------ windows features -------------------------------     
   if iswindows; then
@@ -4964,7 +4972,7 @@ configure_ffmpeg() {
     truthy "$enable_mediafoundation" && config_options+=" --enable-mediafoundation"     # enable encoding via MediaFoundation [auto]
   fi
   # ------------------------------ apple features -------------------------------     
-  if ismacos || isios; then
+  if ismacos || isios || istvos; then
     truthy "$enable_avfoundation" && config_options+=" --enable-avfoundation"           # enable Apple AVFoundation framework [autodetect]
     truthy "$enable_avfoundation" && add_extra_libs "-framework AVFoundation"
     truthy "$enable_appkit" && config_options+=" --enable-appkit"                       # enable Apple AppKit framework [autodetect]
@@ -4979,7 +4987,7 @@ configure_ffmpeg() {
     truthy "$enable_securetransport" && add_extra_libs "-framework Security"
     truthy "$enable_videotoolbox" && config_options+=" --enable-videotoolbox"           # enable VideoToolbox code [autodetect]
     truthy "$enable_videotoolbox" && add_extra_libs "-framework VideoToolbox"
-    if isios; then
+    if isios || istvos; then
       gsed -i 's/framework="$1"/framework="$1"\n\theader_file="${2:-$1}"/' configure
       gsed -i 's/${framework}\.h/${header_file}\.h/g' configure
       gsed -i 's/check_apple_framework CoreAudio/check_apple_framework CoreAudio CoreAudioTypes/g' configure
@@ -5009,7 +5017,7 @@ configure_ffmpeg() {
 	else
 		postpend_configure_opts+=" --disable-debug --enable-stripping --enable-optimizations"
 	fi
-  if ismacos || isios; then
+  if ismacos || isios || istvos; then
     postpend_configure_opts+=" --extra-cflags=\"-std=gnu17\" --extra-ldflags=\"-Wl,-dead_strip -Wl,-dead_strip\" --extra-libs=\"$extra_libs -lc++\" $ff_flags_values"
   else
     postpend_configure_opts+=" --extra-cflags=\"-std=gnu17\" --extra-libs=\"-Wl,--start-group $extra_libs -Wl,--end-group\" $ff_flags_values"
@@ -5099,7 +5107,7 @@ install_ffmpeg() {
   ffmpeg_patches
   iswindows && export LD=${cross_prefix}gcc # ld weirdness with windows
   isandroid && export AS="$CC" && export LD="$CC"
-  if ismacos || isios || isiossimulator; then 
+  if ismacos || isios || istvos; then 
     export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
     local bin2c_py=$(create_bin2c_py)
     setup_default_python
@@ -5240,7 +5248,7 @@ install_pkg_config_file() {
 create_ffmpeg_kit_bundle() {
   if isandroid && truthy "$create_bundle"; then
     create_android_aar
-  elif (isios || isiossimulator) && truthy "$create_bundle"; then
+  elif { isios || istvos; } && truthy "$create_bundle"; then
     create_ios_xcframework
   elif ismacos && truthy "$create_bundle"; then
     create_macos_xcframework
@@ -5930,7 +5938,7 @@ pick_ssl_type() {
     if iswindows; then
       export ssl_type="system"
       enable_library "schannel"
-    elif ismacos || isios; then
+    elif ismacos || isios || istvos; then
       export ssl_type="system"
       enable_library "securetransport"
     else
@@ -6279,6 +6287,39 @@ disable_autodetected() {
   disable_preset "$CONFIG_AUTODETECT"
 }
 
+disable_unsupported() {
+case "${host_platform,,}" in
+  linux)
+  apply_preset "$CONFIG_LINUX_UNSUPPORTED"
+  ;;
+  windows)
+  apply_preset "$CONFIG_WINDOWS_UNSUPPORTED"
+  ;;
+  android)
+  apply_preset "$CONFIG_ANDROID_UNSUPPORTED"
+  ;;
+  ios|macos|iphonesimulator|appletvos|appletvsimulator)
+  apply_preset "$CONFIG_APPLE_UNSUPPORTED"
+  if [[ "$host_platform" == "macos" ]]; then
+    apply_preset "$CONFIG_MACOS_UNSUPPORTED"
+  elif [[ "$host_platform" == "ios" ]]; then
+    apply_preset "$CONFIG_IOS_UNSUPPORTED"
+  fi
+  if [[ "$host_platform" == "appletvos" || "$host_platform" == "appletvsimulator" ]]; then
+    apply_preset "$CONFIG_TVOS_UNSUPPORTED"
+  fi
+  ;;
+  rpi)
+  apply_preset "$CONFIG_RPI_UNSUPPORTED"
+  ;;
+  oh|openharmony|open-harmony|open_harmony|harmony)
+  apply_preset "$CONFIG_OH_UNSUPPORTED"
+  ;;
+  *)
+  ;;
+esac
+}
+
 add_src_dir() {
   local dirs=()
   dirs+=("$@")
@@ -6294,7 +6335,7 @@ add_src_dir() {
           -e 's|/usr/local/mingw-w64/[^ ]+/lib/lib([a-zA-Z0-9]+)\.a|-l\1|g' \
           -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' \
           -e 's|-Wl,--export-dynamic||g' {} +
-    elif ismacos || isios || isiossimulator; then
+    elif ismacos || isios || istvos; then
       find "$dependency_install_prefix/lib" -name "*.la" -delete
       find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i -e 's|-Wl,--export-dynamic||g' \
         -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' {} +
@@ -6887,7 +6928,7 @@ static_link_check() {
         if iswindows; then 
           sys_libs="-lcrypt32 -lwindowscodecs -ldwrite -ld2d1 -lshlwapi -lole32 -lshell32 -luuid -lws2_32 -ladvapi32 -luser32 -lkernel32 -lmsvcrt -lwinmm"
           ext="dll"
-        elif ismacos || isios; then
+        elif ismacos || isios || istvos; then
           ext="dylib"
         fi
         local out_bin="${tmp}/${name}.${ext}"
@@ -6905,7 +6946,7 @@ static_link_check() {
                     cmd+=("$lib")
                 else
                     # It is a true static archive (Linux, Windows, or Mac). Force merge it.
-                    if ismacos || isios; then
+                    if ismacos || isios || istvos; then
                         cmd+=("-Wl,-force_load" "$lib")
                     else
                         cmd+=("-Wl,--whole-archive" "$lib" "-Wl,--no-whole-archive")
@@ -6920,13 +6961,13 @@ static_link_check() {
                 cmd+=("$lib")
             fi
         done
-        if ! ismacos && ! isios; then
+        if ! ismacos && ! isios && ! istvos; then
             cmd+=("-static" "-static-libgcc" "-static-libstdc++" "$stdcpp_path" "$stdgcc_path")
         fi
-        if [ "$use_map" = true ] && ! ismacos && ! isios; then
+        if [ "$use_map" = true ] && ! ismacos && ! isios && ! istvos; then
             cmd+=("-Wl,--version-script=$map_file" "-Wl,-Bsymbolic")
         fi
-        if ismacos || isios; then
+        if ismacos || isios || istvos; then
             cmd+=("-undefined" "dynamic_lookup")
         else
             cmd+=("-Wl,--allow-multiple-definition" "-Wl,--unresolved-symbols=ignore-all")
@@ -6976,7 +7017,7 @@ static_link_check() {
                     shared_libs+="libgcc.dll "
                 fi
             fi
-        elif ismacos || isios; then
+        elif ismacos || isios || istvos; then
             # MacOS/iOS: Use otool to check for shared library dependencies
             if command -v otool >/dev/null 2>&1; then
                 if otool -L "$binary" 2>/dev/null | grep -q "libstdc++.*\.dylib"; then
