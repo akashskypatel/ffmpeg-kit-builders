@@ -7733,14 +7733,11 @@ create_github_release() {
     exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
     return 1
   fi
-  REPO_PATH="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
-  REPO_NAME="${REPO_PATH##*/}"
-  OWNER="${REPO_PATH%%/*}"
   local attachment="$1"
   local version=$(get_version)
   local tag="v$version-$host_platform"
-  local repo="${REPO_NAME:-$(get_github_repo)}"
-  local owner="${OWNER:-$(get_github_owner)}"
+  local repo="${GITHUB_REPO:-$(get_github_repo)}"
+  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
   local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
   # check if tag exists
   if git show-ref --verify --tags "refs/tags/$tag"; then
@@ -7794,9 +7791,9 @@ upload_release_asset() {
   local asset_name=$(basename "$attachment")
   local version=$(get_version)
   local tag="v$version-$host_platform"
-  local repo="$(get_github_repo)"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token)"
+  local repo="${GITHUB_REPO:-$(get_github_repo)}"
+  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
 
   # Retrieve release metadata
   local release_json=$(curl -f -s -H "Authorization: Bearer $github_token" \
@@ -7841,8 +7838,8 @@ upload_release_asset() {
 check_existing_package() {
   local package_name="$1"
   local package_version="$2"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token_classic)"
+  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
   local package_type="maven"
 
   echo "Checking for existing package $package_name version $package_version..." > >(redirect_output)
@@ -7879,8 +7876,8 @@ check_existing_package() {
 delete_existing_package() {
   local package_name="$1"
   local package_version="$2"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token_classic)"
+  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
   local package_type="maven"
 
   # 1. Get all versions for the package
@@ -7932,10 +7929,10 @@ delete_existing_package() {
 check_maven_package_status() {
   local package_name="$1"
   local package_version="$2"
-  local username="$(get_maven_username)"
-  local password="$(get_maven_password)"
+  local username="${OSSRH_USERNAME:-$(get_maven_username)}"
+  local password="${OSSRH_PASSWORD:-$(get_maven_password)}"
   local endpoint="https://central.sonatype.com/api/v1/publisher/published"
-  local owner="$(get_github_owner)"
+  local owner="${GITHUB_USERNAME:-$(get_github_owner)}"
   local namespace="io.github.$owner.ffmpegkit"
 
   echo "Checking for existing package $package_name version $package_version on Maven Central..." > >(redirect_output)
