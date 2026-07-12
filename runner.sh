@@ -986,8 +986,9 @@ main() {
     }
     # build ffmpeg-kit mode
     truthy "$build_ffmpeg_kit" && {
-     configure_ffmpeg_kit
-     install_ffmpeg_kit
+      download_ffmpeg
+      configure_ffmpeg_kit
+      install_ffmpeg_kit
      }
      # build ffmpeg-kit bundle mode
     truthy "$create_bundle" && create_ffmpeg_kit_bundle
