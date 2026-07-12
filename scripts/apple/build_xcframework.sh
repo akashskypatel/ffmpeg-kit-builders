@@ -234,7 +234,7 @@ execute_build() {
 
   echo "[BUILD] Starting: ${cmd_string}" | tee -a "${LOG_FILE}"
 
-  if sudo -E bash -c "${cmd_string}" > >(redirect_output) 2>&1; then
+  if eval "${cmd_string}" > >(redirect_output) 2>&1; then
     mark_completed "${cmd_string}"
     echo "[DONE] Completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
