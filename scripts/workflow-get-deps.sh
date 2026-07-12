@@ -320,11 +320,11 @@ PY
         dir_name="${archive_path#"${platform}-${arch}-"}"
         dir_name="${dir_name%.zip}"
         extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dir_name}"
-        rm -rf "$extract_dir"
+        # rm -rfv "$extract_dir"
         mkdir -p "$extract_dir"
     fi
 	unzip -oq "$archive_path" -d "$extract_dir"
-	rm -f "$archive_path"
+	# rm -fv "$archive_path"
 	mark_workflow_step_seen "$seen_key"
     # libraries_dir_sed="$(
     #   printf '%s\n' "$libraries_dir" |
