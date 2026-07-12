@@ -7802,8 +7802,18 @@ create_github_release() {
       echo "Release $tag created successfully." | tee -a "$LOG_FILE"
       upload_release_asset "$attachment"
     else
-      echo "Failed to create release $tag." | tee -a "$LOG_FILE"
-      return 1
+      # GitHub can return an error here even if another concurrent or retried run
+      # has already created the release. Re-check by tag before failing.
+      if curl -f -s -H "Authorization: Bearer $github_token" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" \
+        >> "$LOG_FILE" 2>&1; then
+        echo "Release $tag became available after create attempt. Continuing..." | tee -a "$LOG_FILE"
+        upload_release_asset "$attachment"
+      else
+        echo "Failed to create release $tag." | tee -a "$LOG_FILE"
+        return 1
+      fi
     fi
   fi
 }
