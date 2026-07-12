@@ -17,16 +17,10 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
 
     set(PKG_CONFIG_USE_STATIC_LIBS ON)
 
-    if(FFMPEG_KIT_BUNDLE_TYPE STREQUAL "base")
-        pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-            libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil jsoncpp sdl2
-        )
-    else()
-        pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-            libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil jsoncpp sdl2 iconv bzip2 liblzma zlib
-        )
-    endif()
-
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+        libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil jsoncpp sdl2 iconv bzip2 liblzma zlib
+    )
+    
     configure_static_linking(FFMPEG ON)
 
     if(ENABLE_LIBPLACEBO)

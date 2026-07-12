@@ -761,7 +761,7 @@ else
   esac
 fi
 
-if ! truthy "$enable_base"; then
+if truthy "$enable_base"; then
   echo -e "\n  [CONFIG] Enabling selected libraries..." >>"$LOG_FILE"
   apply_preset "$CONFIG_GENERAL"
 
