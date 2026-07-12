@@ -9,3 +9,6 @@ brew install 'bash' 'coreutils' 'ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' '
 'gperf' 'autogen' 'bzip2' 'python3' 'cython' 'bc' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' \
 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'libtool' 'gsed' 'libdatrie' 'ripgrep'
 echo "HOMEBREW_BASH=$(brew --prefix)/bin/bash" >> "$GITHUB_ENV"
+LLVM_PREFIX="$(brew --prefix llvm)"
+echo "LLVM_HOME=${LLVM_PREFIX}" >> "$GITHUB_ENV"
+echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"

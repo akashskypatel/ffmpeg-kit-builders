@@ -46,9 +46,28 @@ function(rewrite_lzma_archives_for_ios INPUT_LIBS OUTPUT_VAR)
         return()
     endif()
 
-    find_program(LLVM_OBJCOPY_EXE llvm-objcopy)
+    set(_llvm_objcopy_hints "")
+    foreach(_hint
+        "$ENV{LLVM_HOME}/bin"
+        "$ENV{LLVM_ROOT}/bin"
+        "$ENV{HOMEBREW_PREFIX}/opt/llvm/bin"
+        /opt/homebrew/opt/llvm/bin
+        /usr/local/opt/llvm/bin
+    )
+        if(NOT "${_hint}" STREQUAL "/bin" AND NOT "${_hint}" STREQUAL "")
+            list(APPEND _llvm_objcopy_hints "${_hint}")
+        endif()
+    endforeach()
+
+    find_program(LLVM_OBJCOPY_EXE
+        NAMES llvm-objcopy
+        HINTS ${_llvm_objcopy_hints}
+    )
     if(NOT LLVM_OBJCOPY_EXE)
-        message(FATAL_ERROR "llvm-objcopy is required for iOS LZMA symbol rewriting")
+        message(FATAL_ERROR
+            "llvm-objcopy is required for iOS LZMA symbol rewriting. "
+            "Searched PATH and hints: ${_llvm_objcopy_hints}"
+        )
     endif()
 
     if(NOT CMAKE_RANLIB)
