@@ -22,50 +22,50 @@ fi
 #                        WINDOWS FFMPEG BUILD PRIMARY DEPENDENCIES
 #
 #===============================================================================================
-build_pthread_win32() {
-  local repo="https://github.com/GerHobbelt/pthread-win32"
-  local lib="pthread-win32"
-  local repo_ver="version-3.1.0-release"
-	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
-	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver" || exit_message 1 "Failed git_checkout"
-  change_dir "$src_dir/$lib" || exit_message 1 "Failed change_dir"
-  cp -f "CMakeLists.txt" "CMakeLists.txt.bak" || exit_message 1 "Failed copy_path"
-  apply_patch "$PATCHDIR/pthreads-win32_cmake.patch" || exit_message 1 "Failed apply_patch"
-  gsed -i '1{/^#ifdef __cplusplus/!{i\
-#ifdef __cplusplus\
-#include <exception>\
-#endif
-}}' pthread.c || exit_message 1 "Failed gsed pthread.c"
-  gsed -i 's/ terminate ();/std::terminate();/g' ptw32_callUserDestroyRoutines.c || exit_message 1 "Failed gsed ptw32_callUserDestroyRoutines.c"
-	change_dir "$src_dir/$lib/build" 1 || exit_message 1 "Failed change_dir"
-  local cmake_args="-DTARGET_ARCH=$host_arch \
--DCMAKE_CXX_STANDARD=11 \
--DCMAKE_CXX_FLAGS=\"-fpermissive\" \
--DCMAKE_C_FLAGS=\"-DPTW32_STATIC_LIB -DPTW32_BUILD_INLINED -fcommon\""
-  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args" || exit_message 1 "Failed do_cmake_from_build_dir"
-  do_make_and_make_install || exit_message 1 "Failed do_make_and_make_install"
-	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
-  export PTW32_PATH="$dependency_install_prefix"
-  # Usage: generate_pkg_config -t=<scan_dir> -o=<output_pc_file> -i=<install_prefix> -n=<name> [-v=<ver>] [-d=<desc>] [-l=<libs>]
-  generate_pkg_config -o="$install_pkgconfig_dir/pthreadGC3.pc" \
-    -i="$dependency_install_prefix" \
-    -v="3.1.0" \
-    -n="PthreadGC3" \
-    -d="PthreadGC3 from PthreadWin32 library" \
-    -l="-lpthreadGC3" > >(redirect_output) 2>&1
-  generate_pkg_config -o="$install_pkgconfig_dir/pthreadGCE3.pc" \
-    -i="$dependency_install_prefix" \
-    -v="3.1.0" \
-    -n="PthreadGCE3" \
-    -d="PthreadGCE3 from PthreadWin32 library" \
-    -l="-lpthreadGCE3" > >(redirect_output) 2>&1
-  generate_pkg_config -t="$src_dir/$lib/build" \
-    -o="$install_pkgconfig_dir/pthreadwin32.pc" \
-    -i="$dependency_install_prefix" \
-    -v="3.1.0" \
-    -n="PthreadWin32" \
-    -d="PthreadWin32 library" > >(redirect_output) 2>&1
-}
+# build_pthread_win32() {
+#   local repo="https://github.com/GerHobbelt/pthread-win32"
+#   local lib="pthread-win32"
+#   local repo_ver="version-3.1.0-release"
+# 	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
+# 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver" || exit_message 1 "Failed git_checkout"
+#   change_dir "$src_dir/$lib" || exit_message 1 "Failed change_dir"
+#   cp -f "CMakeLists.txt" "CMakeLists.txt.bak" || exit_message 1 "Failed copy_path"
+#   apply_patch "$PATCHDIR/pthreads-win32_cmake.patch" || exit_message 1 "Failed apply_patch"
+#   gsed -i '1{/^#ifdef __cplusplus/!{i\
+# #ifdef __cplusplus\
+# #include <exception>\
+# #endif
+# }}' pthread.c || exit_message 1 "Failed gsed pthread.c"
+#   gsed -i 's/ terminate ();/std::terminate();/g' ptw32_callUserDestroyRoutines.c || exit_message 1 "Failed gsed ptw32_callUserDestroyRoutines.c"
+# 	change_dir "$src_dir/$lib/build" 1 || exit_message 1 "Failed change_dir"
+#   local cmake_args="-DTARGET_ARCH=$host_arch \
+# -DCMAKE_CXX_STANDARD=11 \
+# -DCMAKE_CXX_FLAGS=\"-fpermissive\" \
+# -DCMAKE_C_FLAGS=\"-DPTW32_STATIC_LIB -DPTW32_BUILD_INLINED -fcommon\""
+#   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args" || exit_message 1 "Failed do_cmake_from_build_dir"
+#   do_make_and_make_install || exit_message 1 "Failed do_make_and_make_install"
+# 	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
+#   export PTW32_PATH="$dependency_install_prefix"
+#   # Usage: generate_pkg_config -t=<scan_dir> -o=<output_pc_file> -i=<install_prefix> -n=<name> [-v=<ver>] [-d=<desc>] [-l=<libs>]
+#   generate_pkg_config -o="$install_pkgconfig_dir/pthreadGC3.pc" \
+#     -i="$dependency_install_prefix" \
+#     -v="3.1.0" \
+#     -n="PthreadGC3" \
+#     -d="PthreadGC3 from PthreadWin32 library" \
+#     -l="-lpthreadGC3" > >(redirect_output) 2>&1
+#   generate_pkg_config -o="$install_pkgconfig_dir/pthreadGCE3.pc" \
+#     -i="$dependency_install_prefix" \
+#     -v="3.1.0" \
+#     -n="PthreadGCE3" \
+#     -d="PthreadGCE3 from PthreadWin32 library" \
+#     -l="-lpthreadGCE3" > >(redirect_output) 2>&1
+#   generate_pkg_config -t="$src_dir/$lib/build" \
+#     -o="$install_pkgconfig_dir/pthreadwin32.pc" \
+#     -i="$dependency_install_prefix" \
+#     -v="3.1.0" \
+#     -n="PthreadWin32" \
+#     -d="PthreadWin32 library" > >(redirect_output) 2>&1
+# }
 build_dlfcn() {
   # vcpkg https://vcpkg.io/en/package/dlfcn-win32
   local repo="https://github.com/dlfcn-win32/dlfcn-win32"
@@ -5031,13 +5031,6 @@ build_libopencolorio() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-    while read -r lib_file; do
-    cp -v "$lib_file" "$dependency_install_prefix/lib/" > >(redirect_output) || exit_message 1 "Failed to copy library file for $lib"
-    filename="$(basename "$lib_file")"
-    file_noext="${filename%.a}"
-    lib_flag="-l${file_noext#lib}"
-    add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag"
-  done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
   
   local ocio_ext_dist_dir="$src_dir/$lib/build/ext/dist"
   
@@ -5059,6 +5052,15 @@ build_libopencolorio() {
     
     find "$ocio_ext_dist_dir/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
   fi
+
+  while read -r lib_file; do
+    cp -v "$lib_file" "$dependency_install_prefix/lib/" > >(redirect_output) || exit_message 1 "Failed to copy library file for $lib"
+    filename="$(basename "$lib_file")"
+    file_noext="${filename%.a}"
+    lib_flag="-l${file_noext#lib}"
+    add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag" -c="-DOpenColorIO_SKIP_IMPORTS"
+  done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
+
   if [[ -d "$ocio_ext_dist_dir/include" ]]; then
     cp -rfv "$ocio_ext_dist_dir/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
   fi

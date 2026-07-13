@@ -4951,6 +4951,10 @@ configure_ffmpeg() {
   truthy "$enable_libopencolorio" && {
     config_options+=" --enable-libopencolorio"
     ! isios && ! istvos && add_extra_libs "-lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"
+    iswindows && { 
+      config_options+=" --extra-cflags='-DOpenColorIO_SKIP_IMPORTS' --extra-cxxflags='-DOpenColorIO_SKIP_IMPORTS'" 
+      add_extra_libs "-L${dependency_install_prefix}/lib -l:libOpenColorIO.a -lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"
+    }
   }                                                                                   # enable OpenColorIO code [autodetect]
   truthy "$enable_libmpeghdec" && config_options+=" --enable-libmpeghdec"             # enable MPEG-H 3D Audio decoder code [autodetect]
   if truthy "$enable_opengl" && ismacos ; then

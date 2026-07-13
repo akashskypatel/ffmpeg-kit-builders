@@ -17,10 +17,6 @@
  * along with FFmpegKit.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifdef __MINGW32__
-#include "pthread_compat.h"
-#endif
-
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>

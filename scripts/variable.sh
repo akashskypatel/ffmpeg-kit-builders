@@ -121,8 +121,7 @@ CONFIG_GENERAL="\
 --enable-zlib"
 
 CONFIG_BASE="--enable-libjsoncpp \
---enable-sdl2 \
---enable-pthread-win32"
+--enable-sdl2"
 
 # must pick crypto type for streaming support
 CONFIG_STREAMING="\

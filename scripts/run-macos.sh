@@ -4369,14 +4369,7 @@ build_libopencolorio() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-    while read -r lib_file; do
-    cp -v "$lib_file" "$dependency_install_prefix/lib/" > >(redirect_output) || exit_message 1 "Failed to copy library file for $lib"
-    filename="$(basename "$lib_file")"
-    file_noext="${filename%.a}"
-    lib_flag="-l${file_noext#lib}"
-    add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag"
-  done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
-  
+
   local ocio_ext_dist_dir="$src_dir/$lib/build/ext/dist"
   
   if [[ -d "$ocio_ext_dist_dir" ]]; then
@@ -4397,6 +4390,15 @@ build_libopencolorio() {
     
     find "$ocio_ext_dist_dir/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
   fi
+
+  while read -r lib_file; do
+    cp -v "$lib_file" "$dependency_install_prefix/lib/" > >(redirect_output) || exit_message 1 "Failed to copy library file for $lib"
+    filename="$(basename "$lib_file")"
+    file_noext="${filename%.a}"
+    lib_flag="-l${file_noext#lib}"
+    add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag" -c="-DOpenColorIO_SKIP_IMPORTS"
+  done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
+
   if [[ -d "$ocio_ext_dist_dir/include" ]]; then
     cp -rfv "$ocio_ext_dist_dir/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
   fi
