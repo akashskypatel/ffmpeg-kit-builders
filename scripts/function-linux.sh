@@ -45,6 +45,7 @@ configure_ffmpeg_kit() {
 -DCMAKE_CXX_COMPILER=\"$CXX\" \
 -DFFMPEG_SRC_DIR=\"$ffmpeg_source_dir\" \
 -DFFMPEG_BUILD_DIR=\"$ffmpeg_install_prefix\" \
+-DDEPENDENCY_BUILD_DIR=\"$dependency_install_prefix\" \
 -DCMAKE_INSTALL_PREFIX=\"$ffmpeg_kit_install\" \
 -DFFMPEG_KIT_BUNDLE_TYPE=\"$(get_bundle_type)\" \
 -DFFMPEG_KIT_VERSION=\"$(get_latest_version_from_changelog)\""

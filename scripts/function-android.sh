@@ -68,6 +68,7 @@ configure_ffmpeg_kit() {
 -DCMAKE_MODULE_LINKER_FLAGS_INIT=\"-L${ffmpeg_install_prefix}/lib -L${dependency_install_prefix}/lib\" \
 -DFFMPEG_SRC_DIR=\"$ffmpeg_source_dir\" \
 -DFFMPEG_BUILD_DIR=\"$ffmpeg_install_prefix\" \
+-DDEPENDENCY_BUILD_DIR=\"$dependency_install_prefix\" \
 -DCMAKE_INSTALL_PREFIX=\"$ffmpeg_kit_install\" \
 -DFFMPEG_KIT_BUNDLE_TYPE=\"$(get_bundle_type)\" \
 -DCMAKE_SHARED_LINKER_FLAGS=\"-Wl,--allow-multiple-definition -Wl,--exclude-libs,libunwind.a $UNWIND_STATIC $BUILTINS_STATIC\" \
