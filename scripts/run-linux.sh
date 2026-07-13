@@ -2243,6 +2243,8 @@ build_libxxhash() {
   generic_make "CFLAGS=\"${CFLAGS}\""
   disable_nonessential "$src_dir/$lib"
   generic_make_install
+  find "$dependency_install_prefix/lib" -name "*xxhash*.so*" -delete
+  [[ ! -f "$dependency_install_prefix/lib/libxxhash.a" ]] && exit_message 1 "libxxhash static library did not build successfully"
   change_dir "$src_dir"
 }
 build_spirv_cross() {
