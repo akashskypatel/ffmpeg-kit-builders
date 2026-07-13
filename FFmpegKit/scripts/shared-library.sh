@@ -117,10 +117,8 @@ process_library_path() {
 	fi
 	filename=$(basename "$lib_path")
 	dirname=$(dirname "$lib_path")
-	extension="${filename##*.}"
-
-	case "$extension" in
-		so | dll | dylib)
+	case "$filename" in
+		*.so | *.so.* | *.dll | *.dylib)
 			echo_log "  [DEBUG] $filename is shared library"
 			if [ -h "$lib_path" ]; then
 				echo_log "  [DEBUG] $filename is symlink"
@@ -142,7 +140,7 @@ process_library_path() {
 				echo "$real_path" >>bundle_manifest.txt
 			fi
 			;;
-		a | lib)
+		*.a | *.lib)
 			echo_log "  [DEBUG] $filename is static library"
 			if [ -h "$lib_path" ]; then
 				echo_log "  [DEBUG] $filename is symlink"

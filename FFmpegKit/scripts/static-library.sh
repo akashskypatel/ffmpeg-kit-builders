@@ -121,10 +121,8 @@ process_library_path() {
 
 	filename=$(basename "$lib_path")
 	dirname=$(dirname "$lib_path")
-	extension="${filename##*.}"
-
-	case "$extension" in
-	a | lib)
+	case "$filename" in
+	*.a | *.lib)
 		if [ -h "$lib_path" ]; then
 			target=$(readlink -f "$lib_path")
 			if [[ "$target" == *.so || "$target" == *.dll || "$target" == *.dylib ]]; then
@@ -163,7 +161,7 @@ process_library_path() {
 			echo "ADDLIB $lib_path" >>lib.mri
 		fi
 		;;
-	so | dll | dylib)
+	*.so | *.so.* | *.dll | *.dylib)
 		if [ -h "$lib_path" ]; then
 			target=$(readlink -f "$lib_path")
 			if [[ "$target" == *.a || "$target" == *.lib ]]; then

@@ -2916,8 +2916,8 @@ get_small_touchfile_name() { # have to call with assignment like a=$(get_small..
 }
 
 redirect_output() {
-	local term_width="${COLUMNS:-80}"
-  local max_length=$((term_width > 10 ? term_width - 2 : 78))
+	local term_width="${COLUMNS:-256}"
+  local max_length=$((term_width > 10 ? term_width - 2 : 254))
   while IFS= read -r line; do
     if [[ "$line" == *"<command-line>: warning:"* ]]; then
       continue

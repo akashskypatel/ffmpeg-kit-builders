@@ -313,14 +313,10 @@ elseif(APPLE)
             "-framework OpenGLES"
             "-framework UIKit"
             "-framework CoreMotion"
-            "-framework GameController"
-            "-framework CoreHaptics"
         )
     elseif(CMAKE_SYSTEM_NAME STREQUAL "tvOS")
         target_link_libraries(ffmpegkit PRIVATE
             "-framework UIKit"
-            "-framework GameController"
-            "-framework CoreHaptics"
             "-framework OpenGLES"
         )
     endif()
@@ -341,6 +337,8 @@ elseif(APPLE)
         "-framework Security"
         "-framework VideoToolbox"
         "-framework Accelerate"
+        "-framework GameController"
+        "-framework CoreHaptics"
         "-lresolv"
     )
 
