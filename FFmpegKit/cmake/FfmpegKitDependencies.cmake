@@ -84,11 +84,41 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
             pkg_check_modules(LIBTORCH REQUIRED IMPORTED_TARGET libtorch)
             configure_static_linking(LIBTORCH OFF)
             if(NOT APPLE)
+                set(_PYTHON311_SEARCH_PATHS
+                    /usr/lib64
+                    /usr/lib
+                    /usr/local/lib64
+                    /usr/local/lib
+                    /opt/homebrew/lib
+                )
+                file(GLOB _PYTHON311_INTERNAL_ROOTS LIST_DIRECTORIES true "/opt/_internal/cpython-3.11.*")
+                foreach(_PYTHON311_ROOT ${_PYTHON311_INTERNAL_ROOTS})
+                    if(IS_DIRECTORY "${_PYTHON311_ROOT}")
+                        list(APPEND _PYTHON311_SEARCH_PATHS
+                            "${_PYTHON311_ROOT}/lib"
+                            "${_PYTHON311_ROOT}/lib64"
+                            "${_PYTHON311_ROOT}/libs"
+                        )
+                    endif()
+                endforeach()
                 find_library(PYTHON311_LIB
-                    NAMES python3.11
-                    PATHS /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib /opt/homebrew/lib
+                    NAMES python3.11 libpython3.11
+                    PATHS ${_PYTHON311_SEARCH_PATHS}
                     NO_DEFAULT_PATH
                 )
+                if(NOT PYTHON311_LIB)
+                    foreach(_PYTHON311_ROOT ${_PYTHON311_INTERNAL_ROOTS})
+                        foreach(_PYTHON311_LIB_DIR lib lib64 libs)
+                            if(EXISTS "${_PYTHON311_ROOT}/${_PYTHON311_LIB_DIR}/libpython3.11.so.1.0")
+                                set(PYTHON311_LIB "${_PYTHON311_ROOT}/${_PYTHON311_LIB_DIR}/libpython3.11.so.1.0")
+                                break()
+                            endif()
+                        endforeach()
+                        if(PYTHON311_LIB)
+                            break()
+                        endif()
+                    endforeach()
+                endif()
                 if(NOT PYTHON311_LIB)
                     if(EXISTS "/usr/lib64/libpython3.11.so.1.0")
                         set(PYTHON311_LIB "/usr/lib64/libpython3.11.so.1.0")
@@ -97,7 +127,7 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
                     endif()
                 endif()
                 if(NOT PYTHON311_LIB)
-                    message(FATAL_ERROR "Could not find libpython3.11 in /usr/lib64 or /usr/lib")
+                    message(FATAL_ERROR "Could not find libpython3.11 in system library paths or /opt/_internal/cpython-3.11.*")
                 else()
                     message(STATUS "Found Python 3.11 library: ${PYTHON311_LIB}")
                 endif()
