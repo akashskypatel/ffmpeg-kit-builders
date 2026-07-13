@@ -215,8 +215,17 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
         "-Wl,--no-warn-mismatch"
     )
 
-    pkg_check_modules(ALSA QUIET alsa)
-    if(ALSA_FOUND)
+    find_path(ALSA_INCLUDE_DIR
+        NAMES alsa/asoundlib.h
+        PATHS ${DEPENDENCY_BUILD_DIR}/include /usr/include /usr/local/include
+    )
+    find_library(ALSA_LIBRARY
+        NAMES asound libasound.a libasound.a.2 libasound.so libasound.so.2 libasound.so.2.0.0
+        PATHS ${DEPENDENCY_BUILD_DIR}/lib /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib
+    )
+    if(ALSA_INCLUDE_DIR AND ALSA_LIBRARY)
+        set(ALSA_LIBRARIES "${ALSA_LIBRARY}")
+        set(ALSA_INCLUDE_DIRS "${ALSA_INCLUDE_DIR}")
         target_link_libraries(ffmpegkit PRIVATE
             ${ALSA_LIBRARIES}
             -lpthread
