@@ -161,6 +161,40 @@ read_workflow_bundles() {
   done
 }
 
+get_simulator_companion_platform() {
+  local platform="$1"
+  case "$platform" in
+    ios) printf '%s\n' "iphonesimulator" ;;
+    appletvos) printf '%s\n' "appletvsimulator" ;;
+    *) return 1 ;;
+  esac
+}
+
+is_simulator_platform() {
+  local platform="$1"
+  [[ "$platform" == "iphonesimulator" || "$platform" == "appletvsimulator" ]]
+}
+
+cleanup_combo_prebuilt_dirs() {
+  local platform="$1"
+  local arch="$2"
+  local combo="${platform}-${arch}"
+  local simulator_platform
+
+  if is_simulator_platform "$platform"; then
+    echo "::notice::Skipping prebuilt cleanup for simulator combo $combo until its physical device companion completes"
+    return 0
+  fi
+
+  echo "::notice::Cleaning up prebuilt directory for $combo"
+  sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${combo}"
+
+  if simulator_platform="$(get_simulator_companion_platform "$platform" 2>/dev/null)" && is_supported_combo "${simulator_platform}-${arch}"; then
+    echo "::notice::Cleaning up paired simulator prebuilt directory for ${simulator_platform}-${arch}"
+    sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${simulator_platform}-${arch}"
+  fi
+}
+
 build_runner_args() {
   local platform="$1"
   local arch="$2"
@@ -311,7 +345,6 @@ ensure_ffmpeg_artifacts() {
     if ! run_with_runner_shell ./scripts/workflow-get-deps.sh "$platform" "$arch" "$pattern" --artifact-pattern; then
       echo "::notice::Failed to get ffmpeg artifacts matching '$pattern' for ${platform}-${arch}; building locally"
       workflow_build_ffmpeg "$platform" "$arch"
-      return
     fi
   done < <(read_workflow_bundles)
 }
@@ -426,6 +459,30 @@ IFS=',' read -ra selected_platforms <<< "$WORKFLOW_TARGET_PLATFORMS"
 IFS=',' read -ra selected_archs <<< "$WORKFLOW_TARGET_ARCHS"
 ran_any=false
 declare -A installed_toolchains=()
+declare -A workflow_target_combo_seen=()
+declare -a workflow_target_combos=()
+
+append_workflow_target_combo() {
+  local platform="$1"
+  local arch="$2"
+  local combo="${platform}-${arch}"
+  [[ -z "$platform" || -z "$arch" ]] && return 0
+
+  if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
+    echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
+    return 0
+  fi
+
+  if ! is_supported_combo "$combo"; then
+    echo "::notice::Skipping unsupported target $combo"
+    return 0
+  fi
+
+  if [[ -z "${workflow_target_combo_seen[$combo]:-}" ]]; then
+    workflow_target_combo_seen["$combo"]=1
+    workflow_target_combos+=("$combo")
+  fi
+}
 
 echo "::notice::Workflow mode: $workflow_mode"
 echo "::notice::Starting workflow for platforms: $WORKFLOW_TARGET_PLATFORMS and architectures: $WORKFLOW_TARGET_ARCHS"
@@ -433,21 +490,19 @@ for raw_platform in "${selected_platforms[@]}"; do
   platform="$(trim "$raw_platform")"
   [[ -z "$platform" ]] && continue
 
-  if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
-    echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
-    continue
-  fi
-
   for raw_arch in "${selected_archs[@]}"; do
     arch="$(trim "$raw_arch")"
     [[ -z "$arch" ]] && continue
-    combo="${platform}-${arch}"
-
-    if ! is_supported_combo "$combo"; then
-      echo "::notice::Skipping unsupported target $combo"
-      continue
+    if companion_platform="$(get_simulator_companion_platform "$platform" 2>/dev/null)"; then
+      append_workflow_target_combo "$companion_platform" "$arch"
     fi
+    append_workflow_target_combo "$platform" "$arch"
+  done
+done
 
+for combo in "${workflow_target_combos[@]}"; do
+    platform="${combo%-*}"
+    arch="${combo#*-}"
     ran_any=true
     ensure_target_toolchain "$platform" "$arch"
     echo "Preparing build steps for $combo"
@@ -498,8 +553,8 @@ for raw_platform in "${selected_platforms[@]}"; do
     fi
 
     if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then
-      echo "::notice::Cleaning up prebuilt directory for $combo because ffmpeg built successfully and no bundle build was requested"
-      sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
+      echo "::notice::ffmpeg built successfully for $combo and no bundle build was requested"
+      cleanup_combo_prebuilt_dirs "$platform" "$arch"
       continue
     fi
 
@@ -509,10 +564,9 @@ for raw_platform in "${selected_platforms[@]}"; do
         exit 1
       fi
 
-      echo "::notice::Cleaning up prebuilt directory for $combo because bundle built successfully"
-      sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
+      echo "::notice::bundle built successfully for $combo"
+      cleanup_combo_prebuilt_dirs "$platform" "$arch"
     fi
-  done
 done
 
 if [[ "$ran_any" != "true" ]]; then

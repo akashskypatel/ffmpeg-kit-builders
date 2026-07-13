@@ -66,6 +66,7 @@ p_args=""
 deps=""
 bundles=""
 reset_state=false
+# now imported from supported.sh
 # VALID_BUNDLES=("full" "video_hw" "video" "audio" "base" "debug")
 # VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
 # VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
@@ -115,6 +116,22 @@ _add_platform_arch() {
   fi
 }
 
+_append_simulator_companions() {
+  local device_platform="${1}" simulator_platform="${2}"
+  local archs="${PLATFORMS["$device_platform"]}"
+  local arch
+
+  [[ -z "${archs}" ]] && return
+
+  IFS=',' read -ra _arch_array <<< "${archs}"
+  for arch in "${_arch_array[@]}"; do
+    [[ -z "${arch}" ]] && continue
+    if is_supported_combo "${simulator_platform}-${arch}"; then
+      _add_platform_arch "${simulator_platform}" "${arch}"
+    fi
+  done
+}
+
 parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
@@ -153,6 +170,9 @@ parse_platforms() {
     fi
     _add_platform_arch "${p%-*}" "${p#*-}"
   done
+
+  _append_simulator_companions "ios" "iphonesimulator"
+  _append_simulator_companions "appletvos" "appletvsimulator"
 }
 
 parse_bundles() {
@@ -547,7 +567,7 @@ apple_platforms=()
 apple_platforms_str=""
 for platform in "${!PLATFORMS[@]}"; do
   case "${platform}" in
-    "ios"|"macos"|"iphonesim"*|"iphone-sim"*|"appletvos"|"appletvsim"*|"appletv-sim"*|"ios-sim"*|"tvos-sim"*|"iossim"*|"tvossim"*)
+    "ios"|"macos"|"appletvos")
       apple_platforms+=("${platform}")
       ;;
     *)
