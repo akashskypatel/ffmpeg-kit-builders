@@ -217,11 +217,21 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
     find_path(ALSA_INCLUDE_DIR
         NAMES alsa/asoundlib.h
-        PATHS ${DEPENDENCY_BUILD_DIR}/include /usr/include /usr/local/include
+        PATHS
+            "${DEPENDENCY_BUILD_DIR}/include"
+            "${FFMPEG_BUILD_DIR}/include"
+            /usr/include
+            /usr/local/include
     )
     find_library(ALSA_LIBRARY
         NAMES asound libasound.a libasound.a.2 libasound.so libasound.so.2 libasound.so.2.0.0
-        PATHS ${DEPENDENCY_BUILD_DIR}/lib /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib
+        PATHS
+            "${DEPENDENCY_BUILD_DIR}/lib"
+            "${FFMPEG_BUILD_DIR}/lib"
+            /usr/lib64
+            /usr/lib
+            /usr/local/lib64
+            /usr/local/lib
     )
     if(ALSA_INCLUDE_DIR AND ALSA_LIBRARY)
         set(ALSA_LIBRARIES "${ALSA_LIBRARY}")
@@ -234,7 +244,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
         )
         target_include_directories(ffmpegkit PRIVATE ${ALSA_INCLUDE_DIRS})
     else()
-        message(FATAL_ERROR "ALSA not found. Please install libasound-dev")
+        message(FATAL_ERROR "ALSA not found. Checked DEPENDENCY_BUILD_DIR='${DEPENDENCY_BUILD_DIR}', FFMPEG_BUILD_DIR='${FFMPEG_BUILD_DIR}', and system paths")
     endif()
 
     # Allow libffmpegkit.so to find sibling libs (e.g. libpulsecommon) in the
