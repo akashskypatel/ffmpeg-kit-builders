@@ -1912,6 +1912,7 @@ build_libopencv() {
   else
     copy_path "$src_dir/$lib/build/unix-install/opencv4.pc" "$install_pkgconfig_dir/opencv.pc" -f
   fi
+  find "${dependency_install_prefix}/lib/opencv4/3rdparty" \( -name "*.a" -o -name "*.lib" -o -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) -exec cp {} "${dependency_install_prefix}/lib/" \;
   export PKG_CONFIG_PATH=$original_pkg_path
   change_dir "$src_dir"
 }
