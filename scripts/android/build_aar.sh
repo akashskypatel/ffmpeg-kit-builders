@@ -447,11 +447,11 @@ if [[ ! -f "${BASEDIR}/gradlew" ]]; then
   gradle wrapper --distribution-type all || { echo "Failed to create Gradle wrapper"; exit 1; }
 fi
 chmod +x "${BASEDIR}/gradlew"
-OWNER="$(get_github_owner)"
+OWNER="${GITHUB_USERNAME:-$(get_github_owner)}"
 create_aar_artifact() {
   FFMPEG_KIT_JNI_LIBS_DIR="$1"
   FFMPEG_KIT_OUTPUT_NAME="$2"
-  FFMPEG_KIT_NAMESPACE="io.github.$OWNER.ffmpegkit"
+  FFMPEG_KIT_NAMESPACE="io.github.${OWNER}.ffmpegkit"
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
   build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
