@@ -91,7 +91,10 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
                     /usr/local/lib
                     /opt/homebrew/lib
                 )
-                file(GLOB _PYTHON311_INTERNAL_ROOTS LIST_DIRECTORIES true "/opt/_internal/cpython-3.11.*")
+                file(GLOB _PYTHON311_INTERNAL_ROOTS LIST_DIRECTORIES true
+                    "/opt/_internal/cpython-3.11.*"
+                    "/opt/python/cp311-*"
+                )
                 foreach(_PYTHON311_ROOT ${_PYTHON311_INTERNAL_ROOTS})
                     if(IS_DIRECTORY "${_PYTHON311_ROOT}")
                         list(APPEND _PYTHON311_SEARCH_PATHS
@@ -126,8 +129,19 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
                         set(PYTHON311_LIB "/usr/lib/libpython3.11.so.1.0")
                     endif()
                 endif()
+                if(PYTHON311_LIB)
+                    get_filename_component(PYTHON311_LIB_DIR "${PYTHON311_LIB}" DIRECTORY)
+                else()
+                    foreach(_PYTHON311_ROOT ${_PYTHON311_INTERNAL_ROOTS})
+                        if(EXISTS "${_PYTHON311_ROOT}/lib/pkgconfig/python-3.11-embed.pc")
+                            set(PYTHON311_LIB_DIR "${_PYTHON311_ROOT}/lib")
+                            set(PYTHON311_LIB "-L${PYTHON311_LIB_DIR}" "-lpython3.11")
+                            break()
+                        endif()
+                    endforeach()
+                endif()
                 if(NOT PYTHON311_LIB)
-                    message(FATAL_ERROR "Could not find libpython3.11 in system library paths or /opt/_internal/cpython-3.11.*")
+                    message(FATAL_ERROR "Could not find libpython3.11 in system library paths, /opt/_internal/cpython-3.11.*, or /opt/python/cp311-*")
                 else()
                     message(STATUS "Found Python 3.11 library: ${PYTHON311_LIB}")
                 endif()
@@ -162,6 +176,10 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
             if(CMAKE_SYSTEM_NAME MATCHES "Linux")
                 target_link_options(${TARGET_NAME} PRIVATE
                     "-Wl,-rpath,/usr/lib64"
+                    "-Wl,-rpath,/usr/lib"
+                    "-Wl,-rpath,/usr/local/lib64"
+                    "-Wl,-rpath,/usr/local/lib"
+                    $<$<BOOL:${PYTHON311_LIB_DIR}>:-Wl,-rpath,${PYTHON311_LIB_DIR}>
                     $<$<BOOL:${LLVM17_LIB_DIR}>:-Wl,-rpath,${LLVM17_LIB_DIR}>
                 )
             endif()

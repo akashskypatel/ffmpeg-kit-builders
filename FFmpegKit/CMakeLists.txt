@@ -287,11 +287,21 @@ elseif(APPLE)
             "-framework AppKit"
             "-framework OpenGL"
             "-framework DiskArbitration"
+            "-framework IOKit"
         )
     elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         target_link_libraries(ffmpegkit PRIVATE
             "-framework OpenGLES"
             "-framework UIKit"
+            "-framework CoreMotion"
+            "-framework GameController"
+            "-framework CoreHaptics"
+        )
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "tvOS")
+        target_link_libraries(ffmpegkit PRIVATE
+            "-framework UIKit"
+            "-framework GameController"
+            "-framework CoreHaptics"
         )
     endif()
 
@@ -301,20 +311,16 @@ elseif(APPLE)
         "-framework AVFoundation"
         "-framework CoreAudio"
         "-framework Foundation"
-        "-framework GameController"
-        "-framework CoreHaptics"
         "-framework QuartzCore"
         "-framework CoreGraphics"
         "-framework CoreMedia"
         "-framework CoreImage"
-        "-framework CoreMotion"
         "-framework CoreVideo"
         "-framework CoreText"
         "-framework Metal"
         "-framework Security"
         "-framework VideoToolbox"
         "-framework Accelerate"
-        "-framework IOKit"
         "-lresolv"
     )
 
@@ -327,7 +333,7 @@ elseif(APPLE)
 
     target_link_options(ffmpegkit PRIVATE
         "-v"
-        "-ld64"
+        "-ld_classic"
         "-Wl,-w"
         "-Wl,-dead_strip"
         "-Wl,-twolevel_namespace"

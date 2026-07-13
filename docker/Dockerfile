@@ -57,6 +57,8 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     perl-Thread-Queue \
     perl-Time-Piece \
     pkgconf-pkg-config \
+    python3.11 \
+    python3.11-devel \
     python3-pip \
     ragel \
     SDL2-devel \
