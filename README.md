@@ -352,6 +352,7 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 | libvo-amrwbenc, libvorbis, openal                                     | a+      | a+    | a+      | a+  | a+    |
 | alsa                                                                  |         | a+    |         |     |       |
 | libbs2b<sup>[10](#gpl-info)</sup>                                     | a+      | a+    | a+      | a+  | a+    |
+| libmpeghdec                                                           | a+      | a+    | a+      | a+  | a+    |
 | **Audio Extras** *(not in `--small` builds)*                          |         |       |         |     |       |
 | chromaprint, libflite, libgme, libmysofa, libshine, lv2               | a+      | a+    | a+      | a+  | a+    |
 | libcdio, librubberband<sup>[10](#gpl-info)</sup>                      | a+      | a+    | a+      | a+  | a+    |
@@ -368,8 +369,9 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 | libxevd, libxeve, libzimg, libzvbi, libxml2, sdl2                     | v+      | v+    | v+      | v+  | v+    |
 | libdavs2, libdvdnav, libdvdread, libx264<sup>[10](#gpl-info)</sup>    | v+      | v+    | v+      | v+  | v+    |
 | libx265, libxavs, libxavs2, libaribb24<sup>[10](#gpl-info)</sup>      | v+      | v+    | v+      | v+  | v+    |
-| libdc1394, libiec61883                                                |         | v+    |         |     |       |
+| libdc1394, libiec61883, libsvtjpegxs                                   |         | v+    |         |     |       |
 | libxvid<sup>[10](#gpl-info)</sup>                                     |         | v+    |         |     |       |
+| libopencolorio<sup>[15](#arch-info)</sup>                             | v+      | v+    | v+      | v+  | v+    |
 | **Video Extras** *(not in `--small` builds)*                          |         |       |         |     |       |
 | libklvanc, liblensfun, libqrencode, libvmaf, vapoursynth              | v+      | v+    | v+      | v+  | v+    |
 | frei0r, libvidstab<sup>[10](#gpl-info)</sup>                          | v+      | v+    | v+      | v+  | v+    |
@@ -559,6 +561,9 @@ You can also get the full list of supported external libraries by running `--lis
 | libzvbi                                      | Decodes VBI teletext data                               |                                        |                                  |      |                    | x                  | x                  | x                   |
 | vapoursynth                                  | Demuxes VapourSynth script frames                       |                                        | x                                |      |                    | x                  | x                  | x                   |
 | xlib                                         | Captures screen content via Xlib                        | Linux                                  | x                                |      |                    | x                  | x                  | x                   |
+| libsvtjpegxs                                 | Encodes JPEG XS video                                   |                                        |                                  |      |                    | x                  | x                  | x                   |
+| libopencolorio<sup>[15](#arch-info)</sup>   | Color space conversion                                  |                                        |                                  |      |                    | [15](#arch-info)   | [15](#arch-info)   | [15](#arch-info)    |
+| libmpeghdec                                  | Decodes MPEG-H 3D Audio                                 |                                        |                                  |      | [9](#nonfree-info) | [9](#nonfree-info) | [9](#nonfree-info) | [9](#nonfree-info)  |
 
 <sup>1</sup> Platform specific libraries are enabled by default for target platform and bundle.<a id="platform-info"></a></br>
 <sup>2</sup> Extra libraries are enabled on non-small bundles.<a id="extra-info"></a></br>
@@ -577,6 +582,10 @@ You can also get the full list of supported external libraries by running `--lis
 
 >   - libmfx -> libvpl*</br>
 >   - libglslang -> libshaderc*</br>
+
+<sup>15</sup> These libraries are only supported on specific CPU architectures.<a id="arch-info"></a></br>
+
+>   - libsvtjpegxs -> x86_64 only</br>
 
 ## Troubleshooting
 

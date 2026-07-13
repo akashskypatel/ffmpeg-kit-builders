@@ -6,7 +6,7 @@
 - Add additional supported external libraries
   - libsvtjpegxs
   - libopencolorio
-  - libmpeghdec
+  - libmpeghdec (non-free only)
 
 ## Version 0.10.4
 
