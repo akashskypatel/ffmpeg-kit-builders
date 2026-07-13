@@ -26,6 +26,75 @@ function(ffmpegkit_dedupe_link_list INPUT_VAR)
     set(${INPUT_VAR} "${_out}" PARENT_SCOPE)
 endfunction()
 
+function(ffmpegkit_filter_linux_shared_link_list INPUT_VAR)
+    set(_out "")
+    set(_filtered "")
+    set(_system_static_libs
+        c
+        dl
+        m
+        pthread
+        rt
+        util
+        resolv
+        nsl
+        crypt
+        gcc
+        gcc_s
+        gcc_eh
+        stdc++
+    )
+
+    foreach(_item IN LISTS ${INPUT_VAR})
+        if("${_item}" STREQUAL "")
+            continue()
+        endif()
+
+        set(_skip OFF)
+        set(_force_dynamic OFF)
+        if("${_item}" STREQUAL "-static" OR
+           "${_item}" STREQUAL "-static-libgcc" OR
+           "${_item}" STREQUAL "-static-libstdc++")
+            set(_skip ON)
+        elseif("${_item}" STREQUAL "-Wl,-Bstatic")
+            set(_skip ON)
+            list(APPEND _out "-Wl,-Bdynamic")
+        elseif("${_item}" MATCHES "^-[Ww]l,")
+            set(_skip OFF)
+        elseif("${_item}" MATCHES "^-l(.+)$")
+            set(_lib_name "${CMAKE_MATCH_1}")
+            list(FIND _system_static_libs "${_lib_name}" _system_lib_index)
+            if(NOT _system_lib_index EQUAL -1)
+                set(_force_dynamic ON)
+            endif()
+        else()
+            get_filename_component(_file_name "${_item}" NAME)
+            if(_file_name MATCHES "^lib(.+)\\.a$")
+                set(_lib_name "${CMAKE_MATCH_1}")
+                list(FIND _system_static_libs "${_lib_name}" _system_lib_index)
+                if(NOT _system_lib_index EQUAL -1)
+                    set(_skip ON)
+                endif()
+            endif()
+        endif()
+
+        if(_skip)
+            list(APPEND _filtered "${_item}")
+        elseif(_force_dynamic)
+            list(APPEND _filtered "${_item}")
+            list(APPEND _out "-Wl,-Bdynamic" "${_item}")
+        else()
+            list(APPEND _out "${_item}")
+        endif()
+    endforeach()
+
+    if(_filtered)
+        message(STATUS "Filtered Linux shared-link static system libraries: ${_filtered}")
+    endif()
+
+    set(${INPUT_VAR} "${_out}" PARENT_SCOPE)
+endfunction()
+
 function(replace_static_with_shared INPUT_LIB OUTPUT_VAR)
     if(INPUT_LIB MATCHES "\\.a$" OR INPUT_LIB MATCHES "\\.lib$")
         if(WIN32)

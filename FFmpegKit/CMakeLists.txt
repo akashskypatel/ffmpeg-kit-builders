@@ -426,12 +426,14 @@ if(BUILD_SHARED_LIBS)
                 "-lws2_32"
             )
         elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
+            set(LINUX_SHARED_BUNDLE_LIBRARIES ${BUNDLE_LIBRARIES})
+            ffmpegkit_filter_linux_shared_link_list(LINUX_SHARED_BUNDLE_LIBRARIES)
             target_link_libraries(ffmpegkit PRIVATE
                 "-Wl,--whole-archive"
                 ${FFMPEG_STATIC_LIBS}
                 ${ALSA_LIBRARIES}
                 "-Wl,--no-whole-archive"
-                ${BUNDLE_LIBRARIES}
+                ${LINUX_SHARED_BUNDLE_LIBRARIES}
             )
         elseif(ANDROID)
             target_link_libraries(ffmpegkit PRIVATE
