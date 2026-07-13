@@ -409,6 +409,7 @@ OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
 GRADLE_COMMAND="publishToMavenCentral"
 USER_HOME="/home/vscode"
 GRADLE_USER_HOME="${USER_HOME}/.gradle"
+SDKMAN_DIR="${SDKMAN_DIR:-/usr/local/sdkman}"
 
 if [[ ! -f "${GRADLE_USER_HOME}/gradle.properties" && ! -f "${USER_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
   GRADLE_COMMAND="publishToMavenLocal"
@@ -420,16 +421,32 @@ if [[ "$SNAPSHOT" == true ]]; then
 else
   FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")"
 fi
+
+cd "${BASEDIR}" || { echo "Failed to change directory to ${BASEDIR}"; exit 1; }
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 # Define all build steps
 declare -a BUILD_STEPS
 
-if [[ ! -f gradlew ]]; then
+if ! command -v gradle >/dev/null 2>&1; then
+  if [[ -f /etc/profile.d/sdkman.sh ]]; then
+    # shellcheck source=/dev/null
+    source /etc/profile.d/sdkman.sh
+  fi
+  if [[ -x "${SDKMAN_DIR}/candidates/gradle/current/bin/gradle" ]]; then
+    export PATH="${SDKMAN_DIR}/candidates/gradle/current/bin:${PATH}"
+  fi
+fi
+
+if [[ ! -f "${BASEDIR}/gradlew" ]]; then
+  if ! command -v gradle >/dev/null 2>&1; then
+    echo "Gradle is not available on PATH. Ensure scripts/toolchain/setup-android.sh completed successfully."
+    exit 1
+  fi
   echo "RUNNING: gradle wrapper --distribution-type all"
   gradle wrapper --distribution-type all || { echo "Failed to create Gradle wrapper"; exit 1; }
 fi
-chmod +x gradlew
+chmod +x "${BASEDIR}/gradlew"
 OWNER="$(get_github_owner)"
 create_aar_artifact() {
   FFMPEG_KIT_JNI_LIBS_DIR="$1"
