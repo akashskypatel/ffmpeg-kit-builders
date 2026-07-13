@@ -302,6 +302,7 @@ elseif(APPLE)
             "-framework UIKit"
             "-framework GameController"
             "-framework CoreHaptics"
+            "-framework OpenGLES"
         )
     endif()
 

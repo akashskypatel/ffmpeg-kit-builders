@@ -45,6 +45,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     libzstd-devel \
     lld \
     llvm \
+    llvm-compat-libs \
     libasan \
     make \
     nasm \

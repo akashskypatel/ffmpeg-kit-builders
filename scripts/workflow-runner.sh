@@ -480,10 +480,10 @@ for raw_platform in "${selected_platforms[@]}"; do
           exit 1
         fi
         if [[ "$workflow_mode" != "ffmpeg_bundle" ]]; then
-          sudo rm -rfv "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
+          sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
           reset_workflow_seen_steps
         fi
-        sudo rm -rfv "${GITHUB_WORKSPACE}/prebuilt/src"
+        sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/src"
       fi
     done
 
@@ -499,7 +499,7 @@ for raw_platform in "${selected_platforms[@]}"; do
 
     if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" && "${WORKFLOW_BUILD_BUNDLE}" != "true" ]]; then
       echo "::notice::Cleaning up prebuilt directory for $combo because ffmpeg built successfully and no bundle build was requested"
-      sudo rm -rfv "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
+      sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
       continue
     fi
 
@@ -510,7 +510,7 @@ for raw_platform in "${selected_platforms[@]}"; do
       fi
 
       echo "::notice::Cleaning up prebuilt directory for $combo because bundle built successfully"
-      sudo rm -rfv "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
+      sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}"
     fi
   done
 done

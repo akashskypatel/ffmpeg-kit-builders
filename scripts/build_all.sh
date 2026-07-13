@@ -547,7 +547,7 @@ apple_platforms=()
 apple_platforms_str=""
 for platform in "${!PLATFORMS[@]}"; do
   case "${platform}" in
-    "ios"|"macos")
+    "ios"|"macos"|"iphonesim"*|"iphone-sim"*|"appletvos"|"appletvsim"*|"appletv-sim"*|"ios-sim"*|"tvos-sim"*|"iossim"*|"tvossim"*)
       apple_platforms+=("${platform}")
       ;;
     *)
