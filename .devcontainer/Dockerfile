@@ -42,6 +42,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     glibc-static \
     gperf \
     help2man \
+    jq \
     libstdc++-static \
     libzstd-devel \
     lld \

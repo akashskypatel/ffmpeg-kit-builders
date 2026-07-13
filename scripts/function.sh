@@ -2024,7 +2024,9 @@ check_missing_packages() {
     # zeranoe's build scripts use wget, though we don't here...
     local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
   'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
-  'bzip2' 'python3' 'bc' 'ripgrep' 'libdatrie')
+  'bzip2' 'python3' 'bc' 'ripgrep' 'libdatrie' 'jq' 'asciidoc' 'compiler-rt' 'clang-tools-extra' 'doxygen' \
+
+  )
     # autoconf-archive is just for leptonica FWIW
     # I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
     # that being said, if it where set I would imagine it would be set to centos... And this contition will satisfy the "Is not initially set"
@@ -2032,7 +2034,14 @@ check_missing_packages() {
     if [ -z "${VENDOR}" ] || [ "${VENDOR}" != "redhat" ] && [ "${VENDOR}" != "centos" ]; then
       check_packages+=('cmake')
     elif [ "${VENDOR}" == "redhat" ]; then
-      check_packages+=('libzstd-devel')
+      check_packages+=('libzstd-devel' 'alsa-lib-devel' 'gcc-gfortran' 'gcc-c++' 'gcc-toolset-14-libasan-devel' \
+'gcc-toolset-14-libubsan-devel' 'gcc-toolset-14-libtsan-devel' 'gettext-devel' 'glib2-devel' 'glibc-static' 'libstdc++-static' \
+'libzstd-devel' 'llvm-compat-libs' 'libasan' 'openssl-devel' 'perl-IPC-Cmd' 'perl-Thread-Queue' 'perl-Time-Piece' \
+'pkgconf-pkg-config' 'python3.11' 'python3.11-devel' 'python3-pip' 'SDL2-devel' 'valgrind-devel' 'libXmu-devel' \
+'xorg-x11-util-macros' 'xorg-x11-xtrans-devel' 'xorg-x11-proto-devel' 'libXext-devel' 'libXdmcp-devel' \
+'libXrender-devel' 'libXft-devel' 'libX11-devel' 'libXau-devel' 'libxcb-devel' 'libpciaccess-devel' 'zlib-devel' \
+'dbus-devel' 'libsmbclient-devel' 'ocl-icd-devel' 'wayland-devel' 'wayland-protocols-devel' 'libxkbcommon-devel' \
+'libXcursor-devel' 'libXi-devel' 'libXinerama-devel' 'libXrandr-devel' 'mesa-libGL-devel' 'mesa-libGLU-devel')
     elif [ "${VENDOR}" == "debian" ]; then
       check_packages+=('zstd' 'cython3' 'xutils-dev' 'python3-venv' 'python3-numpy')
     elif [ "${VENDOR}" == "macos" ]; then
