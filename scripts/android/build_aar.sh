@@ -407,12 +407,20 @@ GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)
 OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}"
 OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
 GRADLE_COMMAND="publishToMavenCentral"
-USER_HOME="/home/vscode"
-GRADLE_USER_HOME="${USER_HOME}/.gradle"
+GRADLE_SIGN_PUBLICATIONS="true"
+SIGNING_HOME="${GITHUB_WORKSPACE:-$(get_userhome)}"
+SIGNING_HOME="${SIGNING_HOME:-$HOME}"
+GRADLE_SIGNING_HOME="${SIGNING_HOME}/.gradle"
 SDKMAN_DIR="${SDKMAN_DIR:-/usr/local/sdkman}"
 
-if [[ ! -f "${GRADLE_USER_HOME}/gradle.properties" && ! -f "${USER_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
+if [[ -z "$SIGNING_HOME" || ! -d "$SIGNING_HOME" ]]; then
+  echo "Unable to determine user home" >&2
+  exit 1
+fi
+
+if [[ ! -f "${GRADLE_SIGNING_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
   GRADLE_COMMAND="publishToMavenLocal"
+  GRADLE_SIGN_PUBLICATIONS="false"
 fi
 
 # FFMPEG_KIT_VERSION: from version file
@@ -463,6 +471,7 @@ create_aar_artifact() {
   -PFFMPEG_KIT_VERSION=\"${FFMPEG_KIT_VERSION}\" \
   -PFFMPEG_KIT_JNI_LIBS_DIR=\"${FFMPEG_KIT_JNI_LIBS_DIR}\" \
   -PFFMPEG_KIT_OUTPUT_NAME=\"${FFMPEG_KIT_OUTPUT_NAME}\" \
+  -PFFMPEG_KIT_SIGN_PUBLICATIONS=\"${GRADLE_SIGN_PUBLICATIONS}\" \
   -PmavenCentralUsername=\"${OSSRH_USERNAME}\" \
   -PmavenCentralPassword=\"${OSSRH_PASSWORD}\""
   if [[ "$local_build" == "true" ]]; then

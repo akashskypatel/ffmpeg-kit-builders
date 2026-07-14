@@ -123,6 +123,29 @@ jobs:
         shell: bash
         run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
 
+      - name: Configure Maven signing
+        shell: bash
+        run: |
+          USER_HOME="\${GITHUB_WORKSPACE}"
+
+          if [[ -z "\${USER_HOME}" || ! -d "\${USER_HOME}" ]]; then
+            echo "Unable to determine user home" >&2
+            exit 1
+          fi
+
+          mkdir -p \${USER_HOME}/.gradle \${USER_HOME}/.gnupg
+
+          echo "\${{ secrets.GPG_SECRET_KEYRING_BASE64 }}" | base64 -d | \
+            tee \${USER_HOME}/.gnupg/secring.gpg > /dev/null
+
+          tee \${USER_HOME}/.gradle/gradle.properties > /dev/null <<EOF
+          signing.keyId=\${{ secrets.GPG_KEY_ID }}
+          signing.password=\${{ secrets.GPG_PASSWORD }}
+          signing.secretKeyRingFile=\${USER_HOME}/.gnupg/secring.gpg
+          EOF
+
+          chmod 600 \${USER_HOME}/.gnupg/secring.gpg \${USER_HOME}/.gradle/gradle.properties
+
       - name: Build selected dependencies
         shell: bash
         run: sudo -E "\${GITHUB_WORKSPACE}/scripts/workflow-runner.sh" --runner-platform=linux

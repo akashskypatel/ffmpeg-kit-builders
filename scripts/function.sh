@@ -7536,10 +7536,9 @@ get_changes_from_changelog() {
   echo "$changes" | gsed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}'
 }
 
-get_keystore(){
+get_userhome() {
   local original_user=""
   local original_home=""
-  local keystore_dir=""
 
   if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
     original_user="$SUDO_USER"
@@ -7561,6 +7560,15 @@ get_keystore(){
     original_home="$HOME"
   fi
 
+  echo "$original_home"
+}
+
+get_keystore(){
+  local original_home=""
+  local keystore_dir=""
+
+  original_home="$(get_userhome)"
+
   if [[ -n "$original_home" ]]; then
     keystore_dir="$original_home/.config/keystore"
     if [[ -d "$keystore_dir" ]]; then
@@ -7569,7 +7577,7 @@ get_keystore(){
     fi
   fi
 
-  exit_message 1 "Keystore directory not found for user '${original_user:-$(id -un)}' at '${keystore_dir:-<unknown>}'" | tee -a "$LOG_FILE" >&2
+  exit_message 1 "Keystore directory not found for user '$(id -un)' at '${keystore_dir:-<unknown>}'" | tee -a "$LOG_FILE" >&2
   return 1
 }
 
