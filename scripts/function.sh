@@ -745,6 +745,30 @@ setup_windows_environment() {
     cross_windres
 }
 
+find_windows_static_winpthread() {
+    local compiler="${1:-${CC:-${cross_prefix:-}gcc}}"
+    local candidate=""
+
+    if [[ -n "$compiler" ]] && command -v "$compiler" >/dev/null 2>&1; then
+        candidate="$("$compiler" -print-file-name=libwinpthread.a 2>/dev/null || true)"
+        if [[ -n "$candidate" && -f "$candidate" ]]; then
+            readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate"
+            return 0
+        fi
+    fi
+
+    for candidate in \
+        "${toolchain_root_dir:-/usr/local/mingw-w64}/${host_target:-}/lib/libwinpthread.a" \
+        "/usr/local/mingw-w64/${host_target:-}/lib/libwinpthread.a"; do
+        if [[ -f "$candidate" ]]; then
+            readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 setup_linux_environment() {
     export PATCHDIR="$SCRIPTDIR/linux/patches"
     export dependency_install_prefix="$work_dir/libraries" # dependencies
@@ -4609,16 +4633,21 @@ configure_ffmpeg() {
     
   fi
   if iswindows; then
-    export LDFLAGS="$LDFLAGS -Wl,-Bstatic -lpthread -Wl,-Bdynamic"
+    local winpthread_static_lib=""
+    local winpthread_static_dir=""
+    winpthread_static_lib="$(find_windows_static_winpthread "$CC")" || exit_message 1 "configure_ffmpeg: static MinGW winpthread library not found"
+    winpthread_static_dir="$(dirname "$winpthread_static_lib")"
+    export LDFLAGS="$LDFLAGS -L${winpthread_static_dir}"
     export CFLAGS="$CFLAGS -mstackrealign"
     export LD=${cross_prefix}gcc # ld weirdness with windows
 	  init_options+=" --target-os=mingw32"
     # init_options+=" --enable-w32threads"
     init_options+=" --disable-w32threads"
     init_options+=" --enable-pthreads"
-    init_options+=" --extra-ldflags=\" -Wl,-Bstatic -lpthread -Wl,-Bdynamic \""
+    init_options+=" --extra-ldflags=\" -L${winpthread_static_dir} \""
     init_options+=" --disable-filter=gfxcapture"
     init_options+=" --extra-ldflags=\" -L${deps_install_prefix}/lib \""
+    add_extra_libs "$winpthread_static_lib"
   elif isandroid; then
     # unset PKG_CONFIG_PATH
     export PKG_CONFIG_SYSROOT_DIR="/"

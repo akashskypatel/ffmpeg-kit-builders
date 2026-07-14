@@ -238,13 +238,21 @@ fix_pkgconfig_flags() {
 		fi
 	done < <(find "$ffmpeg_install_prefix/lib/pkgconfig" -name "*.pc" -print0)
 
+	local winpthread_static_lib=""
+	local winpthread_static_sed=""
+	winpthread_static_lib="$(find_windows_static_winpthread "$CXX" 2>/dev/null || true)"
+	winpthread_static_sed="${winpthread_static_lib//&/\\&}"
+
 	for pc_file in "$PKG_CONFIG_LIBDIR"/*.pc; do
 			gsed -i "s|-l/|/|g" "$pc_file"
 			gsed -i "s|-lstdc++||g" "$pc_file"
 			gsed -i "s|-lgcc_s||g" "$pc_file"
 			gsed -i "s|-lgcc||g" "$pc_file"
-			gsed -i 's|\b-lwinpthread\b|-lpthreadwin32|g' "$pc_file"
-			gsed -i 's|\b-lpthread\b|-lpthreadwin32|g' "$pc_file"
+			if [[ -n "$winpthread_static_sed" ]]; then
+				gsed -i -E "s|(^|[[:space:]])-lwinpthread([[:space:]]|$)|\\1${winpthread_static_sed}\\2|g" "$pc_file"
+				gsed -i -E "s|(^|[[:space:]])-lpthread([[:space:]]|$)|\\1${winpthread_static_sed}\\2|g" "$pc_file"
+				gsed -i -E "s|(^|[[:space:]])-lpthreadwin32([[:space:]]|$)|\\1${winpthread_static_sed}\\2|g" "$pc_file"
+			fi
 			gsed -i "s|-latomic|$(realpath "$("$CXX" -print-file-name=libatomic.a)")|g" "$pc_file"
 			gsed -i "s|/usr/local/mingw-w64/[^ ]*libstdc++[^ ]*|${stdcpp_path}|g" "$pc_file"
 			gsed -i 's|/usr/local/mingw-w64/[^ ]*libstdc++\.a||g' "$pc_file"
