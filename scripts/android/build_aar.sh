@@ -399,6 +399,7 @@ verify_maven_signing_configuration() {
   local signing_key_id=""
   local signing_password=""
   local signing_keyring_file=""
+  local signing_gnupg_home=""
   local prop_key prop_value
   local tmp_dir tmp_gnupg passphrase_file preflight_file signature_file
 
@@ -411,6 +412,7 @@ verify_maven_signing_configuration() {
       signing.keyId) signing_key_id="$prop_value" ;;
       signing.password) signing_password="$prop_value" ;;
       signing.secretKeyRingFile) signing_keyring_file="$prop_value" ;;
+      signing.gnupg.homeDir) signing_gnupg_home="$prop_value" ;;
     esac
   done < "$gradle_properties"
 
@@ -430,6 +432,15 @@ verify_maven_signing_configuration() {
   if [[ ! -f "$signing_keyring_file" ]]; then
     exit_message 1 "Configured signing.secretKeyRingFile does not exist: ${signing_keyring_file}"
   fi
+
+  if [[ -z "$signing_gnupg_home" ]]; then
+    signing_gnupg_home="${SIGNING_HOME}/.gnupg"
+  fi
+  case "$signing_gnupg_home" in
+    "~/"*) signing_gnupg_home="${HOME}/${signing_gnupg_home#"~/"}" ;;
+    /*) ;;
+    *) signing_gnupg_home="${GRADLE_HOME}/${signing_gnupg_home}" ;;
+  esac
 
   tmp_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/maven-signing-preflight.XXXXXX")" || exit_message 1 "Failed to create Maven signing preflight directory"
   tmp_gnupg="${tmp_dir}/gnupg"
@@ -457,6 +468,20 @@ verify_maven_signing_configuration() {
       --detach-sign --armor --output "$signature_file" "$preflight_file" > >(redirect_output) 2>&1; then
     rm -rf "$tmp_dir"
     exit_message 1 "Maven signing preflight failed; verify GPG_KEY_ID, GPG_PASSWORD, and GPG_SECRET_KEYRING_BASE64"
+  fi
+
+  mkdir -p "$signing_gnupg_home"
+  chmod 700 "$signing_gnupg_home"
+  if ! gpg --batch --homedir "$signing_gnupg_home" --import "$signing_keyring_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Failed to import Maven signing key into Gradle GPG home"
+  fi
+
+  if ! gpg --batch --yes --pinentry-mode loopback --homedir "$signing_gnupg_home" \
+      --passphrase-file "$passphrase_file" --local-user "$signing_key_id" \
+      --detach-sign --armor --output "${signature_file}.gradle-home" "$preflight_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Maven signing preflight failed from Gradle GPG home; verify GPG command signing configuration"
   fi
 
   rm -rf "$tmp_dir"

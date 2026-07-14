@@ -104,6 +104,9 @@ jobs:
             printf 'signing.keyId=%s\n' "${GPG_KEY_ID}"
             printf 'signing.password=%s\n' "${GPG_PASSWORD}"
             printf 'signing.secretKeyRingFile=%s/.gnupg/secring.gpg\n' "${USER_HOME}"
+            printf 'signing.gnupg.keyName=%s\n' "${GPG_KEY_ID}"
+            printf 'signing.gnupg.passphrase=%s\n' "${GPG_PASSWORD}"
+            printf 'signing.gnupg.homeDir=%s/.gnupg\n' "${USER_HOME}"
           } > "${USER_HOME}/.gradle/gradle.properties"
 
           chmod 600 "${USER_HOME}/.gnupg/secring.gpg" "${USER_HOME}/.gradle/gradle.properties"

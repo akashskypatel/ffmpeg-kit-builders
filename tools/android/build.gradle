@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'com.vanniktech.maven.publish'
+    id 'signing'
 }
 
 /**
@@ -92,6 +93,15 @@ if (!binariesExist) {
             
             task.onlyIf { false }
         }
+    }
+}
+
+signing {
+    def signPublications = providers.gradleProperty('FFMPEG_KIT_SIGN_PUBLICATIONS')
+        .map { it.toBoolean() }
+        .getOrElse(false)
+    if (signPublications) {
+        useGpgCmd()
     }
 }
 
