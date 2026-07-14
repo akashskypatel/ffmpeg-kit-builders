@@ -410,18 +410,20 @@ GRADLE_COMMAND="publishToMavenCentral"
 GRADLE_SIGN_PUBLICATIONS="true"
 SIGNING_HOME="${GITHUB_WORKSPACE:-$(get_userhome)}"
 SIGNING_HOME="${SIGNING_HOME:-$HOME}"
-GRADLE_SIGNING_HOME="${SIGNING_HOME}/.gradle"
+GRADLE_HOME="${SIGNING_HOME}/.gradle"
 SDKMAN_DIR="${SDKMAN_DIR:-/usr/local/sdkman}"
 
 if [[ -z "$SIGNING_HOME" || ! -d "$SIGNING_HOME" ]]; then
   exit_message 1 "Unable to determine user home"
 fi
 
-echo "Checking signing configuration at ${GRADLE_SIGNING_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
-if [[ ! -f "${GRADLE_SIGNING_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
+echo "Checking signing configuration at ${GRADLE_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
+if [[ ! -f "${GRADLE_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
   echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
   GRADLE_COMMAND="publishToMavenLocal"
   GRADLE_SIGN_PUBLICATIONS="false"
+else
+  echo "Maven signing configured, using remote build" | tee -a "${LOG_FILE}"
 fi
 
 # FFMPEG_KIT_VERSION: from version file
@@ -464,7 +466,7 @@ create_aar_artifact() {
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
   build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
-  --no-daemon --info --warning-mode all --gradle-user-home ${GRADLE_SIGNING_HOME}/.gradle \
+  --no-daemon --info --warning-mode all --gradle-user-home ${GRADLE_HOME} \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \
   -PANDROID_NDK=\"${ANDROID_NDK}\" \
   -PANDROID_API_LEVEL=\"${ANDROID_API_LEVEL}\" \
