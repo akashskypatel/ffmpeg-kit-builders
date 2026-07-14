@@ -133,18 +133,18 @@ jobs:
             exit 1
           fi
 
-          mkdir -p \${USER_HOME}/.gradle \${USER_HOME}/.gnupg
+          mkdir -p "\${USER_HOME}/.gradle" "\${USER_HOME}/.gnupg"
 
           echo "\${{ secrets.GPG_SECRET_KEYRING_BASE64 }}" | base64 -d | \
-            tee \${USER_HOME}/.gnupg/secring.gpg > /dev/null
+            tee "\${USER_HOME}/.gnupg/secring.gpg" > /dev/null
 
-          tee \${USER_HOME}/.gradle/gradle.properties > /dev/null <<EOF
-          signing.keyId=\${{ secrets.GPG_KEY_ID }}
-          signing.password=\${{ secrets.GPG_PASSWORD }}
-          signing.secretKeyRingFile=\${USER_HOME}/.gnupg/secring.gpg
-          EOF
+          {
+            printf '%s\n' 'signing.keyId=\${{ secrets.GPG_KEY_ID }}'
+            printf '%s\n' 'signing.password=\${{ secrets.GPG_PASSWORD }}'
+            printf 'signing.secretKeyRingFile=%s/.gnupg/secring.gpg\n' "\${USER_HOME}"
+          } > "\${USER_HOME}/.gradle/gradle.properties"
 
-          chmod 600 \${USER_HOME}/.gnupg/secring.gpg \${USER_HOME}/.gradle/gradle.properties
+          chmod 600 "\${USER_HOME}/.gnupg/secring.gpg" "\${USER_HOME}/.gradle/gradle.properties"
 
       - name: Build selected dependencies
         shell: bash
