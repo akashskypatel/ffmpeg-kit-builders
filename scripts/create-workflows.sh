@@ -125,6 +125,10 @@ jobs:
 
       - name: Configure Maven signing
         shell: bash
+        env:
+          GPG_SECRET_KEYRING_BASE64: \${{ secrets.GPG_SECRET_KEYRING_BASE64 }}
+          GPG_KEY_ID: \${{ secrets.GPG_KEY_ID }}
+          GPG_PASSWORD: \${{ secrets.GPG_PASSWORD }}
         run: |
           USER_HOME="\${GITHUB_WORKSPACE}"
 
@@ -135,12 +139,12 @@ jobs:
 
           mkdir -p "\${USER_HOME}/.gradle" "\${USER_HOME}/.gnupg"
 
-          echo "\${{ secrets.GPG_SECRET_KEYRING_BASE64 }}" | base64 -d | \
+          printf '%s' "\${GPG_SECRET_KEYRING_BASE64}" | base64 -d | \
             tee "\${USER_HOME}/.gnupg/secring.gpg" > /dev/null
 
           {
-            printf '%s\n' 'signing.keyId=\${{ secrets.GPG_KEY_ID }}'
-            printf '%s\n' 'signing.password=\${{ secrets.GPG_PASSWORD }}'
+            printf 'signing.keyId=%s\n' "\${GPG_KEY_ID}"
+            printf 'signing.password=%s\n' "\${GPG_PASSWORD}"
             printf 'signing.secretKeyRingFile=%s/.gnupg/secring.gpg\n' "\${USER_HOME}"
           } > "\${USER_HOME}/.gradle/gradle.properties"
 
