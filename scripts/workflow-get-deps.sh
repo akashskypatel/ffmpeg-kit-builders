@@ -125,6 +125,10 @@ fi
 source "$deps_file"
 
 if [[ "$mode" == "--artifact-pattern" ]]; then
+    if truthy "$build_force"; then
+		echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
+		exit 4
+	fi
 	release_tag="${platform}-${arch}-deps"
 	release_name="${platform}-${arch}-dependencies"
 	asset_prefix="${platform}-${arch}-"
