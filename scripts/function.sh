@@ -7768,6 +7768,11 @@ create_github_release() {
   local owner="${GITHUB_USERNAME:-}"
   local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
+  if [[ -z "$attachment" || ! -f "$attachment" ]]; then
+    echo "Invalid attachment. File doesn't exist or attachment is blank: $attachment" | tee -a "$LOG_FILE"
+    return 1
+  fi
+
   if [[ -z "$repo" ]]; then
     repo="$(get_github_repo)" || return 1
   fi

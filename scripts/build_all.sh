@@ -544,11 +544,6 @@ fi
 
 if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
   echo "Building AARs..." | tee -a "${LOG_FILE}"
-  if [[ "${REMOTE_RELEASE}" == true ]]; then
-    remote="--remote"
-  else
-    remote="--local"
-  fi
   repo_path="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
   owner="${repo_path%%/*}"
   export GITHUB_USERNAME="$owner" && \

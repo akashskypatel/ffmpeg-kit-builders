@@ -175,11 +175,55 @@ is_simulator_platform() {
   [[ "$platform" == "iphonesimulator" || "$platform" == "appletvsimulator" ]]
 }
 
+is_android_platform() {
+  local platform="$1"
+  [[ "$platform" == "android" ]]
+}
+
+defer_android_prebuilt_cleanup() {
+  local platform="$1"
+  local arch="$2"
+  local combo="${platform}-${arch}"
+
+  if [[ -z "${deferred_android_cleanup_seen[$combo]:-}" ]]; then
+    deferred_android_cleanup_seen["$combo"]=1
+    deferred_android_cleanup_combos+=("$combo")
+  fi
+}
+
+cleanup_deferred_android_prebuilt_dirs() {
+  local combo
+
+  for combo in "${deferred_android_cleanup_combos[@]}"; do
+    echo "::notice::Cleaning up deferred Android prebuilt directory for $combo"
+    sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${combo}"
+  done
+}
+
+cleanup_combo_libraries() {
+  local platform="$1"
+  local arch="$2"
+
+  if is_android_platform "$platform"; then
+    echo "::notice::Preserving Android prebuilt libraries for ${platform}-${arch} until all Android archs complete"
+    defer_android_prebuilt_cleanup "$platform" "$arch"
+    return 0
+  fi
+
+  sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
+}
+
 cleanup_combo_prebuilt_dirs() {
   local platform="$1"
   local arch="$2"
   local combo="${platform}-${arch}"
   local simulator_platform
+
+  if is_android_platform "$platform"; then
+    echo "::notice::Deferring Android prebuilt cleanup for $combo until all Android archs complete"
+    defer_android_prebuilt_cleanup "$platform" "$arch"
+    return 0
+  fi
 
   if is_simulator_platform "$platform"; then
     echo "::notice::Skipping prebuilt cleanup for simulator combo $combo until its physical device companion completes"
@@ -461,6 +505,8 @@ ran_any=false
 declare -A installed_toolchains=()
 declare -A workflow_target_combo_seen=()
 declare -a workflow_target_combos=()
+declare -A deferred_android_cleanup_seen=()
+declare -a deferred_android_cleanup_combos=()
 
 append_workflow_target_combo() {
   local platform="$1"
@@ -535,7 +581,7 @@ for combo in "${workflow_target_combos[@]}"; do
           exit 1
         fi
         if [[ "$workflow_mode" != "ffmpeg_bundle" ]]; then
-          sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
+          cleanup_combo_libraries "$platform" "$arch"
           reset_workflow_seen_steps
         fi
         sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/src"
@@ -568,6 +614,8 @@ for combo in "${workflow_target_combos[@]}"; do
       cleanup_combo_prebuilt_dirs "$platform" "$arch"
     fi
 done
+
+cleanup_deferred_android_prebuilt_dirs
 
 if [[ "$ran_any" != "true" ]]; then
   echo "::notice::No supported platform-arch combinations selected for this runner"

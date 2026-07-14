@@ -414,11 +414,11 @@ GRADLE_SIGNING_HOME="${SIGNING_HOME}/.gradle"
 SDKMAN_DIR="${SDKMAN_DIR:-/usr/local/sdkman}"
 
 if [[ -z "$SIGNING_HOME" || ! -d "$SIGNING_HOME" ]]; then
-  echo "Unable to determine user home" >&2
-  exit 1
+  exit_message 1 "Unable to determine user home"
 fi
 
 if [[ ! -f "${GRADLE_SIGNING_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
+  echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
   GRADLE_COMMAND="publishToMavenLocal"
   GRADLE_SIGN_PUBLICATIONS="false"
 fi
@@ -430,7 +430,7 @@ else
   FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")"
 fi
 
-cd "${BASEDIR}" || { echo "Failed to change directory to ${BASEDIR}"; exit 1; }
+cd "${BASEDIR}" || { exit_message 1 "Failed to change directory to ${BASEDIR}"; }
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 # Define all build steps
@@ -448,11 +448,10 @@ fi
 
 if [[ ! -f "${BASEDIR}/gradlew" ]]; then
   if ! command -v gradle >/dev/null 2>&1; then
-    echo "Gradle is not available on PATH. Ensure scripts/toolchain/setup-android.sh completed successfully."
-    exit 1
+    exit_message 1 "Gradle is not available on PATH. Ensure scripts/toolchain/setup-android.sh completed successfully."
   fi
-  echo "RUNNING: gradle wrapper --distribution-type all"
-  gradle wrapper --distribution-type all || { echo "Failed to create Gradle wrapper"; exit 1; }
+  echo "RUNNING: gradle wrapper --distribution-type all" | tee -a "${LOG_FILE}"
+  gradle wrapper --distribution-type all || { exit_message 1 "Failed to create Gradle wrapper"; }
 fi
 chmod +x "${BASEDIR}/gradlew"
 OWNER="${GITHUB_USERNAME:-$(get_github_owner)}"
@@ -477,7 +476,7 @@ create_aar_artifact() {
   if [[ "$local_build" == "true" ]]; then
     BUILD_STEPS+=("$build_step")
   elif check_maven_package_status "${FFMPEG_KIT_OUTPUT_NAME}" "$FFMPEG_KIT_VERSION" > >(redirect_output) 2>&1; then
-    echo "Package ${FFMPEG_KIT_OUTPUT_NAME} version ${FFMPEG_KIT_VERSION} already exists in Maven Central, skipping build"
+    echo "Package ${FFMPEG_KIT_OUTPUT_NAME} version ${FFMPEG_KIT_VERSION} already exists in Maven Central, skipping build" | tee -a "${LOG_FILE}"
   else
     BUILD_STEPS+=("$build_step")
   fi
@@ -485,7 +484,7 @@ create_aar_artifact() {
 
 create_release_artifact() {
   release_asset="$1"
-  build_step="create_github_release \"${release_asset}\""
+  build_step="export host_platform=${host_platform:-android} && create_github_release \"${release_asset}\""
   BUILD_STEPS+=("$build_step")
 }
 
@@ -533,7 +532,7 @@ for key in "${!PLATFORMS[@]}"; do
               done
               FFMPEG_KIT_JNI_LIBS_DIR=$(realpath "${jni_libs_dir}")
               if [[ ! -d "${FFMPEG_KIT_JNI_LIBS_DIR}" ]]; then
-                echo "DEBUG: Failed to resolve jniLibs directory"
+                echo "DEBUG: Failed to resolve jniLibs directory" | tee -a "${LOG_FILE}"
                 continue
               fi
               small_pfx=""
@@ -555,11 +554,16 @@ for key in "${!PLATFORMS[@]}"; do
               fi
               FFMPEG_KIT_OUTPUT_NAME="bundle-${bundle_pfx}-shared${debug_pfx}${small_pfx}${license_pfx}"
               package_name="${FFMPEG_KIT_NAMESPACE}.${FFMPEG_KIT_OUTPUT_NAME}"
-              echo "${FFMPEG_KIT_JNI_LIBS_DIR}" > >(redirect_output)
+              echo "jniLibs dir: ${FFMPEG_KIT_JNI_LIBS_DIR}" > >(redirect_output)
               if find "${FFMPEG_KIT_JNI_LIBS_DIR}" -type f \( -name "*.so" -o -name "*.a" \) | read -r; then
-                [[ "${create_aar}" == "true" ]] && create_aar_artifact "${FFMPEG_KIT_JNI_LIBS_DIR}" "${FFMPEG_KIT_OUTPUT_NAME}"
-                [[ "${create_release}" == "true" ]] && release_asset=$(realpath "${BASEDIR}/tools/android/build/outputs/aar/${FFMPEG_KIT_OUTPUT_NAME}-${assemble_type,,}.aar") || true
-                [[ "${create_release}" == "true" && "$local_build" != "true" ]] && create_release_artifact "${release_asset}" || true
+                [[ "${create_aar}" == "true" ]] && { create_aar_artifact "${FFMPEG_KIT_JNI_LIBS_DIR}" "${FFMPEG_KIT_OUTPUT_NAME}" || exit_message 1 "Failed to create AAR artifact"; }
+                if [[ "${create_release}" == "true" ]]; then
+                  release_asset="${BASEDIR}/tools/android/build/outputs/aar/${FFMPEG_KIT_OUTPUT_NAME}-${assemble_type,,}.aar"
+                  if [[ ! -f "$release_asset" ]]; then
+                    exit_message 1 "Release asset not found: $release_asset"
+                  fi
+                fi
+                [[ "${create_release}" == "true" && "$local_build" != "true" ]] && { create_release_artifact "${release_asset}" || exit_message 1 "Failed to create release artifact"; }
               fi
           done
       done
