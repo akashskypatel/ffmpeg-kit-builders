@@ -512,25 +512,25 @@ for key in "${!PLATFORMS[@]}"; do
                   abi_arch="$(parse_arch "${arch}")"
                   # copy to jniLibs
                   if [[ -d "${ffmpeg_kit_include_dir}" ]]; then
-                    echo "Copying include directory to jniLibs" > >(redirect_output)
-                    build_step="cp -r \"${ffmpeg_kit_include_dir}\" \"${jni_libs_dir}\""
+                    echo "Copying include directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_include_dir} to ${jni_libs_dir}" > >(redirect_output)
+                    build_step="cp -rfv \"${ffmpeg_kit_include_dir}\" \"${jni_libs_dir}\""
                     BUILD_STEPS+=("$build_step")
                   fi
                   if [[ -d "${ffmpeg_kit_dir}/lib" ]]; then
-                    echo "Copying lib directory to jniLibs" > >(redirect_output)
-                    build_step="find \"${ffmpeg_kit_dir}/lib\" \( -name \"*.so*\" -o -name \"*.a*\" \) -exec cp -fv {} \"${jni_libs_dir}/${abi_arch}\" \;"
+                    echo "Copying lib directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib to ${jni_libs_dir}/${abi_arch}" > >(redirect_output)
+                    build_step="find \"${ffmpeg_kit_dir}/lib\" \( -name \"*.so*\" -o -name \"*.a*\" \) -exec cp -rfv {} \"${jni_libs_dir}/${abi_arch}\" \;"
                     BUILD_STEPS+=("$build_step")
                   fi
                   if [[ -d "${ffmpeg_kit_dir}/lib/pkgconfig" ]]; then
-                    echo "Copying pkgconfig directory to jniLibs" > >(redirect_output)
-                    build_step="cp -r \"${ffmpeg_kit_dir}/lib/pkgconfig\" \"${jni_libs_dir}/lib\""
+                    echo "Copying pkgconfig directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib/pkgconfig to ${jni_libs_dir}/lib" > >(redirect_output)
+                    build_step="cp -rfv \"${ffmpeg_kit_dir}/lib/pkgconfig\" \"${jni_libs_dir}/lib\""
                     BUILD_STEPS+=("$build_step")
                   fi
                   build_step="chmod -R a+rwx \"${jni_libs_dir}\""
                   BUILD_STEPS+=("$build_step")
                 fi
               done
-              FFMPEG_KIT_JNI_LIBS_DIR=$(realpath "${jni_libs_dir}")
+              FFMPEG_KIT_JNI_LIBS_DIR="${jni_libs_dir}"
               if [[ ! -d "${FFMPEG_KIT_JNI_LIBS_DIR}" ]]; then
                 echo "DEBUG: Failed to resolve jniLibs directory" | tee -a "${LOG_FILE}"
                 continue
@@ -564,6 +564,8 @@ for key in "${!PLATFORMS[@]}"; do
                   fi
                 fi
                 [[ "${create_release}" == "true" && "$local_build" != "true" ]] && { create_release_artifact "${release_asset}" || exit_message 1 "Failed to create release artifact"; }
+              else
+                echo "DEBUG: No native libraries found in ${FFMPEG_KIT_JNI_LIBS_DIR}" | tee -a "${LOG_FILE}"
               fi
           done
       done
