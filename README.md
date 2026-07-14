@@ -317,7 +317,7 @@ prebuilt/
 
 ## Bundle Contents by Platform
 
-Shows which bundle first includes each library on Android, Linux, and Windows. `b+` = Base bundle and above. `a+` = Audio bundle and above. `v+` = Video bundle and above. `h+` = Video+Hardware bundle and above. `f` = Full bundle only. *(empty)* = not available on this platform.
+Shows which bundle first includes each library on iOS, macOS, Android, Linux, and Windows. 
 
 ### Filters
 
@@ -335,6 +335,14 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 
 > **`libopenvino`**, and **`libtensorflow`** only available on Desktop builds (`MacOS`, `Linux`, and `Windows`). **`libtorch`** only available on `Linux` and `MacOs` builds (`Windows` not supported due ABI mismatch).
 
+| Bundle Key | Description                          |
+| ---------- | ------------------------------------ |
+| `b+`       | Base bundle and above.               |
+| `a+`       | Audio bundle and above.              |
+| `v+`       | Video bundle and above.              |
+| `h+`       | Video+Hardware bundle and above.     |
+| `f`        | Full bundle only.                    |
+| *(empty)*  | not available on this platform.      |
 
 | Library                                                               | Android | Linux | Windows | iOS | macOS |
 | --------------------------------------------------------------------- | ------- | ----- | ------- | --- | ----- |
@@ -352,7 +360,7 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 | libvo-amrwbenc, libvorbis, openal                                     | a+      | a+    | a+      | a+  | a+    |
 | alsa                                                                  |         | a+    |         |     |       |
 | libbs2b<sup>[10](#gpl-info)</sup>                                     | a+      | a+    | a+      | a+  | a+    |
-| libmpeghdec                                                           | a+      | a+    | a+      | a+  | a+    |
+| libmpeghdec<sup>[9](#nonfree-info)</sup> *(--enable-nonfree)*         | a+      | a+    | a+      | a+  | a+    |
 | **Audio Extras** *(not in `--small` builds)*                          |         |       |         |     |       |
 | chromaprint, libflite, libgme, libmysofa, libshine, lv2               | a+      | a+    | a+      | a+  | a+    |
 | libcdio, librubberband<sup>[10](#gpl-info)</sup>                      | a+      | a+    | a+      | a+  | a+    |
@@ -364,12 +372,12 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 | libdav1d, libfontconfig, libfreetype, libfribidi                      | v+      | v+    | v+      | v+  | v+    |
 | libharfbuzz, libjxl, libkvazaar, liblcevc-dec                         | v+      | v+    | v+      | v+  | v+    |
 | liboapv, libopenh264, libopenjpeg, librav1e                           | v+      | v+    | v+      | v+  | v+    |
-| librsvg, libsnappy, libsvtav1, libtheora,                             | v+      | v+    | v+      | v+  | v+    |
-| libtheora, libuavs3d, libvpx, libvvenc, libwebp                       | v+      | v+    | v+      | v+  | v+    |
+| librsvg, libsnappy, libsvtav1, libtheora                              | v+      | v+    | v+      | v+  | v+    |
+| libuavs3d, libvpx, libvvenc, libwebp                                  | v+      | v+    | v+      | v+  | v+    |
 | libxevd, libxeve, libzimg, libzvbi, libxml2, sdl2                     | v+      | v+    | v+      | v+  | v+    |
 | libdavs2, libdvdnav, libdvdread, libx264<sup>[10](#gpl-info)</sup>    | v+      | v+    | v+      | v+  | v+    |
 | libx265, libxavs, libxavs2, libaribb24<sup>[10](#gpl-info)</sup>      | v+      | v+    | v+      | v+  | v+    |
-| libdc1394, libiec61883, libsvtjpegxs                                   |         | v+    |         |     |       |
+| libdc1394, libiec61883, libsvtjpegxs                                  |         | v+    |         |     |       |
 | libxvid<sup>[10](#gpl-info)</sup>                                     |         | v+    |         |     |       |
 | libopencolorio<sup>[15](#arch-info)</sup>                             | v+      | v+    | v+      | v+  | v+    |
 | **Video Extras** *(not in `--small` builds)*                          |         |       |         |     |       |
