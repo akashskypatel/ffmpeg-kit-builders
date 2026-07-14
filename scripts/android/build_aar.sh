@@ -417,6 +417,7 @@ if [[ -z "$SIGNING_HOME" || ! -d "$SIGNING_HOME" ]]; then
   exit_message 1 "Unable to determine user home"
 fi
 
+echo "Checking signing configuration at ${GRADLE_SIGNING_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
 if [[ ! -f "${GRADLE_SIGNING_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
   echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
   GRADLE_COMMAND="publishToMavenLocal"
@@ -463,7 +464,7 @@ create_aar_artifact() {
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
   build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
-  --no-daemon --info --warning-mode all --gradle-user-home ~/.gradle \
+  --no-daemon --info --warning-mode all --gradle-user-home ${GRADLE_SIGNING_HOME}/.gradle \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \
   -PANDROID_NDK=\"${ANDROID_NDK}\" \
   -PANDROID_API_LEVEL=\"${ANDROID_API_LEVEL}\" \
@@ -516,12 +517,12 @@ for key in "${!PLATFORMS[@]}"; do
                   abi_arch="$(parse_arch "${arch}")"
                   # copy to jniLibs
                   if [[ -d "${ffmpeg_kit_include_dir}" ]]; then
-                    echo "Copying include directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_include_dir} to ${jni_libs_dir}" > >(redirect_output)
+                    echo "Copying include directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_include_dir} to ${jni_libs_dir}" >> "${LOG_FILE}"
                     build_step="cp -rfv \"${ffmpeg_kit_include_dir}\" \"${jni_libs_dir}\""
                     BUILD_STEPS+=("$build_step")
                   fi
                   if [[ -d "${ffmpeg_kit_dir}/lib" ]]; then
-                    echo "Copying lib directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib to ${jni_libs_dir}/${abi_arch}" > >(redirect_output)
+                    echo "Copying lib directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib to ${jni_libs_dir}/${abi_arch}" >> "${LOG_FILE}"
                     build_step="find \"${ffmpeg_kit_dir}/lib\" \( -name \"*.so*\" -o -name \"*.a*\" \) -exec cp -rfv {} \"${jni_libs_dir}/${abi_arch}\" \;"
                     BUILD_STEPS+=("$build_step")
                     if find "${ffmpeg_kit_dir}/lib" -type f \( -name "*.so*" -o -name "*.a*" \) | read -r; then
@@ -529,7 +530,7 @@ for key in "${!PLATFORMS[@]}"; do
                     fi
                   fi
                   if [[ -d "${ffmpeg_kit_dir}/lib/pkgconfig" ]]; then
-                    echo "Copying pkgconfig directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib/pkgconfig to ${jni_libs_dir}/lib" > >(redirect_output)
+                    echo "Copying pkgconfig directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib/pkgconfig to ${jni_libs_dir}/lib" >> "${LOG_FILE}"
                     build_step="cp -rfv \"${ffmpeg_kit_dir}/lib/pkgconfig\" \"${jni_libs_dir}/lib\""
                     BUILD_STEPS+=("$build_step")
                   fi
@@ -586,6 +587,7 @@ for _step in "${BUILD_STEPS[@]}"; do
   is_completed "${_step}" && (( completed_steps++ )) || true
 done
 
+echo "" | tee -a "${LOG_FILE}"
 echo "========================================" | tee -a "${LOG_FILE}"
 echo "FFmpeg Kit AAR Build - State Management" | tee -a "${LOG_FILE}"
 echo "========================================" | tee -a "${LOG_FILE}"
@@ -593,6 +595,9 @@ echo "Platform: ${PLATFORMS[*]}" | tee -a "${LOG_FILE}"
 echo "Bundles: ${BUNDLE_ARRAY[*]}" | tee -a "${LOG_FILE}"
 echo "Licenses: ${LICENSE_ARRAY[*]}" | tee -a "${LOG_FILE}"
 echo "Small: ${SMALL_FLAGS[*]}" | tee -a "${LOG_FILE}"
+echo "Local build: ${local_build}" | tee -a "${LOG_FILE}"
+echo "Create AAR: ${create_aar}" | tee -a "${LOG_FILE}"
+echo "Create release: ${create_release}" | tee -a "${LOG_FILE}"
 echo "Total steps: ${total_steps}" | tee -a "${LOG_FILE}"
 echo "Completed steps: ${completed_steps}" | tee -a "${LOG_FILE}"
 echo "Remaining steps: $((total_steps - completed_steps))" | tee -a "${LOG_FILE}"
