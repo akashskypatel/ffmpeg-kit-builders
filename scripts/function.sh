@@ -4609,14 +4609,14 @@ configure_ffmpeg() {
     
   fi
   if iswindows; then
-    export LDFLAGS="$LDFLAGS -Wl,-Bstatic"
+    export LDFLAGS="$LDFLAGS -Wl,-Bstatic -lpthread -Wl,-Bdynamic"
     export CFLAGS="$CFLAGS -mstackrealign"
     export LD=${cross_prefix}gcc # ld weirdness with windows
 	  init_options+=" --target-os=mingw32"
     # init_options+=" --enable-w32threads"
     init_options+=" --disable-w32threads"
     init_options+=" --enable-pthreads"
-    init_options+=" --extra-cflags=\" -DPTW32_STATIC_LIB \""
+    init_options+=" --extra-ldflags=\" -Wl,-Bstatic -lpthread -Wl,-Bdynamic \""
     init_options+=" --disable-filter=gfxcapture"
     init_options+=" --extra-ldflags=\" -L${deps_install_prefix}/lib \""
   elif isandroid; then
