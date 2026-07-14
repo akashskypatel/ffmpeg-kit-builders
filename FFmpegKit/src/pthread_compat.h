@@ -20,7 +20,7 @@
 #ifndef PTHREAD_COMPAT_H
 #define PTHREAD_COMPAT_H
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 #if defined(HAVE_STDINT_H)
 #undef HAVE_STDINT_H
 #endif
@@ -114,5 +114,5 @@ extern "C++" {
 
 #endif
 
-#endif // _WIN32
+#endif // defined(_WIN32) && !defined(__MINGW32__)
 #endif // PTHREAD_COMPAT_H
