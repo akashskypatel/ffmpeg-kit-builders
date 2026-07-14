@@ -162,6 +162,24 @@ if(WIN32)
     )
 
     if(MINGW)
+        find_library(FFMPEGKIT_WINPTHREAD_STATIC_LIB
+            NAMES libwinpthread.a
+            PATHS
+                "${DEPENDENCY_BUILD_DIR}/lib"
+                "${FFMPEG_BUILD_DIR}/lib"
+                "${CMAKE_C_IMPLICIT_LINK_DIRECTORIES}"
+            NO_DEFAULT_PATH
+        )
+        if(NOT FFMPEGKIT_WINPTHREAD_STATIC_LIB)
+            find_library(FFMPEGKIT_WINPTHREAD_STATIC_LIB
+                NAMES libwinpthread.a
+            )
+        endif()
+        set(FFMPEGKIT_PTHREAD_STATIC_LIB "${FFMPEGKIT_WINPTHREAD_STATIC_LIB}")
+        if(NOT EXISTS "${FFMPEGKIT_PTHREAD_STATIC_LIB}")
+            message(FATAL_ERROR "Static MinGW winpthread library not found. Expected libwinpthread.a in the dependency, FFmpeg, or toolchain library paths.")
+        endif()
+
         target_compile_definitions(ffmpegkit PRIVATE
             _WIN32_WINNT=0x0600
             _FORTIFY_SOURCE=2
@@ -177,13 +195,13 @@ if(WIN32)
             "-static-libstdc++"
             # "-nodefaultlibs"
             # "-Wl,--entry,_DllMainCRTStartup"
-            "-Wl,-Bstatic -lpthread -Wl,-Bdynamic"
             "-Wl,--enable-runtime-pseudo-reloc"
             "-Wl,-u,__mingw_raise_matherr"
             "-Wl,--exclude-libs,libstdc++.a"
             "-Wl,--exclude-libs,libgcc.a"
             "-Wl,--exclude-libs,libgomp.a"
             "-Wl,--exclude-libs,libssp.a"
+            "-Wl,--exclude-libs,libwinpthread.a"
             "-Wl,--nxcompat"          # Data Execution Prevention (DEP)
             "-Wl,--dynamicbase"       # ASLR
             "-Wl,--high-entropy-va"   # 64-bit ASLR
@@ -400,7 +418,7 @@ if(BUILD_SHARED_LIBS)
                 "-Wl,-Bstatic"
                 "-lstdc++"
                 "-lgcc"
-                "-lwinpthread"
+                "${FFMPEGKIT_PTHREAD_STATIC_LIB}"
                 "-Wl,-Bdynamic"
 
                 # 2. FFmpeg core - whole-archive to prevent dead-stripping of
@@ -479,9 +497,8 @@ if(BUILD_SHARED_LIBS)
         if(MINGW)
             target_link_libraries(ffmpegkit PRIVATE
                 "-Wl,--start-group"
-                "${PTW32_STATIC_LIB}"
+                "${FFMPEGKIT_PTHREAD_STATIC_LIB}"
                 ${BUNDLE_LIBRARIES}
-                "pthread"
                 "ws2_32"
                 "bcrypt"
                 "-Wl,--end-group"
