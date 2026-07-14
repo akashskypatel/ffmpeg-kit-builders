@@ -458,6 +458,7 @@ OWNER="${GITHUB_USERNAME:-$(get_github_owner)}"
 create_aar_artifact() {
   FFMPEG_KIT_JNI_LIBS_DIR="$1"
   FFMPEG_KIT_OUTPUT_NAME="$2"
+  AAR_ARTIFACT_QUEUED=false
   FFMPEG_KIT_NAMESPACE="io.github.${OWNER}.ffmpegkit"
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
@@ -475,10 +476,12 @@ create_aar_artifact() {
   -PmavenCentralPassword=\"${OSSRH_PASSWORD}\""
   if [[ "$local_build" == "true" ]]; then
     BUILD_STEPS+=("$build_step")
+    AAR_ARTIFACT_QUEUED=true
   elif check_maven_package_status "${FFMPEG_KIT_OUTPUT_NAME}" "$FFMPEG_KIT_VERSION" > >(redirect_output) 2>&1; then
     echo "Package ${FFMPEG_KIT_OUTPUT_NAME} version ${FFMPEG_KIT_VERSION} already exists in Maven Central, skipping build" | tee -a "${LOG_FILE}"
   else
     BUILD_STEPS+=("$build_step")
+    AAR_ARTIFACT_QUEUED=true
   fi
 }
 
@@ -496,6 +499,7 @@ for key in "${!PLATFORMS[@]}"; do
       for license in "${LICENSE_ARRAY[@]}"; do
           for small in "${SMALL_FLAGS[@]}"; do
               jni_libs_dir="$(create_jni_libs_dir -b="${bundle}" -l="${license}" -s="${small}")"
+              has_native_binaries=false
               license_flag=""
               if [[ "${license}" == "gpl" ]]; then
                   license_flag="--gpl"
@@ -520,6 +524,9 @@ for key in "${!PLATFORMS[@]}"; do
                     echo "Copying lib directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib to ${jni_libs_dir}/${abi_arch}" > >(redirect_output)
                     build_step="find \"${ffmpeg_kit_dir}/lib\" \( -name \"*.so*\" -o -name \"*.a*\" \) -exec cp -rfv {} \"${jni_libs_dir}/${abi_arch}\" \;"
                     BUILD_STEPS+=("$build_step")
+                    if find "${ffmpeg_kit_dir}/lib" -type f \( -name "*.so*" -o -name "*.a*" \) | read -r; then
+                      has_native_binaries=true
+                    fi
                   fi
                   if [[ -d "${ffmpeg_kit_dir}/lib/pkgconfig" ]]; then
                     echo "Copying pkgconfig directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib/pkgconfig to ${jni_libs_dir}/lib" > >(redirect_output)
@@ -553,19 +560,18 @@ for key in "${!PLATFORMS[@]}"; do
                   debug_pfx="-debug"
               fi
               FFMPEG_KIT_OUTPUT_NAME="bundle-${bundle_pfx}-shared${debug_pfx}${small_pfx}${license_pfx}"
-              package_name="${FFMPEG_KIT_NAMESPACE}.${FFMPEG_KIT_OUTPUT_NAME}"
               echo "jniLibs dir: ${FFMPEG_KIT_JNI_LIBS_DIR}" > >(redirect_output)
-              if find "${FFMPEG_KIT_JNI_LIBS_DIR}" -type f \( -name "*.so" -o -name "*.a" \) | read -r; then
+              if [[ "$has_native_binaries" == "true" ]]; then
                 [[ "${create_aar}" == "true" ]] && { create_aar_artifact "${FFMPEG_KIT_JNI_LIBS_DIR}" "${FFMPEG_KIT_OUTPUT_NAME}" || exit_message 1 "Failed to create AAR artifact"; }
                 if [[ "${create_release}" == "true" ]]; then
                   release_asset="${BASEDIR}/tools/android/build/outputs/aar/${FFMPEG_KIT_OUTPUT_NAME}-${assemble_type,,}.aar"
-                  if [[ ! -f "$release_asset" ]]; then
+                  if [[ "${create_aar}" != "true" && ! -f "$release_asset" ]]; then
                     exit_message 1 "Release asset not found: $release_asset"
                   fi
                 fi
-                [[ "${create_release}" == "true" && "$local_build" != "true" ]] && { create_release_artifact "${release_asset}" || exit_message 1 "Failed to create release artifact"; }
+                [[ "${create_release}" == "true" && "$local_build" != "true" && ( "${create_aar}" != "true" || "$AAR_ARTIFACT_QUEUED" == "true" ) ]] && { create_release_artifact "${release_asset}" || exit_message 1 "Failed to create release artifact"; }
               else
-                echo "DEBUG: No native libraries found in ${FFMPEG_KIT_JNI_LIBS_DIR}" | tee -a "${LOG_FILE}"
+                echo "DEBUG: No native libraries found in source ffmpeg-kit outputs for ${FFMPEG_KIT_OUTPUT_NAME}" | tee -a "${LOG_FILE}"
               fi
           done
       done
