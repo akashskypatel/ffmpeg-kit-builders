@@ -129,7 +129,7 @@ configure_ffmpeg_kit() {
 
 	export CFLAGS="${local_cflags}"
 	export CXXFLAGS="${local_cxxfalgs}"
-	export LDFLAGS="${LDFLAGS//-static /} -static-libgcc -static-libstdc++ -Wl,-Bstatic -l:libpthreadGC3.a"
+	export LDFLAGS="${LDFLAGS//-static /} -static-libgcc -static-libstdc++ -Wl,-Bstatic"
 
 	local cmake_params="-DCMAKE_SYSTEM_NAME=Windows \
 -DCMAKE_C_COMPILER=$CC \

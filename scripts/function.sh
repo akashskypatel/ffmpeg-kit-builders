@@ -4609,7 +4609,7 @@ configure_ffmpeg() {
     
   fi
   if iswindows; then
-    export LDFLAGS="$LDFLAGS -Wl,-Bstatic -l:libpthreadGC3.a"
+    export LDFLAGS="$LDFLAGS -Wl,-Bstatic"
     export CFLAGS="$CFLAGS -mstackrealign"
     export LD=${cross_prefix}gcc # ld weirdness with windows
 	  init_options+=" --target-os=mingw32"
@@ -4703,7 +4703,7 @@ configure_ffmpeg() {
 	  init_options+=" --extra-cflags=\" -pipe \""
     init_options+=" --extra-ldflags=\" $stdcpp_path $stdgcc_path \""
     init_options+=" --extra-cflags=\" $extra_ffmpeg_c_flags \""
-    add_extra_libs "$stdcpp_path -l:libpthreadGC3.a"
+    add_extra_libs "$stdcpp_path"
     init_options+=" --extra-cflags=\" -Wno-pedantic -Wno-cpp -Wno-variadic-macros \""
   fi
 
