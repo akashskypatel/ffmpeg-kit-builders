@@ -76,6 +76,7 @@ contains_csv_value() {
   local csv="$1"
   local needle="$2"
   local item
+  local -a items=()
   IFS=',' read -ra items <<< "$csv"
   for item in "${items[@]}"; do
     item="$(trim "$item")"
@@ -148,12 +149,14 @@ reset_workflow_seen_steps() {
 
 read_workflow_bundles() {
   local bundle_csv="${WORKFLOW_BUNDLES:-}"
+  local bundle
+  local -a bundles=()
+
   if [[ -z "$bundle_csv" ]]; then
     printf '%s\n' "full"
     return 0
   fi
 
-  local bundle
   IFS=',' read -ra bundles <<< "$bundle_csv"
   for bundle in "${bundles[@]}"; do
     bundle="$(trim "$bundle")"
@@ -180,35 +183,30 @@ is_android_platform() {
   [[ "$platform" == "android" ]]
 }
 
-defer_android_prebuilt_cleanup() {
+cleanup_platform_batch_prebuilt_dirs() {
   local platform="$1"
-  local arch="$2"
-  local combo="${platform}-${arch}"
+  local combo arch
+  local combo_csv="${bundle_platform_combo_csv[$platform]:-}"
+  local -a platform_batch_combos=()
 
-  if [[ -z "${deferred_android_cleanup_seen[$combo]:-}" ]]; then
-    deferred_android_cleanup_seen["$combo"]=1
-    deferred_android_cleanup_combos+=("$combo")
-  fi
-}
+  [[ -z "$combo_csv" ]] && return 0
 
-cleanup_deferred_android_prebuilt_dirs() {
-  local combo
-
-  for combo in "${deferred_android_cleanup_combos[@]}"; do
-    echo "::notice::Cleaning up deferred Android prebuilt directory for $combo"
-    sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${combo}"
+  IFS=',' read -ra platform_batch_combos <<< "$combo_csv"
+  for combo in "${platform_batch_combos[@]}"; do
+    [[ -z "$combo" ]] && continue
+    arch="${combo#*-}"
+    if is_android_platform "$platform"; then
+      echo "::notice::Cleaning up Android prebuilt directory for $combo"
+      sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${combo}"
+    else
+      cleanup_combo_prebuilt_dirs "$platform" "$arch"
+    fi
   done
 }
 
 cleanup_combo_libraries() {
   local platform="$1"
   local arch="$2"
-
-  if is_android_platform "$platform"; then
-    echo "::notice::Preserving Android prebuilt libraries for ${platform}-${arch} until all Android archs complete"
-    defer_android_prebuilt_cleanup "$platform" "$arch"
-    return 0
-  fi
 
   sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${platform}-${arch}/libraries"
 }
@@ -218,12 +216,6 @@ cleanup_combo_prebuilt_dirs() {
   local arch="$2"
   local combo="${platform}-${arch}"
   local simulator_platform
-
-  if is_android_platform "$platform"; then
-    echo "::notice::Deferring Android prebuilt cleanup for $combo until all Android archs complete"
-    defer_android_prebuilt_cleanup "$platform" "$arch"
-    return 0
-  fi
 
   if is_simulator_platform "$platform"; then
     echo "::notice::Skipping prebuilt cleanup for simulator combo $combo until its physical device companion completes"
@@ -236,6 +228,27 @@ cleanup_combo_prebuilt_dirs() {
   if simulator_platform="$(get_simulator_companion_platform "$platform" 2>/dev/null)" && is_supported_combo "${simulator_platform}-${arch}"; then
     echo "::notice::Cleaning up paired simulator prebuilt directory for ${simulator_platform}-${arch}"
     sudo rm -rf "${GITHUB_WORKSPACE}/prebuilt/${simulator_platform}-${arch}"
+  fi
+}
+
+validate_workflow_target_combo() {
+  local platform="$1"
+  local arch="$2"
+  local combo="${platform}-${arch}"
+
+  if [[ -z "$platform" || -z "$arch" ]]; then
+    echo "::notice::Skipping target with missing platform or arch: platform='$platform' arch='$arch'"
+    return 1
+  fi
+
+  if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
+    echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
+    return 1
+  fi
+
+  if ! is_supported_combo "$combo"; then
+    echo "::notice::Skipping unsupported target $combo"
+    return 1
   fi
 }
 
@@ -393,26 +406,32 @@ ensure_ffmpeg_artifacts() {
   done < <(read_workflow_bundles)
 }
 
+append_bundle_target_combo() {
+  local platform="$1"
+  local arch="$2"
+  local combo="${platform}-${arch}"
+
+  if [[ -z "${bundle_platform_seen[$platform]:-}" ]]; then
+    bundle_platform_seen["$platform"]=1
+    bundle_platforms+=("$platform")
+  fi
+
+  if [[ -z "${bundle_combo_seen[$combo]:-}" ]]; then
+    bundle_combo_seen["$combo"]=1
+    if [[ -n "${bundle_platform_combo_csv[$platform]:-}" ]]; then
+      bundle_platform_combo_csv["$platform"]+=",${combo}"
+    else
+      bundle_platform_combo_csv["$platform"]="$combo"
+    fi
+  fi
+}
 
 workflow_step_build_ffmpeg() {
   local platform="$1"
   local arch="$2"
-  local combo="${platform}-${arch}"
   if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" ]]; then
     echo "::notice::Building ffmpeg for selected platforms and architectures"
-    [[ -z "$platform" ]] && return 1
-
-    if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
-      echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
-      return 1
-    fi
-
-    [[ -z "$arch" ]] && return 1
-
-    if ! is_supported_combo "$combo"; then
-      echo "::notice::Skipping unsupported target $combo"
-      return 1
-    fi
+    validate_workflow_target_combo "$platform" "$arch" || return 1
 
     set_workflow_current_step "build_ffmpeg"
     if ! ensure_ffmpeg_artifacts "$platform" "$arch"; then
@@ -427,20 +446,8 @@ workflow_step_build_bundle() {
   local arch="$2"
   local combo="${platform}-${arch}"
   if [[ "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
-    echo "::notice::Building bundle for selected platforms and architectures"
-    [[ -z "$platform" ]] && return 1
-
-    if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
-      echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
-      return 1
-    fi
-
-    [[ -z "$arch" ]] && return 1
-
-    if ! is_supported_combo "$combo"; then
-      echo "::notice::Skipping unsupported target $combo"
-      return 1
-    fi
+    echo "::notice::Preparing bundle build for $combo"
+    validate_workflow_target_combo "$platform" "$arch" || return 1
 
     set_workflow_current_step "build_bundle"
 
@@ -451,20 +458,35 @@ workflow_step_build_bundle() {
       fi
     fi
 
-    if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
-      echo "::notice::Building bundle for $combo with bundles: $WORKFLOW_BUNDLES"
-      if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=kit,bundle --remote --bundle="${WORKFLOW_BUNDLES}"; then
-        echo "::error::Failed to build bundle for $combo"
-        return 1
-      fi
-    else
-      echo "::notice::Building bundle for $combo"
-      if ! run_with_runner_shell ./scripts/build_all.sh --platform="${combo}" --build=kit,bundle --remote; then
-        echo "::error::Failed to build bundle for $combo"
-        return 1
-      fi
-    fi
+    append_bundle_target_combo "$platform" "$arch"
   fi
+}
+
+workflow_step_build_bundle_batches() {
+  local platform combo_csv
+  local -a build_all_args
+
+  [[ "${WORKFLOW_BUILD_BUNDLE}" == "true" ]] || return 0
+
+  for platform in "${bundle_platforms[@]}"; do
+    combo_csv="${bundle_platform_combo_csv[$platform]:-}"
+    [[ -z "$combo_csv" ]] && continue
+
+    set_workflow_current_step "build_bundle"
+    build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build=kit,bundle --remote)
+    if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
+      build_all_args+=(--bundle="${WORKFLOW_BUNDLES}")
+    fi
+
+    echo "::notice::Building bundle batch for $platform platforms: $combo_csv"
+    if ! run_with_runner_shell "${build_all_args[@]}"; then
+      echo "::error::Failed to build bundle batch for $platform platforms: $combo_csv"
+      return 1
+    fi
+
+    echo "::notice::Bundle batch built successfully for $platform platforms: $combo_csv"
+    cleanup_platform_batch_prebuilt_dirs "$platform"
+  done
 }
 
 
@@ -505,22 +527,17 @@ ran_any=false
 declare -A installed_toolchains=()
 declare -A workflow_target_combo_seen=()
 declare -a workflow_target_combos=()
-declare -A deferred_android_cleanup_seen=()
-declare -a deferred_android_cleanup_combos=()
+declare -A bundle_platform_seen=()
+declare -A bundle_combo_seen=()
+declare -A bundle_platform_combo_csv=()
+declare -a bundle_platforms=()
 
 append_workflow_target_combo() {
   local platform="$1"
   local arch="$2"
   local combo="${platform}-${arch}"
-  [[ -z "$platform" || -z "$arch" ]] && return 0
 
-  if ! contains_csv_value "$RUNNER_WORKFLOW_TARGET_PLATFORMS" "$platform"; then
-    echo "::notice::Skipping platform '$platform': this ${runner_platform} runner supports only $RUNNER_WORKFLOW_TARGET_PLATFORMS"
-    return 0
-  fi
-
-  if ! is_supported_combo "$combo"; then
-    echo "::notice::Skipping unsupported target $combo"
+  if ! validate_workflow_target_combo "$platform" "$arch"; then
     return 0
   fi
 
@@ -606,16 +623,15 @@ for combo in "${workflow_target_combos[@]}"; do
 
     if [[ "${WORKFLOW_BUILD_BUNDLE}" == "true" ]]; then
       if ! workflow_step_build_bundle "$platform" "$arch"; then
-        echo "::error::Failed to build bundle for $combo"
+        echo "::error::Failed to prepare bundle build for $combo"
         exit 1
       fi
-
-      echo "::notice::bundle built successfully for $combo"
-      cleanup_combo_prebuilt_dirs "$platform" "$arch"
     fi
 done
 
-cleanup_deferred_android_prebuilt_dirs
+if ! workflow_step_build_bundle_batches; then
+  exit 1
+fi
 
 if [[ "$ran_any" != "true" ]]; then
   echo "::notice::No supported platform-arch combinations selected for this runner"
