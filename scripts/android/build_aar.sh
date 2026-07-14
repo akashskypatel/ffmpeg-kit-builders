@@ -402,6 +402,7 @@ verify_maven_signing_configuration() {
   local signing_gnupg_home=""
   local prop_key prop_value
   local tmp_dir tmp_gnupg passphrase_file preflight_file signature_file
+  local signing_gnupg_passphrase_file
 
   if ! command -v gpg >/dev/null 2>&1; then
     exit_message 1 "gpg is required to verify Maven signing configuration"
@@ -472,13 +473,24 @@ verify_maven_signing_configuration() {
 
   mkdir -p "$signing_gnupg_home"
   chmod 700 "$signing_gnupg_home"
+  signing_gnupg_passphrase_file="${signing_gnupg_home}/passphrase"
+  printf '%s' "$signing_password" > "$signing_gnupg_passphrase_file"
+  chmod 600 "$signing_gnupg_passphrase_file"
+  {
+    printf 'default-key %s\n' "$signing_key_id"
+    printf '%s\n' "pinentry-mode loopback"
+    printf '%s\n' "batch"
+    printf '%s\n' "no-tty"
+    printf 'passphrase-file %s\n' "$signing_gnupg_passphrase_file"
+  } > "${signing_gnupg_home}/gpg.conf"
+  chmod 600 "${signing_gnupg_home}/gpg.conf"
+
   if ! gpg --batch --homedir "$signing_gnupg_home" --import "$signing_keyring_file" > >(redirect_output) 2>&1; then
     rm -rf "$tmp_dir"
     exit_message 1 "Failed to import Maven signing key into Gradle GPG home"
   fi
 
-  if ! gpg --batch --yes --pinentry-mode loopback --homedir "$signing_gnupg_home" \
-      --passphrase-file "$passphrase_file" --local-user "$signing_key_id" \
+  if ! GNUPGHOME="$signing_gnupg_home" gpg --no-tty --batch \
       --detach-sign --armor --output "${signature_file}.gradle-home" "$preflight_file" > >(redirect_output) 2>&1; then
     rm -rf "$tmp_dir"
     exit_message 1 "Maven signing preflight failed from Gradle GPG home; verify GPG command signing configuration"
@@ -560,7 +572,7 @@ create_aar_artifact() {
   FFMPEG_KIT_NAMESPACE="io.github.${OWNER}.ffmpegkit"
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
-  build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
+  build_step="GNUPGHOME=\"${SIGNING_HOME}/.gnupg\" ./gradlew :tools:android:${GRADLE_COMMAND} \
   --no-daemon --info --warning-mode all --gradle-user-home \"${GRADLE_HOME}\" \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \
   -PANDROID_NDK=\"${ANDROID_NDK}\" \
