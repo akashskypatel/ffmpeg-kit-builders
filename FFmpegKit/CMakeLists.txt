@@ -177,6 +177,7 @@ if(WIN32)
             "-static-libstdc++"
             # "-nodefaultlibs"
             # "-Wl,--entry,_DllMainCRTStartup"
+            "-Wl,-Bstatic -lpthread -Wl,-Bdynamic"
             "-Wl,--enable-runtime-pseudo-reloc"
             "-Wl,-u,__mingw_raise_matherr"
             "-Wl,--exclude-libs,libstdc++.a"
