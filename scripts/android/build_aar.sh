@@ -394,6 +394,75 @@ if [[ ! -f "${STATE_FILE}" ]]; then
   echo "# Format: <script> <args>" >> "${STATE_FILE}"
 fi
 
+verify_maven_signing_configuration() {
+  local gradle_properties="$1"
+  local signing_key_id=""
+  local signing_password=""
+  local signing_keyring_file=""
+  local prop_key prop_value
+  local tmp_dir tmp_gnupg passphrase_file preflight_file signature_file
+
+  if ! command -v gpg >/dev/null 2>&1; then
+    exit_message 1 "gpg is required to verify Maven signing configuration"
+  fi
+
+  while IFS='=' read -r prop_key prop_value; do
+    case "$prop_key" in
+      signing.keyId) signing_key_id="$prop_value" ;;
+      signing.password) signing_password="$prop_value" ;;
+      signing.secretKeyRingFile) signing_keyring_file="$prop_value" ;;
+    esac
+  done < "$gradle_properties"
+
+  if [[ -z "$signing_key_id" ]]; then
+    exit_message 1 "Missing signing.keyId in ${gradle_properties}"
+  fi
+  if [[ -z "$signing_keyring_file" ]]; then
+    exit_message 1 "Missing signing.secretKeyRingFile in ${gradle_properties}"
+  fi
+
+  case "$signing_keyring_file" in
+    "~/"*) signing_keyring_file="${HOME}/${signing_keyring_file#"~/"}" ;;
+    /*) ;;
+    *) signing_keyring_file="${GRADLE_HOME}/${signing_keyring_file}" ;;
+  esac
+
+  if [[ ! -f "$signing_keyring_file" ]]; then
+    exit_message 1 "Configured signing.secretKeyRingFile does not exist: ${signing_keyring_file}"
+  fi
+
+  tmp_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/maven-signing-preflight.XXXXXX")" || exit_message 1 "Failed to create Maven signing preflight directory"
+  tmp_gnupg="${tmp_dir}/gnupg"
+  passphrase_file="${tmp_dir}/passphrase"
+  preflight_file="${tmp_dir}/preflight.txt"
+  signature_file="${tmp_dir}/preflight.asc"
+  mkdir -p "$tmp_gnupg"
+  chmod 700 "$tmp_gnupg"
+  printf '%s' "$signing_password" > "$passphrase_file"
+  chmod 600 "$passphrase_file"
+  printf '%s\n' "ffmpeg-kit Maven signing preflight" > "$preflight_file"
+
+  if ! gpg --batch --homedir "$tmp_gnupg" --import "$signing_keyring_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Failed to import configured Maven signing secret keyring"
+  fi
+
+  if ! gpg --batch --homedir "$tmp_gnupg" --list-secret-keys "$signing_key_id" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Configured signing.keyId was not found in Maven signing secret keyring"
+  fi
+
+  if ! gpg --batch --yes --pinentry-mode loopback --homedir "$tmp_gnupg" \
+      --passphrase-file "$passphrase_file" --local-user "$signing_key_id" \
+      --detach-sign --armor --output "$signature_file" "$preflight_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Maven signing preflight failed; verify GPG_KEY_ID, GPG_PASSWORD, and GPG_SECRET_KEYRING_BASE64"
+  fi
+
+  rm -rf "$tmp_dir"
+  echo "Maven signing preflight succeeded" | tee -a "${LOG_FILE}"
+}
+
 ANDROID_HOME="/usr/local/android-sdk"
 latest_ndk=$(ls -v "$ANDROID_HOME/ndk" 2>/dev/null | tail -n 1)
 ANDROID_API_LEVEL="26"
@@ -424,6 +493,7 @@ if [[ ! -f "${GRADLE_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/se
   GRADLE_SIGN_PUBLICATIONS="false"
 else
   echo "Maven signing configured, using remote build" | tee -a "${LOG_FILE}"
+  verify_maven_signing_configuration "${GRADLE_HOME}/gradle.properties"
 fi
 
 # FFMPEG_KIT_VERSION: from version file
@@ -466,7 +536,7 @@ create_aar_artifact() {
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
   build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
-  --no-daemon --info --warning-mode all --gradle-user-home ${GRADLE_HOME} \
+  --no-daemon --info --warning-mode all --gradle-user-home \"${GRADLE_HOME}\" \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \
   -PANDROID_NDK=\"${ANDROID_NDK}\" \
   -PANDROID_API_LEVEL=\"${ANDROID_API_LEVEL}\" \
