@@ -259,7 +259,17 @@ require_sudo() {
 		exit_message 1 "This script must be run with sudo"
 	fi
 
-	if [ -z "$SUDO_USER" ]; then
+	if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
+		export FF_BUILD_ORIGINAL_USER="${FF_BUILD_ORIGINAL_USER:-$SUDO_USER}"
+		if command -v getent >/dev/null 2>&1; then
+			export FF_BUILD_ORIGINAL_HOME="${FF_BUILD_ORIGINAL_HOME:-$(getent passwd "$FF_BUILD_ORIGINAL_USER" | cut -d: -f6)}"
+		fi
+	elif [[ -z "${FF_BUILD_ORIGINAL_USER:-}" && "$(id -u)" -ne 0 ]]; then
+		export FF_BUILD_ORIGINAL_USER="$(id -un)"
+		export FF_BUILD_ORIGINAL_HOME="${HOME:-}"
+	fi
+
+	if [ -z "${SUDO_USER:-}" ]; then
 		echo "Warning: Running as root directly (not via sudo)" | tee -a "$LOG_FILE"
 	else
 		echo "Running with sudo privileges (user: $SUDO_USER)" | tee -a "$LOG_FILE"
@@ -7569,15 +7579,23 @@ get_userhome() {
   local original_user=""
   local original_home=""
 
-  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
+  if [[ -n "${FF_BUILD_ORIGINAL_HOME:-}" && "${FF_BUILD_ORIGINAL_HOME:-}" != "/root" ]]; then
+    original_home="$FF_BUILD_ORIGINAL_HOME"
+  fi
+
+  if [[ -n "${FF_BUILD_ORIGINAL_USER:-}" && "${FF_BUILD_ORIGINAL_USER:-}" != "root" ]]; then
+    original_user="$FF_BUILD_ORIGINAL_USER"
+  elif [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
     original_user="$SUDO_USER"
+  elif [[ -n "${SUDO_UID:-}" && "${SUDO_UID:-}" != "0" ]]; then
+    original_user="$(getent passwd "$SUDO_UID" | cut -d: -f1)"
   elif [[ -n "${PKEXEC_UID:-}" ]]; then
     original_user="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"
   elif [[ "$(id -u)" -ne 0 ]]; then
     original_user="$(id -un)"
   fi
 
-  if [[ -n "$original_user" ]]; then
+  if [[ -z "$original_home" && -n "$original_user" ]]; then
     if command -v getent >/dev/null 2>&1; then
       original_home="$(getent passwd "$original_user" | cut -d: -f6)"
     else
@@ -7593,9 +7611,11 @@ get_userhome() {
 }
 
 get_keystore(){
+  local original_user=""
   local original_home=""
   local keystore_dir=""
 
+  original_user="${FF_BUILD_ORIGINAL_USER:-${SUDO_USER:-$(id -un)}}"
   original_home="$(get_userhome)"
 
   if [[ -n "$original_home" ]]; then
@@ -7606,7 +7626,7 @@ get_keystore(){
     fi
   fi
 
-  exit_message 1 "Keystore directory not found for user '$(id -un)' at '${keystore_dir:-<unknown>}'" | tee -a "$LOG_FILE" >&2
+  exit_message 1 "Keystore directory not found for user '${original_user}' at '${keystore_dir:-<unknown>}'" | tee -a "$LOG_FILE" >&2
   return 1
 }
 
