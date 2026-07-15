@@ -16,17 +16,18 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
     set(ENV{PKG_CONFIG_PATH} "${FFMPEG_BUILD_DIR}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
 
     set(PKG_CONFIG_USE_STATIC_LIBS ON)
-
+    set(FFMPEG_PKG_LIST "libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil jsoncpp")
     if(FFMPEG_KIT_BUNDLE_TYPE STREQUAL "base")
-        pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-            libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil jsoncpp sdl2
-        )
+        list(APPEND FFMPEG_PKG_LIST "sdl2")
     else()
-        pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-            libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil jsoncpp sdl2 iconv bzip2 liblzma zlib
-        )
+        list(APPEND FFMPEG_PKG_LIST "sdl2 iconv bzip2 liblzma zlib")
     endif()
-
+    if(MINGW)
+        list(APPEND FFMPEG_PKG_LIST "pthreadGC3")
+    endif()
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+        ${FFMPEG_PKG_LIST}
+    )
     configure_static_linking(FFMPEG ON)
 
     if(ENABLE_LIBPLACEBO)

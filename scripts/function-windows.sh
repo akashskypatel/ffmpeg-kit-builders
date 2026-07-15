@@ -61,7 +61,7 @@ use_pthread_win32_flags() {
 	local pthread_include_dir="${dependency_install_prefix}/include"
 	local pthread_lib_dir="${dependency_install_prefix}/lib"
 
-	pthread_static_lib="$(find_windows_static_pthread_win32)" || exit_message 1 "pthread-win32 static library not found. Build build_pthread_win32 before this dependency."
+	pthread_static_lib="$(find_windows_static_pthread_win32)" || run_valid_function build_pthread_win32
 
 	export CPPFLAGS="$CPPFLAGS -I${pthread_include_dir} -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
 	export CFLAGS="$CFLAGS -I${pthread_include_dir} -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"

@@ -26,6 +26,10 @@ build_pthread_win32() {
   local repo="https://github.com/GerHobbelt/pthread-win32"
   local lib="pthread-win32"
   local repo_ver="version-3.1.0-release"
+  local pthread_static_lib=""
+  local pthread_static_name=""
+  local pthread_gc3_lib="$dependency_install_prefix/lib/libpthreadGC3.a"
+  local pthread_gce3_lib="$dependency_install_prefix/lib/libpthreadGCE3.a"
 	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver" || exit_message 1 "Failed git_checkout"
   change_dir "$src_dir/$lib" || exit_message 1 "Failed change_dir"
@@ -48,25 +52,33 @@ build_pthread_win32() {
   do_make_and_make_install || exit_message 1 "Failed do_make_and_make_install"
 	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
   export PTW32_PATH="$dependency_install_prefix"
-  # Usage: generate_pkg_config -t=<scan_dir> -o=<output_pc_file> -i=<install_prefix> -n=<name> [-v=<ver>] [-d=<desc>] [-l=<libs>]
-  generate_pkg_config -o="$install_pkgconfig_dir/pthreadGC3.pc" \
-    -i="$dependency_install_prefix" \
-    -v="3.1.0" \
-    -n="PthreadGC3" \
-    -d="PthreadGC3 from PthreadWin32 library" \
-    -l="$dependency_install_prefix/lib/libpthreadGC3.a" > >(redirect_output) 2>&1
-  generate_pkg_config -o="$install_pkgconfig_dir/pthreadGCE3.pc" \
-    -i="$dependency_install_prefix" \
-    -v="3.1.0" \
-    -n="PthreadGCE3" \
-    -d="PthreadGCE3 from PthreadWin32 library" \
-    -l="$dependency_install_prefix/lib/libpthreadGCE3.a" > >(redirect_output) 2>&1
-  generate_pkg_config -t="$src_dir/$lib/build" \
-    -o="$install_pkgconfig_dir/pthreadwin32.pc" \
+  pthread_static_lib="$(find_windows_static_pthread_win32)" || exit_message 1 "Failed to locate installed pthread-win32 static library"
+  pthread_static_name="$(basename "$pthread_static_lib")"
+
+  if [[ -f "$pthread_gc3_lib" ]]; then
+    generate_pkg_config -o="$install_pkgconfig_dir/pthreadGC3.pc" \
+      -i="$dependency_install_prefix" \
+      -v="3.1.0" \
+      -n="PthreadGC3" \
+      -d="PthreadGC3 from PthreadWin32 library" \
+      -l="$pthread_gc3_lib" > >(redirect_output) 2>&1
+  fi
+
+  if [[ -f "$pthread_gce3_lib" ]]; then
+    generate_pkg_config -o="$install_pkgconfig_dir/pthreadGCE3.pc" \
+      -i="$dependency_install_prefix" \
+      -v="3.1.0" \
+      -n="PthreadGCE3" \
+      -d="PthreadGCE3 from PthreadWin32 library" \
+      -l="$pthread_gce3_lib" > >(redirect_output) 2>&1
+  fi
+
+  generate_pkg_config -o="$install_pkgconfig_dir/pthreadwin32.pc" \
     -i="$dependency_install_prefix" \
     -v="3.1.0" \
     -n="PthreadWin32" \
-    -d="PthreadWin32 library" > >(redirect_output) 2>&1
+    -d="PthreadWin32 library (${pthread_static_name})" \
+    -l="$pthread_static_lib" > >(redirect_output) 2>&1
   fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
 }
 build_dlfcn() {
@@ -563,7 +575,8 @@ build_opengl() {
 
 build_glew() {
   local lib="glew"
-  local repo="https://sourceforge.net/projects/glew/files/glew/2.1.0/glew-2.1.0.tgz/download"
+  #local repo="https://sourceforge.net/projects/glew/files/glew/2.1.0/glew-2.1.0.tgz/download"
+  local repo="https://github.com/nigels-com/glew/releases/download/glew-2.1.0/glew-2.1.0.tgz"
   local repo_ver="glew-2.2.0"
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
