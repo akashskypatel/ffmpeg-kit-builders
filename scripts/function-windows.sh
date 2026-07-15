@@ -249,9 +249,9 @@ fix_pkgconfig_flags() {
 			gsed -i "s|-lgcc_s||g" "$pc_file"
 			gsed -i "s|-lgcc||g" "$pc_file"
 			if [[ -n "$winpthread_static_sed" ]]; then
-				gsed -i -E "s|(^|[[:space:]])-lwinpthread([[:space:]]|$)|\\1${winpthread_static_sed}\\2|g" "$pc_file"
-				gsed -i -E "s|(^|[[:space:]])-lpthread([[:space:]]|$)|\\1${winpthread_static_sed}\\2|g" "$pc_file"
-				gsed -i -E "s|(^|[[:space:]])-lpthreadwin32([[:space:]]|$)|\\1${winpthread_static_sed}\\2|g" "$pc_file"
+				gsed -i -E "s#(^|[[:space:]])-lwinpthread([[:space:]]|$)#\\1${winpthread_static_sed}\\2#g" "$pc_file"
+				gsed -i -E "s#(^|[[:space:]])-lpthread([[:space:]]|$)#\\1${winpthread_static_sed}\\2#g" "$pc_file"
+				gsed -i -E "s#(^|[[:space:]])-lpthreadwin32([[:space:]]|$)#\\1${winpthread_static_sed}\\2#g" "$pc_file"
 			fi
 			gsed -i "s|-latomic|$(realpath "$("$CXX" -print-file-name=libatomic.a)")|g" "$pc_file"
 			gsed -i "s|/usr/local/mingw-w64/[^ ]*libstdc++[^ ]*|${stdcpp_path}|g" "$pc_file"
