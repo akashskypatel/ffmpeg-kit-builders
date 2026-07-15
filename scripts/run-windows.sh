@@ -1192,6 +1192,12 @@ build_sdl12_compat() {
   gsed -i '/set_target_properties(SDL PROPERTIES LINK_FLAGS "-nostdlib")/d' CMakeLists.txt
   # Patch 4: Skip version.rc 
   gsed -i 's/set(WIN32_SRCS "src\/version.rc")/set(WIN32_SRCS "")/' CMakeLists.txt
+  # Patch 5: Force the SDL target to consume only the SDL2 include dir.
+  # The generated SDL2 config also exports the parent include root first,
+  # which causes sdl12-compat to pick up installed SDL 1.2 headers from
+  # include/SDL instead of SDL2 headers from include/SDL2.
+  gsed -i 's/target_include_directories(SDL PRIVATE ${SDL2_INCLUDE_DIRS})/target_include_directories(SDL PRIVATE ${SDL2_INCLUDE_DIR})/' CMakeLists.txt
+  gsed -i 's/target_include_directories(SDL-static PRIVATE ${SDL2_INCLUDE_DIRS})/target_include_directories(SDL-static PRIVATE ${SDL2_INCLUDE_DIR})/' CMakeLists.txt
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DSDL12TESTS=OFF \
 -DSDL12DEVEL=ON \
