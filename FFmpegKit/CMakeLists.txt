@@ -414,11 +414,10 @@ if(BUILD_SHARED_LIBS)
 
         if(MINGW)
             target_link_libraries(ffmpegkit PRIVATE
-                # 1. CRT and threading - must resolve before anything else
+                # 1. CRT - keep static runtimes embedded in libffmpegkit.dll.
                 "-Wl,-Bstatic"
                 "-lstdc++"
                 "-lgcc"
-                "${FFMPEGKIT_PTHREAD_STATIC_LIB}"
                 "-Wl,-Bdynamic"
 
                 # 2. FFmpeg core - whole-archive to prevent dead-stripping of
@@ -429,8 +428,11 @@ if(BUILD_SHARED_LIBS)
 
                 # 3. External dependency libs from pkg-config (SDL2, openmpt, rist,
                 #    etc.) - grouped to resolve circular references between them.
+                #    Static winpthread must appear after the archives that reference
+                #    pthread symbols so GNU ld pulls the needed archive members.
                 "-Wl,--start-group"
                 ${BUNDLE_LIBRARIES}
+                "${FFMPEGKIT_PTHREAD_STATIC_LIB}"
                 "-Wl,--end-group"
 
                 # 4. Windows system DLLs - always dynamic, always last
@@ -497,8 +499,8 @@ if(BUILD_SHARED_LIBS)
         if(MINGW)
             target_link_libraries(ffmpegkit PRIVATE
                 "-Wl,--start-group"
-                "${FFMPEGKIT_PTHREAD_STATIC_LIB}"
                 ${BUNDLE_LIBRARIES}
+                "${FFMPEGKIT_PTHREAD_STATIC_LIB}"
                 "ws2_32"
                 "bcrypt"
                 "-Wl,--end-group"
