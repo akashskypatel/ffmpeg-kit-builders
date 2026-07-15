@@ -94,12 +94,13 @@ build_libxavs() {
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
   gsed -i 's/, tmp\[0\]);/, \&tmp[0]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  gsed -i 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  gsed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  gsed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+	gsed -i 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+	gsed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+	gsed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
 	if [[ ! -f Makefile.bak ]]; then
 		gsed -i "s/O4/O2/" configure # Change CFLAGS.
 	fi
+  gsed -i '/CFLAGS="\$CFLAGS -DPTW32_STATIC_LIB"/d' configure || exit_message 1 "Failed gsed configure PTW32_STATIC_LIB cleanup for xavs"
   use_pthread_win32_flags
   clear_cross_vars AS
   # wget "https://patch-diff.githubusercontent.com/raw/Distrotech/xavs/pull/1.patch" > >(redirect_output) 2>&1
@@ -113,6 +114,12 @@ build_libxavs() {
 --host=$host_target \
 --prefix=$dependency_install_prefix \
 --cross-prefix=$cross_prefix"
+  apply_patch "$PATCHDIR/xavs_pthread_win32_attach.patch" || exit_message 1 "Failed apply_patch xavs_pthread_win32_attach.patch"
+  gsed -i '/pthread_win32_process_attach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread attach cleanup"
+  gsed -i '/pthread_win32_thread_attach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread thread attach cleanup"
+  gsed -i '/pthread_win32_thread_detach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread thread detach cleanup"
+  gsed -i '/pthread_win32_process_detach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread process detach cleanup"
+  gsed -i '/^#ifdef PTW32_STATIC_LIB$/N;/^#ifdef PTW32_STATIC_LIB$\n#endif$/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs empty PTW32 blocks cleanup"
 	do_make_and_make_install "AS= " "AS= "
   fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/xavs.pc"
 	if [[ -d NUL ]]; then

@@ -1,0 +1,13 @@
+diff --git a/xavs.c b/xavs.c
+--- a/xavs.c
++++ b/xavs.c
+@@ -114,4 +114,0 @@
+-#ifdef PTW32_STATIC_LIB
+-  pthread_win32_process_attach_np ();
+-  pthread_win32_thread_attach_np ();
+-#endif
+@@ -134,4 +130,0 @@
+-#ifdef PTW32_STATIC_LIB
+-  pthread_win32_thread_detach_np ();
+-  pthread_win32_process_detach_np ();
+-#endif
