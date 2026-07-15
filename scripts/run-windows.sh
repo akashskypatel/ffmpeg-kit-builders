@@ -453,6 +453,7 @@ build_sdl2() {
   gsed -i -E 's|=\s*\$\(objects\)/version\.lo|=|g' "Makefile"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  copy_path "$dependency_install_prefix/include/SDL2/SDL_config.h" "$dependency_install_prefix/include/SDL2/_SDL_config.h" "-f"
 	change_dir "$src_dir"
 }
 # build_amf               # config_options+= --disable-amf                # disable AMF video encoding code [autodetect]
@@ -1198,19 +1199,13 @@ build_sdl12_compat() {
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   # Patch 1: Remove OS restriction for static builds 
-  gsed -i 's/if(STATICDEVEL AND NOT (CMAKE_SYSTEM_NAME MATCHES "Linux"))/if(FALSE)/' CMakeLists.txt
+  sed -i 's/if(STATICDEVEL AND NOT (CMAKE_SYSTEM_NAME MATCHES "Linux"))/if(FALSE)/' CMakeLists.txt
   # Patch 2: Force the main SDL target to be STATIC 
-  gsed -i 's/add_library(SDL SHARED/add_library(SDL STATIC/' CMakeLists.txt
+  sed -i 's/add_library(SDL SHARED/add_library(SDL STATIC/' CMakeLists.txt
   # Patch 3: Remove -nostdlib causing Win32 API issues 
-  gsed -i '/set_target_properties(SDL PROPERTIES LINK_FLAGS "-nostdlib")/d' CMakeLists.txt
+  sed -i '/set_target_properties(SDL PROPERTIES LINK_FLAGS "-nostdlib")/d' CMakeLists.txt
   # Patch 4: Skip version.rc 
-  gsed -i 's/set(WIN32_SRCS "src\/version.rc")/set(WIN32_SRCS "")/' CMakeLists.txt
-  # Patch 5: Force the SDL target to consume only the SDL2 include dir.
-  # The generated SDL2 config also exports the parent include root first,
-  # which causes sdl12-compat to pick up installed SDL 1.2 headers from
-  # include/SDL instead of SDL2 headers from include/SDL2.
-  gsed -i 's/target_include_directories(SDL PRIVATE ${SDL2_INCLUDE_DIRS})/target_include_directories(SDL PRIVATE ${SDL2_INCLUDE_DIR})/' CMakeLists.txt
-  gsed -i 's/target_include_directories(SDL-static PRIVATE ${SDL2_INCLUDE_DIRS})/target_include_directories(SDL-static PRIVATE ${SDL2_INCLUDE_DIR})/' CMakeLists.txt
+  sed -i 's/set(WIN32_SRCS "src\/version.rc")/set(WIN32_SRCS "")/' CMakeLists.txt
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DSDL12TESTS=OFF \
 -DSDL12DEVEL=ON \

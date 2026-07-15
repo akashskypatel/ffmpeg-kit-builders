@@ -4481,13 +4481,13 @@ run_valid_build_functions() {
         export WORKFLOW_FORCE_SELF="true"
       fi
       if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
-        echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
+        echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"${LOG_FILE}"
         set_run_state "$step_name"
         mark_as_built "$step_name"
         continue
       fi
     fi
-    run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See $LOG_FILE for details"
+    run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See ${LOG_FILE} for details"
     last_built_step="$step_name"
   done
   printf "\r\033[KAll dependencies built successfully!\n"
@@ -4495,8 +4495,8 @@ run_valid_build_functions() {
   # should only upload deps when running in "multi-step with requested build_only step and its dependencies" mode, ideally only from workflow-runner.sh, but optionally can be run from local runner.
   # upload script uploads everything in prebuilt/${platform}-${arch}/libraries directory so it packages the final step as well as its dependencies into a neat self contained package.
   if truthy "$upload_deps" && [[ -n "$last_built_step" ]] && [[ "$last_built_step" == "$build_only" ]]; then
-    echo "INFO: Uploading dependencies for $host_platform-$platform_arch-$last_built_step" | tee -a "$LOG_FILE"
-    sudo -E "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${last_built_step#build_}"
+    echo "INFO: Uploading dependencies for $host_platform-$platform_arch-$last_built_step" | tee -a "${LOG_FILE}"
+    sudo -E "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${last_built_step#build_}" | tee -a "${LOG_FILE}"
   fi
   static_link_check "$install_pkgconfig_dir"
   reset_ldflags
