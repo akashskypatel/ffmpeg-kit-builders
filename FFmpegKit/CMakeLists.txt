@@ -162,27 +162,27 @@ if(WIN32)
     )
 
     if(MINGW)
-        find_library(FFMPEGKIT_WINPTHREAD_STATIC_LIB
-            NAMES libwinpthread.a
+        find_library(FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB
+            NAMES libpthreadGC3.a libpthreadGCE3.a pthreadGC3 pthreadGCE3
             PATHS
                 "${DEPENDENCY_BUILD_DIR}/lib"
                 "${FFMPEG_BUILD_DIR}/lib"
-                "${CMAKE_C_IMPLICIT_LINK_DIRECTORIES}"
             NO_DEFAULT_PATH
         )
-        if(NOT FFMPEGKIT_WINPTHREAD_STATIC_LIB)
-            find_library(FFMPEGKIT_WINPTHREAD_STATIC_LIB
-                NAMES libwinpthread.a
-            )
-        endif()
-        set(FFMPEGKIT_PTHREAD_STATIC_LIB "${FFMPEGKIT_WINPTHREAD_STATIC_LIB}")
+        set(FFMPEGKIT_PTHREAD_STATIC_LIB "${FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB}")
         if(NOT EXISTS "${FFMPEGKIT_PTHREAD_STATIC_LIB}")
-            message(FATAL_ERROR "Static MinGW winpthread library not found. Expected libwinpthread.a in the dependency, FFmpeg, or toolchain library paths.")
+            message(FATAL_ERROR "Static pthread-win32 library not found. Expected libpthreadGC3.a or libpthreadGCE3.a in the dependency or FFmpeg library paths.")
         endif()
 
         target_compile_definitions(ffmpegkit PRIVATE
             _WIN32_WINNT=0x0600
             _FORTIFY_SOURCE=2
+            PTW32_STATIC_LIB
+            _POSIX_C_SOURCE=200112L
+        )
+
+        target_include_directories(ffmpegkit PRIVATE
+            "${DEPENDENCY_BUILD_DIR}/include"
         )
 
         target_compile_options(ffmpegkit PRIVATE
@@ -201,7 +201,8 @@ if(WIN32)
             "-Wl,--exclude-libs,libgcc.a"
             "-Wl,--exclude-libs,libgomp.a"
             "-Wl,--exclude-libs,libssp.a"
-            "-Wl,--exclude-libs,libwinpthread.a"
+            "-Wl,--exclude-libs,libpthreadGC3.a"
+            "-Wl,--exclude-libs,libpthreadGCE3.a"
             "-Wl,--nxcompat"          # Data Execution Prevention (DEP)
             "-Wl,--dynamicbase"       # ASLR
             "-Wl,--high-entropy-va"   # 64-bit ASLR
@@ -428,7 +429,7 @@ if(BUILD_SHARED_LIBS)
 
                 # 3. External dependency libs from pkg-config (SDL2, openmpt, rist,
                 #    etc.) - grouped to resolve circular references between them.
-                #    Static winpthread must appear after the archives that reference
+                #    Static pthread-win32 must appear after archives that reference
                 #    pthread symbols so GNU ld pulls the needed archive members.
                 "-Wl,--start-group"
                 ${BUNDLE_LIBRARIES}

@@ -186,6 +186,10 @@ while [ $# -gt 0 ]; do
     export build_force=y
     shift
 		;;
+  -fs | --force-self)
+    export force_self=y
+    shift
+		;;
   -y)
     export accept_defaults=y
     echo "Skipping interactive. Accepting defult selections."

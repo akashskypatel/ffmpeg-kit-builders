@@ -99,7 +99,9 @@ mark_workflow_step_seen() {
 
 # repo = owner/repo_name
 # authorize_github token repo_name owner
-if ! authorize_github "$token" "${repo#*/}" "${repo%/*}"; then
+repo_name="${repo#*/}"
+repo_owner="${repo%/*}"
+if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
 	exit 1
 fi
 
@@ -333,16 +335,18 @@ PY
     echo "Archive extracted successfully to $extract_dir"
 	rm -fv "$archive_path"
 	mark_workflow_step_seen "$seen_key"
-    # libraries_dir_sed="$(
-    #   printf '%s\n' "$libraries_dir" |
-    #     gsed -e 's/[\/&|]/\\&/g'
-    # )"
-    # find "$libraries_dir" -type f -name "*.pc" -exec gsed -i \
-    # -e "s|^prefix=.*|prefix=$libraries_dir_sed|g" \
-    # -e "s|^exec_prefix=.*|exec_prefix=\${prefix}|g" \
-    # -e "s|^libdir=.*|libdir=\${prefix}/lib|g" \
-    # -e "s|^sharedlibdir=.*|sharedlibdir=\${prefix}/lib|g" \
-    # -e "s|^includedir=.*|includedir=\${prefix}/include|g" \
-    # -e "s|$libraries_dir_sed|\${prefix}|g" \
-    # {} +
+    repo_root_sed="$(
+        printf '%s\n' "$repo_root" |
+        gsed -e 's/[\/&|]/\\&/g'
+    )"
+
+    while IFS= read -r -d '' file; do
+        if grep -Iq . "$file"; then
+            gsed -i \
+                -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+                -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+                -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+                "$file"
+        fi
+    done < <(find "$libraries_dir" -type f -print0)
 done

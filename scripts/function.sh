@@ -676,13 +676,17 @@ setup_default_python() {
         ln -sfn "$selected_python" "$python_link" || exit_message 1 "setup_default_python: unable to link $python_link to $selected_python"
     done
 
-    case ":$PATH:" in
-        *":$link_dir:"*) ;;
-        *) export PATH="$link_dir:$PATH" ;;
-    esac
+    local new_path="$link_dir"
+    local path_part=""
+    IFS=':' read -r -a path_parts <<< "$PATH"
+    for path_part in "${path_parts[@]}"; do
+        [[ -z "$path_part" || "$path_part" == "$link_dir" ]] && continue
+        new_path+=":$path_part"
+    done
+    export PATH="$new_path"
 
-    export PYTHON="$python_link_path"
-    export PYTHON3="$python3_link_path"
+    export PYTHON="$selected_python"
+    export PYTHON3="$selected_python"
     export PYTHON_BIN="$selected_python"
     export PYTHON_VERSION="$selected_version"
     hash -r 2>/dev/null || true
@@ -737,13 +741,13 @@ setup_windows_environment() {
     export stdcpp_path="$(realpath "$("$CXX" -print-file-name=libstdc++.a)")"
     export stdgcc_path="$(realpath "$("$CXX" -print-file-name=libgcc.a)")"
 
-    export windows_cflags="$original_cflags -std=gnu11 -mtune=generic -O3 -pipe -Wno-pedantic -D_POSIX_THREADS -fno-use-linker-plugin -mstackrealign"
+    export windows_cflags="$original_cflags -std=gnu11 -mtune=generic -O3 -pipe -Wno-pedantic -D_POSIX_THREADS -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L -fno-use-linker-plugin -mstackrealign"
     export CFLAGS="$windows_cflags"
     
-    export windows_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include -D_POSIX_THREADS -fno-use-linker-plugin -mstackrealign"
+    export windows_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include -D_POSIX_THREADS -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L -fno-use-linker-plugin -mstackrealign"
     export CXXFLAGS="$windows_cxxflags"
     
-    export windows_cppflags="$original_cppflags -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -I${dependency_install_prefix}/include"
+    export windows_cppflags="$original_cppflags -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L -I${dependency_install_prefix}/include"
     export CPPFLAGS="$windows_cppflags"
     
     export windows_ldflags="-static -static-libgcc -static-libstdc++ $original_ldflags -L${dependency_install_prefix}/lib"
@@ -755,21 +759,12 @@ setup_windows_environment() {
     cross_windres
 }
 
-find_windows_static_winpthread() {
-    local compiler="${1:-${CC:-${cross_prefix:-}gcc}}"
+find_windows_static_pthread_win32() {
     local candidate=""
 
-    if [[ -n "$compiler" ]] && command -v "$compiler" >/dev/null 2>&1; then
-        candidate="$("$compiler" -print-file-name=libwinpthread.a 2>/dev/null || true)"
-        if [[ -n "$candidate" && -f "$candidate" ]]; then
-            readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate"
-            return 0
-        fi
-    fi
-
     for candidate in \
-        "${toolchain_root_dir:-/usr/local/mingw-w64}/${host_target:-}/lib/libwinpthread.a" \
-        "/usr/local/mingw-w64/${host_target:-}/lib/libwinpthread.a"; do
+        "${dependency_install_prefix:-}/lib/libpthreadGC3.a" \
+        "${dependency_install_prefix:-}/lib/libpthreadGCE3.a"; do
         if [[ -f "$candidate" ]]; then
             readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate"
             return 0
@@ -3018,8 +3013,9 @@ do_python() {
     chmod +x waf
   fi
   setup_default_python
+  local python_cmd="${PYTHON_BIN:-${PYTHON3:-python3}}"
   # shellcheck disable=SC2206,SC2128
-  configure_command=(python3 ${configure_name[*]})
+  configure_command=("$python_cmd" ${configure_name[*]})
 	local cur_dir2=$(pwd)
 	local english_name=$(basename "$cur_dir2")
   local touch_prefix="${host_name}${touch_postfix}already_python"
@@ -3032,9 +3028,9 @@ do_python() {
       reset_touch "$cur_dir2" "${touch_prefix}*.touch"
       if [[ -f $src_touch ]]; then
         echo -e "INFO: $src_touch found during do_python(). Uninstalling existing installation..." >>"$LOG_FILE"
-        { eval "python3 ./waf uninstall" > >(redirect_output) 2>&1 || true; }
+        { eval "\"$python_cmd\" ./waf uninstall" > >(redirect_output) 2>&1 || true; }
       fi
-      { eval "python3 ./waf clean" > >(redirect_output) 2>&1 || true; }
+      { eval "\"$python_cmd\" ./waf clean" > >(redirect_output) 2>&1 || true; }
     else
 		  reset_touch "$cur_dir2" "${touch_prefix}_$(basename "${configure_name[*]}")*.touch"
     fi
@@ -3824,8 +3820,9 @@ do_meson() {
     command_name="${configure_name[*]}"
 	fi
   setup_default_python
+  local meson_python="${PYTHON_BIN:-${PYTHON3:-python3}}"
 	if [[ -e "$local_meson" ]]; then
-    configure_command=(python3 "$local_meson" "${configure_name[*]}")
+    configure_command=("$meson_python" "$local_meson" "${configure_name[*]}")
 	else
 		configure_command=(meson)
 	fi
@@ -3844,8 +3841,8 @@ do_meson() {
     fi
     [[ -f ninja.build ]] && { nice ninja uninstall > >(redirect_output) 2>&1 || true; }
     [[ -f Makefile ]] && { nice make uninstall > >(redirect_output) 2>&1 || true; }
-    { python3 "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
-    { python3 "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
+    { "$meson_python" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
+    { "$meson_python" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
     [[ "$command_name" == "setup_build" ]] && [[ -d "$(pwd)/build" ]] && { remove_path -rf "build" || true; }
 	fi
 	if [ ! -f "$touch_name" ]; then
@@ -3854,8 +3851,8 @@ do_meson() {
       reset_touch "$cur_dir2" "${touch_prefix}*.touch"
       [[ -f ninja.build ]] && { nice ninja uninstall > >(redirect_output) 2>&1 || true; }
       [[ -f Makefile ]] && { nice make uninstall > >(redirect_output) 2>&1 || true; }
-      { python3 "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
-      { python3 "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
+      { "$meson_python" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
+      { "$meson_python" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
       [[ "$command_name" == "setup_build" ]] && [[ -d "build" ]] && { remove_path -rf "build" || true; }
 			echo -e "INFO: Adding --reconfigure to meson config because there is an existing previous build" >>"$LOG_FILE"
 			configure_options+=" --reconfigure"
@@ -4480,6 +4477,9 @@ run_valid_build_functions() {
     # should rebuild dependencies from scratch if build_force is true and prevent depedencies from being downloaded since they are being built from scratch
     # should prevent depedencies from being downloaded if start_from is requested but not building dependencies from scratch, in which case it should download prebuilt dependencies
     if ! truthy "$build_force"; then
+      if truthy "$force_self"; then
+        export WORKFLOW_FORCE_SELF="true"
+      fi
       if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
         echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"$LOG_FILE"
         set_run_state "$step_name"
@@ -4643,21 +4643,26 @@ configure_ffmpeg() {
     
   fi
   if iswindows; then
-    local winpthread_static_lib=""
-    local winpthread_static_dir=""
-    winpthread_static_lib="$(find_windows_static_winpthread "$CC")" || exit_message 1 "configure_ffmpeg: static MinGW winpthread library not found"
-    winpthread_static_dir="$(dirname "$winpthread_static_lib")"
-    export LDFLAGS="$LDFLAGS -L${winpthread_static_dir}"
+    local pthread_win32_static_lib=""
+    local pthread_win32_static_dir=""
+    pthread_win32_static_lib="$(find_windows_static_pthread_win32)" || exit_message 1 "configure_ffmpeg: static pthread-win32 library not found. Build build_pthread_win32 before configuring FFmpeg."
+    pthread_win32_static_dir="$(dirname "$pthread_win32_static_lib")"
+    export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+    export CXXFLAGS="$CXXFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+    export CPPFLAGS="$CPPFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+    export LDFLAGS="$LDFLAGS -L${pthread_win32_static_dir}"
     export CFLAGS="$CFLAGS -mstackrealign"
     export LD=${cross_prefix}gcc # ld weirdness with windows
 	  init_options+=" --target-os=mingw32"
     # init_options+=" --enable-w32threads"
     init_options+=" --disable-w32threads"
     init_options+=" --enable-pthreads"
-    init_options+=" --extra-ldflags=\" -L${winpthread_static_dir} \""
+    init_options+=" --extra-cflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
+    init_options+=" --extra-cxxflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
+    init_options+=" --extra-ldflags=\" -L${pthread_win32_static_dir} \""
     init_options+=" --disable-filter=gfxcapture"
-    init_options+=" --extra-ldflags=\" -L${deps_install_prefix}/lib \""
-    add_extra_libs "$winpthread_static_lib"
+    init_options+=" --extra-ldflags=\" -L${dependency_install_prefix}/lib \""
+    add_extra_libs "$pthread_win32_static_lib"
   elif isandroid; then
     # unset PKG_CONFIG_PATH
     export PKG_CONFIG_SYSROOT_DIR="/"
@@ -6456,8 +6461,8 @@ reset_and_clean() {
       mapfile -t sub_dirs < <(find "$dir" -name "meson.build" -exec dirname {} \; | sort -u 2>/dev/null)
       if [[ -f meson.build ]] && [[ "${#sub_dirs[@]}" -gt 0 ]]; then
         echo "Cleaning meson artifacts at $sub_dir..." > >(redirect_output)
-        { python3 "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
-        { python3 "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
+        { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
+        { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
       fi
       mapfile -t sub_dirs < <(find "$dir" -name "CMakeList.txt" -exec dirname {} \; | sort -u 2>/dev/null)
       for sub_dir in "${sub_dirs[@]}"; do
@@ -6496,7 +6501,7 @@ reset_and_clean() {
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f waf ]]; then
           echo "Cleaning waf artifacts at $sub_dir..." > >(redirect_output)
-          { eval "python3 ./waf clean" > >(redirect_output) 2>&1 || true; }
+          { "${PYTHON_BIN:-${PYTHON3:-python3}}" ./waf clean > >(redirect_output) 2>&1 || true; }
         fi
         cd "$dir" 2>/dev/null || continue
       done

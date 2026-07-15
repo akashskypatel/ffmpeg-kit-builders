@@ -1,0 +1,54 @@
+diff --git a/pthread.h b/pthread.h
+index 9e3819a..3b7798f 100644
+--- a/pthread.h
++++ b/pthread.h
+@@ -405,6 +405,49 @@ typedef struct
+ } __ptw32_handle_t;
+ 
+ typedef __ptw32_handle_t pthread_t;
++
++#ifdef __cplusplus
++/* __ptw32_handle_t comparison operators for libstdc++ std::thread::id. */
++#if __cplusplus >= 202002L
++#include <compare>
++#endif
++
++inline bool operator==(const __ptw32_handle_t& lhs, const __ptw32_handle_t& rhs) {
++  return lhs.p == rhs.p && lhs.x == rhs.x;
++}
++
++inline bool operator!=(const __ptw32_handle_t& lhs, const __ptw32_handle_t& rhs) {
++  return !(lhs == rhs);
++}
++
++#if __cplusplus >= 202002L
++inline std::strong_ordering operator<=>(const __ptw32_handle_t& lhs, const __ptw32_handle_t& rhs) {
++  if (lhs.p < rhs.p) return std::strong_ordering::less;
++  if (lhs.p > rhs.p) return std::strong_ordering::greater;
++  if (lhs.x < rhs.x) return std::strong_ordering::less;
++  if (lhs.x > rhs.x) return std::strong_ordering::greater;
++  return std::strong_ordering::equal;
++}
++#else
++inline bool operator<(const __ptw32_handle_t& lhs, const __ptw32_handle_t& rhs) {
++  if (lhs.p < rhs.p) return true;
++  if (lhs.p > rhs.p) return false;
++  return lhs.x < rhs.x;
++}
++
++inline bool operator>(const __ptw32_handle_t& lhs, const __ptw32_handle_t& rhs) {
++  return rhs < lhs;
++}
++
++inline bool operator<=(const __ptw32_handle_t& lhs, const __ptw32_handle_t& rhs) {
++  return !(rhs < lhs);
++}
++
++inline bool operator>=(const __ptw32_handle_t& lhs, const __ptw32_handle_t& rhs) {
++  return !(lhs < rhs);
++}
++#endif
++#endif
+ typedef struct pthread_attr_t_ * pthread_attr_t;
+ typedef struct pthread_once_t_ pthread_once_t;
+ typedef struct pthread_key_t_ * pthread_key_t;

@@ -41,6 +41,70 @@ set_toolchain_paths() {
 	export CXX="$(realpath "${cross_prefix}g++")"
 }
 
+find_windows_static_pthread_win32() {
+	local candidate=""
+
+	for candidate in \
+		"${dependency_install_prefix:-}/lib/libpthreadGC3.a" \
+		"${dependency_install_prefix:-}/lib/libpthreadGCE3.a"; do
+		if [[ -f "$candidate" ]]; then
+			readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+use_pthread_win32_flags() {
+	local pthread_static_lib=""
+	local pthread_include_dir="${dependency_install_prefix}/include"
+	local pthread_lib_dir="${dependency_install_prefix}/lib"
+
+	pthread_static_lib="$(find_windows_static_pthread_win32)" || exit_message 1 "pthread-win32 static library not found. Build build_pthread_win32 before this dependency."
+
+	export CPPFLAGS="$CPPFLAGS -I${pthread_include_dir} -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+	export CFLAGS="$CFLAGS -I${pthread_include_dir} -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+	export CXXFLAGS="$CXXFLAGS -I${pthread_include_dir} -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+	export LDFLAGS="$LDFLAGS -L${pthread_lib_dir}"
+	export LIBS="${pthread_static_lib} ${LIBS:-}"
+	export PTHREAD_WIN32_STATIC_LIB="$pthread_static_lib"
+}
+
+fix_pthread_win32_pkgconfig_file() {
+	local pc_file="$1"
+	local pthread_static_lib=""
+	local pthread_static_sed=""
+	local pthread_include_sed=""
+
+	[[ -f "$pc_file" ]] || return 0
+	pthread_static_lib="$(find_windows_static_pthread_win32 2>/dev/null || true)"
+	[[ -n "$pthread_static_lib" ]] || return 0
+	pthread_static_sed="${pthread_static_lib//&/\\&}"
+	pthread_include_sed="${dependency_install_prefix//&/\\&}/include"
+
+	gsed -i -E \
+		-e "/^Libs(\\.private)?:/ s#(^|[[:space:]])-pthread([[:space:]]|$)#\\1${pthread_static_sed}\\2#g" \
+		-e "/^Libs(\\.private)?:/ s#(^|[[:space:]])-lpthread([[:space:]]|$)#\\1${pthread_static_sed}\\2#g" \
+		-e "/^Libs(\\.private)?:/ s#(^|[[:space:]])-lwinpthread([[:space:]]|$)#\\1${pthread_static_sed}\\2#g" \
+		-e "/^Libs(\\.private)?:/ s#(^|[[:space:]])-lpthreadwin32([[:space:]]|$)#\\1${pthread_static_sed}\\2#g" \
+		-e "/^Cflags:/ s#(^|[[:space:]])-pthread([[:space:]]|$)#\\1-I${pthread_include_sed} -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L\\2#g" \
+		-e "/^Cflags:/ s#(^|[[:space:]])-l(pthread|winpthread|pthreadwin32)([[:space:]]|$)#\\1\\3#g" \
+		"$pc_file"
+}
+
+fix_pthread_win32_pkgconfig_flags() {
+	local target="${1:-$install_pkgconfig_dir}"
+
+	if [[ -f "$target" ]]; then
+		fix_pthread_win32_pkgconfig_file "$target"
+	elif [[ -d "$target" ]]; then
+		find "$target" -type f -name "*.pc" -print0 | while IFS= read -r -d '' pc_file; do
+			fix_pthread_win32_pkgconfig_file "$pc_file"
+		done
+	fi
+}
+
 check_cross_compiler_bin() {
 	local gcc_bin="$toolchain_bin_path/$host_target-gcc"
 	if [[ -f $gcc_bin ]]; then
@@ -238,21 +302,17 @@ fix_pkgconfig_flags() {
 		fi
 	done < <(find "$ffmpeg_install_prefix/lib/pkgconfig" -name "*.pc" -print0)
 
-	local winpthread_static_lib=""
-	local winpthread_static_sed=""
-	winpthread_static_lib="$(find_windows_static_winpthread "$CXX" 2>/dev/null || true)"
-	winpthread_static_sed="${winpthread_static_lib//&/\\&}"
+	local pthread_win32_static_lib=""
+	local pthread_win32_static_sed=""
+	pthread_win32_static_lib="$(find_windows_static_pthread_win32 2>/dev/null || true)"
+	pthread_win32_static_sed="${pthread_win32_static_lib//&/\\&}"
 
 	for pc_file in "$PKG_CONFIG_LIBDIR"/*.pc; do
 			gsed -i "s|-l/|/|g" "$pc_file"
 			gsed -i "s|-lstdc++||g" "$pc_file"
 			gsed -i "s|-lgcc_s||g" "$pc_file"
 			gsed -i "s|-lgcc||g" "$pc_file"
-			if [[ -n "$winpthread_static_sed" ]]; then
-				gsed -i -E "s#(^|[[:space:]])-lwinpthread([[:space:]]|$)#\\1${winpthread_static_sed}\\2#g" "$pc_file"
-				gsed -i -E "s#(^|[[:space:]])-lpthread([[:space:]]|$)#\\1${winpthread_static_sed}\\2#g" "$pc_file"
-				gsed -i -E "s#(^|[[:space:]])-lpthreadwin32([[:space:]]|$)#\\1${winpthread_static_sed}\\2#g" "$pc_file"
-			fi
+			[[ -n "$pthread_win32_static_sed" ]] && fix_pthread_win32_pkgconfig_file "$pc_file"
 			gsed -i "s|-latomic|$(realpath "$("$CXX" -print-file-name=libatomic.a)")|g" "$pc_file"
 			gsed -i "s|/usr/local/mingw-w64/[^ ]*libstdc++[^ ]*|${stdcpp_path}|g" "$pc_file"
 			gsed -i 's|/usr/local/mingw-w64/[^ ]*libstdc++\.a||g' "$pc_file"
