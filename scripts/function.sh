@@ -741,13 +741,13 @@ setup_windows_environment() {
     export stdcpp_path="$(realpath "$("$CXX" -print-file-name=libstdc++.a)")"
     export stdgcc_path="$(realpath "$("$CXX" -print-file-name=libgcc.a)")"
 
-    export windows_cflags="$original_cflags -std=gnu11 -mtune=generic -O3 -pipe -Wno-pedantic -D_POSIX_THREADS -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L -fno-use-linker-plugin -mstackrealign"
+    export windows_cflags="$original_cflags -std=gnu11 -mtune=generic -O3 -pipe -Wno-pedantic -D_POSIX_THREADS -fno-use-linker-plugin -mstackrealign"
     export CFLAGS="$windows_cflags"
     
-    export windows_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include -D_POSIX_THREADS -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L -fno-use-linker-plugin -mstackrealign"
+    export windows_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include -D_POSIX_THREADS -fno-use-linker-plugin -mstackrealign"
     export CXXFLAGS="$windows_cxxflags"
     
-    export windows_cppflags="$original_cppflags -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L -I${dependency_install_prefix}/include"
+    export windows_cppflags="$original_cppflags -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -I${dependency_install_prefix}/include"
     export CPPFLAGS="$windows_cppflags"
     
     export windows_ldflags="-static -static-libgcc -static-libstdc++ $original_ldflags -L${dependency_install_prefix}/lib"
@@ -4551,7 +4551,7 @@ run_valid_function() {
     local return_code=$1
     set_run_state
     reset_allflags
-    return $return_code
+    return "$return_code"
   }
 	if [[ -n "$step" ]]; then
     if [[ "$step" == build_* ]] && check_if_built "$step"; then

@@ -2154,21 +2154,9 @@ build_libx264() {
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
   clear_cross_vars AS
-  local saved_cflags="$CFLAGS"
-  local saved_cxxflags="$CXXFLAGS"
-  local saved_cppflags="$CPPFLAGS"
-  export CFLAGS="${CFLAGS//-DPTW32_STATIC_LIB/}"
-  export CXXFLAGS="${CXXFLAGS//-DPTW32_STATIC_LIB/}"
-  export CPPFLAGS="${CPPFLAGS//-DPTW32_STATIC_LIB/}"
-  export CFLAGS="${CFLAGS//-D_POSIX_C_SOURCE=200112L/}"
-  export CXXFLAGS="${CXXFLAGS//-D_POSIX_C_SOURCE=200112L/}"
-  export CPPFLAGS="${CPPFLAGS//-D_POSIX_C_SOURCE=200112L/}"
   generic_configure "--enable-static --disable-cli --disable-asm --enable-pic"
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install "AS= AR=\"${AR} rc \" " "AS= AR=\"${AR} rc \" " # weird ness with AR variable
-  export CFLAGS="$saved_cflags"
-  export CXXFLAGS="$saved_cxxflags"
-  export CPPFLAGS="$saved_cppflags"
   reset_cross_vars
 	change_dir "$src_dir"
 }
@@ -2283,7 +2271,7 @@ build_openssl() {
   # https://github.com/openssl/openssl 
   local repo="https://github.com/openssl/openssl"
   local repo_ver="openssl-3.6.0"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
   install_missing_packages perl-IPC-Cmd perl-Time-Piece
   clear_cross_vars
