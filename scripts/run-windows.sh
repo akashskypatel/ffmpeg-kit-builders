@@ -449,17 +449,13 @@ build_sdl2() {
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib/build" 1
-  # generic_configure "--bindir=$toolchain_bin_path --enable-static --disable-shared"
   local cmake_args="-DCMAKE_BUILD_TYPE=Release \
 -DSDL_STATIC=ON \
 -DSDL_STATIC_PIC=ON \
 -DSDL_TEST=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
   gsed -i -E 's|=\s*\$\(objects\)/version\.lo|=|g' "Makefile"
-  # disable_nonessential "$src_dir/$lib"
-  copy_path "$src_dir/$lib/build/include-config-release/SDL2/SDL_config.h" "$dependency_install_prefix/include/SDL2/SDL_config_.h" "-f"
   do_make_and_make_install
-  copy_path "$dependency_install_prefix/include/SDL2/SDL_config.h" "$dependency_install_prefix/include/SDL2/_SDL_config.h" "-f"
 	change_dir "$src_dir"
 }
 # build_amf               # config_options+= --disable-amf                # disable AMF video encoding code [autodetect]
