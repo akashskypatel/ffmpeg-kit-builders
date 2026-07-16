@@ -52,6 +52,8 @@ extern "C" {
 #include <chrono>
 #include <ctime>
 
+extern void *ffmpegKitInitialize();
+
 static std::string getCurrentTimeStamp() {
   time_t now = time(0);
   struct tm *timeinfo = localtime(&now);
@@ -286,6 +288,8 @@ list_to_handle_array(std::shared_ptr<std::list<std::shared_ptr<T>>> list) {
 extern "C" {
 
 void DLL_ALIGN ffmpeg_kit_initialize() {
+    ffmpegKitInitialize();
+
     // 1. Core FFmpeg Logging
     av_log_set_level(AV_LOG_INFO);
 
