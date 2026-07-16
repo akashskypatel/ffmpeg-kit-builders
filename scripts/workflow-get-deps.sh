@@ -330,22 +330,32 @@ PY
         rm -rf "$extract_dir"
         mkdir -p "$extract_dir"
     fi
-    echo "Unzipping archive: $archive_path to $extract_dir"
-	unzip -oq "$archive_path" -d "$extract_dir"
-    echo "Archive extracted successfully to $extract_dir"
-	rm -fv "$archive_path"
-	mark_workflow_step_seen "$seen_key"
+    staging_dir="$(mktemp -d)"
+
+echo "Unzipping archive: $archive_path to $staging_dir"
+unzip -oq "$archive_path" -d "$staging_dir"
+echo "Archive extracted successfully"
+
+rm -fv "$archive_path"
+
+if [[ "$repo_root" != "/__w/${repo_name}/${repo_name}" &&
+      "$repo_root" != "/Users/runner/work/${repo_name}/${repo_name}" &&
+      "$repo_root" != "/Users/runner/${repo_name}/${repo_name}" ]]; then
+
     repo_root_sed="$(
         printf '%s\n' "$repo_root" |
-        gsed -e 's/[\/&|]/\\&/g'
+            gsed -e 's/[\/&|]/\\&/g'
     )"
-    if [[ "$repo_root_sed" != "/__w/${repo_name}/${repo_name}" &&
-      "$repo_root_sed" != "/Users/runner/work/${repo_name}/${repo_name}" &&
-      "$repo_root_sed" != "/Users/runner/${repo_name}/${repo_name}" ]]; then
-    find "$libraries_dir" -type f -exec grep -IlZ . {} + |
-        xargs -0 gsed -i \
+
+    find "$staging_dir" -type f -exec grep -IlZ . {} + |
+        xargs -0 -r gsed -i \
             -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
             -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
             -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
-    fi
+fi
+
+cp -a "$staging_dir"/. "$extract_dir"/
+rm -rf "$staging_dir"
+
+mark_workflow_step_seen "$seen_key"
 done
