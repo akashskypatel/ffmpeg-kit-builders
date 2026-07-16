@@ -340,13 +340,9 @@ PY
         gsed -e 's/[\/&|]/\\&/g'
     )"
 
-    while IFS= read -r -d '' file; do
-        if grep -Iq . "$file"; then
-            gsed -i \
-                -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-                -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-                -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-                "$file"
-        fi
-    done < <(find "$libraries_dir" -type f -print0)
+    find "$libraries_dir" -type f -exec grep -IlZ . {} + |
+    xargs -0 gsed -i \
+        -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+        -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+        -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
 done
