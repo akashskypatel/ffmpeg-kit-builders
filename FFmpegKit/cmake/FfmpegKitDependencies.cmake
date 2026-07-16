@@ -22,9 +22,6 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
     else()
         list(APPEND FFMPEG_PKG_LIST "sdl2 iconv bzip2 liblzma zlib")
     endif()
-    if(MINGW)
-        list(APPEND FFMPEG_PKG_LIST "pthreadGC3")
-    endif()
     pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
         ${FFMPEG_PKG_LIST}
     )

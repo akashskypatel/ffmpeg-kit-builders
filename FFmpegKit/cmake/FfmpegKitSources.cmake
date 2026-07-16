@@ -9,7 +9,6 @@ function(ffmpegkit_prepare_sources OUT_SOURCES OUT_HEADERS)
 
     message(STATUS "Patching config.h for SDL compatibility...")
     file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/config.h" CONFIG_H_CONTENT)
-    string(REPLACE "#define HAVE_PTHREAD_SETNAME_NP 0" "" CONFIG_H_CONTENT "${CONFIG_H_CONTENT}")
     file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/src/config.h" "${CONFIG_H_CONTENT}")
 
     file(GLOB_RECURSE KIT_SOURCES
@@ -26,11 +25,6 @@ function(ffmpegkit_prepare_sources OUT_SOURCES OUT_HEADERS)
 
     list(REMOVE_ITEM KIT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ffplay.c")
     list(REMOVE_ITEM KIT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ffprobe.c")
-
-    if(MINGW)
-        list(REMOVE_ITEM KIT_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/pthread_compat.c")
-        list(REMOVE_ITEM KIT_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/src/pthread_compat.h")
-    endif()
 
     list(FILTER KIT_SOURCES EXCLUDE REGEX ".*_(bak|orig)\\.(c|cpp)$")
     list(FILTER KIT_HEADERS EXCLUDE REGEX ".*_(bak|orig)\\.h$")

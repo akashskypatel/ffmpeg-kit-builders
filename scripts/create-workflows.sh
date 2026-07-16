@@ -86,7 +86,7 @@ on:
         type: boolean
 
 env:
-  GH_TOKEN: \${{ github.token }}
+  GH_TOKEN: \${{ secrets.GH_TOKEN }}
   WORKFLOW_FORCE_SELF: \${{ inputs.force }}
   WORKFLOW_BUILD_FROM: \${{ inputs.build_from }}
   WORKFLOW_BUILD_ONLY: \${{ inputs.build_only }}
@@ -229,7 +229,7 @@ on:
         type: boolean
 
 env:
-  GH_TOKEN: \${{ github.token }}
+  GH_TOKEN: \${{ secrets.GH_TOKEN }}
   WORKFLOW_FORCE_SELF: \${{ inputs.force }}
   WORKFLOW_BUILD_FROM: \${{ inputs.build_from }}
   WORKFLOW_BUILD_ONLY: \${{ inputs.build_only }}

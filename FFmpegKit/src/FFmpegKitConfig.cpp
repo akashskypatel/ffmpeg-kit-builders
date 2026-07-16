@@ -551,11 +551,12 @@ extern "C" void ffmpegkit_unregister_root_context(const void *root) {
 }
 
 static std::once_flag ffmpegKitInitializerFlag;
-static const pthread_t nullThread{};
-static pthread_t callbackThread{};
-static pthread_t asyncFFplayThread{};
+static pthread_t callbackThread = 0;
+static pthread_t asyncFFplayThread = 0;
 
 void *ffmpegKitInitialize();
+
+const void *_ffmpegKitConfigInitializer{ffmpegKitInitialize()};
 
 enum CallbackType { LogType, StatisticsType };
 
@@ -1600,16 +1601,16 @@ int executeFFplay(const long sessionId,
 }
 
 void ffmpegkit::FFmpegKitConfig::joinAsyncFFplayThread() {
-  if (asyncFFplayThread == nullThread) {
+  if (asyncFFplayThread == 0) {
     return;
   }
   detachAsyncFFplayThread();
 }
 
 void ffmpegkit::FFmpegKitConfig::detachAsyncFFplayThread() {
-  if (asyncFFplayThread != nullThread) {
+  if (asyncFFplayThread != 0) {
     pthread_detach(asyncFFplayThread);
-    asyncFFplayThread = nullThread;
+    asyncFFplayThread = 0;
   }
 }
 
@@ -1685,11 +1686,11 @@ void ffmpegkit::FFmpegKitConfig::enableRedirection() {
 
   int rc = pthread_create(&callbackThread, NULL, callbackThreadFunction, NULL);
   if (rc != 0) {
-    redirectionEnabled.store(0, std::memory_order_release);
     std::cout
         << "[" << getCurrentTimeStamp()
         << "] [ffmpeg-kit] [ERROR] Failed to create async callback block: %d"
         << rc << std::endl;
+    lock.unlock();
     return;
   }
 
@@ -1714,7 +1715,12 @@ void ffmpegkit::FFmpegKitConfig::disableRedirection() {
   callbackNotify();
 
   // file-scope variable
-  if (callbackThread != nullThread) {
+  if (callbackThread != 0) {
+#ifdef _WIN32
+    // Windows implementation
+    WaitForSingleObject((HANDLE)callbackThread, 5000);
+    CloseHandle((HANDLE)callbackThread);
+#else
     // Standard Linux/GLIBC
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -1736,7 +1742,8 @@ void ffmpegkit::FFmpegKitConfig::disableRedirection() {
                 << std::endl;
       pthread_detach(callbackThread);
     }
-    callbackThread = nullThread;
+#endif
+    callbackThread = 0;
   }
 
   ffmpegkit_set_log_delegate_callback(nullptr);
@@ -2182,7 +2189,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFmpegExecute(
 
   auto *args = new AsyncFFmpegArgs{ffmpegSession};
   pthread_t thread;
-  int rc = pthread_create(
+  pthread_create(
       &thread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncFFmpegArgs *>(arg);
@@ -2220,14 +2227,6 @@ void ffmpegkit::FFmpegKitConfig::asyncFFmpegExecute(
         return nullptr;
       },
       args);
-  if (rc != 0) {
-    delete args;
-    std::cout << "[" << getCurrentTimeStamp()
-              << "] [ffmpeg-kit] [ERROR] Failed to create async FFmpeg "
-                 "thread: "
-              << rc << std::endl;
-    return;
-  }
   pthread_detach(thread);
 }
 
@@ -2236,7 +2235,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFprobeExecute(
 
   auto *args = new AsyncFFprobeArgs{ffprobeSession};
   pthread_t thread;
-  int rc = pthread_create(
+  pthread_create(
       &thread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncFFprobeArgs *>(arg);
@@ -2274,14 +2273,6 @@ void ffmpegkit::FFmpegKitConfig::asyncFFprobeExecute(
         return nullptr;
       },
       args);
-  if (rc != 0) {
-    delete args;
-    std::cout << "[" << getCurrentTimeStamp()
-              << "] [ffmpeg-kit] [ERROR] Failed to create async FFprobe "
-                 "thread: "
-              << rc << std::endl;
-    return;
-  }
   pthread_detach(thread);
 }
 
@@ -2290,7 +2281,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFplayExecute(
     int waitTimeout) {
   // Join any previously completed async ffplay thread before launching a new
   // one
-  if (asyncFFplayThread != nullThread) {
+  if (asyncFFplayThread != 0) {
     auto activeSession = getActiveFFplaySession();
     if (activeSession != nullptr) {
       activeSession->close();
@@ -2299,7 +2290,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFplayExecute(
   }
 
   auto *args = new AsyncFFplayArgs{ffplaySession, waitTimeout};
-  int rc = pthread_create(
+  pthread_create(
       &asyncFFplayThread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncFFplayArgs *>(arg);
@@ -2338,15 +2329,6 @@ void ffmpegkit::FFmpegKitConfig::asyncFFplayExecute(
         return nullptr;
       },
       args);
-  if (rc != 0) {
-    asyncFFplayThread = nullThread;
-    delete args;
-    std::cout << "[" << getCurrentTimeStamp()
-              << "] [ffmpeg-kit] [ERROR] Failed to create async FFplay "
-                 "thread: "
-              << rc << std::endl;
-    return;
-  }
   // Do NOT detach: keep asyncFFplayThread joinable so we can wait for it at
   // program exit (in ~FFmpegKitConfig) and avoid ASAN/TLS teardown crashes.
 }
@@ -2358,7 +2340,7 @@ void ffmpegkit::FFmpegKitConfig::asyncGetMediaInformationExecute(
 
   auto *args = new AsyncMediaInfoArgs{mediaInformationSession, waitTimeout};
   pthread_t thread;
-  int rc = pthread_create(
+  pthread_create(
       &thread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncMediaInfoArgs *>(arg);
@@ -2398,14 +2380,6 @@ void ffmpegkit::FFmpegKitConfig::asyncGetMediaInformationExecute(
         return nullptr;
       },
       args);
-  if (rc != 0) {
-    delete args;
-    std::cout << "[" << getCurrentTimeStamp()
-              << "] [ffmpeg-kit] [ERROR] Failed to create async media "
-                 "information thread: "
-              << rc << std::endl;
-    return;
-  }
   pthread_detach(thread);
 }
 
@@ -2951,7 +2925,7 @@ std::string ffmpegkit::FFmpegKitConfig::listAudioOutputDevices() {
 ffmpegkit::FFmpegKitConfig::~FFmpegKitConfig() {
   // 0. Join async ffplay thread so its TLS destructors run before ASAN/LLVM
   //    tears down during program exit (prevents __nptl_deallocate_tsd crash).
-  if (asyncFFplayThread != nullThread) {
+  if (asyncFFplayThread != 0) {
     auto activeSession = getActiveFFplaySession();
     if (activeSession != nullptr) {
       activeSession->close();

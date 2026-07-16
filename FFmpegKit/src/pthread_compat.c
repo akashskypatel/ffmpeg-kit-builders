@@ -17,7 +17,7 @@
  * along with FFmpegKit.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#if defined(_WIN32) && !defined(__MINGW32__)
+#ifdef _WIN32
 #include <windows.h>
 #include <pthread.h>
 #include <time.h>

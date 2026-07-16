@@ -7,7 +7,8 @@ index 9e3819a..3b7798f 100644
  
  typedef __ptw32_handle_t pthread_t;
 +
-+#ifdef __cplusplus
++#if defined(__cplusplus) && !defined(PTW32_CPP_HANDLE_COMPARATORS)
++#define PTW32_CPP_HANDLE_COMPARATORS
 +/* __ptw32_handle_t comparison operators for libstdc++ std::thread::id. */
 +#if __cplusplus >= 202002L
 +#include <compare>
