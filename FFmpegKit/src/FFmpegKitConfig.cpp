@@ -17,6 +17,10 @@
  * along with FFmpegKit.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef __MINGW32__
+#include "pthread_compat.h"
+#endif
+
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -547,8 +551,9 @@ extern "C" void ffmpegkit_unregister_root_context(const void *root) {
 }
 
 static std::once_flag ffmpegKitInitializerFlag;
-static pthread_t callbackThread = 0;
-static pthread_t asyncFFplayThread = 0;
+static const pthread_t nullThread{};
+static pthread_t callbackThread{};
+static pthread_t asyncFFplayThread{};
 
 void *ffmpegKitInitialize();
 
@@ -1597,16 +1602,16 @@ int executeFFplay(const long sessionId,
 }
 
 void ffmpegkit::FFmpegKitConfig::joinAsyncFFplayThread() {
-  if (asyncFFplayThread == 0) {
+  if (asyncFFplayThread == nullThread) {
     return;
   }
   detachAsyncFFplayThread();
 }
 
 void ffmpegkit::FFmpegKitConfig::detachAsyncFFplayThread() {
-  if (asyncFFplayThread != 0) {
+  if (asyncFFplayThread != nullThread) {
     pthread_detach(asyncFFplayThread);
-    asyncFFplayThread = 0;
+    asyncFFplayThread = nullThread;
   }
 }
 
@@ -1711,12 +1716,7 @@ void ffmpegkit::FFmpegKitConfig::disableRedirection() {
   callbackNotify();
 
   // file-scope variable
-  if (callbackThread != 0) {
-#ifdef _WIN32
-    // Windows implementation
-    WaitForSingleObject((HANDLE)callbackThread, 5000);
-    CloseHandle((HANDLE)callbackThread);
-#else
+  if (callbackThread != nullThread) {
     // Standard Linux/GLIBC
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -1738,8 +1738,7 @@ void ffmpegkit::FFmpegKitConfig::disableRedirection() {
                 << std::endl;
       pthread_detach(callbackThread);
     }
-#endif
-    callbackThread = 0;
+    callbackThread = nullThread;
   }
 
   ffmpegkit_set_log_delegate_callback(nullptr);
@@ -2277,7 +2276,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFplayExecute(
     int waitTimeout) {
   // Join any previously completed async ffplay thread before launching a new
   // one
-  if (asyncFFplayThread != 0) {
+  if (asyncFFplayThread != nullThread) {
     auto activeSession = getActiveFFplaySession();
     if (activeSession != nullptr) {
       activeSession->close();
@@ -2921,7 +2920,7 @@ std::string ffmpegkit::FFmpegKitConfig::listAudioOutputDevices() {
 ffmpegkit::FFmpegKitConfig::~FFmpegKitConfig() {
   // 0. Join async ffplay thread so its TLS destructors run before ASAN/LLVM
   //    tears down during program exit (prevents __nptl_deallocate_tsd crash).
-  if (asyncFFplayThread != 0) {
+  if (asyncFFplayThread != nullThread) {
     auto activeSession = getActiveFFplaySession();
     if (activeSession != nullptr) {
       activeSession->close();

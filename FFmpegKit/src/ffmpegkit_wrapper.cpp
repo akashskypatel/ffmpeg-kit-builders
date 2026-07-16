@@ -17,6 +17,10 @@
  * along with FFmpegKit.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef __MINGW32__
+#include "pthread_compat.h"
+#endif
+
 extern "C" {
 #include "libavutil/log.h"
 #include "libavformat/avformat.h"
