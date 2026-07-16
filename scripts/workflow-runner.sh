@@ -142,7 +142,7 @@ set_workflow_current_step() {
 }
 
 reset_workflow_seen_steps() {
-  local seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${GITHUB_WORKSPACE:-${repo_root}}/workflow-seen-steps.txt}"
+  local seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${GITHUB_WORKSPACE:-${repo_root}}/workflow-seen-steps.log}"
   export WORKFLOW_SEEN_STEPS=""
   rm -f "$seen_steps_file"
   if [[ -n "${GITHUB_ENV:-}" ]]; then

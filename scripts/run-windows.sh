@@ -4073,6 +4073,7 @@ build_libopencv() {
     gsed -i '/^[[:space:]]*ocv_generate_vs_version_file("${_VS_VERSION_FILE}"/,/)/ s/^/# /' "cmake/OpenCVModule.cmake"
     gsed -i '/^[[:space:]]*source_group("Src" FILES "${_VS_VERSION_FILE}")/ s/^/# /' "cmake/OpenCVModule.cmake"
     gsed -i 's/^[[:space:]]*${_VS_VERSION_FILE}[[:space:]]*$/# ${_VS_VERSION_FILE}/' "cmake/OpenCVModule.cmake"
+    gsed -i 's/ocv_update(OPENCV_DLLVERSION/#ocv_update(OPENCV_DLLVERSION/g' "CMakeLists.txt"
     change_dir "$src_dir/$lib/build" 1
     local original_pkg_path=$PKG_CONFIG_PATH
     export PKG_CONFIG_PATH="$install_pkgconfig_dir"
@@ -4127,7 +4128,7 @@ build_libopencv() {
     -e 's|-L[^ ]*opencv4/3rdparty|-L${libdir}/opencv4/3rdparty|g' \
     -e 's|-L${exec_prefix}//[^ ]*||g' \
     -e 's|-L/workspaces/[^ ]*||g' \
-    {} + # TODO: fix "workspaces" path
+    {} +
 	  change_dir "$src_dir"
     unset LIBS
     reset_ldflags

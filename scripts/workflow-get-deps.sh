@@ -36,7 +36,7 @@ workspace="${GITHUB_WORKSPACE:-$repo_root}"
 token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
 build_force="${WORKFLOW_FORCE_SELF:-false}"
 requested_step="${WORKFLOW_REQUESTED_STEP:-}"
-seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${GITHUB_WORKSPACE:-${repo_root}}/workflow-seen-steps.txt}"
+seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${GITHUB_WORKSPACE:-${repo_root}}/workflow-seen-steps.log}"
 
 if [[ -z "$token" ]]; then
 	echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
