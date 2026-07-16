@@ -339,10 +339,13 @@ PY
         printf '%s\n' "$repo_root" |
         gsed -e 's/[\/&|]/\\&/g'
     )"
-
+    if [[ "$repo_root_sed" != "/__w/${repo_name}/${repo_name}" &&
+      "$repo_root_sed" != "/Users/runner/work/${repo_name}/${repo_name}" &&
+      "$repo_root_sed" != "/Users/runner/${repo_name}/${repo_name}" ]]; then
     find "$libraries_dir" -type f -exec grep -IlZ . {} + |
-    xargs -0 gsed -i \
-        -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-        -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-        -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
+        xargs -0 gsed -i \
+            -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+            -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+            -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
+    fi
 done
