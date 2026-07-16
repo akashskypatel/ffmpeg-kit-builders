@@ -121,7 +121,7 @@ jobs:
 
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
+        run: find scripts FFmpegKit -type f -name "*.sh" -exec chmod +x {} +
 
       - name: Configure Maven signing
         shell: bash
@@ -255,7 +255,7 @@ jobs:
       
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh FFmpegKit/scripts/*.sh
+        run: find scripts FFmpegKit -type f -name "*.sh" -exec chmod +x {} +
 
       - name: Install Bash
         shell: bash
