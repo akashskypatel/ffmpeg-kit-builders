@@ -388,42 +388,6 @@ create_xcframework() {
     done
   }
 
-  # Helper function: create universal dylib from two architecture-specific dylibs
-  create_universal_dylib() {
-    local lib_name="$1"
-    local arch1_dir="$2"
-    local arch2_dir="$3"
-    local output_dir="$4"
-
-    local lib1="${arch1_dir}/${lib_name}"
-    local lib2="${arch2_dir}/${lib_name}"
-
-    if [[ -f "$lib1" && -f "$lib2" ]]; then
-      lipo -create -output "${output_dir}/${lib_name}" "$lib1" "$lib2"
-      install_name_tool -id "@rpath/${lib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-      codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-      # Fix rpath references
-      for dylib in "${output_dir}"/*.dylib; do
-        [[ -f "$dylib" ]] || continue
-        local dylib_name="$(basename "$dylib")"
-        [[ "$dylib_name" == "$lib_name" ]] && continue
-        if otool -L "${output_dir}/${lib_name}" 2>/dev/null | grep -q "${dylib_name}"; then
-          install_name_tool -change "${arch1_dir}/${dylib_name}" "@rpath/${dylib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-          install_name_tool -change "${arch2_dir}/${dylib_name}" "@rpath/${dylib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-          codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-        fi
-      done
-    elif [[ -f "$lib1" ]]; then
-      cp -f "$lib1" "${output_dir}/${lib_name}"
-      install_name_tool -id "@rpath/${lib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-      codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-    elif [[ -f "$lib2" ]]; then
-      cp -f "$lib2" "${output_dir}/${lib_name}"
-      install_name_tool -id "@rpath/${lib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-      codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-    fi
-  }
-
   # Helper: strip all baked-in rpaths and replace with @loader_path
   fix_dylib_rpaths() {
     local dylib="$1"
@@ -462,6 +426,59 @@ create_xcframework() {
     fi
 
     return 1
+  }
+
+  # CocoaPods does not support XCFramework slices packaged as raw dynamic
+  # libraries. Wrap libffmpegkit.dylib in a standard dynamic framework for
+  # every Apple platform before passing it to xcodebuild.
+  create_dynamic_framework() {
+    local source_dir="$1"
+    local framework_dir="${source_dir}/ffmpegkit.framework"
+
+    rm -rf "${framework_dir}"
+    mkdir -p "${framework_dir}/Headers" "${framework_dir}/Modules"
+
+    cp -f "${source_dir}/libffmpegkit${lib_ext}" "${framework_dir}/ffmpegkit"
+    if [[ -d "${source_dir}/Headers" ]]; then
+      cp -r "${source_dir}/Headers/." "${framework_dir}/Headers/"
+    fi
+
+    install_name_tool -id "@rpath/ffmpegkit.framework/ffmpegkit" "${framework_dir}/ffmpegkit" 2>/dev/null || true
+
+    cat > "${framework_dir}/Modules/module.modulemap" <<'EOF'
+framework module ffmpegkit {
+  umbrella "Headers"
+  export *
+  module * { export * }
+}
+EOF
+
+    cat > "${framework_dir}/Info.plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>ffmpegkit</string>
+  <key>CFBundleIdentifier</key>
+  <string>io.github.akashskypatel.ffmpegkit</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>ffmpegkit</string>
+  <key>CFBundlePackageType</key>
+  <string>FMWK</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+</dict>
+</plist>
+EOF
+
+    codesign --sign - --force "${framework_dir}" 2>/dev/null || true
   }
 
   IFS=',' read -ra arch_array <<< "$archs_for_platform"
@@ -521,7 +538,8 @@ create_xcframework() {
       cp -r "${include_dir}/." "${temp_framework_dir}/Headers/"
     fi
 
-    framework_inputs+=("-library" "${temp_framework_dir}/libffmpegkit${lib_ext}" "-headers" "${temp_framework_dir}/Headers")
+    create_dynamic_framework "${temp_framework_dir}"
+    framework_inputs+=("-framework" "${temp_framework_dir}/ffmpegkit.framework")
   done
 
   # Handle macOS: create universal binaries if both archs are present
@@ -620,7 +638,8 @@ create_xcframework() {
         cp -r "${macos_headers_dir}/." "${temp_framework_dir}/Headers/"
       fi
 
-      framework_inputs+=("-library" "${temp_framework_dir}/libffmpegkit${lib_ext}" "-headers" "${temp_framework_dir}/Headers")
+      create_dynamic_framework "${temp_framework_dir}"
+      framework_inputs+=("-framework" "${temp_framework_dir}/ffmpegkit.framework")
     fi
   fi
 
