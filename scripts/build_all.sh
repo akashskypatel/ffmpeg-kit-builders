@@ -401,7 +401,7 @@ execute_build() {
   if [[ "$(id -u)" -eq 0 ]]; then
     runner=(bash -c "${cmd_string}")
   else
-    runner=(sudo -E "${cmd_string}")
+    runner=(sudo -E bash -c "${cmd_string}")
   fi
 
   if "${runner[@]}"; then
@@ -558,7 +558,11 @@ if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
   export OSSRH_BASE64="${OSSRH_BASE64:-$(get_maven_base64)}" && \
   export OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}" && \
   export OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}" && \
-  sudo -E "${WORK_DIR}/scripts/android/build_aar.sh --bundle=${bundles} --reset ${remote} ${SNAPSHOT}"
+  sudo -E "${WORK_DIR}/scripts/android/build_aar.sh" \
+    "--bundle=${bundles}" \
+    --reset \
+    "${remote}" \
+    "${SNAPSHOT}"
 fi
 
 # Build XCFrameworks for Apple platforms
@@ -591,5 +595,9 @@ if [[ -n "${apple_platforms_str}" ]] && truthy "$build_bundle"; then
   else
     remote="--local"
   fi
-  sudo -E "${WORK_DIR}/scripts/apple/build_xcframework.sh --platform=${apple_platforms_str} --bundle=${bundles} --reset ${remote}"
+  sudo -E "${WORK_DIR}/scripts/apple/build_xcframework.sh" \
+    "--platform=${apple_platforms_str}" \
+    "--bundle=${bundles}" \
+    --reset \
+    "${remote}"
 fi
