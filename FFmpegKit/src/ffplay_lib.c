@@ -403,9 +403,11 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
         SDL_getenv("SDL_AUDIODRIVER") ? SDL_getenv("SDL_AUDIODRIVER") : "(null)",
         args_string ? args_string : "(null)");
 #else
-    // Linux/Windows: use dummy audio unless the caller has set SDL_AUDIODRIVER.
+#if defined(__LINUX__)
+    // Linux: use dummy audio for headless playback unless the caller overrides.
     if (!SDL_getenv("SDL_AUDIODRIVER"))
         SDL_setenv("SDL_AUDIODRIVER", "dummy", 0);
+#endif
 #endif
 #endif /* !__ANDROID__ */
         
