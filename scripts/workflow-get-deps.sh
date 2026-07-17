@@ -332,30 +332,33 @@ PY
     fi
     staging_dir="$(mktemp -d)"
 
-echo "Unzipping archive: $archive_path to $staging_dir"
-unzip -oq "$archive_path" -d "$staging_dir"
-echo "Archive extracted successfully"
+    echo "Unzipping archive: $archive_path to $staging_dir"
+    unzip -oq "$archive_path" -d "$staging_dir"
+    echo "Archive extracted successfully"
 
-rm -fv "$archive_path"
+    rm -fv "$archive_path"
 
-if [[ "$repo_root" != "/__w/${repo_name}/${repo_name}" &&
-      "$repo_root" != "/Users/runner/work/${repo_name}/${repo_name}" &&
-      "$repo_root" != "/Users/runner/${repo_name}/${repo_name}" ]]; then
+    if [[ "$repo_root" != "/__w/${repo_name}/${repo_name}" &&
+        "$repo_root" != "/Users/runner/work/${repo_name}/${repo_name}" &&
+        "$repo_root" != "/Users/runner/${repo_name}/${repo_name}" ]]; then
 
-    repo_root_sed="$(
-        printf '%s\n' "$repo_root" |
-            gsed -e 's/[\/&|]/\\&/g'
-    )"
+        repo_root_sed="$(
+            printf '%s\n' "$repo_root" |
+                gsed -e 's/[\/&|]/\\&/g'
+        )"
 
-    find "$staging_dir" -type f -exec grep -IlZ . {} + |
-        xargs -0 -r gsed -i \
-            -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-            -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-            -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
-fi
+        find "$staging_dir" -type f -exec grep -IlZ . {} + |
+            xargs -0 -r gsed -i \
+                -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+                -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+                -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
+    fi
 
-cp -a "$staging_dir"/. "$extract_dir"/
-rm -rf "$staging_dir"
+    cp -a "$staging_dir"/. "$extract_dir"/
+    rm -rf "$staging_dir"
+    chmod -R a+rwx "$extract_dir"
 
-mark_workflow_step_seen "$seen_key"
+    mark_workflow_step_seen "$seen_key"
 done
+
+exit 0

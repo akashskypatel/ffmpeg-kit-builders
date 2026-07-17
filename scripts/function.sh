@@ -4473,20 +4473,6 @@ run_valid_build_functions() {
     fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
-    # download prebuilt dependency if build_force is not requested OR start_from requested and step_name not already built
-    # should rebuild dependencies from scratch if build_force is true and prevent depedencies from being downloaded since they are being built from scratch
-    # should prevent depedencies from being downloaded if start_from is requested but not building dependencies from scratch, in which case it should download prebuilt dependencies
-    if ! truthy "$build_force"; then
-      if truthy "$force_self"; then
-        export WORKFLOW_FORCE_SELF="true"
-      fi
-      if sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$step_name" --self; then
-        echo "INFO: Downloaded existing release artifact for $step_name. Skipping build." >>"${LOG_FILE}"
-        set_run_state "$step_name"
-        mark_as_built "$step_name"
-        continue
-      fi
-    fi
     run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See ${LOG_FILE} for details"
     last_built_step="$step_name"
   done
@@ -4543,6 +4529,7 @@ run_valid_function() {
   local arg=()
   arg+=("$@")
   reset_allflags
+  local workflow_requested_step="${WORKFLOW_REQUESTED_STEP:-${build_only}}"
   if ! isapple && ! { islinux && [[ "$host_arch" == "aarch64" ]]; }; then
     export LDFLAGS=" $LDFLAGS -static-libstdc++ "
   fi
@@ -4553,10 +4540,29 @@ run_valid_function() {
     reset_allflags
     return "$return_code"
   }
+  # Download a prebuilt artifact for this step when this run is not forcing a
+  # rebuild. A successful self-artifact download satisfies the step and must not
+  # fall through to the local build function.
+  if ! truthy "$build_force"; then
+    sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" \
+      "$SCRIPTDIR/workflow-get-deps.sh" \
+      "$host_platform" "$platform_arch" "$step" --self 2>&1 | tee -a "$LOG_FILE"
+    result=${PIPESTATUS[0]}
+    if [[ $result -eq 0 ]]; then
+      echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
+      set_run_state "$step"
+      mark_as_built "$step"
+      reset_and_exit 0
+      return $?
+    else
+      echo "INFO: No reusable release artifact for $step (workflow-get-deps exit ${result}). Building locally." >>"${LOG_FILE}"
+    fi
+  fi
 	if [[ -n "$step" ]]; then
     if [[ "$step" == build_* ]] && check_if_built "$step"; then
       echo "INFO: $step already built. Skipping." >>"$LOG_FILE"
       reset_and_exit 0
+      return $?
     fi
 		change_dir "$src_dir"
 		if declare -F "$step" >/dev/null; then
@@ -4569,17 +4575,20 @@ run_valid_function() {
          # 2. OPTIMIZATION: Mark as built on success
          mark_as_built "$step"
          reset_and_exit 0
+         return $?
       else
          echo -e "ERROR: Step $step failed with status $status" | tee -a "$LOG_FILE"
-         reset_and_exit $status
+         reset_and_exit "$status"
+         return $?
       fi
 		else
 			echo -e "WARNING: Function '$step' not found. Attempting eval..." >>"$LOG_FILE"
-      eval "$step ${arg[*]}" || reset_and_exit 1
+      eval "$step ${arg[*]}" || { reset_and_exit 1; return $?; }
 		fi
 	else
 		echo -e "ERROR: Step argument is missing." | tee -a "$LOG_FILE"
     reset_and_exit 1
+    return $?
 	fi
   set_run_state
   reset_allflags

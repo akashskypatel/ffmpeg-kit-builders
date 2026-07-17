@@ -172,6 +172,8 @@ configure_ffmpeg_kit() {
 	local type_postfix="$build_ffmpeg_kit_type"
 	
 	iswindows && fix_pkgconfig_flags
+	
+	run_valid_function build_pthread_win32
 
 	if truthy "$build_force"; then
 		remove_path -rf "$ffmpeg_kit_src_dir"/already_configured_*
