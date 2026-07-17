@@ -1,44 +1,103 @@
 #!/usr/bin/env bash
+
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKFLOW_DIR="$(dirname "$SCRIPT_DIR")/.github/workflows"
 
+source "$SCRIPT_DIR/function.sh"
+
+OWNER="$(get_github_owner)"
+
 if [[ ! -d "$WORKFLOW_DIR" ]]; then
-	echo "Workflow directory not found: $WORKFLOW_DIR" >&2
+	mkdir -p "$WORKFLOW_DIR"
+fi
+
+# Check if build argument is provided
+if [[ $# -eq 0 ]]; then
+	echo "Usage: $0 <build_name>" >&2
 	exit 1
 fi
 
-shopt -s nullglob
-workflow_files=("$WORKFLOW_DIR"/*.yaml)
+BUILD_NAME="$1"
 
-if [[ ${#workflow_files[@]} -eq 0 ]]; then
-	echo "No workflow files found in $WORKFLOW_DIR" >&2
-	exit 1
+if [[ ! -f "$WORKFLOW_DIR/$BUILD_NAME.yaml" ]]; then
+	echo "" > "$WORKFLOW_DIR/$BUILD_NAME.yaml"
 fi
 
-for file in "${workflow_files[@]}"; do
-	workflow_name="$(basename "$file" .yaml)"
-	tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
+file="$WORKFLOW_DIR/$BUILD_NAME.yaml"
 
-	{
-		printf 'name: %s\n\n' "$workflow_name"
-		cat <<'YAML'
+workflow_name="$(basename "$file" .yaml)"
+tmp_file="$(mktemp "${file}.tmp.XXXXXX")"
+
+{
+printf 'name: %s\n\n' "$workflow_name"
+cat <<'YAML'
+run-name: ${{ github.workflow }} ${{ inputs.platform || 'all' }}-${{ inputs.arch || 'all' }} ${{ inputs.orchestrator_run_id || github.run_id }}
+
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: all
+        options:
+          - all
+          - linux
+          - windows
+          - android
+          - ios
+          - iphonesimulator
+          - macos
+          - apple
+      arch:
+        description: Architecture to build
+        type: choice
+        default: all
+        options:
+          - all
+          - x86_64
+          - aarch64
+          - armv7a
+      force:
+        description: "Force rebuild instead of using existing self release artifacts"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
   packages: read
+  actions: read
 
 jobs:
   linux:
     name: Linux
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'linux' || inputs.platform == 'windows' || inputs.platform == 'android' }}
     runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WORKFLOW_FORCE_SELF: ${{ inputs.force }}
     container:
-      image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+      image: ghcr.io/${OWNER}/ffmpeg-kit-builders-dev:latest
       credentials:
-        username: akashskypatel
+        username: ${OWNER}
         password: ${{ secrets.GHCR_PAT || github.token }}
       options: --user root
     steps:
@@ -47,104 +106,120 @@ jobs:
 
       - name: Prepare scripts
         shell: bash
-        run: chmod +x runner.sh scripts/*.sh
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
+
+      - name: Setup Linux arm64 toolchain
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
+        shell: bash
+        run: sudo -E ./scripts/toolchain/setup-linux-arm64.sh
+
+      - name: Setup Windows toolchain
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'windows') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
+        shell: bash
+        run: sudo -E ./scripts/toolchain/setup-mingw-w64.sh
+
+      - name: Setup Android toolchain
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'android' }}
+        shell: bash
+        run: sudo -E ./scripts/toolchain/setup-android.sh
 
       - name: Build Linux
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=linux --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Linux dependencies
+      - name: Build Linux aarch64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'linux') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: ./scripts/upload-deps-release.sh linux x86_64
+        run: sudo -E ./runner.sh --host=linux --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Windows
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'windows') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
-
-      - name: Upload Windows dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh windows x86_64
+        run: sudo -E ./runner.sh --host=windows --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Android x86_64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=android --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Android x86_64 dependencies
+      - name: Build Android aarch64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: ./scripts/upload-deps-release.sh android x86_64
-
-      - name: Build Android arm64
-        shell: bash
-        run: sudo ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
-
-      - name: Upload Android arm64 dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh android aarch64
+        run: sudo -E ./runner.sh --host=android --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build Android armv7a
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'android') && (inputs.arch == 'all' || inputs.arch == 'armv7a') }}
         shell: bash
-        run: sudo ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo -E ./runner.sh --host=android --arch=armv7a -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload Android armv7a dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh android armv7a
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-artifacts-${{ github.workflow }}-${{ github.job }}
+          path: |
+            build.log
+            prebuilt
+          if-no-files-found: ignore
 
   macos:
     name: macOS
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'ios' || inputs.platform == 'iphonesimulator' || inputs.platform == 'macos' }}
     runs-on: macos-14
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WORKFLOW_FORCE_SELF: ${{ inputs.force }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Prepare scripts
-        shell: bash
-        run: chmod +x runner.sh scripts/*.sh
-
       - name: Install Bash
         shell: bash
         run: |
-          brew install 'bash' 'coreutils' 'ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' 'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' 'bzip2' 'python3' 'bc' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'libtool' 'gsed'
+          brew install 'bash' 'coreutils' 'ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' 'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' 'bzip2' 'python3' 'cython' 'bc' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'libtool' 'gsed' 'libdatrie' 'ripgrep'
           echo "HOMEBREW_BASH=$(brew --prefix)/bin/bash" >> "$GITHUB_ENV"
 
       - name: Accept Xcode license
         shell: bash
         run: sudo xcodebuild -license accept
 
-      - name: Build iOS
-        shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Upload iOS dependencies
+      - name: Prepare scripts
         shell: bash
-        run: ./scripts/upload-deps-release.sh ios aarch64
+        run: chmod +x runner.sh scripts/*.sh scripts/toolchain/*.sh
+
+      - name: Build iOS
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'ios') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
+        shell: bash
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=ios --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build iPhone Simulator
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'iphonesimulator') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
-
-      - name: Upload iPhone Simulator dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh iphonesimulator aarch64
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=iphonesimulator --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
       - name: Build macOS x86_64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'x86_64') }}
         shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=x86_64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Upload macOS x86_64 dependencies
+      - name: Build macOS aarch64
+        if: ${{ (inputs.platform == 'all' || inputs.platform == 'apple' || inputs.platform == 'macos') && (inputs.arch == 'all' || inputs.arch == 'aarch64') }}
         shell: bash
-        run: ./scripts/upload-deps-release.sh macos x86_64
+        run: sudo -E "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --workflow --build-only=${{ github.workflow }}
 
-      - name: Build macOS arm64
-        shell: bash
-        run: sudo "$HOMEBREW_BASH" ./runner.sh --host=macos --arch=aarch64 -y --enable-full --enable-gpl --skip --build-only=${{ github.workflow }}
-
-      - name: Upload macOS arm64 dependencies
-        shell: bash
-        run: ./scripts/upload-deps-release.sh macos aarch64
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-artifacts-${{ github.workflow }}-${{ github.job }}
+          path: |
+            build.log
+            prebuilt
+          if-no-files-found: ignore
 YAML
-	} > "$tmp_file"
+} > "$tmp_file"
 
-	chmod 0644 "$tmp_file"
-	mv "$tmp_file" "$file"
-	echo "Wrote $file"
-done
+chmod 0644 "$tmp_file"
+mv "$tmp_file" "$file"
+echo "Wrote $file"

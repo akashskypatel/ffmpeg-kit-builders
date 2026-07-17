@@ -1,6 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 # DIRECTORY DEFINITIONS
 export FFMPEG_KIT_TMPDIR="${BASEDIR}/.tmp"
@@ -8,7 +21,6 @@ export FFMPEG_KIT_TMPDIR="${BASEDIR}/.tmp"
 export MINGW_W64_BRANCH="master"
 export BINUTILS_BRANCH="binutils-2_44-branch"
 export GCC_BRANCH="releases/gcc-14"
-export LOG_FILE="${BASEDIR}"/build.log
 
 # variables with their defaults
 export build_cross_compile=n
@@ -25,6 +37,8 @@ export build_ffmpeg=n
 export build_ffmpeg_kit_type=shared
 export build_ffmpeg_kit=n
 export build_tests=n
+export skip_validation=n
+export skip_package_check=n
 export create_bundle=y
 export git_get_latest=n
 export prefer_stable=y # Only for x264 and x265.
@@ -85,6 +99,7 @@ CONFIG_WINDOWS="\
 --enable-d3d12va \
 --enable-dxva2 \
 --enable-schannel \
+--enable-pthread-win32 \
 --enable-mediafoundation"
 
 CONFIG_MACOS="\
@@ -107,8 +122,7 @@ CONFIG_GENERAL="\
 --enable-zlib"
 
 CONFIG_BASE="--enable-libjsoncpp \
---enable-sdl2 \
---enable-pthread-win32"
+--enable-sdl2"
 
 # must pick crypto type for streaming support
 CONFIG_STREAMING="\
@@ -170,6 +184,7 @@ CONFIG_AUDIO_EXTRA="\
 # Cross-Platform Audio Focused NON-FREE
 CONFIG_AUDIO_NON_FREE="\
 --enable-libfdk-aac \
+--enable-libmpeghdec \
 --enable-audiotoolbox"
 
 # Cross-platform Video Focused
@@ -198,6 +213,8 @@ CONFIG_VIDEO="\
 --enable-liboapv \
 --enable-libopenh264 \
 --enable-libopenjpeg \
+--enable-libsvtjpegxs \
+--enable-libopencolorio \
 --enable-librav1e \
 --enable-librsvg \
 --enable-libsnappy \
@@ -343,6 +360,12 @@ CONFIG_AUTODETECT="\
 --disable-metal \
 --disable-securetransport \
 --disable-videotoolbox"
+
+CONFIG_TVOS_UNSUPPORTED=" \
+--disable-frei0r \
+--disable-liblensfun \
+--disable-librsvg \
+--disable-pocketsphinx"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
 # build_mediacodec        # config_options+= --disable-mediacodec         # Video  # enable Android MediaCodec support [no]
@@ -499,6 +522,9 @@ CONFIG_AUTODETECT="\
 # build_metal             # config_options+= --disable-metal              # Video  # disable Apple Metal framework [autodetect]
 # build_securetransport   # config_options+= --disable-securetransport    # System # disable Secure Transport, needed for TLS support on OSX if openssl and gnutls are not used [autodetect]
 # build_videotoolbox      # config_options+= --disable-videotoolbox       # Video  # disable VideoToolbox code [autodetect]
+# build_libsvtjpegxs      # config_options+= --disable-libsvtjpegxs       # Video  # disable SVT-JPEGXS code [autodetect]
+# build_libopencolorio    # config_options+= --disable-libopencolorio     # Video  # disable OpenColorIO code [autodetect]
+# build_libmpeghdec       # config_options+= --disable-libmpeghdec        # Audio  # disable MPEG-H 3D Audio decoder code [autodetect]
 
 # disabled on android
 # build_alsa

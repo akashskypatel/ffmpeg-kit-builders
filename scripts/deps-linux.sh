@@ -1,4 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 # shellcheck disable=2034
 
@@ -14,7 +29,7 @@ SUB_DEPENDENCIES[build_libusb]=""
 SUB_DEPENDENCIES[build_sdl12_compat]="build_sdl2"
 SUB_DEPENDENCIES[build_libdc1394]="build_sdl12_compat build_libusb"
 SUB_DEPENDENCIES[build_libdrm]=""
-SUB_DEPENDENCIES[build_libavc1394]=""
+SUB_DEPENDENCIES[build_libavc1394]="build_libraw1394"
 SUB_DEPENDENCIES[build_libraw1394]=""
 SUB_DEPENDENCIES[build_libiec61883]="build_libraw1394 build_libavc1394"
 SUB_DEPENDENCIES[build_libjsonc]=""
@@ -36,7 +51,7 @@ SUB_DEPENDENCIES[build_libxdmcp]=""
 SUB_DEPENDENCIES[build_libxrender]=""
 SUB_DEPENDENCIES[build_libxft]=""
 SUB_DEPENDENCIES[build_x11]="build_xorgproto build_xtrans build_libxcb build_libxdmcp"
-SUB_DEPENDENCIES[build_xlib]=""
+SUB_DEPENDENCIES[build_xlib]="build_x11"
 SUB_DEPENDENCIES[build_amf]=""
 SUB_DEPENDENCIES[build_vulkan]=""
 SUB_DEPENDENCIES[build_libmfx]=""
@@ -99,8 +114,7 @@ SUB_DEPENDENCIES[build_libjxl]="build_brotli build_lcms2 build_cpuinfo"
 SUB_DEPENDENCIES[build_libklvanc]=""
 SUB_DEPENDENCIES[build_libkvazaar]=""
 SUB_DEPENDENCIES[build_liblc3]=""
-SUB_DEPENDENCIES[build_iconv_minimal]=""
-SUB_DEPENDENCIES[build_iconv]="build_iconv_minimal build_gettext"
+SUB_DEPENDENCIES[build_iconv]="build_gettext"
 SUB_DEPENDENCIES[build_gettext]=""
 SUB_DEPENDENCIES[build_libffi]=""
 SUB_DEPENDENCIES[build_pcre2]="build_zlib build_bzlib"
@@ -192,7 +206,7 @@ SUB_DEPENDENCIES[build_libxv]="build_xlib"
 SUB_DEPENDENCIES[build_libxvid]="build_libxv"
 SUB_DEPENDENCIES[build_libzimg]=""
 SUB_DEPENDENCIES[build_libzmq]=""
-SUB_DEPENDENCIES[build_libzvbi]=""
+SUB_DEPENDENCIES[build_libzvbi]="build_iconv build_libpng"
 SUB_DEPENDENCIES[build_sratom]="build_sord build_lv2_headers"
 SUB_DEPENDENCIES[build_sord]="build_zix"
 SUB_DEPENDENCIES[build_serd]=""
@@ -209,7 +223,10 @@ SUB_DEPENDENCIES[build_opengl]="build_glew build_glfw"
 SUB_DEPENDENCIES[build_openssl]=""
 SUB_DEPENDENCIES[build_lapack]=""
 SUB_DEPENDENCIES[build_bison]=""
-SUB_DEPENDENCIES[build_pocketsphinx]="build_alsa build_libunwind build_lzma build_glib"
+SUB_DEPENDENCIES[build_swig]=""
+SUB_DEPENDENCIES[build_sphinxbase]="build_alsa build_swig"
+SUB_DEPENDENCIES[build_gstreamer]="build_lzma build_glib build_sphinxbase"
+SUB_DEPENDENCIES[build_pocketsphinx]="build_libunwind build_gstreamer"
 SUB_DEPENDENCIES[build_vapoursynth]="build_libzimg"
 SUB_DEPENDENCIES[build_ggml]=""
 SUB_DEPENDENCIES[build_whisper]=""
@@ -241,3 +258,6 @@ SUB_DEPENDENCIES[build_coreimage]=""
 SUB_DEPENDENCIES[build_metal]=""
 SUB_DEPENDENCIES[build_securetransport]=""
 SUB_DEPENDENCIES[build_videotoolbox]=""
+SUB_DEPENDENCIES[build_libsvtjpegxs]=""
+SUB_DEPENDENCIES[build_libopencolorio]=""
+SUB_DEPENDENCIES[build_libmpeghdec]=""

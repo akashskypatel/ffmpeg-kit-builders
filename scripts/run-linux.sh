@@ -1,6 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 # required for ffmpeg-kit
 build_libjsoncpp() {
@@ -36,10 +49,10 @@ build_ladspa() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib/src"
-  sed -i "s|^INSTALL_INCLUDE_DIR.*|INSTALL_INCLUDE_DIR = ${dependency_install_prefix}/include|g" Makefile
-  sed -i "s|^INSTALL_PLUGINS_DIR.*|INSTALL_PLUGINS_DIR = ${dependency_install_prefix}/lib/ladspa|g" Makefile
-  sed -i "s|^INSTALL_BINARY_DIR.*|INSTALL_BINARY_DIR = ${dependency_install_prefix}/bin|g" Makefile
-  sed -i "s|^LIBRARIES	=	-ldl -lm -lsndfile|LIBRARIES	=	-ldl -lm -lsndfile -lmpg123 -lmp3lame -lid3tag -lz|g" Makefile
+  gsed -i "s|^INSTALL_INCLUDE_DIR.*|INSTALL_INCLUDE_DIR = ${dependency_install_prefix}/include|g" Makefile
+  gsed -i "s|^INSTALL_PLUGINS_DIR.*|INSTALL_PLUGINS_DIR = ${dependency_install_prefix}/lib/ladspa|g" Makefile
+  gsed -i "s|^INSTALL_BINARY_DIR.*|INSTALL_BINARY_DIR = ${dependency_install_prefix}/bin|g" Makefile
+  gsed -i "s|^LIBRARIES	=	-ldl -lm -lsndfile|LIBRARIES	=	-ldl -lm -lsndfile -lmpg123 -lmp3lame -lid3tag -lz|g" Makefile
   export LDFLAGS="$LDFLAGS -lsndfile -lmpg123 -lmp3lame -lid3tag -lz"
   generic_make "CFLAGS=\"${CFLAGS} -I. ${LDFLAGS}\" LDFLAGS=\"${LDFLAGS}\""
   disable_nonessential "$src_dir/$lib"
@@ -83,6 +96,7 @@ build_libusb() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--disable-udev --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -115,7 +129,7 @@ build_libdc1394() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i 's/^AM_PATH_SDL/# AM_PATH_SDL/g' configure.ac
+  gsed -i 's/^AM_PATH_SDL/# AM_PATH_SDL/g' configure.ac
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -226,66 +240,6 @@ build_libv4l2() {
   unset LIBS
   change_dir "$src_dir"
 }
-# build_libxcb_shape      # config_options+= --enable-libxcb-shape        # enable X11 grabbing shape rendering [autodetect]
-build_libxcb_shape() {
-  # run_valid_function "build_libxcb" 1
-    echo "INFO: libxcb-shape is part of libxcb." >>"$LOG_FILE"
-}
-# build_libxcb_shm        # config_options+= --enable-libxcb-shm          # enable X11 grabbing shm communication [autodetect]
-build_libxcb_shm() {
-  # run_valid_function "build_libxcb" 1
-    echo "INFO: libxcb-shm is part of libxcb." >>"$LOG_FILE"
-}
-# build_libxcb_xfixes     # config_options+= --enable-libxcb-xfixes       # enable X11 grabbing mouse rendering [autodetect]
-build_libxcb_xfixes() {
-  # run_valid_function "build_libxcb" 1
-    echo "INFO: libxcb-xfixes is part of libxcb." >>"$LOG_FILE"
-}
-build_xcbproto() {
-  install_missing_packages "xorg-x11-proto-devel"
-  # https://gitlab.freedesktop.org/xorg/proto/xcbproto
-  # local lib="xcbproto"
-  # local repo="https://gitlab.freedesktop.org/xorg/proto/xcbproto"
-  # local repo_ver="xcb-proto-1.17.0"
-  # change_dir "$src_dir"
-  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  # change_dir "$src_dir/$lib"
-  # generic_configure "--enable-static --disable-shared"
-  # disable_nonessential "$src_dir/$lib"
-  # do_make_and_make_install
-  # change_dir "$src_dir"
-}
-build_libxau() {
-  install_missing_packages "libxau-devel"
-  # # run_valid_function "build_xorgproto"
-  # # https://gitlab.freedesktop.org/xorg/lib/libxau
-  # local lib="libxau"
-  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxau"
-  # local repo_ver="libXau-1.0.12"
-  # change_dir "$src_dir"
-  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  # change_dir "$src_dir/$lib"
-  # automake --force-missing --add-missing > >(redirect_output) 2>&1
-  # generic_configure "--enable-static --disable-shared"
-  # disable_nonessential "$src_dir/$lib"
-  # do_make_and_make_install
-  # change_dir "$src_dir"
-}
-# build_libxcb            # config_options+= --enable-libxcb              # enable X11 grabbing using XCB [autodetect]
-build_libxcb() {
-  install_missing_packages "libxau-devel" "xorg-x11-proto-devel" "libxcb-devel"
-  # https://gitlab.freedesktop.org/xorg/lib/libxcb
-  # local lib="libxcb"
-  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxcb"
-  # local repo_ver="libxcb-1.17.0"
-  # change_dir "$src_dir"
-  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  # change_dir "$src_dir/$lib"
-  # generic_configure "--enable-static --disable-shared"
-  # disable_nonessential "$src_dir/$lib"
-  # do_make_and_make_install
-  # change_dir "$src_dir"
-}
 # build_rkmpp             # config_options+= --enable-rkmpp               # enable Rockchip Media Process Platform code [no]
 build_rkmpp() {
   # https://github.com/rockchip-linux/mpp
@@ -316,6 +270,7 @@ build_vaapi() {
   # run_valid_function "build_xlib" 1
   # local original_pkg_path=$PKG_CONFIG_PATH
   # https://github.com/intel/libva
+  build_xlib
   local lib="vaapi"
   local repo="https://github.com/intel/libva"
   local repo_ver="2.22.0"
@@ -328,14 +283,14 @@ build_vaapi() {
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -lxcb -lXau -lXdmcp -lX11"
   # export PKG_CONFIG_PATH="$install_pkgconfig_dir"
   export gl_cv_have_ld_version_script=no
-  sed -i 's/-Wl,-version-script[^ ]*//g' "$src_dir/$lib/va/Makefile.am"
+  gsed -i 's/-Wl,-version-script[^ ]*//g' "$src_dir/$lib/va/Makefile.am"
   autoreconf_library # a handful of them require this to create ./configure :|
   automake --force-missing --add-missing > >(redirect_output) 2>&1
   # remove function versioning. causes issues with PIC
-  sed -i 's/$wl-version-script //g' "$src_dir/$lib/configure"
-  sed -i 's/-version-script //g' "$src_dir/$lib/configure"
-  sed -i 's/-Wl,--version-script//g' "$src_dir/$lib/va/meson.build"
-  sed -i "s/libva_sym_arg = .*/libva_sym_arg = ''/g" "$src_dir/$lib/va/meson.build"
+  gsed -i 's/$wl-version-script //g' "$src_dir/$lib/configure"
+  gsed -i 's/-version-script //g' "$src_dir/$lib/configure"
+  gsed -i 's/-Wl,--version-script//g' "$src_dir/$lib/va/meson.build"
+  gsed -i "s/libva_sym_arg = .*/libva_sym_arg = ''/g" "$src_dir/$lib/va/meson.build"
   generic_configure "--enable-static \
 --disable-shared \
 --enable-pic \
@@ -343,10 +298,10 @@ build_vaapi() {
 --disable-docs \
 gl_cv_have_ld_version_script=no"
   # remove function versioning. causes issues with PIC
-  sed -i '/#define VA_CPP_HELPER_ALIAS_(/s/\\$//' "$src_dir/$lib/va/va_compat.h"
-  sed -i '/asm(".symver/d' "$src_dir/$lib/va/va_compat.h"
-  sed -i '/#func binding/d' "$src_dir/$lib/va/va_compat.h"
-  find . -name "Makefile" -exec sed -i 's/-Wl,-*version-script=[^ ]*//g' {} +
+  gsed -i '/#define VA_CPP_HELPER_ALIAS_(/s/\\$//' "$src_dir/$lib/va/va_compat.h"
+  gsed -i '/asm(".symver/d' "$src_dir/$lib/va/va_compat.h"
+  gsed -i '/#func binding/d' "$src_dir/$lib/va/va_compat.h"
+  find . -name "Makefile" -exec gsed -i 's/-Wl,-*version-script=[^ ]*//g' {} +
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   unset gl_cv_have_ld_version_script
@@ -472,8 +427,83 @@ build_x11() {
   # do_make_and_make_install
   # change_dir "$src_dir"
 }
+
+# build_libxcb_shape      # config_options+= --enable-libxcb-shape        # enable X11 grabbing shape rendering [autodetect]
+build_libxcb_shape() {
+  # run_valid_function "build_libxcb" 1
+    echo "INFO: libxcb-shape is part of libxcb." >>"$LOG_FILE"
+}
+# build_libxcb_shm        # config_options+= --enable-libxcb-shm          # enable X11 grabbing shm communication [autodetect]
+build_libxcb_shm() {
+  # run_valid_function "build_libxcb" 1
+    echo "INFO: libxcb-shm is part of libxcb." >>"$LOG_FILE"
+}
+# build_libxcb_xfixes     # config_options+= --enable-libxcb-xfixes       # enable X11 grabbing mouse rendering [autodetect]
+build_libxcb_xfixes() {
+  # run_valid_function "build_libxcb" 1
+    echo "INFO: libxcb-xfixes is part of libxcb." >>"$LOG_FILE"
+}
+build_xcbproto() {
+  install_missing_packages "xorg-x11-proto-devel"
+  # https://gitlab.freedesktop.org/xorg/proto/xcbproto
+  # local lib="xcbproto"
+  # local repo="https://gitlab.freedesktop.org/xorg/proto/xcbproto"
+  # local repo_ver="xcb-proto-1.17.0"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib"
+  # generic_configure "--enable-static --disable-shared"
+  # disable_nonessential "$src_dir/$lib"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
+}
+build_libxau() {
+  install_missing_packages "libXau-devel"
+  # # run_valid_function "build_xorgproto"
+  # # https://gitlab.freedesktop.org/xorg/lib/libxau
+  # local lib="libxau"
+  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxau"
+  # local repo_ver="libXau-1.0.12"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib"
+  # automake --force-missing --add-missing > >(redirect_output) 2>&1
+  # generic_configure "--enable-static --disable-shared"
+  # disable_nonessential "$src_dir/$lib"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
+}
+# build_libxcb            # config_options+= --enable-libxcb              # enable X11 grabbing using XCB [autodetect]
+build_libxcb() {
+  install_missing_packages "libXau-devel" "xorg-x11-proto-devel" "libxcb-devel"
+  # https://gitlab.freedesktop.org/xorg/lib/libxcb
+  # local lib="libxcb"
+  # local repo="https://gitlab.freedesktop.org/xorg/lib/libxcb"
+  # local repo_ver="libxcb-1.17.0"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib"
+  # generic_configure "--enable-static --disable-shared"
+  # disable_nonessential "$src_dir/$lib"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
+}
 # build_xlib              # config_options+= --disable-xlib               # disable xlib [autodetect]
 build_xlib() {
+  build_x11
+  build_libxft
+  build_libxrender
+  build_libxdmcp
+  build_libxext
+  build_xorg_macros
+  build_xorgproto
+  build_xtrans
+  build_libxcb
+  build_libxau
+  build_xcbproto
+  build_libxcb_xfixes
+  build_libxcb_shm
+  build_libxcb_shape
   install_missing_packages "libxcb-devel" "libX11-devel" "libXrender-devel" "libXext-devel" "libXft-devel" "libXdmcp-devel" "xorg-x11-xtrans-devel" "xorg-x11-proto-devel"
 }
 #endregion---------------------------------------------------------------------
@@ -639,8 +669,14 @@ build_sndio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export LDFLAGS="$LDFLAGS -lpthread -ldl"
-  do_configure "--prefix=$dependency_install_prefix --enable-static"
+  find . -maxdepth 2 \( -name "configure" -o -name "Makefile.in" \) -exec gsed -i 's/\r$//' {} +
+  do_configure "--prefix=\"$dependency_install_prefix\" \
+--libdir=\"$dependency_install_prefix/lib\" \
+--pkgconfdir=\"$install_pkgconfig_dir\" \
+--enable-static \
+--enable-alsa \
+CFLAGS=\"$CFLAGS -I$dependency_install_prefix/include\" \
+LDFLAGS=\"$LDFLAGS -L$dependency_install_prefix/lib -lpthread -ldl\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -667,6 +703,7 @@ build_libvo_amrwbenc() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
+  autoreconf_library
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -679,6 +716,7 @@ build_libopencore_amrnb() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
+  autoreconf_library
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -696,7 +734,7 @@ build_liblcevc_dec() {
   local repo="https://github.com/v-novaltd/LCEVCdec"
   local repo_ver="4.0.4"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  disable_git_lfs_and_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
@@ -791,8 +829,9 @@ build_gcrypt() {
 build_gmp() {
   local lib="gmp"
   local repo="https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
+  local mirror="https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   generic_configure "ABI=$bits_target"
   disable_nonessential "$src_dir/$lib"
@@ -802,8 +841,9 @@ build_gmp() {
 build_libnettle() {
   local lib="nettle"
   local repo="https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   generic_configure "--disable-openssl --disable-documentation --libdir=$dependency_install_prefix/lib" # in case we have both gnutls and openssl, just use gnutls [except that gnutls uses this so...huh?
   disable_nonessential "$src_dir/$lib"
@@ -939,6 +979,13 @@ build_libaribb24() {
   local repo="https://github.com/nkoriyama/aribb24"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  if [[ ! -f configure && -f configure.ac ]]; then
+    mkdir -p m4
+    for autotools_file in bootstrap configure.ac Makefile.am; do
+      [[ -f "$autotools_file" ]] && gsed -i 's/\r$//' "$autotools_file"
+    done
+    autoreconf --install > >(redirect_output) 2>&1
+  fi
   generic_configure
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1007,8 +1054,8 @@ build_libbs2b() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  touch "no.autoreconf"
-  sed -i.bak "s/AC_FUNC_MALLOC//" configure.ac # #270
+  remove_path -f "no.autoreconf"
+  gsed -i -e "s/AC_FUNC_MALLOC//" -e "s/[[:space:]]*dist-lzma//" configure.ac # #270
   export LIBS="-lm"                              # avoid pow failure linux native
   export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include"
   export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include"
@@ -1030,7 +1077,7 @@ build_libcaca() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
+  gsed -i 's/AC_PREREQ([2.71])/# AC_PREREQ([2.71])/g' configure.ac
   generic_configure "--libdir=$dependency_install_prefix/lib \
 --disable-csharp \
 --disable-java  \
@@ -1055,6 +1102,8 @@ build_libcdio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--disable-vcd-info --disable-cddb --disable-example-progs MAKEINFO=true"
   for prog in cd-drive cd-info cd-read iso-info iso-read mmc-tool; do
     touch src/"$prog".1
@@ -1068,6 +1117,8 @@ build_libcdio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--disable-example-progs MAKEINFO=true"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1134,7 +1185,7 @@ build_libdavs2() {
   if [[ ! -f "$install_pkgconfig_dir/davs2.pc" && -f "$src_dir/$lib/build/linux/davs2.pc" ]]; then
     copy_path "$src_dir/$lib/build/linux/davs2.pc" "$install_pkgconfig_dir/davs2.pc" "-f"
   fi
-  sed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$install_pkgconfig_dir/davs2.pc"
+  gsed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$install_pkgconfig_dir/davs2.pc"
   change_dir "$src_dir"
   export AS=as
 }
@@ -1152,7 +1203,7 @@ build_libdvdnav() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  #sed -i.bak 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
+  #gsed -i 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$install_pkgconfig_dir/dvdnav.pc" # psapi for dlfcn ... [hrm?]
   change_dir "$src_dir"
 }
 build_libdvdcss() {
@@ -1186,7 +1237,7 @@ build_libdvdread() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  #sed -i.bak 's/-ldvdread.*/-ldvdread -ldvdcss/' "$install_pkgconfig_dir/dvdread.pc"
+  #gsed -i 's/-ldvdread.*/-ldvdread -ldvdcss/' "$install_pkgconfig_dir/dvdread.pc"
   change_dir "$src_dir"
   reset_cflags
   reset_cxxflags
@@ -1409,10 +1460,13 @@ build_libgsm() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  sed -i -e "s|^INSTALL_ROOT.*|INSTALL_ROOT = $dependency_install_prefix|g" \
+  create_dir "$dependency_install_prefix/lib"
+  create_dir "$dependency_install_prefix/include"
+  create_dir "$dependency_install_prefix/man/man3"
+  gsed -i -e "s|^INSTALL_ROOT.*|INSTALL_ROOT = $dependency_install_prefix|g" \
   -e "s|^GSM_INSTALL_LIB.*|GSM_INSTALL_LIB = $dependency_install_prefix/lib|g" \
   -e "s|^GSM_INSTALL_INC.*|GSM_INSTALL_INC = $dependency_install_prefix/include|g" \
-  -e "s|^GSM_INSTALL_MAN.*|GSM_INSTALL_MAN = $dependency_install_prefix/man|g" \
+  -e "s|^GSM_INSTALL_MAN.*|GSM_INSTALL_MAN = $dependency_install_prefix/man/man3|g" \
   Makefile
   export CFLAGS="$CFLAGS -c -O2 -DNeedFunctionPrototypes=1 -Wall -Wno-comment -DSASR -DWAV49 -I./inc"
   generic_make "lib/libgsm.a CFLAGS='${CFLAGS}'" "make"
@@ -1438,8 +1492,8 @@ build_graphite() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i "s/add_subdirectory(tests)/#add_subdirectory(tests)/g" CMakeLists.txt
-  sed -i "s/add_subdirectory(doc)/#add_subdirectory(doc)/g" CMakeLists.txt
+  gsed -i "s/add_subdirectory(tests)/#add_subdirectory(tests)/g" CMakeLists.txt
+  gsed -i "s/add_subdirectory(doc)/#add_subdirectory(doc)/g" CMakeLists.txt
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5" "$src_dir/$lib"
@@ -1548,8 +1602,8 @@ build_libjack() {
   change_dir "$src_dir/$lib"
   export CFLAGS="-ffunction-sections -fdata-sections -static -O3 -I$dependency_install_prefix/include -L$dependency_install_prefix/lib"
   export CXXFLAGS="-ffunction-sections -fdata-sections -static -O3 -I$dependency_install_prefix/include -L$dependency_install_prefix/lib"
-  sed -i "/opt.load('xcode6')/d" wscript
-  sed -i "/conf.load('xcode6')/d" wscript
+  gsed -i "/opt.load('xcode6')/d" wscript
+  gsed -i "/conf.load('xcode6')/d" wscript
   do_python '--prefix="$dependency_install_prefix" --platform="$host_name" --db="no" --check-c-compiler=gcc --check-cxx-compiler=g++ --static'
   disable_nonessential "$src_dir/$lib"
   do_python "" "./waf build"
@@ -1605,7 +1659,7 @@ build_libjxl() {
 -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
 -DJPEGXL_FORCE_SYSTEM_LCMS2=ON"
   # force third party PIC
-  sed -i '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
+  gsed -i '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
@@ -1620,6 +1674,10 @@ build_libklvanc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  find . -maxdepth 2 \( -name "autogen.sh" -o -name "configure.ac" -o -name "Makefile.am" \) -exec gsed -i 's/\r$//' {} +
+  autoreconf_library
+  touch "no.autoreconf"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --disable-examples"
@@ -1675,9 +1733,10 @@ build_liblc3() {
 build_iconv_minimal() {
   local lib="libiconv-minimal"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   generic_configure "--enable-static \
@@ -1709,9 +1768,10 @@ build_iconv() {
   # install full iconv
   local lib="libiconv"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -fPIC"
   export CXXFLAGS="$CXXFLAGS -fPIC"
@@ -1743,16 +1803,21 @@ EOF
 }
 build_gettext() {
   local lib="gettext"
-  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-0.26.tar.gz"
+  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib" 
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib"
+  do_autogen --skip-gnulib
+  touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
-  export LIBS="-liconv"
   local clfags="CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
---with-libiconv-prefix=\"${dependency_install_prefix}\" \
---with-included-gettext \
+--with-included-libintl \
+--without-libintl-prefix \
+--with-included-libiconv \
+--without-libiconv-prefix \
 --enable-static \
 --disable-shared \
 --disable-java \
@@ -1761,10 +1826,21 @@ build_gettext() {
 --disable-libasprintf \
 --disable-openmp \
 --disable-doc"
+  export aclocal="/usr/local/bin/aclocal"
+  export automake="/usr/local/bin/automake"
+  export ACLOCAL="$aclocal"
+  export AUTOMAKE="$automake"
+  find "$src_dir/$lib" -type f -name configure -exec gsed -i \
+    -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
+    -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
+  touch "no.autoreconf"
+  touch "no.autogen"
   generic_configure "$config \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   # disable_nonessential "$src_dir/$lib"
+  change_dir "$src_dir/$lib/gettext-runtime/intl"
+  do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
+  change_dir "$src_dir/$lib/gettext-runtime"
   do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
@@ -1779,9 +1855,10 @@ Libs: -L\${libdir} -lintl -liconv
 Cflags: -I\${includedir} -Dlibintl_STATIC
 EOF
   change_dir "$src_dir/$lib/libtextstyle"
+  touch "no.autoreconf"
+  touch "no.autogen"
   generic_configure "$config \
-CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
-LIBS=\"$LIBS\""
+CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
   do_make_and_make_install
   change_dir "$src_dir/$lib/gettext-tools"
   config+=" --disable-curses \
@@ -1789,14 +1866,14 @@ LIBS=\"$LIBS\""
 --disable-nls \
 --disable-libasprintf \
 --without-libtextstyle-prefix"
+  touch "no.autoreconf"
+  touch "no.autogen"
   generic_configure "$config \
 CFLAGS=\"$CFLAGS -Dlibintl_STATIC \" \
-LIBS=\"$LIBS\" \
-LDFLAGS=\"$LDFLAGS $LIBS\""
+LDFLAGS=\"$LDFLAGS\""
   disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests"
-  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\" LIBS=\"$LIBS\""
+  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
   do_make_and_make_install "$make_config" "$make_config"
-  unset LIBS
   reset_allflags
 }
 build_libffi() {
@@ -1850,7 +1927,7 @@ build_glib() {
 --wrap-mode=nofallback"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  sed -i.bak 's/-lglib-2.0.*$/-lglib-2.0 -lintl -lm -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
+  gsed -i 's/-lglib-2.0.*$/-lglib-2.0 -lintl -lm -liconv/' "$install_pkgconfig_dir/glib-2.0.pc"
   change_dir "$src_dir"
   reset_cflags
 }
@@ -1874,7 +1951,7 @@ build_liblensfun() {
 -DINSTALL_PYTHON_MODULE=OFF" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i.bak 's/-llensfun/-llensfun -lstdc++/' "$install_pkgconfig_dir/lensfun.pc"
+  gsed -i 's/-llensfun/-llensfun -lstdc++/' "$install_pkgconfig_dir/lensfun.pc"
   reset_cppflags
   reset_cxxflags
   change_dir "$src_dir"
@@ -1886,7 +1963,7 @@ build_libmodplug() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib"
-  generic_configure
+  generic_cmake
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1898,6 +1975,7 @@ build_mpg123() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
+  autoreconf_library
   generic_configure
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1963,8 +2041,8 @@ build_liboapv() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  sed -i 's|libdir=.*|libdir=\${prefix}/lib/oapv|g' "$install_pkgconfig_dir/oapv.pc"
-  sed -i 's|includedir=.*|includedir=\${prefix}/include|g' "$install_pkgconfig_dir/oapv.pc"
+  gsed -i 's|libdir=.*|libdir=\${prefix}/lib/oapv|g' "$install_pkgconfig_dir/oapv.pc"
+  gsed -i 's|includedir=.*|includedir=\${prefix}/include|g' "$install_pkgconfig_dir/oapv.pc"
   change_dir "$src_dir"
 }
 # build_libopencv         # config_options+= --enable-libopencv           # enable video filtering via libopencv [no]
@@ -2034,7 +2112,7 @@ build_libopenjpeg() {
   do_make_and_make_install
   change_dir "$src_dir"
   if [[ -f "$install_pkgconfig_dir/libopenjp2.pc" ]]; then
-    sed -i 's/-l-lpthread/-lpthread/g' "$install_pkgconfig_dir/libopenjp2.pc"
+    gsed -i 's/-l-lpthread/-lpthread/g' "$install_pkgconfig_dir/libopenjp2.pc"
   fi
 }
 build_libogg() {
@@ -2165,6 +2243,8 @@ build_libxxhash() {
   generic_make "CFLAGS=\"${CFLAGS}\""
   disable_nonessential "$src_dir/$lib"
   generic_make_install
+  find "$dependency_install_prefix/lib" -name "*xxhash*.so*" -delete
+  [[ ! -f "$dependency_install_prefix/lib/libxxhash.a" ]] && exit_message 1 "libxxhash static library did not build successfully"
   change_dir "$src_dir"
 }
 build_spirv_cross() {
@@ -2234,7 +2314,7 @@ build_libplacebo() {
   generic_meson "$meson_options"
   # disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i.bak 's/-lplacebo.*$/-lplacebo -lm -lunwind -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
+  gsed -i 's/-lplacebo.*$/-lplacebo -lm -lunwind -lxxhash -lstdc++/' "$install_pkgconfig_dir/libplacebo.pc"
 }
 build_libid3tag() {
   # run_valid_function "build_zlib" 1
@@ -2338,10 +2418,8 @@ build_libquirc() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   create_dir "$src_dir/$lib/build"
-  sed -i 's/all: libquirc.$(LIB_SUFFIX) qrtest/all: libquirc.$(LIB_SUFFIX)/g' "$src_dir/$lib/Makefile"
-  sed -i 's|install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
-  sed -i 's|install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|# install -o root -g root -m 0755 quirc-scanner $(DESTDIR)$(PREFIX)/bin|g' "$src_dir/$lib/Makefile"
-  sed -i 's|install: libquirc.a libquirc.$(LIB_SUFFIX) quirc-demo quirc-scanner|install: libquirc.a libquirc.$(LIB_SUFFIX)|g' "$src_dir/$lib/Makefile"
+  change_dir "$src_dir/$lib"
+  apply_patch "$PATCHDIR/libquirc_Makefile.patch"
   do_make "libquirc.a LDFLAGS=\"-static\" PREFIX=${dependency_install_prefix}"
   disable_nonessential "$src_dir/$lib"
   do_make_install "PREFIX=${dependency_install_prefix}"
@@ -2458,6 +2536,15 @@ build_libexpat() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/expat"
+  [[ -f buildconf.sh ]] && ./buildconf.sh > >(redirect_output) 2>&1
+  touch "no.autoreconf"
+  export aclocal="/usr/local/bin/aclocal"
+  export automake="/usr/local/bin/automake"
+  export ACLOCAL="$aclocal"
+  export AUTOMAKE="$automake"
+  find "$src_dir/$lib/expat" -type f -name configure -exec gsed -i \
+    -e 's/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal-${am__api_version}"}/ACLOCAL=${ACLOCAL-"${am_missing_run}aclocal"}/g' \
+    -e 's/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake-${am__api_version}"}/AUTOMAKE=${AUTOMAKE-"${am_missing_run}automake"}/g' {} +
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -2518,7 +2605,7 @@ build_pango() {
 -Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\" \
 -Dcpp_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
   # disable tools - not needed for ffmpeg
-  sed -i "s/subdir('utils')/# subdir('utils')/g" meson.build
+  gsed -i "s/subdir('utils')/# subdir('utils')/g" meson.build
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
   change_dir "$src_dir"
@@ -2619,8 +2706,8 @@ build_libshaderc() {
   if [[ -f "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" ]] ; then
     copy_path "$src_dir/$lib/build/libshaderc_util/libshaderc_util.a" "$dependency_install_prefix/lib/libshaderc_util.a" >>"$LOG_FILE"
   fi
-  sed -i.bak "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_combined.pc"
-  sed -i.bak "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_static.pc"
+  gsed -i "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_combined.pc"
+  gsed -i "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/shaderc_static.pc"
   change_dir "$src_dir"
 }
 # build_libshine          # config_options+= --enable-libshine            # enable fixed-point MP3 encoding via libshine [no]
@@ -2631,6 +2718,7 @@ build_libshine() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  gsed -i 's/^void shine_mdct_initialise();/void shine_mdct_initialise(shine_global_config *config);/' src/lib/l3mdct.h
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -2878,7 +2966,7 @@ build_libopenvino() {
             -m="$manifest" \
             -d="OpenVINO Toolkit" || exit_message 1 "could not install $lib_name"
         cp -f "$src_dir/$lib/openvino/libs/tbb.pc" "$install_pkgconfig_dir/tbb.pc"
-        sed -i -e "s|^prefix=.*|prefix=${dependency_install_prefix}|g" \
+        gsed -i -e "s|^prefix=.*|prefix=${dependency_install_prefix}|g" \
             -e "s|^libdir=.*|libdir=\${prefix}/lib|g" \
             "$install_pkgconfig_dir/tbb.pc"
         create_touch_file 0 "$touch_name"
@@ -2954,7 +3042,7 @@ build_libtorch() {
     gomp_name="${gomp_name%%.*}" # remove version suffix
     ln -sf "$gomp_lib" "$dependency_install_prefix/lib/$gomp_name.so"
   fi
-  sed -i -E 's/-lunbox_ /-lunbox_lib /g' "$install_pkgconfig_dir/$base_lib.pc" # unbox_lib becomes unbox_ for some reason
+  gsed -i -E 's/-lunbox_ /-lunbox_lib /g' "$install_pkgconfig_dir/$base_lib.pc" # unbox_lib becomes unbox_ for some reason
 }
 # build_libtensorflow     # config_options+= --enable-libtensorflow       # enable TensorFlow as a DNN module backend for DNN based filters like sr [no]
 build_libtensorflow() {
@@ -3039,7 +3127,7 @@ build_jbig() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i "s|CCFLAGS = -O2 -W|CCFLAGS = -O2 -W ${CFLAGS}|g" Makefile
+  gsed -i "s|CCFLAGS = -O2 -W|CCFLAGS = -O2 -W ${CFLAGS}|g" Makefile
   do_make
   cp -fv "$src_dir/$lib/libjbig/libjbig.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"
   cp -fv "$src_dir/$lib/libjbig/jbig.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"
@@ -3223,7 +3311,7 @@ build_libpsl() {
 --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i.bak "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
+  gsed -i "s/Libs: .*/& -lidn2 -lunistring -liconv/" "$install_pkgconfig_dir/libpsl.pc"
   reset_cflags
   change_dir "$src_dir"
 }
@@ -3245,9 +3333,10 @@ build_libidn2() {
   # run_valid_function "build_libunistring"
   local lib="libidn2"
   local repo="https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
   local repo_ver="2.3.8"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
   generic_configure "--enable-static --disable-shared --with-libunistring-prefix=$dependency_install_prefix"
@@ -3258,10 +3347,12 @@ build_libidn2() {
 build_libunistring() {
   local lib="libunistring"
   local repo="https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
   local repo_ver="1.4.1"
   change_dir "$src_dir"
-  download_and_unpack_file "$repo" "$lib"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3382,9 +3473,12 @@ build_libtwolame() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  install_missing_packages "asciidoc" "doxygen"
+  gsed -i "s/--enable-maintainer-mode//g" autogen.sh
   if [[ ! -f Makefile.am.bak ]]; then # Library only, front end refuses to build for some reason with git master
-    sed -i.bak "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
+    gsed -i "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
+  touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3440,7 +3534,7 @@ build_libvmaf() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  sed -i.bak "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
+  gsed -i "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
   change_dir "$src_dir"
 }
 # build_libvorbis         # config_options+= --enable-libvorbis           # enable Vorbis en/decoding via libvorbis, native implementation exists [no]
@@ -3451,6 +3545,8 @@ build_libvorbis() {
   local repo_ver="v1.3.7"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--disable-docs --disable-examples --disable-oggtest --enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3494,7 +3590,7 @@ build_libvvenc() {
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   # Fix corrupted pkg-config file generated by static libvvenc install
-  sed -i 's/interface_libs-NOTFOUND//g' "$install_pkgconfig_dir/libvvenc.pc"
+  gsed -i 's/interface_libs-NOTFOUND//g' "$install_pkgconfig_dir/libvvenc.pc"
   change_dir "$src_dir"
 }
 # build_libwebp           # config_options+= --enable-libwebp             # enable WebP encoding via libwebp [no]
@@ -3535,11 +3631,11 @@ build_libx265() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/12bit" 1
   # Fix for CMake > 3.0 dropping support for OLD policy behaviors
-  sed -i 's/cmake_policy(SET CMP0025 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
-  sed -i 's/cmake_policy(SET CMP0054 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
-  sed -i 's/ARGS ${NASM_FLAGS} ${ASM_SRC}/ARGS ${NASM_FLAGS} -DPIC ${ASM_SRC}/g' "$src_dir/$lib/source/CMakeLists.txt"
-  sed -i 's/set(ARGS -f elf64)/set(ARGS -f elf64 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
-  sed -i 's/set(ARGS -f elf32)/set(ARGS -f elf32 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
+  gsed -i 's/cmake_policy(SET CMP0025 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/cmake_policy(SET CMP0054 OLD)//g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/ARGS ${NASM_FLAGS} ${ASM_SRC}/ARGS ${NASM_FLAGS} -DPIC ${ASM_SRC}/g' "$src_dir/$lib/source/CMakeLists.txt"
+  gsed -i 's/set(ARGS -f elf64)/set(ARGS -f elf64 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
+  gsed -i 's/set(ARGS -f elf32)/set(ARGS -f elf32 -DPIC)/g' "$src_dir/$lib/source/cmake/CMakeASM_NASMInformation.cmake"
   do_cmake_from_build_dir "$src_dir/$lib/source" "-DHIGH_BIT_DEPTH=ON \
 -DEXPORT_C_API=OFF \
 -DENABLE_CLI=OFF \
@@ -3609,10 +3705,10 @@ build_libxavs() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  sed -i 's/, tmp\[0\]);/, \&tmp[0]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  sed -i 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  sed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
-  sed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/, tmp\[0\]);/, \&tmp[0]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/, tmp\[1\]);/, \&tmp[1]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/, tmp\[2\]);/, \&tmp[2]);/g' "$src_dir/$lib/common/i386/dct-c.c"
+  gsed -i 's/, tmp\[3\]);/, \&tmp[3]);/g' "$src_dir/$lib/common/i386/dct-c.c"
   generic_configure "--enable-static \
 --disable-shared \
 --enable-pic \
@@ -3640,7 +3736,7 @@ build_libxavs2() {
 --extra-cflags=\"$CFLAGS -Wno-error=incompatible-pointer-types\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  sed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$dependency_install_prefix"/lib/pkgconfig/xavs2.pc
+  gsed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$dependency_install_prefix"/lib/pkgconfig/xavs2.pc
   change_dir "$src_dir"
 }
 # build_libxevd           # config_options+= --enable-libxevd             # enable EVC decoding via libxevd [no]
@@ -3668,7 +3764,7 @@ EOF
   disable_nonessential "$src_dir/$lib/build"
   do_make "xevd"
   # XXX replace version if repo_ver is changed
-  sed -i "s/Version:.*/Version: 1.5.0/g" "$src_dir/$lib/build/xevd.pc"
+  gsed -i "s/Version:.*/Version: 1.5.0/g" "$src_dir/$lib/build/xevd.pc"
   # manually install static library only
   { cp -fv "$src_dir/$lib/build/src_main/libxevd.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib static lib"
   { cp -fv "$src_dir/$lib/inc/xevd.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib headers"
@@ -3702,7 +3798,7 @@ EOF
   disable_nonessential "$src_dir/$lib/build"
   do_make "xeve"
   # XXX replace version if repo_ver is changed
-  sed -i "s/Version:.*/Version: 0.5.1/g" "$src_dir/$lib/build/xeve.pc"
+  gsed -i "s/Version:.*/Version: 0.5.1/g" "$src_dir/$lib/build/xeve.pc"
   # manually install static library only
   { cp -fv "$src_dir/$lib/build/src_main/libxeve.a" "$dependency_install_prefix/lib/" >>"$LOG_FILE"; } || exit_message 1 "build_libxeve: could not install $lib static lib"
   { cp -fv "$src_dir/$lib/inc/xeve.h" "$dependency_install_prefix/include/" >>"$LOG_FILE"; } || exit_message 1 "build_libxeve: could not install $lib headers"
@@ -3719,6 +3815,8 @@ build_libxml2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--with-ftp=no --with-http=no --with-python=no --with-iconv=$dependency_install_prefix" # using configure. meson doesnt work
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3747,10 +3845,10 @@ build_libxvid() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build/generic"
-  sed -i 's/BUILD_DIR = =build/BUILD_DIR = build/g' Makefile
-  sed -i 's|install:.*|install: $(STATIC_LIB)|g' Makefile
-  sed -i 's|$(LN_S)|$(LN_S) -f|g' Makefile
-  sed -i '/ifeq ($(SHARED_EXTENSION)/,/endif/ s/^/# /' Makefile
+  gsed -i 's/BUILD_DIR = =build/BUILD_DIR = build/g' Makefile
+  gsed -i 's|install:.*|install: $(STATIC_LIB)|g' Makefile
+  gsed -i 's|$(LN_S)|$(LN_S) -f|g' Makefile
+  gsed -i '/ifeq ($(SHARED_EXTENSION)/,/endif/ s/^/# /' Makefile
   generic_configure "--enable-pic --with-pic --enable-static --disable-shared --disable-assembly"
   do_make "libxvidcore.a CFLAGS=\"$CFLAGS -fvisibility=hidden\""
   do_make "install"
@@ -3779,6 +3877,8 @@ build_libzimg() {
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -fPIC"
   export CXXFLAGS="$CXXFLAGS -fPIC"
+  do_autogen
+  touch "no.autoreconf"
   generic_configure "--enable-static \
 --disable-shared \
 --with-pic"
@@ -3809,8 +3909,68 @@ build_libzmq() {
   do_make_and_make_install
   change_dir "$src_dir"
 }
+build_gettext_native() {
+  local min_ver="0.21"
+  if command -v gettext &>/dev/null; then
+    local installed_ver="$(gettext --version 2>/dev/null | head -n 1 | awk '{print $NF}')"
+  else
+    local installed_ver=0
+  fi
+  if [ "$(printf '%s\n' "$min_ver" "$installed_ver" | sort -V | head -n 1)" = "$installed_ver" ] && [ "$installed_ver" != "$min_ver" ]; then
+  # run_valid_function "build_iconv_minimal_native"
+  clear_cross_vars
+  local lib="gettext-native"
+  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+  change_dir "$src_dir"
+  download_and_unpack_file "$repo" "$lib" --alt="$mirror"
+  change_dir "$src_dir/$lib"
+  do_autogen --skip-gnulib
+  change_dir "$src_dir/$lib/gettext-runtime"
+  export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
+  export CXXFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
+  export CPPFLAGS=""
+  export LDFLAGS=""
+  local config="--prefix=/usr \
+--with-sysroot=\"/usr\" \
+--with-included-libintl \
+--with-included-libiconv \
+--libdir=/usr/lib \
+--with-included-gettext \
+--enable-static \
+--disable-doc"
+  touch "no.autoreconf"
+  touch "no.autogen"
+  do_configure "$config \
+CFLAGS=\"$CFLAGS\""
+  do_make
+  do_make_install "PREFIX=\"/usr\""
+  change_dir "$src_dir/$lib/libtextstyle"
+  touch "no.autoreconf"
+  touch "no.autogen"
+  do_configure "$config \
+CFLAGS=\"$CFLAGS\""
+  do_make
+  do_make_install "PREFIX=\"/usr\""
+  change_dir "$src_dir/$lib/gettext-tools"
+  config+="--disable-examples \
+--without-libtextstyle-prefix"
+  touch "no.autoreconf"
+  touch "no.autogen"
+  do_configure "$config \
+CFLAGS=\"$CFLAGS\" \
+LDFLAGS=\"$LDFLAGS\""
+  local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
+  do_make
+  do_make_install "PREFIX=\"/usr\""
+  unset LIBS
+  reset_allflags
+  reset_cross_vars
+  fi
+}
 # build_libzvbi           # config_options+= --enable-libzvbi             # enable teletext support via libzvbi [no]
 build_libzvbi() {
+  build_gettext_native
   local lib="libzvbi"
   local repo="https://github.com/zapping-vbi/zvbi"
   local repo_ver="v0.2.44"
@@ -3963,7 +4123,7 @@ build_lv2_headers() {
 # build_lv2               # config_options+= --enable-lv2                 # enable LV2 audio filtering [no]
 build_lv2() {
   # run_valid_function "build_lilv"
-  find "$install_pkgconfig_dir" -type f -name "*.pc" -exec sed -i \
+  find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i \
   -e 's/-lsratom-0\b/-lsratom/g' \
   -e 's/-lsord-0\b/-lsord/g' \
   -e 's/-lserd-0\b/-lserd/g' \
@@ -4035,8 +4195,8 @@ build_opencl() {
   disable_nonessential "$src_dir/$parentlib/$lib/build"
   do_make_and_make_install
   cp -f "$src_dir/$parentlib/$lib/OpenCL-Headers.pc.in" "$install_pkgconfig_dir/OpenCL-Headers.pc"
-  sed -i "s|@PKGCONFIG_PREFIX@|${dependency_install_prefix}|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
-  sed -i "s|@OPENCL_INCLUDEDIR_PC@|\${prefix}/include|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
+  gsed -i "s|@PKGCONFIG_PREFIX@|${dependency_install_prefix}|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
+  gsed -i "s|@OPENCL_INCLUDEDIR_PC@|\${prefix}/include|g" "$install_pkgconfig_dir/OpenCL-Headers.pc"
   local lib="OpenCL-ICD-Loader"
   local repo="https://github.com/KhronosGroup/OpenCL-ICD-Loader"
   local repo_ver="v2025.07.22"
@@ -4076,6 +4236,18 @@ build_glfw() {
   local lib="glfw"
   local repo="https://github.com/glfw/glfw"
   local repo_ver="3.4"
+  install_missing_packages \
+    wayland-devel \
+    wayland-protocols-devel \
+    libwayland-bin \
+    libxkbcommon-devel \
+    libX11-devel \
+    libXcursor-devel \
+    libXi-devel \
+    libXinerama-devel \
+    libXrandr-devel \
+    mesa-libGL-devel \
+    mesa-libGLU-devel
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -4155,34 +4327,39 @@ build_bison() {
     fi
   fi
 }
-# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
-build_pocketsphinx() {
-  # run_valid_function "build_alsa"
-  # run_valid_function "build_libunwind"
-  # run_valid_function "build_lzma"
-  # run_valid_function "build_glib"
-  local parent="pocketsphinx"
+
+build_swig() {
+  install_missing_packages python3-dev python3-pip
   local lib="swig"
   local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
   local repo_ver="v2.0.12"
   export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
   change_dir "$src_dir"
-  change_dir "$src_dir/$parent" 1
   download_and_unpack_file "$repo" "$lib"
-  change_dir "$src_dir/$parent/$lib"
+  change_dir "$src_dir/$lib"
+  touch "no.autogen"
+  local automake_aux_dir
+  automake_aux_dir="$(automake --print-libdir)"
+  for automake_aux_file in compile config.guess config.sub depcomp install-sh missing ylwrap; do
+    [[ -f "Tools/config/$automake_aux_file" || ! -f "$automake_aux_dir/$automake_aux_file" ]] && continue
+    cp "$automake_aux_dir/$automake_aux_file" "Tools/config/$automake_aux_file"
+  done
   touch "no.autoreconf"
   do_configure "--prefix=$dependency_install_prefix \
 --libdir=$dependency_install_prefix/lib \
 --without-pcre \
+--disable-ccache \
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
-  reset_cxxflags
-  install_missing_packages python3-dev
+  reset_allflags
+}
+build_sphinxbase() {
   local lib="sphinxbase"
   local repo="https://github.com/cmusphinx/sphinxbase"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
@@ -4192,15 +4369,19 @@ build_pocketsphinx() {
 --disable-pulseaudio \
 --disable-pulse \
 LIBS=\"-lasound\""
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
+  reset_allflags
+}
+build_gstreamer() {
   activate_meson
   local lib="gstreamer"
   local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
   local repo_ver="1.26.10"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$parent/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
   local meson_options="-Ddoc=disabled \
 -Dexamples=disabled \
 -Dtests=disabled \
@@ -4210,21 +4391,29 @@ LIBS=\"-lasound\""
 -Dnls=disabled \
 -Dc_link_args=\"-L$dependency_install_prefix/lib -llzma\""
   generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
-  reset_ldflags
+  reset_allflags
+}
+# build_pocketsphinx      # config_options+= --enable-pocketsphinx        # enable PocketSphinx, needed for asr filter [no]
+build_pocketsphinx() {
+  # run_valid_function "build_alsa"
+  # run_valid_function "build_libunwind"
+  # run_valid_function "build_lzma"
+  # run_valid_function "build_glib"  
   change_dir "$src_dir"
   local lib="pocketsphinx"
   local repo="https://svn.code.sf.net/p/cmusphinx/code/trunk/pocketsphinx"
   local repo_ver="r13291"
   change_dir "$src_dir"
-  do_svn_checkout "$repo" "$src_dir/$parent/$lib"
-  change_dir "$src_dir/$parent/$lib"
+  do_svn_checkout "$repo" "$src_dir/$lib"
+  change_dir "$src_dir/$lib"
+  touch "no.autogen"
   generic_configure "--enable-static \
 --disable-shared \
 --without-python \
 --without-lapack"
-  disable_nonessential "$src_dir/$parent/$lib"
+  disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
 }
@@ -4244,6 +4433,40 @@ LIBS=\"-lasound\""
 #   change_dir "$src_dir"
 #   fi
 # }
+find_native_python() {
+  local py_header
+  setup_default_python
+  py_header="$(
+    python3 - <<'PY' 2>/dev/null
+import os
+import sysconfig
+
+for key in ("INCLUDEPY", "CONFINCLUDEPY"):
+    include_dir = sysconfig.get_config_var(key)
+    if include_dir and os.path.isfile(os.path.join(include_dir, "Python.h")):
+        print(os.path.join(include_dir, "Python.h"))
+        break
+PY
+  )"
+  if [[ -z "$py_header" ]]; then
+    py_header="$(find "$dependency_install_prefix" /opt/_internal /usr/local /usr -path "*/include/python*/Python.h" -print -quit 2>/dev/null)"
+  fi
+  if [[ -n "$py_header" ]]; then
+    local py_include_dir
+    local py_ver
+    local py_lib_dir
+    py_include_dir="$(dirname "$py_header")"
+    py_ver="$(basename "$py_include_dir")"
+    py_lib_dir="$(find "$dependency_install_prefix/lib" /opt/_internal /usr/local/lib /usr/lib /usr/lib64 -name "lib$py_ver*" -printf '%h\n' -quit 2>/dev/null)"
+    export CXXFLAGS="$CXXFLAGS -I$py_include_dir"
+    export CPPFLAGS="$CPPFLAGS -I$py_include_dir"
+    export CFLAGS="$CFLAGS -I$py_include_dir"
+    if [[ -n "$py_lib_dir" ]]; then
+      export LDFLAGS="$LDFLAGS -L$py_lib_dir"
+      export LIBS="$LIBS -l$py_ver"
+    fi
+  fi
+}
 # build_vapoursynth       # config_options+= --enable-vapoursynth         # enable VapourSynth demuxer [no]
 build_vapoursynth() {
   # run_valid_function "build_libzimg" 1
@@ -4255,17 +4478,7 @@ build_vapoursynth() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   install_missing_packages python3-dev
-  if [[ -f "/opt/_internal/cpython-3.12.12/include/python3.12/Python.h" ]]; then
-  local py_root="/opt/_internal/cpython-3.12.12"
-  local py_ver="python3.12"
-  remove_path -rf "$dependency_install_prefix/include/$py_ver"
-  ln -sf "$py_root/include/$py_ver" "$dependency_install_prefix/include/"
-  find "$py_root/lib" -maxdepth 1 -name "lib$py_ver*" -exec ln -sf {} "$dependency_install_prefix/lib/" \;
-  fi
-  export CXXFLAGS="$CXXFLAGS -I$dependency_install_prefix/include/$py_ver "
-  export CPPFLAGS="$CPPFLAGS -I$dependency_install_prefix/include/$py_ver "
-  export CFLAGS="$CFLAGS -I$dependency_install_prefix/include/$py_ver "
-  export LDFLAGS="$LDFLAGS -L/opt/_internal/cpython-3.12.12"
+  find_native_python
   generic_meson "-Denable_vspipe=false -Denable_python_module=false"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -4540,6 +4753,100 @@ build_libnpp() {
   echo "WARNING: This is FFmpeg does not support modern npp based filters. Older api has been deprecated by Nvidia. Use scale_cuda instead. Disabling libnpp." >>"$LOG_FILE"
     disable_library "libnpp"
 }
+build_libsvtjpegxs() {
+  if [[ "$host_arch" != "x86_64" ]]; then
+    echo -e "\nWARNING: libsvtjpegxs is only supported on x86_64, skipping..."
+    return 0
+  fi
+  local lib="libsvtjpegxs"
+  local repo="https://github.com/OpenVisualCloud/SVT-JPEG-XS"
+  local repo_ver="main"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DBUILD_APPS=OFF \
+  -DBUILD_TESTING=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib/build"
+  do_make_and_make_install
+  change_dir "$src_dir"
+}
+build_libopencolorio() {
+  local lib="libopencolorio"
+  local repo="https://github.com/AcademySoftwareFoundation/OpenColorIO"
+  local repo_ver="v2.5.2"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  export LDFLAGS="$LDFLAGS"
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -DOCIO_BUILD_APPS=OFF \
+  -DOCIO_BUILD_TESTS=OFF \
+  -DOCIO_BUILD_GPU_TESTS=OFF \
+  -DOCIO_BUILD_PYTHON=OFF \
+  -DOCIO_INSTALL_EXT_PACKAGES=\"ALL\""
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib/build"
+  do_make_and_make_install
+
+  local ocio_ext_dist_dir="$src_dir/$lib/build/ext/dist"
+  
+  if [[ -d "$ocio_ext_dist_dir" ]]; then
+    local ocio_ext_dist_dir_sed="$(
+      printf '%s\n' "$ocio_ext_dist_dir" |
+        gsed -e 's/[\/&|]/\\&/g'
+    )"
+    local dependency_install_prefix_sed="$(
+      printf '%s\n' "$dependency_install_prefix" |
+        gsed -e 's/[\/&|]/\\&/g'
+    )"
+    find "$ocio_ext_dist_dir" -type f -name "*.pc" \
+      -exec gsed -i \
+        -e "s|^prefix=.*|prefix=$dependency_install_prefix_sed|g" \
+        -e "s|$ocio_ext_dist_dir_sed|\${prefix}|g" {} \; \
+      > >(redirect_output) \
+      || exit_message 1 "Failed to update prefix in pkgconfig files for $lib"
+    
+    find "$ocio_ext_dist_dir/lib/pkgconfig" -type f -name "*.pc" -exec cp -v {} "$install_pkgconfig_dir/" \; > >(redirect_output) || exit_message 1 "Failed to copy pkgconfig files for $lib"
+  fi
+
+  while read -r lib_file; do
+    cp -v "$lib_file" "$dependency_install_prefix/lib/" > >(redirect_output) || exit_message 1 "Failed to copy library file for $lib"
+    filename="$(basename "$lib_file")"
+    file_noext="${filename%.a}"
+    lib_flag="-l${file_noext#lib}"
+    add_libs_to_pkg -t="$install_pkgconfig_dir/OpenColorIO.pc" -l="$lib_flag" -c="-DOpenColorIO_SKIP_IMPORTS"
+  done < <(find "$src_dir/$lib/build/ext/dist/lib" -name "*.a")
+
+  if [[ -d "$ocio_ext_dist_dir/include" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/include" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy include directory for $lib"
+  fi
+  if [[ -d "$ocio_ext_dist_dir/lib/cmake" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/lib/cmake" "$dependency_install_prefix/lib" > >(redirect_output) || exit_message 1 "Failed to copy cmake directory for $lib"
+  fi
+  if [[ -d "$ocio_ext_dist_dir/share" ]]; then
+    cp -rfv "$ocio_ext_dist_dir/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
+  fi
+  change_dir "$src_dir"
+}
+build_libmpeghdec() {
+  local lib="libmpeghdec"
+  local repo="https://github.com/Fraunhofer-IIS/mpeghdec"
+  local repo_ver="r3.0.3"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+  -Dmpeghdec_BUILD_BINARIES=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib/build"
+  do_make_and_make_install
+  change_dir "$src_dir"
+}
 #endregion
 #region---------- non-gpl linux/unix (Raspberry Pi) features ------------------    
 # build_mmal              # config_options+= --disable-mmal               # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
@@ -4580,8 +4887,8 @@ build_omx() {
   export PATH="/usr/local/arm-gnu-toolchain/sys-bin:/usr/local/arm-gnu-toolchain/bin:$PATH"
   export CFLAGS="$CFLAGS -Wno-error"
   # disable omxregister utility. not needed for ffmpeg
-  sed -i 's/bin_PROGRAMS = omxregister-bellagio/#bin_PROGRAMS = omxregister-bellagio/' src/Makefile.am
-  find . -name "configure.ac" -exec sed -i 's/-Werror//g' {} +
+  gsed -i 's/bin_PROGRAMS = omxregister-bellagio/#bin_PROGRAMS = omxregister-bellagio/' src/Makefile.am
+  find . -name "configure.ac" -exec gsed -i 's/-Werror//g' {} +
   find . -exec touch {} +
   generic_configure "--disable-doc"
   disable_nonessential "$src_dir/$lib"

@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
 
 # Run from ffmpeg-kit-builders project root
 TARGET_DIR="FFmpegKit/src"
@@ -41,9 +43,9 @@ for file_rel in "${FILE_LIST[@]}"; do
 
     for var_line in "${VAR_LINES[@]}"; do
         if [[ "$var_line" == *"(*"* ]]; then
-            name=$(echo "$var_line" | sed -E 's/.*(\(\*([a-zA-Z0-9_]+)\)).*/\2/')
+            name=$(echo "$var_line" | gsed -E 's/.*(\(\*([a-zA-Z0-9_]+)\)).*/\2/')
         else
-            name=$(echo "$var_line" | sed -E 's/.*FFMPEG_THREAD_LOCAL//; s/[[;=].*//; s/.*[[:space:]*]([a-zA-Z0-9_]+)[[:space:]]*$/\1/' | xargs)
+            name=$(echo "$var_line" | gsed -E 's/.*FFMPEG_THREAD_LOCAL//; s/[[;=].*//; s/.*[[:space:]*]([a-zA-Z0-9_]+)[[:space:]]*$/\1/' | xargs)
         fi
 
         [[ -z "$name" || "$var_line" == *"#define"* ]] && continue
@@ -57,14 +59,14 @@ for file_rel in "${FILE_LIST[@]}"; do
         
         # 1. Run clang-query
         # 2. Filter for lines that actually look like source locations (path:line:col)
-        # 3. Use sed to extract only the path:line portion
+        # 3. Use gsed to extract only the path:line portion
         clang-query $P_FLAG "$full_path" \
             -c "$QUERY" \
             --extra-arg="-DFFMPEG_THREAD_LOCAL=__thread" \
             --extra-arg="-I$TARGET_DIR" \
             2>/dev/null | \
             grep -E "^/.*:[0-9]+:[0-9]+" | \
-            sed -i'' -E 's/^(.+:[0-9]+):[0-9]+.*/\1/' | \
+            gsed -i -E 's/^(.+:[0-9]+):[0-9]+.*/\1/' | \
             while read -r loc; do
                 
                 [[ -z "$loc" ]] && continue
@@ -74,7 +76,7 @@ for file_rel in "${FILE_LIST[@]}"; do
                 
                 # Check if file exists and line number is valid
                 if [[ -f "$f_path" && "$l_num" =~ ^[0-9]+$ ]]; then
-                    line_content=$(sed -i'' "${l_num}q;d" "$f_path" | xargs)
+                    line_content=$(gsed -i "${l_num}q;d" "$f_path" | xargs)
                     
                     # Output match if it's not the declaration line
                     if [[ ! "$line_content" == *"FFMPEG_THREAD_LOCAL"* ]]; then

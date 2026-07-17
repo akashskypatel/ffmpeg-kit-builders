@@ -1,0 +1,56 @@
+diff --git a/configure b/configure
+--- a/configure
++++ b/configure
+@@ -101,6 +101,8 @@
+ all_platforms="${all_platforms} arm64-darwin-gcc"
+ all_platforms="${all_platforms} arm64-darwin20-gcc"
+ all_platforms="${all_platforms} arm64-darwin21-gcc"
++all_platforms="${all_platforms} arm64-appletvos-gcc"
++all_platforms="${all_platforms} arm64-appletvsimulator-gcc"
+ all_platforms="${all_platforms} arm64-darwin22-gcc"
+ all_platforms="${all_platforms} arm64-darwin23-gcc"
+ all_platforms="${all_platforms} arm64-darwin24-gcc"
+diff --git a/build/make/configure.sh b/build/make/configure.sh
+--- a/build/make/configure.sh
++++ b/build/make/configure.sh
+@@ -917,14 +917,24 @@
+   if enabled shared; then
+     IOS_VERSION_OPTIONS="--enable-shared"
+     IOS_VERSION_MIN="8.0"
++    TVOS_VERSION_MIN="12.0"
+   else
+     IOS_VERSION_OPTIONS=""
+     IOS_VERSION_MIN="7.0"
++    TVOS_VERSION_MIN="12.0"
+   fi
+ 
+   # Handle darwin variants. Newer SDKs allow targeting older
+   # platforms, so use the newest one available.
+   case ${toolchain} in
++    *-appletvos-*)
++      add_cflags "-mtvos-version-min=${TVOS_VERSION_MIN}"
++      tvos_sdk_dir="$(show_darwin_sdk_path appletvos)"
++      if [ -d "${tvos_sdk_dir}" ]; then
++        add_cflags  "-isysroot ${tvos_sdk_dir}"
++        add_ldflags "-isysroot ${tvos_sdk_dir}"
++      fi
++      ;;
+     arm*-darwin-*)
+       add_cflags "-miphoneos-version-min=${IOS_VERSION_MIN}"
+       iphoneos_sdk_dir="$(show_darwin_sdk_path iphoneos)"
+@@ -1004,6 +1014,15 @@
+         add_ldflags "-isysroot ${iossim_sdk_dir}"
+       fi
+       ;;
++    *-appletvsimulator-*)
++      add_cflags  "-mtvos-simulator-version-min=${TVOS_VERSION_MIN}"
++      add_ldflags "-mtvos-simulator-version-min=${TVOS_VERSION_MIN}"
++      tvossim_sdk_dir="$(show_darwin_sdk_path appletvsimulator)"
++      if [ -d "${tvossim_sdk_dir}" ]; then
++        add_cflags  "-isysroot ${tvossim_sdk_dir}"
++        add_ldflags "-isysroot ${tvossim_sdk_dir}"
++      fi
++      ;;
+   esac
+ 
+   # Handle Solaris variants. Solaris 10 needs -lposix4

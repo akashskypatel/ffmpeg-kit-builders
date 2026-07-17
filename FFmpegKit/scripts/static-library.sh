@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
 set -e
 OUTPUT_LIB="$1"
 AR_CMD="$2"
@@ -108,10 +121,8 @@ process_library_path() {
 
 	filename=$(basename "$lib_path")
 	dirname=$(dirname "$lib_path")
-	extension="${filename##*.}"
-
-	case "$extension" in
-	a | lib)
+	case "$filename" in
+	*.a | *.lib)
 		if [ -h "$lib_path" ]; then
 			target=$(readlink -f "$lib_path")
 			if [[ "$target" == *.so || "$target" == *.dll || "$target" == *.dylib ]]; then
@@ -150,7 +161,7 @@ process_library_path() {
 			echo "ADDLIB $lib_path" >>lib.mri
 		fi
 		;;
-	so | dll | dylib)
+	*.so | *.so.* | *.dll | *.dylib)
 		if [ -h "$lib_path" ]; then
 			target=$(readlink -f "$lib_path")
 			if [[ "$target" == *.a || "$target" == *.lib ]]; then
@@ -213,7 +224,7 @@ $AR_CMD -M <lib.mri
 $RANLIB_CMD "$OUTPUT_LIB"
 rm -f lib.mri
 
-clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | sed 's/ *$//')
+clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | gsed 's/ *$//')
 if test -f ffmpegkit.pc; then
   perl -i -pe "s|FFMPEG_KIT_EXT_LIBS|\Q$clean_libs\E|g" ffmpegkit.pc
 fi

@@ -1,13 +1,27 @@
 
 <div align="center">
 
-[![Stars](https://img.shields.io/github/stars/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/stargazers) [![Watchers](https://img.shields.io/github/watchers/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/watchers) [![Forks](https://img.shields.io/github/forks/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/fork) [![Issues](https://img.shields.io/github/issues/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/issues) [![Commit](https://img.shields.io/github/last-commit/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/commits) [![Downloads](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases) [![GitHub release](https://img.shields.io/github/v/release/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases) [![License](https://img.shields.io/github/license/akashskypatel/ffmpeg-kit-builders?color=144DB3)](LICENSE)
+<img src="./assets/banner.png"/>
+
+[![Stars](https://img.shields.io/github/stars/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/stargazers) [![Watchers](https://img.shields.io/github/watchers/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/watchers) [![Forks](https://img.shields.io/github/forks/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/fork) [![Issues](https://img.shields.io/github/issues/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/issues) [![Commit](https://img.shields.io/github/last-commit/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/commits) [![GitHub release](https://img.shields.io/github/v/release/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases) [![License](https://img.shields.io/github/license/akashskypatel/ffmpeg-kit-builders?color=144DB3)](LICENSE)
+
+</div>
+
+<div align="center">
+
+[![v0.10.4-android](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-android/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-android)
+[![v0.10.4-ios](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-ios/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-ios)
+[![v0.10.4-linux](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-linux/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-linux)
+[![v0.10.4-macos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-macos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-macos)
+[![v0.10.4-windows](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.4-windows/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.4-windows)
 
 </div>
 
 # FFmpeg-Kit Extended
 
-FFmpeg-Kit Extended is a native library that allows programatic access to executing FFmpeg, FFprobe, and FFplay commands for iOS, macOS, Android, Windows, and Linux. It provides a simple C and C++ API to execute these commands with callbacks for logs, statistics, session completion, media information parsing and more. The pure C API makes it easy to integrate with any language.
+FFmpeg-Kit Extended is a native library that allows programmatic access to executing FFmpeg, FFprobe, and FFplay commands for iOS, macOS, Android, Windows, and Linux. It provides a simple C and C++ API to execute these commands with callbacks for logs, statistics, session completion, media information parsing and more. The pure C API makes it easy to integrate with any language.
+
+If you like the project and are using it in your app give it a ⭐ on [ffmpeg-kit-builders](https://github.com/akashskypatel/ffmpeg-kit-builders) and [ffmpeg-kit-extended](https://github.com/akashskypatel/ffmpeg-kit-extended), and a 👍 on [pub.dev](https://pub.dev/packages/ffmpeg_kit_extended_flutter). It helps a lot 🙏! Happy coding 🚀!
 
 # FFmpeg-Kit Builders
 
@@ -283,15 +297,16 @@ prebuilt/
 
 ## Bundle Matrix
 
-| Feature   | Base | Audio | Video | Video+Hardware | Full |
-| --------- | ---- | ----- | ----- | -------------- | ---- |
-| Video     |      |       | x     |                | x    |
-| Audio     |      | x     | x     |                | x    |
-| Streaming |      | x     | x     | x              | x    |
-| Hardware  |      |       |       | x              | x    |
-| AI*       |      |       |       |                |      |
-| HTTPS     | *    | x     | x     | x              | x    |
-| Platform* | x    | x     | x     | x              | x    |
+| Feature     | Base | Audio | Video | Video+Hardware | Full |
+| ----------- | ---- | ----- | ----- | -------------- | ---- |
+| Video       |      |       | x     |                | x    |
+| Audio       |      | x     | x     |                | x    |
+| Streaming   |      | x     | x     | x              | x    |
+| Hardware    |      |       |       | x              | x    |
+| AI*         |      |       |       |                |      |
+| HTTPS       | *    | x     | x     | x              | x    |
+| System      |      | x     | x     | x              | x    |
+| Platform*   | x    | x     | x     | x              | x    |
 
 1. AI features are not supported on all platforms. You must deploy your own custom build of ffmpeg-kit-extended to enable certain AI features.
    - See [Supported External Libraries](https://github.com/akashskypatel/ffmpeg-kit-builders?tab=readme-ov-file#supported-external-libraries) for more information.
@@ -302,7 +317,7 @@ prebuilt/
 
 ## Bundle Contents by Platform
 
-Shows which bundle first includes each library on Android, Linux, and Windows. `b+` = Base bundle and above. `a+` = Audio bundle and above. `v+` = Video bundle and above. `h+` = Video+Hardware bundle and above. `f` = Full bundle only. *(empty)* = not available on this platform.
+Shows which bundle first includes each library on iOS, macOS, Android, Linux, and Windows. 
 
 ### Filters
 
@@ -320,6 +335,14 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 
 > **`libopenvino`**, and **`libtensorflow`** only available on Desktop builds (`MacOS`, `Linux`, and `Windows`). **`libtorch`** only available on `Linux` and `MacOs` builds (`Windows` not supported due ABI mismatch).
 
+| Bundle Key | Description                          |
+| ---------- | ------------------------------------ |
+| `b+`       | Base bundle and above.               |
+| `a+`       | Audio bundle and above.              |
+| `v+`       | Video bundle and above.              |
+| `h+`       | Video+Hardware bundle and above.     |
+| `f`        | Full bundle only.                    |
+| *(empty)*  | not available on this platform.      |
 
 | Library                                                               | Android | Linux | Windows | iOS | macOS |
 | --------------------------------------------------------------------- | ------- | ----- | ------- | --- | ----- |
@@ -337,6 +360,7 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 | libvo-amrwbenc, libvorbis, openal                                     | a+      | a+    | a+      | a+  | a+    |
 | alsa                                                                  |         | a+    |         |     |       |
 | libbs2b<sup>[10](#gpl-info)</sup>                                     | a+      | a+    | a+      | a+  | a+    |
+| libmpeghdec<sup>[9](#nonfree-info)</sup> *(--enable-nonfree)*         | a+      | a+    | a+      | a+  | a+    |
 | **Audio Extras** *(not in `--small` builds)*                          |         |       |         |     |       |
 | chromaprint, libflite, libgme, libmysofa, libshine, lv2               | a+      | a+    | a+      | a+  | a+    |
 | libcdio, librubberband<sup>[10](#gpl-info)</sup>                      | a+      | a+    | a+      | a+  | a+    |
@@ -348,13 +372,14 @@ Shows which bundle first includes each library on Android, Linux, and Windows. `
 | libdav1d, libfontconfig, libfreetype, libfribidi                      | v+      | v+    | v+      | v+  | v+    |
 | libharfbuzz, libjxl, libkvazaar, liblcevc-dec                         | v+      | v+    | v+      | v+  | v+    |
 | liboapv, libopenh264, libopenjpeg, librav1e                           | v+      | v+    | v+      | v+  | v+    |
-| librsvg, libsnappy, libsvtav1, libtheora,                             | v+      | v+    | v+      | v+  | v+    |
-| libtheora, libuavs3d, libvpx, libvvenc, libwebp                       | v+      | v+    | v+      | v+  | v+    |
+| librsvg, libsnappy, libsvtav1, libtheora                              | v+      | v+    | v+      | v+  | v+    |
+| libuavs3d, libvpx, libvvenc, libwebp                                  | v+      | v+    | v+      | v+  | v+    |
 | libxevd, libxeve, libzimg, libzvbi, libxml2, sdl2                     | v+      | v+    | v+      | v+  | v+    |
 | libdavs2, libdvdnav, libdvdread, libx264<sup>[10](#gpl-info)</sup>    | v+      | v+    | v+      | v+  | v+    |
 | libx265, libxavs, libxavs2, libaribb24<sup>[10](#gpl-info)</sup>      | v+      | v+    | v+      | v+  | v+    |
-| libdc1394, libiec61883                                                |         | v+    |         |     |       |
+| libdc1394, libiec61883, libsvtjpegxs                                  |         | v+    |         |     |       |
 | libxvid<sup>[10](#gpl-info)</sup>                                     |         | v+    |         |     |       |
+| libopencolorio<sup>[15](#arch-info)</sup>                             | v+      | v+    | v+      | v+  | v+    |
 | **Video Extras** *(not in `--small` builds)*                          |         |       |         |     |       |
 | libklvanc, liblensfun, libqrencode, libvmaf, vapoursynth              | v+      | v+    | v+      | v+  | v+    |
 | frei0r, libvidstab<sup>[10](#gpl-info)</sup>                          | v+      | v+    | v+      | v+  | v+    |
@@ -544,6 +569,9 @@ You can also get the full list of supported external libraries by running `--lis
 | libzvbi                                      | Decodes VBI teletext data                               |                                        |                                  |      |                    | x                  | x                  | x                   |
 | vapoursynth                                  | Demuxes VapourSynth script frames                       |                                        | x                                |      |                    | x                  | x                  | x                   |
 | xlib                                         | Captures screen content via Xlib                        | Linux                                  | x                                |      |                    | x                  | x                  | x                   |
+| libsvtjpegxs                                 | Encodes JPEG XS video                                   |                                        |                                  |      |                    | x                  | x                  | x                   |
+| libopencolorio<sup>[15](#arch-info)</sup>   | Color space conversion                                  |                                        |                                  |      |                    | [15](#arch-info)   | [15](#arch-info)   | [15](#arch-info)    |
+| libmpeghdec                                  | Decodes MPEG-H 3D Audio                                 |                                        |                                  |      | [9](#nonfree-info) | [9](#nonfree-info) | [9](#nonfree-info) | [9](#nonfree-info)  |
 
 <sup>1</sup> Platform specific libraries are enabled by default for target platform and bundle.<a id="platform-info"></a></br>
 <sup>2</sup> Extra libraries are enabled on non-small bundles.<a id="extra-info"></a></br>
@@ -562,6 +590,10 @@ You can also get the full list of supported external libraries by running `--lis
 
 >   - libmfx -> libvpl*</br>
 >   - libglslang -> libshaderc*</br>
+
+<sup>15</sup> These libraries are only supported on specific CPU architectures.<a id="arch-info"></a></br>
+
+>   - libsvtjpegxs -> x86_64 only</br>
 
 ## Troubleshooting
 

@@ -18,6 +18,6 @@
 *.dll.a binary
 *.lib binary
 *.exe binary
-*.dylib binary
 *.a binary
 *.so binary
+*.dylib binary

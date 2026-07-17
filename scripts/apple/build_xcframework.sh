@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,SC2329
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2207
 
 # Create XCFramework bundles for iOS, iOS Simulator, and macOS
 # This script mirrors the Android AAR publishing pipeline for Apple platforms
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 # save start time
 START_TIME=$(date +%s)
@@ -23,6 +36,7 @@ LOCK_FILE="${STATE_DIR}/build_xcframework.lock"
 
 # Source common functions
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true
@@ -50,11 +64,11 @@ touch "${LOCK_FILE}"
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # Parse arguments
-VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
-VALID_PLATFORMS=("ios" "macos")
-VALID_PLATFORM_ARCHS=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
-VALID_LICENSES=("lgpl" "gpl")
-VALID_SMALL_FLAGS=("small" "")
+# VALID_BUNDLES=("debug" "full" "base" "audio" "video" "video_hw")
+VALID_XCF_PLATFORMS=("ios" "macos" "appletvos")
+VALID_XCF_PLATFORM_ARCHS=("ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64" "appletvos-aarch64" "appletvsimulator-aarch64")
+# VALID_LICENSES=("lgpl" "gpl")
+# VALID_SMALL_FLAGS=("small" "")
 REMOTE_RELEASE=true
 SMALL_FLAGS=("small" "")
 build_type="Release"
@@ -86,7 +100,7 @@ parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
   if [[ -z "${p_args}" ]]; then
-    p_args=$(IFS=,; echo "${VALID_PLATFORM_ARCHS[*]}")
+    p_args=$(IFS=,; echo "${VALID_XCF_PLATFORM_ARCHS[*]}")
   fi
   IFS=',' read -ra P_ARRAY <<< "$p_args"
   for p in "${P_ARRAY[@]}"; do
@@ -95,19 +109,27 @@ parse_platforms() {
 
     # Check if it's a plain platform name — expand to all valid archs for that platform
     local is_platform=false
-    for valid_plat in "${VALID_PLATFORMS[@]}"; do
+    for valid_plat in "${VALID_XCF_PLATFORMS[@]}"; do
       if [[ "$p" == "$valid_plat" ]]; then
         is_platform=true
-        for valid_pa in "${VALID_PLATFORM_ARCHS[@]}"; do
+        for valid_pa in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
           if [[ "${valid_pa}" == "${p}-"* ]]; then
             _add_platform_arch "${valid_pa%-*}" "${valid_pa#*-}"
           fi
         done
         # add iphonesimulator if platform is ios — store with 'sim:' prefix to avoid dedup with ios archs
         if [[ "$p" == "ios" ]]; then
-          for valid_pa in "${VALID_PLATFORM_ARCHS[@]}"; do
+          for valid_pa in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
             if [[ "${valid_pa}" == "iphonesimulator-"* ]]; then
               _add_platform_arch "ios" "sim:${valid_pa#*-}"
+            fi
+          done
+        fi
+        # add appletvsimulator if platform is appletvos — store with 'sim:' prefix to avoid dedup with appletvos archs
+        if [[ "$p" == "appletvos" ]]; then
+          for valid_pa in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
+            if [[ "${valid_pa}" == "appletvsimulator-"* ]]; then
+              _add_platform_arch "appletvos" "sim:${valid_pa#*-}"
             fi
           done
         fi
@@ -118,7 +140,7 @@ parse_platforms() {
 
     # Validate as a platform-arch combination
     local valid=false
-    for valid_p in "${VALID_PLATFORM_ARCHS[@]}"; do
+    for valid_p in "${VALID_XCF_PLATFORM_ARCHS[@]}"; do
       [[ "$p" == "$valid_p" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -133,6 +155,11 @@ parse_platforms() {
       plat="ios"
       arch="sim:${arch}"
     fi
+    # Map appletvsimulator to 'appletvos' platform key with 'sim:' prefix for combined XCFramework
+    if [[ "$plat" == "appletvsimulator" ]]; then
+      plat="appletvos"
+      arch="sim:${arch}"
+    fi
     _add_platform_arch "${plat}" "${arch}"
   done
 }
@@ -141,7 +168,7 @@ parse_bundles() {
   bundles="${1}"
   # Ensure bundles is populated if empty
   if [[ -z "${bundles}" ]]; then
-    bundles=$(IFS=,; echo "${VALID_TYPES[*]}")
+    bundles=$(IFS=,; echo "${VALID_BUNDLES[*]}")
   fi
   
   IFS=',' read -ra BUNDLE_ARRAY <<< "${bundles}"
@@ -151,7 +178,7 @@ parse_bundles() {
     
     # Validate against whitelist
     local valid=false
-    for valid_b in "${VALID_TYPES[@]}"; do
+    for valid_b in "${VALID_BUNDLES[@]}"; do
       [[ "$b" == "$valid_b" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -361,42 +388,6 @@ create_xcframework() {
     done
   }
 
-  # Helper function: create universal dylib from two architecture-specific dylibs
-  create_universal_dylib() {
-    local lib_name="$1"
-    local arch1_dir="$2"
-    local arch2_dir="$3"
-    local output_dir="$4"
-
-    local lib1="${arch1_dir}/${lib_name}"
-    local lib2="${arch2_dir}/${lib_name}"
-
-    if [[ -f "$lib1" && -f "$lib2" ]]; then
-      lipo -create -output "${output_dir}/${lib_name}" "$lib1" "$lib2"
-      install_name_tool -id "@rpath/${lib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-      codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-      # Fix rpath references
-      for dylib in "${output_dir}"/*.dylib; do
-        [[ -f "$dylib" ]] || continue
-        local dylib_name="$(basename "$dylib")"
-        [[ "$dylib_name" == "$lib_name" ]] && continue
-        if otool -L "${output_dir}/${lib_name}" 2>/dev/null | grep -q "${dylib_name}"; then
-          install_name_tool -change "${arch1_dir}/${dylib_name}" "@rpath/${dylib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-          install_name_tool -change "${arch2_dir}/${dylib_name}" "@rpath/${dylib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-          codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-        fi
-      done
-    elif [[ -f "$lib1" ]]; then
-      cp -f "$lib1" "${output_dir}/${lib_name}"
-      install_name_tool -id "@rpath/${lib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-      codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-    elif [[ -f "$lib2" ]]; then
-      cp -f "$lib2" "${output_dir}/${lib_name}"
-      install_name_tool -id "@rpath/${lib_name}" "${output_dir}/${lib_name}" 2>/dev/null || true
-      codesign --sign - --force "${output_dir}/${lib_name}" 2>/dev/null || true
-    fi
-  }
-
   # Helper: strip all baked-in rpaths and replace with @loader_path
   fix_dylib_rpaths() {
     local dylib="$1"
@@ -437,6 +428,59 @@ create_xcframework() {
     return 1
   }
 
+  # CocoaPods does not support XCFramework slices packaged as raw dynamic
+  # libraries. Wrap libffmpegkit.dylib in a standard dynamic framework for
+  # every Apple platform before passing it to xcodebuild.
+  create_dynamic_framework() {
+    local source_dir="$1"
+    local framework_dir="${source_dir}/ffmpegkit.framework"
+
+    rm -rf "${framework_dir}"
+    mkdir -p "${framework_dir}/Headers" "${framework_dir}/Modules"
+
+    cp -f "${source_dir}/libffmpegkit${lib_ext}" "${framework_dir}/ffmpegkit"
+    if [[ -d "${source_dir}/Headers" ]]; then
+      cp -r "${source_dir}/Headers/." "${framework_dir}/Headers/"
+    fi
+
+    install_name_tool -id "@rpath/ffmpegkit.framework/ffmpegkit" "${framework_dir}/ffmpegkit" 2>/dev/null || true
+
+    cat > "${framework_dir}/Modules/module.modulemap" <<'EOF'
+framework module ffmpegkit {
+  umbrella "Headers"
+  export *
+  module * { export * }
+}
+EOF
+
+    cat > "${framework_dir}/Info.plist" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>ffmpegkit</string>
+  <key>CFBundleIdentifier</key>
+  <string>io.github.akashskypatel.ffmpegkit</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>ffmpegkit</string>
+  <key>CFBundlePackageType</key>
+  <string>FMWK</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+</dict>
+</plist>
+EOF
+
+    codesign --sign - --force "${framework_dir}" 2>/dev/null || true
+  }
+
   IFS=',' read -ra arch_array <<< "$archs_for_platform"
   for arch in "${arch_array[@]}"; do
     # Strip 'sim:' prefix and determine actual platform
@@ -450,6 +494,9 @@ create_xcframework() {
     local actual_platform="${target_platform}"
     if [[ "${target_platform}" == "ios" && "$is_simulator" == true ]]; then
       actual_platform="iphonesimulator"
+    fi
+    if [[ "${target_platform}" == "appletvos" && "$is_simulator" == true ]]; then
+      actual_platform="appletvsimulator"
     fi
 
     local ffmpeg_kit_dir="$(get_ffmpeg_kit_dir "${actual_platform}" "${clean_arch}" "${bundle}" "${license}" "${small}")"
@@ -491,7 +538,8 @@ create_xcframework() {
       cp -r "${include_dir}/." "${temp_framework_dir}/Headers/"
     fi
 
-    framework_inputs+=("-library" "${temp_framework_dir}/libffmpegkit${lib_ext}" "-headers" "${temp_framework_dir}/Headers")
+    create_dynamic_framework "${temp_framework_dir}"
+    framework_inputs+=("-framework" "${temp_framework_dir}/ffmpegkit.framework")
   done
 
   # Handle macOS: create universal binaries if both archs are present
@@ -590,7 +638,8 @@ create_xcframework() {
         cp -r "${macos_headers_dir}/." "${temp_framework_dir}/Headers/"
       fi
 
-      framework_inputs+=("-library" "${temp_framework_dir}/libffmpegkit${lib_ext}" "-headers" "${temp_framework_dir}/Headers")
+      create_dynamic_framework "${temp_framework_dir}"
+      framework_inputs+=("-framework" "${temp_framework_dir}/ffmpegkit.framework")
     fi
   fi
 
@@ -853,18 +902,19 @@ for arg; do
       create_release=true
       shift;;
     --help)
-      echo "Usage: $0 [--platform=ios-aarch64,iphonesimulator-aarch64,macos-aarch64,macos-x86_64] [--bundle=base,audio,video,video_hw,full,debug] [--license=gpl,lgpl] [--reset] [--help]"
+      echo "Usage: $0 [--platform=ios-aarch64,iphonesimulator-aarch64,macos-aarch64,macos-x86_64,appletvos-aarch64,appletvsimulator-aarch64] [--bundle=base,audio,video,video_hw,full,debug] [--license=gpl,lgpl] [--reset] [--help]"
       echo ""
       echo "Options:"
       echo "  --platform=*        Comma separated (without spaces) list of platforms or platform-arch pairs."
       echo "                      A plain platform name expands to all valid archs for that platform."
       echo "                        e.g. --platform=ios              → ios-aarch64,iphonesimulator-aarch64"
       echo "                        e.g. --platform=ios,macos-x86_64 → ios (all archs) + macos-x86_64"
-      echo "                      Valid platforms (expands to all archs): ${VALID_PLATFORMS[*]}"
-      echo "                      Valid platform-arch combinations:       ${VALID_PLATFORM_ARCHS[*]}"
+      echo "                      Valid platforms (expands to all archs): ${VALID_XCF_PLATFORMS[*]}"
+      echo "                      Valid platform-arch combinations:       ${VALID_XCF_PLATFORM_ARCHS[*]}"
       echo "                      Note: iphonesimulator is automatically added when ios is specified"
+      echo "                      Note: appletvsimulator is automatically added when appletvos is specified"
       echo "  --bundle=*          Comma separated (without spaces) list of bundles to build"
-      echo "                      Valid bundles: ${VALID_TYPES[*]}"
+      echo "                      Valid bundles: ${VALID_BUNDLES[*]}"
       echo "  --license=*         Comma separated (without spaces) list of licenses to build"
       echo "                      Valid licenses: ${VALID_LICENSES[*]}"
       echo "  --small             Build with small flags (reduces binary size)."
@@ -885,7 +935,7 @@ for arg; do
     *)
       echo "Invalid argument: ${arg}"
       echo "Use --help for usage information"
-      exit 1;;
+      shift;;
   esac
 done
 
@@ -916,8 +966,10 @@ fi
 
 # Version information
 FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")"
-GITHUB_USERNAME="$(get_github_owner)"
-GITHUB_REPO="$(get_github_repo)"
+repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+owner="${repo%%/*}"
+export GITHUB_USERNAME="$owner" && \
+export GITHUB_REPO="${repo#*/}" && \
 
 echo "========================================" | tee -a "${LOG_FILE}"
 echo "XCFramework Build Pipeline" | tee -a "${LOG_FILE}"

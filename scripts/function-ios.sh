@@ -1,6 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 configure_ffmpeg_kit() {
   echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
@@ -29,6 +42,7 @@ configure_ffmpeg_kit() {
   local cmake_params="-DCMAKE_TOOLCHAIN_FILE=$(get_generic_cmake_toolchain) \
 -DFFMPEG_SRC_DIR=\"$ffmpeg_source_dir\" \
 -DFFMPEG_BUILD_DIR=\"$ffmpeg_install_prefix\" \
+-DDEPENDENCY_BUILD_DIR=\"$dependency_install_prefix\" \
 -DCMAKE_INSTALL_PREFIX=\"$ffmpeg_kit_install\" \
 -DFFMPEG_KIT_BUNDLE_TYPE=\"$(get_bundle_type)\" \
 -DCMAKE_OSX_ARCHITECTURES=$host_arch \
@@ -106,7 +120,7 @@ ffmpeg_patches() {
 	if ismacos; then
 		echo "INFO: Patching ffmpeg for macOS quirks..." >>"$LOG_FILE"
     if truthy "$enable_vulkan"; then
-      sed -i'.bak' '/#include <SDL_vulkan.h>/a\
+      gsed -i '/#include <SDL_vulkan.h>/a\
 #include "libavutil/hwcontext.h"\
 #include "libavutil/hwcontext_vulkan.h"' "$ffmpeg_source_dir/fftools/ffplay_renderer.c"
     fi
@@ -118,7 +132,7 @@ ffmpeg_patches() {
 get_generic_meson_cross_file() {
 	local variant_name="$1"      # e.g., "librist"
 	local extra_content="$2"     # e.g., "[built-in options]..."
-	local base_filename="$host_name-meson-cross.mingw.txt"
+	local base_filename="$host_name-meson-cross.txt"
 	local base_filepath="$src_dir/$base_filename"
   BUILD_ARCH=$(uname -m)
   BUILD_SYS=$(uname)
@@ -183,7 +197,7 @@ pkg_config_libdir = '$dependency_install_prefix/lib/pkgconfig'
 EOF
 	# 2. Handle Custom Variant logic
 	if [[ -n "$variant_name" ]]; then
-			local custom_filepath="$(pwd)/$host_name-meson-cross.mingw.${variant_name}.txt"
+			local custom_filepath="$(pwd)/$host_name-meson-cross.${variant_name}.txt"
 			# Always overwrite the variant with a fresh copy of the base
 			cp "$base_filepath" "$custom_filepath" 2>"$LOG_FILE"
 			# Append custom options if provided
@@ -203,7 +217,7 @@ EOF
 get_generic_meson_native_file() {
 	local variant_name="$1"      # e.g., "librist"
 	local extra_content="$2"     # e.g., "[built-in options]..."
-	local base_filename="$host_name-meson-native.mingw.txt"
+	local base_filename="$host_name-meson-native.txt"
 	local base_filepath="$src_dir/$base_filename"
 	BUILD_ARCH=$(uname -m)
   BUILD_SYS=$(uname)
@@ -230,7 +244,7 @@ cpp_args = ['-O3', '-march=native']
 EOF
 	# 2. Handle Custom Variant logic
 	if [[ -n "$variant_name" ]]; then
-			local custom_filepath="$(pwd)/$host_name-meson-cross.mingw.${variant_name}.txt"
+			local custom_filepath="$(pwd)/$host_name-meson-cross.${variant_name}.txt"
 			# Always overwrite the variant with a fresh copy of the base
 			cp "$base_filepath" "$custom_filepath" 2>"$LOG_FILE"
 			# Append custom options if provided
@@ -344,6 +358,7 @@ create_ios_xcframework() {
 
 create_bin2c_py() {
 	# binc2c python script because bin2c generated executable is no-op on mac due to security policy
+	setup_default_python
 	local bin2c_py_path="${ffmpeg_source_dir}/ffbuild/bin2c.py"
 	cat > "$bin2c_py_path" << 'EOF'
 #!/usr/bin/env python3

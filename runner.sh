@@ -2,7 +2,18 @@
 
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,1090
 
-export BASEDIR="$(pwd)"
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+export BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPTDIR="${BASEDIR}/scripts"
 export LOG_FILE="${BASEDIR}/build.log"
 export sandbox="prebuilt"
@@ -16,8 +27,8 @@ source "${SCRIPTDIR}/function.sh"
 require_sudo
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
-
-echo -e "INFO: Build options: ${RUN_ARGS[*]}\n" 1>>"$LOG_FILE" 2>&1
+touch "$LOG_FILE"
+echo -e "INFO: Build options: ${RUN_ARGS[*]}\n" | tee -a "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true;
 
 ff_flags_raw=()    # Original arguments: --ff-something
@@ -175,29 +186,33 @@ while [ $# -gt 0 ]; do
     export build_force=y
     shift
 		;;
+  -fs | --force-self)
+    export force_self=y
+    shift
+		;;
   -y)
     export accept_defaults=y
     echo "Skipping interactive. Accepting defult selections."
     shift
     ;;
-  --debug-build|--build-debug)
+  --debug-build|--build-debug|--enable-debug)
     export do_debug_build=y
     shift
     ;;
   --resume)
     shift
     ;;
+  --skip)
+    export skip_validation=y
+    export skip_package_check=y
+    shift
+    ;;
   --skip-pkg-check|--skip-pkg)
-    export skip_pkg_check=y
+    export skip_package_check=y
     shift
     ;;
   --skip-validation|--skip-val)
     export skip_validation=y
-    shift
-    ;;
-  --skip)
-    export skip_validation=y
-    export skip_pkg_check=y
     shift
     ;;
   --release=*)
@@ -459,7 +474,7 @@ while [ $# -gt 0 ]; do
     pick_gpu_type "rocm"
     shift
     ;;
-  --enable-hardware|--enable-hw)
+  --enable-hardware|--enable-hw|--enable-video_hw)
     export enable_hardware=y
     shift
     ;;
@@ -557,6 +572,14 @@ while [ $# -gt 0 ]; do
     export create_bundle=n
     shift
     ;;
+  --upload-deps)
+    export upload_deps=y
+    shift
+    ;;
+  --dry-run)
+    export dry_run=y
+    shift
+    ;;
 	--enable-*)
     lib_name="${1#--enable-}"
     explicit_enabled+=( "$lib_name" )
@@ -607,7 +630,7 @@ if [[ "$*" == *"--resume"* ]]; then
   fi
   if [[ -f "$RUN_STATE_FILE" ]]; then
     LINE=$(head -n 1 "$RUN_STATE_FILE")
-    STEP=$(sed -i'' -n '2{p;q;}' "$RUN_STATE_FILE")
+    STEP=$(gsed -i -n '2{p;q;}' "$RUN_STATE_FILE")
     read -r -a args <<< "$LINE"
     idx_run=-1
     idx_build_only=-1
@@ -726,12 +749,15 @@ else
     android)
     apply_preset "$CONFIG_ANDROID"
     ;;
-    ios|macos|iphonesimulator)
+    ios|macos|iphonesimulator|appletvos|appletvsimulator)
     apply_preset "$CONFIG_APPLE"
     if [[ "$host_platform" == "macos" ]]; then
       apply_preset "$CONFIG_MACOS"
     elif [[ "$host_platform" == "ios" ]]; then
       apply_preset "$CONFIG_IOS"
+    fi
+    if [[ "$host_platform" == "appletvos" || "$host_platform" == "appletvsimulator" ]]; then
+      apply_preset "$CONFIG_TVOS"
     fi
     ;;
     rpi)
@@ -796,38 +822,38 @@ if ! truthy "$enable_base"; then
     are responsible for making sure you have the appropriate licensing 
     to distribute the binaries!" | tee -a "$LOG_FILE"
 
-    truthy "$enable_audio" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_NON_FREE"
-    truthy "$enable_video" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_NON_FREE"
-    truthy "$enable_streaming" || truthy "$enable_full" && apply_preset "$CONFIG_STREAMING_NON_FREE"
-    truthy "$enable_hardware" || truthy "$enable_full" && apply_preset "$CONFIG_HARDWARE_NON_FREE"
-    truthy "$enable_audio_ai" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_AI_NON_FREE"
-    truthy "$enable_video_ai" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_AI_NON_FREE"
-    truthy "$enable_ssh" || truthy "$enable_full" && apply_preset "$CONFIG_SSH_NON_FREE"
+    { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_NON_FREE"
+    { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_NON_FREE"
+    { truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING_NON_FREE"
+    { truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE_NON_FREE"
+    { truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI_NON_FREE"
+    { truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI_NON_FREE"
+    { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH_NON_FREE"
 
     if ! iswindows; then
-      truthy "$enable_smb" || truthy "$enable_full" && apply_preset "$CONFIG_SMB_NON_FREE"
+      { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB_NON_FREE"
     fi
   fi
 
-  truthy "$enable_audio" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO"
-  truthy "$enable_video" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO"
-  truthy "$enable_streaming" || truthy "$enable_full" && apply_preset "$CONFIG_STREAMING"
-  truthy "$enable_hardware" || truthy "$enable_full" && apply_preset "$CONFIG_HARDWARE"
-  truthy "$enable_audio_ai" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_AI"
-  truthy "$enable_video_ai" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_AI"
-  truthy "$enable_ssh" || truthy "$enable_full" && apply_preset "$CONFIG_SSH"
+  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO"
+  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO"
+  { truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING"
+  { truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE"
+  { truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI"
+  { truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI"
+  { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
 
   if ! iswindows; then
-    truthy "$enable_smb" || truthy "$enable_full" && apply_preset "$CONFIG_SMB"
+    { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
   fi
 
   if ! truthy "$build_small"; then
-    truthy "$enable_audio" || truthy "$enable_full" && apply_preset "$CONFIG_AUDIO_EXTRA"
-    truthy "$enable_video" || truthy "$enable_full" && apply_preset "$CONFIG_VIDEO_EXTRA"
+    { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_EXTRA"
+    { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_EXTRA"
   fi
 
-  truthy "$enable_ssh" || truthy "$enable_full" && apply_preset "$CONFIG_SSH"
-  truthy "$enable_smb" || truthy "$enable_full" && apply_preset "$CONFIG_SMB"
+  { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
+  { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
 
   if truthy "$enable_mq" || truthy "$enable_full"; then
     pick_mq_lib
@@ -883,12 +909,17 @@ if ! truthy "$enable_base"; then
   enable_library "libopus"
   disable_library "libcelt"
   fi
-
-  resolve_collisions
-
-  # strict gpl libraries
-  check_gpl_libraries
+else
+  echo -e "\n  [CONFIG] No bundles selected. No external libraries enabled except platform built-in libraries." >>"$LOG_FILE"
 fi
+
+resolve_collisions
+
+# strict gpl libraries
+check_gpl_libraries
+
+# disable unsupported by platform
+disable_unsupported
 
 echo -e "\n  [CONFIG] Enabling explicit libraries..." >>"$LOG_FILE"
 for lib in "${explicit_enabled[@]}"; do
@@ -900,8 +931,15 @@ for lib in "${explicit_disabled[@]}"; do
   disable_library "$lib"
 done
 
+check_missing_packages
 
 main() {
+  # single step with no dependency built mode
+  if truthy "$dry_run"; then
+    echo -e "INFO: --- Dry run mode enabled ---" | tee -a "$LOG_FILE"
+    optimize_dependencies
+    return 0
+  fi
   if [[ -n $run_only ]]; then
     echo -e "INFO: --- Executing single function: $run_only ---" | tee -a "$LOG_FILE"
     if [[ "$run_only" == build_* ]]; then
@@ -914,6 +952,7 @@ main() {
     fi
     echo | tee -a "$LOG_FILE"
     echo -e "INFO: --- Done executing single function: $run_only ---" | tee -a "$LOG_FILE"
+  # multi-step with requested build_only step and its dependencies
   elif [[ -n "$build_only" ]]; then
     if [[ "$build_only" == build_* ]]; then
       if ! declare -F "$build_only" >/dev/null; then
@@ -925,11 +964,12 @@ main() {
     else
       exit_message 1 "Invalid build function $build_only"
     fi
-    echo -e "INFO: --- Executing single build step: $step_name ---" | tee -a "$LOG_FILE"
+    echo -e "INFO: --- Executing single build step: $build_only ---" | tee -a "$LOG_FILE"
     echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
     run_valid_build_functions
     echo | tee -a "$LOG_FILE"
     echo -e "INFO: --- Done building single build step: $step_name ---" | tee -a "$LOG_FILE"
+  # multi-step build all starting from build_from
   elif [[ -n "$build_from" ]]; then
     if ! declare -F "$build_from" >/dev/null; then
       exit_message 1 "DEBUG: Invalid function: $build_from (not defined on $host_platform)"
@@ -944,15 +984,25 @@ main() {
     else
       exit_message 1 "Invalid step $build_from"
     fi
+  # default mode
   else
     change_dir "$work_dir" || exit_message 1 "unable to change directory to $work_dir"
     optimize_dependencies
+    # builds all dependencies
     truthy "$build_dependencies" && run_valid_build_functions
-    truthy "$build_ffmpeg" && download_ffmpeg
-    truthy "$build_ffmpeg" && configure_ffmpeg
-    truthy "$build_ffmpeg" && install_ffmpeg
-    truthy "$build_ffmpeg_kit" && configure_ffmpeg_kit
-    truthy "$build_ffmpeg_kit" && install_ffmpeg_kit
+    # build ffmpeg mode
+    truthy "$build_ffmpeg" && { 
+      download_ffmpeg
+      configure_ffmpeg
+      install_ffmpeg
+    }
+    # build ffmpeg-kit mode
+    truthy "$build_ffmpeg_kit" && {
+      download_ffmpeg
+      configure_ffmpeg_kit
+      install_ffmpeg_kit
+     }
+     # build ffmpeg-kit bundle mode
     truthy "$create_bundle" && create_ffmpeg_kit_bundle
   fi
 }

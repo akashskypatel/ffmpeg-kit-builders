@@ -1,3 +1,18 @@
+#!/usr/bin/env bash
+
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
 # Run this on the clean, unpatched src/ directory
 # Command to find functional calls that are dangerous in global scope
 (grep -Enw 'getenv|setenv|putenv|chdir|setlocale|signal|sigaction|av_log_set_callback' src/*.c src/*.h) > audit_func.log 2>&1

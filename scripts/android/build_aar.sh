@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,SC2012
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2207
 
 # Build AARs for Android
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 # save start time
 START_TIME=$(date +%s)
@@ -20,6 +32,7 @@ STATE_FILE="${STATE_DIR}/build_aar.state"
 LOCK_FILE="${STATE_DIR}/build_aar.lock"
 
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true;
@@ -51,9 +64,9 @@ p=""
 p_args=""
 deps=""
 reset_state=false
-VALID_TYPES=("debug" "full" "base" "audio" "video" "video_hw")
-VALID_ARCHS=("x86_64" "aarch64" "armv7a")
-VALID_PLATFORM_ARCHS=("android-aarch64" "android-armv7a" "android-x86_64")
+# VALID_BUNDLES=("debug" "full" "base" "audio" "video" "video_hw")
+# VALID_ARCHS=("x86_64" "aarch64" "armv7a")
+# VALID_ANDROID=("android-aarch64" "android-armv7a" "android-x86_64")
 LICENSE_ARRAY=(" " "gpl")
 SMALL_FLAGS=(" " "small")
 VALID_LICENSES=("lgpl" "gpl")
@@ -87,7 +100,7 @@ parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
   if [[ -z "${p_args}" ]]; then
-    p_args=$(IFS=,; echo "${VALID_PLATFORM_ARCHS[*]}")
+    p_args=$(IFS=,; echo "${VALID_ANDROID[*]}")
   fi
   echo "DEBUG: p_args: ${p_args}"
   # Use IFS local to the read command
@@ -97,7 +110,7 @@ parse_platforms() {
     [[ -z "$p" ]] && continue
     # Validate against whitelist
     local valid=false
-    for valid_p in "${VALID_PLATFORM_ARCHS[@]}"; do
+    for valid_p in "${VALID_ANDROID[@]}"; do
       [[ "$p" == "$valid_p" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -120,7 +133,7 @@ parse_bundles() {
   bundles="${1}"
   # Ensure bundles is populated if empty
   if [[ -z "${bundles}" ]]; then
-    bundles=$(IFS=,; echo "${VALID_TYPES[*]}")
+    bundles=$(IFS=,; echo "${VALID_BUNDLES[*]}")
   fi
   echo "DEBUG: bundles: ${bundles}"
   # Use IFS local to the read command
@@ -130,7 +143,7 @@ parse_bundles() {
     [[ -z "$b" ]] && continue
     # Validate against whitelist
     local valid=false
-    for valid_b in "${VALID_TYPES[@]}"; do
+    for valid_b in "${VALID_BUNDLES[@]}"; do
       [[ "$b" == "$valid_b" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -317,10 +330,10 @@ for arg; do
       echo "  --platform=*      Comma separated (without spaces) list of platforms and architectures (e.g. --platform=linux-x86_64,windows-x86_64,android-aarch64,android-armv7a,android-x86_64)"
       echo "                    Valid platforms: ${VALID_PLATFORMS[*]}"
       echo "                    Valid architectures: ${VALID_ARCHS[*]}"
-      echo "                    Valid platform and arch combinations: ${VALID_PLATFORM_ARCHS[*]}"
+      echo "                    Valid platform and arch combinations: ${VALID_ANDROID[*]}"
       echo "  --reset           Reset build state and start from beginning"
       echo "  --bundle=*        Comma separated (without spaces) list of bundles to build (e.g. --bundle=debug,full,base,audio,video,video_hw)"
-      echo "                    Valid bundles: ${VALID_TYPES[*]}"
+      echo "                    Valid bundles: ${VALID_BUNDLES[*]}"
       echo "                    Note: Not including one of below flags will create all of artifacts: AAR, and release"
       echo "                    Do not specify if you want to create all artifacts."
       echo "  --license=*       Comma separated (without spaces) list of licenses to build"
@@ -356,7 +369,7 @@ for arg; do
     *)  
       echo "Invalid argument: ${arg}"
       echo "Use --help for usage information"
-      exit 1;;
+      shift;;
   esac
 done
 
@@ -381,21 +394,143 @@ if [[ ! -f "${STATE_FILE}" ]]; then
   echo "# Format: <script> <args>" >> "${STATE_FILE}"
 fi
 
+verify_maven_signing_configuration() {
+  local gradle_properties="$1"
+  local signing_key_id=""
+  local signing_password=""
+  local signing_keyring_file=""
+  local signing_gnupg_home=""
+  local prop_key prop_value
+  local tmp_dir tmp_gnupg passphrase_file preflight_file signature_file
+  local signing_gnupg_passphrase_file
+
+  if ! command -v gpg >/dev/null 2>&1; then
+    exit_message 1 "gpg is required to verify Maven signing configuration"
+  fi
+
+  while IFS='=' read -r prop_key prop_value; do
+    case "$prop_key" in
+      signing.keyId) signing_key_id="$prop_value" ;;
+      signing.password) signing_password="$prop_value" ;;
+      signing.secretKeyRingFile) signing_keyring_file="$prop_value" ;;
+      signing.gnupg.homeDir) signing_gnupg_home="$prop_value" ;;
+    esac
+  done < "$gradle_properties"
+
+  if [[ -z "$signing_key_id" ]]; then
+    exit_message 1 "Missing signing.keyId in ${gradle_properties}"
+  fi
+  if [[ -z "$signing_keyring_file" ]]; then
+    exit_message 1 "Missing signing.secretKeyRingFile in ${gradle_properties}"
+  fi
+
+  case "$signing_keyring_file" in
+    "~/"*) signing_keyring_file="${HOME}/${signing_keyring_file#"~/"}" ;;
+    /*) ;;
+    *) signing_keyring_file="${GRADLE_HOME}/${signing_keyring_file}" ;;
+  esac
+
+  if [[ ! -f "$signing_keyring_file" ]]; then
+    exit_message 1 "Configured signing.secretKeyRingFile does not exist: ${signing_keyring_file}"
+  fi
+
+  if [[ -z "$signing_gnupg_home" ]]; then
+    signing_gnupg_home="${SIGNING_HOME}/.gnupg"
+  fi
+  case "$signing_gnupg_home" in
+    "~/"*) signing_gnupg_home="${HOME}/${signing_gnupg_home#"~/"}" ;;
+    /*) ;;
+    *) signing_gnupg_home="${GRADLE_HOME}/${signing_gnupg_home}" ;;
+  esac
+
+  tmp_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/maven-signing-preflight.XXXXXX")" || exit_message 1 "Failed to create Maven signing preflight directory"
+  tmp_gnupg="${tmp_dir}/gnupg"
+  passphrase_file="${tmp_dir}/passphrase"
+  preflight_file="${tmp_dir}/preflight.txt"
+  signature_file="${tmp_dir}/preflight.asc"
+  mkdir -p "$tmp_gnupg"
+  chmod 700 "$tmp_gnupg"
+  printf '%s' "$signing_password" > "$passphrase_file"
+  chmod 600 "$passphrase_file"
+  printf '%s\n' "ffmpeg-kit Maven signing preflight" > "$preflight_file"
+
+  if ! gpg --batch --homedir "$tmp_gnupg" --import "$signing_keyring_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Failed to import configured Maven signing secret keyring"
+  fi
+
+  if ! gpg --batch --homedir "$tmp_gnupg" --list-secret-keys "$signing_key_id" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Configured signing.keyId was not found in Maven signing secret keyring"
+  fi
+
+  if ! gpg --batch --yes --pinentry-mode loopback --homedir "$tmp_gnupg" \
+      --passphrase-file "$passphrase_file" --local-user "$signing_key_id" \
+      --detach-sign --armor --output "$signature_file" "$preflight_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Maven signing preflight failed; verify GPG_KEY_ID, GPG_PASSWORD, and GPG_SECRET_KEYRING_BASE64"
+  fi
+
+  mkdir -p "$signing_gnupg_home"
+  chmod 700 "$signing_gnupg_home"
+  signing_gnupg_passphrase_file="${signing_gnupg_home}/passphrase"
+  printf '%s' "$signing_password" > "$signing_gnupg_passphrase_file"
+  chmod 600 "$signing_gnupg_passphrase_file"
+  {
+    printf 'default-key %s\n' "$signing_key_id"
+    printf '%s\n' "pinentry-mode loopback"
+    printf '%s\n' "batch"
+    printf '%s\n' "no-tty"
+    printf 'passphrase-file %s\n' "$signing_gnupg_passphrase_file"
+  } > "${signing_gnupg_home}/gpg.conf"
+  chmod 600 "${signing_gnupg_home}/gpg.conf"
+
+  if ! gpg --batch --homedir "$signing_gnupg_home" --import "$signing_keyring_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Failed to import Maven signing key into Gradle GPG home"
+  fi
+
+  if ! GNUPGHOME="$signing_gnupg_home" gpg --no-tty --batch \
+      --detach-sign --armor --output "${signature_file}.gradle-home" "$preflight_file" > >(redirect_output) 2>&1; then
+    rm -rf "$tmp_dir"
+    exit_message 1 "Maven signing preflight failed from Gradle GPG home; verify GPG command signing configuration"
+  fi
+
+  rm -rf "$tmp_dir"
+  echo "Maven signing preflight succeeded" | tee -a "${LOG_FILE}"
+}
+
 ANDROID_HOME="/usr/local/android-sdk"
 latest_ndk=$(ls -v "$ANDROID_HOME/ndk" 2>/dev/null | tail -n 1)
 ANDROID_API_LEVEL="26"
-GITHUB_USERNAME="${GITHUB_USERNAME:-"$(get_github_owner)"}"
-GITHUB_REPO="${GITHUB_REPO:-"$(get_github_repo)"}"
-GITHUB_PASSWORD="${GITHUB_PASSWORD:-"$(get_github_token)"}"
-GITHUB_PASSWORD_CLASSIC="${GITHUB_PASSWORD_CLASSIC:-"$(get_github_token_classic)"}"
-OSSRH_USERNAME="${OSSRH_USERNAME:-"$(get_maven_username)"}"
-OSSRH_PASSWORD="${OSSRH_PASSWORD:-"$(get_maven_password)"}"
+repo_path="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+repo_name="${repo_path##*/}"
+owner="${repo_path%%/*}"
+GITHUB_USERNAME="${GITHUB_USERNAME:-${owner:-$(get_github_owner)}}"
+GITHUB_REPO="${GITHUB_REPO:-${repo_name:-$(get_github_repo)}}"
+GITHUB_PASSWORD="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
+GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
+OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}"
+OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
 GRADLE_COMMAND="publishToMavenCentral"
-USER_HOME="/home/vscode"
-GRADLE_USER_HOME="${USER_HOME}/.gradle"
+GRADLE_SIGN_PUBLICATIONS="true"
+SIGNING_HOME="${GITHUB_WORKSPACE:-$(get_userhome)}"
+SIGNING_HOME="${SIGNING_HOME:-$HOME}"
+GRADLE_HOME="${SIGNING_HOME}/.gradle"
+SDKMAN_DIR="${SDKMAN_DIR:-/usr/local/sdkman}"
 
-if [[ ! -f "${GRADLE_USER_HOME}/gradle.properties" && ! -f "${USER_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
+if [[ -z "$SIGNING_HOME" || ! -d "$SIGNING_HOME" ]]; then
+  exit_message 1 "Unable to determine user home"
+fi
+
+echo "Checking signing configuration at ${GRADLE_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
+if [[ ! -f "${GRADLE_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
+  echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
   GRADLE_COMMAND="publishToMavenLocal"
+  GRADLE_SIGN_PUBLICATIONS="false"
+else
+  echo "Maven signing configured, using remote build" | tee -a "${LOG_FILE}"
+  verify_maven_signing_configuration "${GRADLE_HOME}/gradle.properties"
 fi
 
 # FFMPEG_KIT_VERSION: from version file
@@ -404,25 +539,41 @@ if [[ "$SNAPSHOT" == true ]]; then
 else
   FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")"
 fi
+
+cd "${BASEDIR}" || { exit_message 1 "Failed to change directory to ${BASEDIR}"; }
 echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 # Define all build steps
 declare -a BUILD_STEPS
 
-if [[ ! -f gradlew ]]; then
-  echo "RUNNING: gradle wrapper --distribution-type all"
-  gradle wrapper --distribution-type all || { echo "Failed to create Gradle wrapper"; exit 1; }
+if ! command -v gradle >/dev/null 2>&1; then
+  if [[ -f /etc/profile.d/sdkman.sh ]]; then
+    # shellcheck source=/dev/null
+    source /etc/profile.d/sdkman.sh
+  fi
+  if [[ -x "${SDKMAN_DIR}/candidates/gradle/current/bin/gradle" ]]; then
+    export PATH="${SDKMAN_DIR}/candidates/gradle/current/bin:${PATH}"
+  fi
 fi
-chmod +x gradlew
 
+if [[ ! -f "${BASEDIR}/gradlew" ]]; then
+  if ! command -v gradle >/dev/null 2>&1; then
+    exit_message 1 "Gradle is not available on PATH. Ensure scripts/toolchain/setup-android.sh completed successfully."
+  fi
+  echo "RUNNING: gradle wrapper --distribution-type all" | tee -a "${LOG_FILE}"
+  gradle wrapper --distribution-type all || { exit_message 1 "Failed to create Gradle wrapper"; }
+fi
+chmod +x "${BASEDIR}/gradlew"
+OWNER="${GITHUB_USERNAME:-$(get_github_owner)}"
 create_aar_artifact() {
   FFMPEG_KIT_JNI_LIBS_DIR="$1"
   FFMPEG_KIT_OUTPUT_NAME="$2"
-  FFMPEG_KIT_NAMESPACE="io.github.akashskypatel.ffmpegkit"
+  AAR_ARTIFACT_QUEUED=false
+  FFMPEG_KIT_NAMESPACE="io.github.${OWNER}.ffmpegkit"
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
-  build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
-  --no-daemon --info --warning-mode all --gradle-user-home ~/.gradle \
+  build_step="GNUPGHOME=\"${SIGNING_HOME}/.gnupg\" ./gradlew :tools:android:${GRADLE_COMMAND} \
+  --no-daemon --info --warning-mode all --gradle-user-home \"${GRADLE_HOME}\" \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \
   -PANDROID_NDK=\"${ANDROID_NDK}\" \
   -PANDROID_API_LEVEL=\"${ANDROID_API_LEVEL}\" \
@@ -430,20 +581,23 @@ create_aar_artifact() {
   -PFFMPEG_KIT_VERSION=\"${FFMPEG_KIT_VERSION}\" \
   -PFFMPEG_KIT_JNI_LIBS_DIR=\"${FFMPEG_KIT_JNI_LIBS_DIR}\" \
   -PFFMPEG_KIT_OUTPUT_NAME=\"${FFMPEG_KIT_OUTPUT_NAME}\" \
+  -PFFMPEG_KIT_SIGN_PUBLICATIONS=\"${GRADLE_SIGN_PUBLICATIONS}\" \
   -PmavenCentralUsername=\"${OSSRH_USERNAME}\" \
   -PmavenCentralPassword=\"${OSSRH_PASSWORD}\""
   if [[ "$local_build" == "true" ]]; then
     BUILD_STEPS+=("$build_step")
+    AAR_ARTIFACT_QUEUED=true
   elif check_maven_package_status "${FFMPEG_KIT_OUTPUT_NAME}" "$FFMPEG_KIT_VERSION" > >(redirect_output) 2>&1; then
-    echo "Package ${FFMPEG_KIT_OUTPUT_NAME} version ${FFMPEG_KIT_VERSION} already exists in Maven Central, skipping build"
+    echo "Package ${FFMPEG_KIT_OUTPUT_NAME} version ${FFMPEG_KIT_VERSION} already exists in Maven Central, skipping build" | tee -a "${LOG_FILE}"
   else
     BUILD_STEPS+=("$build_step")
+    AAR_ARTIFACT_QUEUED=true
   fi
 }
 
 create_release_artifact() {
   release_asset="$1"
-  build_step="create_github_release \"${release_asset}\""
+  build_step="export host_platform=${host_platform:-android} && create_github_release \"${release_asset}\""
   BUILD_STEPS+=("$build_step")
 }
 
@@ -455,6 +609,7 @@ for key in "${!PLATFORMS[@]}"; do
       for license in "${LICENSE_ARRAY[@]}"; do
           for small in "${SMALL_FLAGS[@]}"; do
               jni_libs_dir="$(create_jni_libs_dir -b="${bundle}" -l="${license}" -s="${small}")"
+              has_native_binaries=false
               license_flag=""
               if [[ "${license}" == "gpl" ]]; then
                   license_flag="--gpl"
@@ -471,27 +626,30 @@ for key in "${!PLATFORMS[@]}"; do
                   abi_arch="$(parse_arch "${arch}")"
                   # copy to jniLibs
                   if [[ -d "${ffmpeg_kit_include_dir}" ]]; then
-                    echo "Copying include directory to jniLibs" > >(redirect_output)
-                    build_step="cp -r \"${ffmpeg_kit_include_dir}\" \"${jni_libs_dir}\""
+                    echo "Copying include directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_include_dir} to ${jni_libs_dir}" >> "${LOG_FILE}"
+                    build_step="cp -rfv \"${ffmpeg_kit_include_dir}\" \"${jni_libs_dir}\""
                     BUILD_STEPS+=("$build_step")
                   fi
                   if [[ -d "${ffmpeg_kit_dir}/lib" ]]; then
-                    echo "Copying lib directory to jniLibs" > >(redirect_output)
-                    build_step="find \"${ffmpeg_kit_dir}/lib\" \( -name \"*.so*\" -o -name \"*.a*\" \) -exec cp -fv {} \"${jni_libs_dir}/${abi_arch}\" \;"
+                    echo "Copying lib directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib to ${jni_libs_dir}/${abi_arch}" >> "${LOG_FILE}"
+                    build_step="find \"${ffmpeg_kit_dir}/lib\" \( -name \"*.so*\" -o -name \"*.a*\" \) -exec cp -rfv {} \"${jni_libs_dir}/${abi_arch}\" \;"
                     BUILD_STEPS+=("$build_step")
+                    if find "${ffmpeg_kit_dir}/lib" -type f \( -name "*.so*" -o -name "*.a*" \) | read -r; then
+                      has_native_binaries=true
+                    fi
                   fi
                   if [[ -d "${ffmpeg_kit_dir}/lib/pkgconfig" ]]; then
-                    echo "Copying pkgconfig directory to jniLibs" > >(redirect_output)
-                    build_step="cp -r \"${ffmpeg_kit_dir}/lib/pkgconfig\" \"${jni_libs_dir}/lib\""
+                    echo "Copying pkgconfig directory to jniLibs for ${abi_arch} from ${ffmpeg_kit_dir}/lib/pkgconfig to ${jni_libs_dir}/lib" >> "${LOG_FILE}"
+                    build_step="cp -rfv \"${ffmpeg_kit_dir}/lib/pkgconfig\" \"${jni_libs_dir}/lib\""
                     BUILD_STEPS+=("$build_step")
                   fi
                   build_step="chmod -R a+rwx \"${jni_libs_dir}\""
                   BUILD_STEPS+=("$build_step")
                 fi
               done
-              FFMPEG_KIT_JNI_LIBS_DIR=$(realpath "${jni_libs_dir}")
+              FFMPEG_KIT_JNI_LIBS_DIR="${jni_libs_dir}"
               if [[ ! -d "${FFMPEG_KIT_JNI_LIBS_DIR}" ]]; then
-                echo "DEBUG: Failed to resolve jniLibs directory"
+                echo "DEBUG: Failed to resolve jniLibs directory" | tee -a "${LOG_FILE}"
                 continue
               fi
               small_pfx=""
@@ -512,12 +670,18 @@ for key in "${!PLATFORMS[@]}"; do
                   debug_pfx="-debug"
               fi
               FFMPEG_KIT_OUTPUT_NAME="bundle-${bundle_pfx}-shared${debug_pfx}${small_pfx}${license_pfx}"
-              package_name="${FFMPEG_KIT_NAMESPACE}.${FFMPEG_KIT_OUTPUT_NAME}"
-              echo "${FFMPEG_KIT_JNI_LIBS_DIR}" > >(redirect_output)
-              if find "${FFMPEG_KIT_JNI_LIBS_DIR}" -type f \( -name "*.so" -o -name "*.a" \) | read -r; then
-                [[ "${create_aar}" == "true" ]] && create_aar_artifact "${FFMPEG_KIT_JNI_LIBS_DIR}" "${FFMPEG_KIT_OUTPUT_NAME}"
-                [[ "${create_release}" == "true" ]] && release_asset=$(realpath "${BASEDIR}/tools/android/build/outputs/aar/${FFMPEG_KIT_OUTPUT_NAME}-${assemble_type,,}.aar") || true
-                [[ "${create_release}" == "true" && "$local_build" != "true" ]] && create_release_artifact "${release_asset}" || true
+              echo "jniLibs dir: ${FFMPEG_KIT_JNI_LIBS_DIR}" > >(redirect_output)
+              if [[ "$has_native_binaries" == "true" ]]; then
+                [[ "${create_aar}" == "true" ]] && { create_aar_artifact "${FFMPEG_KIT_JNI_LIBS_DIR}" "${FFMPEG_KIT_OUTPUT_NAME}" || exit_message 1 "Failed to create AAR artifact"; }
+                if [[ "${create_release}" == "true" ]]; then
+                  release_asset="${BASEDIR}/tools/android/build/outputs/aar/${FFMPEG_KIT_OUTPUT_NAME}-${assemble_type,,}.aar"
+                  if [[ "${create_aar}" != "true" && ! -f "$release_asset" ]]; then
+                    exit_message 1 "Release asset not found: $release_asset"
+                  fi
+                fi
+                [[ "${create_release}" == "true" && "$local_build" != "true" && ( "${create_aar}" != "true" || "$AAR_ARTIFACT_QUEUED" == "true" ) ]] && { create_release_artifact "${release_asset}" || exit_message 1 "Failed to create release artifact"; }
+              else
+                echo "DEBUG: No native libraries found in source ffmpeg-kit outputs for ${FFMPEG_KIT_OUTPUT_NAME}" | tee -a "${LOG_FILE}"
               fi
           done
       done
@@ -532,6 +696,7 @@ for _step in "${BUILD_STEPS[@]}"; do
   is_completed "${_step}" && (( completed_steps++ )) || true
 done
 
+echo "" | tee -a "${LOG_FILE}"
 echo "========================================" | tee -a "${LOG_FILE}"
 echo "FFmpeg Kit AAR Build - State Management" | tee -a "${LOG_FILE}"
 echo "========================================" | tee -a "${LOG_FILE}"
@@ -539,6 +704,9 @@ echo "Platform: ${PLATFORMS[*]}" | tee -a "${LOG_FILE}"
 echo "Bundles: ${BUNDLE_ARRAY[*]}" | tee -a "${LOG_FILE}"
 echo "Licenses: ${LICENSE_ARRAY[*]}" | tee -a "${LOG_FILE}"
 echo "Small: ${SMALL_FLAGS[*]}" | tee -a "${LOG_FILE}"
+echo "Local build: ${local_build}" | tee -a "${LOG_FILE}"
+echo "Create AAR: ${create_aar}" | tee -a "${LOG_FILE}"
+echo "Create release: ${create_release}" | tee -a "${LOG_FILE}"
 echo "Total steps: ${total_steps}" | tee -a "${LOG_FILE}"
 echo "Completed steps: ${completed_steps}" | tee -a "${LOG_FILE}"
 echo "Remaining steps: $((total_steps - completed_steps))" | tee -a "${LOG_FILE}"

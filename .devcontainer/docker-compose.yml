@@ -16,5 +16,10 @@ services:
       RUSTUP_HOME: /usr/local/rustup
       CARGO_HOME: /usr/local/cargo
       ANDROID_HOME: /usr/local/android-sdk
+      ANDROID_SDK_ROOT: /usr/local/android-sdk
+      ANDROID_NDK_VERSION: 29.0.14206865
+      ANDROID_NDK_ROOT: /usr/local/android-sdk/ndk/29.0.14206865
+      ANDROID_NDK_HOME: /usr/local/android-sdk/ndk/29.0.14206865
+      NDK_HOME: /usr/local/android-sdk/ndk/29.0.14206865
     volumes:
       - ..:/workspaces/ffmpeg-kit-builders:cached

@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034
+
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 # save start time
 START_TIME=$(date +%s)
@@ -20,6 +34,7 @@ STATE_FILE="${STATE_DIR}/build_all.state"
 LOCK_FILE="${STATE_DIR}/build_all.lock"
 
 source "${BASEDIR}/scripts/function.sh"
+source "${BASEDIR}/scripts/supported.sh"
 
 [[ -f "$LOG_FILE" ]] && rm -f "$LOG_FILE"
 [[ -f "$LOG_FILE" ]] && chmod -R a+rwx "$LOG_FILE" || true;
@@ -51,12 +66,13 @@ p_args=""
 deps=""
 bundles=""
 reset_state=false
-VALID_TYPES=("full" "video_hw" "video" "audio" "base" "debug")
-VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
-VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
-VALID_BUILDS=("ffmpeg" "kit" "bundle")
-VALID_LICENSES=("lgpl" "gpl")
-VALID_SMALL_FLAGS=("small" "")
+# now imported from supported.sh
+# VALID_BUNDLES=("full" "video_hw" "video" "audio" "base" "debug")
+# VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
+# VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
+# VALID_BUILDS=("ffmpeg" "kit" "bundle")
+# VALID_LICENSES=("lgpl" "gpl")
+# VALID_SMALL_FLAGS=("small" "")
 SMALL_FLAGS=("small" "")
 ANDROID_PLATFORM_ARCHS=()
 APPLE_PLATFORM_ARCHS=()
@@ -100,6 +116,22 @@ _add_platform_arch() {
   fi
 }
 
+_append_simulator_companions() {
+  local device_platform="${1}" simulator_platform="${2}"
+  local archs="${PLATFORMS["$device_platform"]}"
+  local arch
+
+  [[ -z "${archs}" ]] && return
+
+  IFS=',' read -ra _arch_array <<< "${archs}"
+  for arch in "${_arch_array[@]}"; do
+    [[ -z "${arch}" ]] && continue
+    if is_supported_combo "${simulator_platform}-${arch}"; then
+      _add_platform_arch "${simulator_platform}" "${arch}"
+    fi
+  done
+}
+
 parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
@@ -138,13 +170,16 @@ parse_platforms() {
     fi
     _add_platform_arch "${p%-*}" "${p#*-}"
   done
+
+  _append_simulator_companions "ios" "iphonesimulator"
+  _append_simulator_companions "appletvos" "appletvsimulator"
 }
 
 parse_bundles() {
   local b_arr="${1}"
   # Ensure bundles is populated if empty
   if [[ -z "${b_arr}" ]]; then
-    b_arr=$(IFS=,; echo "${VALID_TYPES[*]}")
+    b_arr=$(IFS=,; echo "${VALID_BUNDLES[*]}")
   fi
   # Use IFS local to the read command
   bundles="$b_arr"
@@ -154,7 +189,7 @@ parse_bundles() {
     [[ -z "$b" ]] && continue
     # Validate against whitelist
     local valid=false
-    for valid_b in "${VALID_TYPES[@]}"; do
+    for valid_b in "${VALID_BUNDLES[@]}"; do
       [[ "$b" == "$valid_b" ]] && valid=true && break
     done
     if [[ "$valid" == false ]]; then
@@ -257,7 +292,7 @@ for arg; do
       echo "  --deps        Build dependencies first"
       echo "  --reset       Reset build state and start from beginning"
       echo "  --bundle=*    Comma separated (without spaces) list of bundles to build (e.g. --bundle=debug,full,base,audio,video,video_hw)"
-      echo "                Valid bundles: ${VALID_TYPES[*]}"
+      echo "                Valid bundles: ${VALID_BUNDLES[*]}"
       echo "  --build=*     Comma separated (without spaces) list of builds to build (e.g. --build=ffmpeg,kit,bundle)"
       echo "                Valid builds: ${VALID_BUILDS[*]}"
       echo "  --clean=*     Comma separated (without spaces) list of components to clean (e.g. --clean=ffmpeg,kit,bundle)"
@@ -308,7 +343,7 @@ for arg; do
     *)  
       echo "Invalid argument: ${arg}"
       echo "Use --help for usage information"
-      exit 1;;
+      shift;;
   esac
 done
 
@@ -355,6 +390,7 @@ mark_completed() {
 execute_build() {
   local cmd_string="$1"
   local step_label="${2:-}"
+  local runner=()
   if is_completed "${cmd_string}"; then
     echo "[SKIP] Already completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
@@ -362,7 +398,13 @@ execute_build() {
 
   echo "[BUILD] Starting: ${cmd_string}" | tee -a "${LOG_FILE}"
 
-  if eval "${cmd_string}"; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    runner=(bash -c "${cmd_string}")
+  else
+    runner=(sudo -E bash -c "${cmd_string}")
+  fi
+
+  if "${runner[@]}"; then
     mark_completed "${cmd_string}"
     echo "[DONE] Completed: ${cmd_string}" | tee -a "${LOG_FILE}"
     return 0
@@ -502,18 +544,25 @@ fi
 
 if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
   echo "Building AARs..." | tee -a "${LOG_FILE}"
+  repo_path="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
+  owner="${repo_path%%/*}"
   if [[ "${REMOTE_RELEASE}" == true ]]; then
     remote="--remote"
   else
     remote="--local"
   fi
-  export GITHUB_USERNAME="$(get_github_owner)" && \
-  export GITHUB_REPO="$(get_github_repo)" && \
-  export GITHUB_PASSWORD="$(get_github_token)" && \
-  export GITHUB_PASSWORD_CLASSIC="$(get_github_token_classic)" && \
-  export OSSRH_USERNAME="$(get_maven_username)" && \
-  export OSSRH_PASSWORD="$(get_maven_password)" && \
-  "${WORK_DIR}/scripts/android/build_aar.sh" --bundle="${bundles}" --reset "${remote}" "${SNAPSHOT}"
+  export GITHUB_USERNAME="$owner" && \
+  export GITHUB_REPO="${repo_path#*/}" && \
+  export GITHUB_PASSWORD="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}" && \
+  export GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}" && \
+  export OSSRH_BASE64="${OSSRH_BASE64:-$(get_maven_base64)}" && \
+  export OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}" && \
+  export OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}" && \
+  sudo -E "${WORK_DIR}/scripts/android/build_aar.sh" \
+    "--bundle=${bundles}" \
+    --reset \
+    "${remote}" \
+    "${SNAPSHOT}"
 fi
 
 # Build XCFrameworks for Apple platforms
@@ -522,7 +571,7 @@ apple_platforms=()
 apple_platforms_str=""
 for platform in "${!PLATFORMS[@]}"; do
   case "${platform}" in
-    "ios"|"macos")
+    "ios"|"macos"|"appletvos")
       apple_platforms+=("${platform}")
       ;;
     *)
@@ -546,5 +595,9 @@ if [[ -n "${apple_platforms_str}" ]] && truthy "$build_bundle"; then
   else
     remote="--local"
   fi
-  sudo -E bash -c "${WORK_DIR}/scripts/apple/build_xcframework.sh --platform=${apple_platforms_str} --bundle=${bundles} --reset ${remote}"
+  sudo -E "${WORK_DIR}/scripts/apple/build_xcframework.sh" \
+    "--platform=${apple_platforms_str}" \
+    "--bundle=${bundles}" \
+    --reset \
+    "${remote}"
 fi

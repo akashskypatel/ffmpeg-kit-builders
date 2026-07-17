@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
 set -e
 
 FFMPEG_BUILD_DIR="$1"
@@ -104,10 +117,8 @@ process_library_path() {
 	fi
 	filename=$(basename "$lib_path")
 	dirname=$(dirname "$lib_path")
-	extension="${filename##*.}"
-
-	case "$extension" in
-		so | dll | dylib)
+	case "$filename" in
+		*.so | *.so.* | *.dll | *.dylib)
 			echo_log "  [DEBUG] $filename is shared library"
 			if [ -h "$lib_path" ]; then
 				echo_log "  [DEBUG] $filename is symlink"
@@ -129,7 +140,7 @@ process_library_path() {
 				echo "$real_path" >>bundle_manifest.txt
 			fi
 			;;
-		a | lib)
+		*.a | *.lib)
 			echo_log "  [DEBUG] $filename is static library"
 			if [ -h "$lib_path" ]; then
 				echo_log "  [DEBUG] $filename is symlink"
@@ -151,7 +162,7 @@ process_library_path() {
 				echo_log "  [DEBUG] $filename is static. Bundling not needed."
 				return
 			fi
-			clean_name=$(echo "$filename" | sed -E 's/^lib//; s/\.(dll\.a|a|lib)$//; s/\.dll$//')
+			clean_name=$(echo "$filename" | gsed -E 's/^lib//; s/\.(dll\.a|a|lib)$//; s/\.dll$//')
 
 			bin_dir="$(dirname "$dirname")/bin"
 			found_dll=""
@@ -219,7 +230,7 @@ done
 if test -f bundle_manifest.txt; then
 	sort -u bundle_manifest.txt -o bundle_manifest.txt
 fi
-clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | sed 's/ *$//')
+clean_libs=$(echo "$raw_libs_to_keep" | awk '{for (i=1;i<=NF;i++) if (!seen[$i]++) printf("%s%s", $i, OFS)}' | gsed 's/ *$//')
 if test -f ffmpegkit.pc; then
   perl -i -pe "s|FFMPEG_KIT_EXT_LIBS|\Q$clean_libs\E|g" ffmpegkit.pc
 fi

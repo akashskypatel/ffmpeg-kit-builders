@@ -1,4 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
 
 # Run from ffmpeg-kit-builders project root
 TARGET_DIR="FFmpegKit/src"
@@ -28,9 +41,9 @@ for file in "${FILE_LIST[@]}"; do
     for var_line in "${VAR_LINES[@]}"; do
         # Parsing logic
         if [[ "$var_line" == *"(*"* ]]; then
-            name=$(echo "$var_line" | sed -E 's/.*(\(\*([a-zA-Z0-9_]+)\)).*/\2/')
+            name=$(echo "$var_line" | gsed -E 's/.*(\(\*([a-zA-Z0-9_]+)\)).*/\2/')
         else
-            name=$(echo "$var_line" | sed -E 's/.*FFMPEG_THREAD_LOCAL//; s/[[;=].*//; s/.*[[:space:]*]([a-zA-Z0-9_]+)[[:space:]]*$/\1/' | xargs)
+            name=$(echo "$var_line" | gsed -E 's/.*FFMPEG_THREAD_LOCAL//; s/[[;=].*//; s/.*[[:space:]*]([a-zA-Z0-9_]+)[[:space:]]*$/\1/' | xargs)
         fi
 
         # Skip if parsing failed or it's a macro definition

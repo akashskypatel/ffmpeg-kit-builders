@@ -1,0 +1,14 @@
+diff --git a/_ptw32.h b/_ptw32.h
+index 2eb85e2..42726db 100644
+--- a/_ptw32.h
++++ b/_ptw32.h
+@@ -151,7 +151,7 @@
+      typedef unsigned _int64 uint64_t;
+ #  if defined (__PTW32_CONFIG_MSVC6)
+      typedef long intptr_t;
+ #  endif
+-#elif defined(HAVE_STDINT_H) && HAVE_STDINT_H == 1
++#elif defined(HAVE_STDINT_H)
+ #  include <stdint.h>
+ #endif
+ 

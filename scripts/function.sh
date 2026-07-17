@@ -1,6 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,SC2269
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 # 1. exit code
 # 2. message
@@ -204,8 +217,8 @@ copy_path() {
 	fi
 
 	# Update permissions on the copied path
-  execute "INFO: updating path permissions: '$path'" "ERROR: unable to update permissions on '$path'" "true" \
-    chmod -R a+rwx "$path"
+  execute "INFO: updating path permissions: '$destination_path'" "ERROR: unable to update permissions on '$destination_path'" "true" \
+    chmod -R a+rwx "$destination_path"
 }
 
 # 1. skip_if_missing
@@ -246,7 +259,17 @@ require_sudo() {
 		exit_message 1 "This script must be run with sudo"
 	fi
 
-	if [ -z "$SUDO_USER" ]; then
+	if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
+		export FF_BUILD_ORIGINAL_USER="${FF_BUILD_ORIGINAL_USER:-$SUDO_USER}"
+		if command -v getent >/dev/null 2>&1; then
+			export FF_BUILD_ORIGINAL_HOME="${FF_BUILD_ORIGINAL_HOME:-$(getent passwd "$FF_BUILD_ORIGINAL_USER" | cut -d: -f6)}"
+		fi
+	elif [[ -z "${FF_BUILD_ORIGINAL_USER:-}" && "$(id -u)" -ne 0 ]]; then
+		export FF_BUILD_ORIGINAL_USER="$(id -un)"
+		export FF_BUILD_ORIGINAL_HOME="${HOME:-}"
+	fi
+
+	if [ -z "${SUDO_USER:-}" ]; then
 		echo "Warning: Running as root directly (not via sudo)" | tee -a "$LOG_FILE"
 	else
 		echo "Running with sudo privileges (user: $SUDO_USER)" | tee -a "$LOG_FILE"
@@ -315,7 +338,7 @@ concat_array() {
 truthy() {
   local value="$1"
   case "${value,,}" in
-    true|1|T|t|True|TRUE|y|Y|yes|Yes|YES|on|On|ON) return 0 ;;
+    true|1|T|t|True|TRUE|y|Y|yes|Yes|YES|on|On|ON|"\true") return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -325,7 +348,7 @@ truthy() {
 falsey() {
   local value="$1"
   case "${value,,}" in
-    false|0|F|f|False|FALSE|n|N|no|No|NO|off|Off|OFF) return 0 ;;
+    false|0|F|f|False|FALSE|n|N|no|No|NO|off|Off|OFF|"\false") return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -340,11 +363,27 @@ overwrite_file() {
 	copy_path "$1" "$2" "-rf" 2>>"$LOG_FILE"
 }
 
+# setup gsed so both linux and macos use GNU sed syntax
+setup_gsed() {
+  determine_distro
+  if [[ "$BUILD_OS" == "linux" ]] && ! command -v gsed &> /dev/null; then
+    ln -sf /usr/bin/sed /usr/local/bin/gsed
+    ln -sf /usr/bin/sed /usr/bin/gsed
+  # else check if gsed is installed
+  elif ! command -v gsed &> /dev/null; then
+    install_missing_packages gsed
+    if ! command -v gsed &> /dev/null; then
+      exit_message 1 "setup_gsed: gsed is not installed and failed to install. Please install it manually."
+    fi
+  fi
+}
+
 setup_build_environment() {
     pick_host_platform "$host_platform"
     pick_host_arch "$host_arch"
     calculate_bits_target
     determine_distro
+    setup_gsed
     export host_name="$host_platform-$host_arch"
     echo -e "\n************** Setting up environment for $host_name build... **************" | tee -a "$LOG_FILE"
     
@@ -409,6 +448,252 @@ calculate_bits_target() {
     esac
 }
 
+run_toolchain_setup() {
+    local setup_name="$1"
+    shift || true
+    local setup_script="${SCRIPTDIR}/toolchain/${setup_name}"
+
+    if [[ ! -x "$setup_script" ]]; then
+        exit_message 1 "Toolchain setup script not found or not executable: $setup_script"
+    fi
+
+    echo "INFO: Ensuring toolchain via $setup_script" >>"$LOG_FILE"
+    "$setup_script" "$@" >>"$LOG_FILE" 2>&1 || exit_message 1 "Failed to run toolchain setup script: $setup_script"
+}
+
+rust_target_installed() {
+    local target="$1"
+    command -v rustup >/dev/null 2>&1 && rustup target list --installed 2>/dev/null | grep -qx "$target"
+}
+
+rust_requires_build_std() {
+    case "${1:-$rust_target}" in
+        aarch64-apple-tvos|aarch64-apple-tvos-sim)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+ensure_rust_target_ready() {
+    local target="${1:-$rust_target}"
+    if rust_requires_build_std "$target"; then
+        rustup toolchain install nightly > >(redirect_output) 2>&1 || exit_message 1 "ensure_rust_target_ready: could not install nightly rust toolchain"
+        rustup component add rust-src --toolchain nightly > >(redirect_output) 2>&1 || exit_message 1 "ensure_rust_target_ready: could not install rust-src for nightly"
+        rustup target add "$target" --toolchain nightly > >(redirect_output) 2>&1 || true
+    else
+        rustup target add "$target" > >(redirect_output) 2>&1 || exit_message 1 "ensure_rust_target_ready: could not install rust target $target"
+    fi
+}
+
+cargo_command_for_target() {
+    local target="${1:-$rust_target}"
+    if rust_requires_build_std "$target"; then
+        echo "cargo +nightly -Z build-std=std,panic_abort"
+    else
+        echo "cargo"
+    fi
+}
+
+prepend_path_once() {
+    local path_entry="$1"
+    [[ -n "$path_entry" && -d "$path_entry" ]] || return 0
+    case ":$PATH:" in
+        *":$path_entry:"*) ;;
+        *) export PATH="$path_entry:$PATH" ;;
+    esac
+}
+
+apply_apple_homebrew_environment() {
+    local brew_prefix="${HOMEBREW_PREFIX:-}"
+
+    if [[ -z "$brew_prefix" ]] && command -v brew >/dev/null 2>&1; then
+        brew_prefix="$(brew --prefix 2>/dev/null || true)"
+    fi
+    if [[ -z "$brew_prefix" ]]; then
+        for candidate in /opt/homebrew /usr/local; do
+            if [[ -x "$candidate/bin/brew" || -d "$candidate/opt/bison/bin" ]]; then
+                brew_prefix="$candidate"
+                break
+            fi
+        done
+    fi
+
+    [[ -n "$brew_prefix" ]] || return 0
+
+    export HOMEBREW_PREFIX="$brew_prefix"
+    prepend_path_once "$brew_prefix/bin"
+    prepend_path_once "$brew_prefix/sbin"
+    prepend_path_once "$brew_prefix/opt/bison/bin"
+    prepend_path_once "$brew_prefix/opt/flex/bin"
+    prepend_path_once "$brew_prefix/opt/m4/bin"
+    hash -r 2>/dev/null || true
+}
+
+find_cargo_cinstall() {
+    local brew_prefix="${HOMEBREW_PREFIX:-}"
+    local candidate
+
+    if command -v cargo-cinstall >/dev/null 2>&1; then
+        command -v cargo-cinstall
+        return 0
+    fi
+
+    if [[ -z "$brew_prefix" ]] && command -v brew >/dev/null 2>&1; then
+        brew_prefix="$(brew --prefix 2>/dev/null || true)"
+    fi
+
+    for candidate in \
+        "${brew_prefix}/bin/cargo-cinstall" \
+        /opt/homebrew/bin/cargo-cinstall \
+        /usr/local/bin/cargo-cinstall \
+        "${brew_prefix}/opt/cargo-c/bin/cargo-cinstall" \
+        /opt/homebrew/opt/cargo-c/bin/cargo-cinstall \
+        /usr/local/opt/cargo-c/bin/cargo-cinstall; do
+        if [[ -x "$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+ensure_cargo_cinstall_available() {
+    local cargo_cinstall
+    local cargo_c_bin
+
+    if cargo_cinstall="$(find_cargo_cinstall)"; then
+        cargo_c_bin="$(dirname "$cargo_cinstall")"
+        prepend_path_once "$cargo_c_bin"
+        hash -r 2>/dev/null || true
+        return 0
+    fi
+
+    return 1
+}
+
+configure_apple_pkg_config_environment() {
+    local apple_pkg_config_path="$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/pkgconfig:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+    export PKG_CONFIG_PATH="$apple_pkg_config_path"
+    export PKG_CONFIG_LIBDIR="$apple_pkg_config_path"
+}
+
+setup_default_python() {
+    local preferred_version="${1:-3.12}"
+    local candidate=""
+    local candidate_name=""
+    local python_link=""
+    local search_root=""
+    local selected_python=""
+    local selected_version=""
+    local best_python=""
+    local best_version=""
+    local seen_candidates=""
+    local log_file="${LOG_FILE:-/dev/null}"
+    local search_roots=(
+        "/opt/_internal"
+        "/opt/python"
+        "/usr/local"
+        "/usr"
+        "/bin"
+        "/opt/homebrew"
+        "/home/linuxbrew/.linuxbrew"
+    )
+    local candidate_names=(
+        "python${preferred_version}"
+        "python${preferred_version}m"
+        "python3"
+        "python"
+    )
+    local candidates=()
+
+    for candidate_name in "${candidate_names[@]}"; do
+        candidate="$(command -v "$candidate_name" 2>/dev/null || true)"
+        if [[ -n "$candidate" && -x "$candidate" && ":$seen_candidates:" != *":$candidate:"* ]]; then
+            candidates+=("$candidate")
+            seen_candidates="${seen_candidates}:${candidate}"
+        fi
+    done
+
+    for search_root in "${search_roots[@]}"; do
+        [[ -d "$search_root" ]] || continue
+        while IFS= read -r -d '' candidate; do
+            if [[ -x "$candidate" && ":$seen_candidates:" != *":$candidate:"* ]]; then
+                candidates+=("$candidate")
+                seen_candidates="${seen_candidates}:${candidate}"
+            fi
+        done < <(find "$search_root" -maxdepth 5 \( -type f -o -type l \) \( \
+            -name "python${preferred_version}" -o \
+            -name "python${preferred_version}m" -o \
+            -name "python3" -o \
+            -name "python3.*" -o \
+            -name "python" \
+        \) -print0 2>/dev/null)
+    done
+
+    for candidate in "${candidates[@]}"; do
+        local candidate_version=""
+        candidate_version="$("$candidate" -c 'import sys; print("{}.{}".format(sys.version_info[0], sys.version_info[1]))' 2>/dev/null || true)"
+        [[ "$candidate_version" == 3.* ]] || continue
+
+        if [[ "$candidate_version" == "$preferred_version" ]]; then
+            selected_python="$candidate"
+            selected_version="$candidate_version"
+            break
+        fi
+
+        if [[ -z "$best_version" || "$(printf '%s\n%s\n' "$best_version" "$candidate_version" | sort -V | tail -n 1)" == "$candidate_version" ]]; then
+            best_python="$candidate"
+            best_version="$candidate_version"
+        fi
+    done
+
+    if [[ -z "$selected_python" ]]; then
+        selected_python="$best_python"
+        selected_version="$best_version"
+    fi
+
+    if [[ -z "$selected_python" ]]; then
+        exit_message 1 "setup_default_python: no usable Python 3 interpreter found"
+    fi
+
+    local link_dir="/usr/local/bin"
+    local python_link_path="${link_dir}/python"
+    local python3_link_path="${link_dir}/python3"
+    local selected_real=""
+
+    mkdir -p "$link_dir" || exit_message 1 "setup_default_python: unable to create $link_dir"
+    selected_real="$(readlink -f "$selected_python" 2>/dev/null || printf '%s' "$selected_python")"
+
+    for python_link in "$python_link_path" "$python3_link_path"; do
+        local link_real=""
+        link_real="$(readlink -f "$python_link" 2>/dev/null || true)"
+        if [[ -e "$python_link" && ! -L "$python_link" && "$link_real" != "$selected_real" ]]; then
+            echo "WARNING: setup_default_python: $python_link exists and is not a symlink; leaving it unchanged" >>"$log_file"
+            continue
+        fi
+        ln -sfn "$selected_python" "$python_link" || exit_message 1 "setup_default_python: unable to link $python_link to $selected_python"
+    done
+
+    local new_path="$link_dir"
+    local path_part=""
+    IFS=':' read -r -a path_parts <<< "$PATH"
+    for path_part in "${path_parts[@]}"; do
+        [[ -z "$path_part" || "$path_part" == "$link_dir" ]] && continue
+        new_path+=":$path_part"
+    done
+    export PATH="$new_path"
+
+    export PYTHON="$selected_python"
+    export PYTHON3="$selected_python"
+    export PYTHON_BIN="$selected_python"
+    export PYTHON_VERSION="$selected_version"
+    hash -r 2>/dev/null || true
+
+    echo "INFO: setup_default_python: selected Python $selected_version at $selected_python" >>"$log_file"
+}
+
 setup_windows_environment() {
     export PATCHDIR="$SCRIPTDIR/windows/patches"
     export host_target="$host_arch-w64-mingw32"
@@ -433,6 +718,7 @@ setup_windows_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
             ;;
         # TODO: Add support for aarch64
         # "aarch64"|"arm64"|"arm64-v8a")
@@ -443,6 +729,10 @@ setup_windows_environment() {
             exit_message 1 "setup_windows_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    if [[ ! -x "${toolchain_bin_path}/${host_target}-gcc" ]] || ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-mingw-w64.sh"
+    fi
     
     reset_cross_vars
     export PREFIX="$dependency_install_prefix"
@@ -469,51 +759,106 @@ setup_windows_environment() {
     cross_windres
 }
 
+find_windows_static_pthread_win32() {
+    local candidate=""
+
+    for candidate in \
+        "${dependency_install_prefix:-}/lib/libpthreadGC3.a" \
+        "${dependency_install_prefix:-}/lib/libpthreadGCE3.a"; do
+        if [[ -f "$candidate" ]]; then
+            readlink -f "$candidate" 2>/dev/null || printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 setup_linux_environment() {
     export PATCHDIR="$SCRIPTDIR/linux/patches"
-    export host_target="$build_triple"
-    export rust_target="$host_arch-unknown-linux-gnu"
     export dependency_install_prefix="$work_dir/libraries" # dependencies
     export install_pkgconfig_dir="${dependency_install_prefix}/lib/pkgconfig"
-    
-    export PKG_CONFIG_PATH="$original_pkg_config_path:$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
-    export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:$original_path"
-    
-    export linux_cflags="$original_cflags -Wno-pedantic -I${dependency_install_prefix}/include "
-    export CFLAGS="$linux_cflags"
-    export linux_cppflags="$original_cppflags -I${dependency_install_prefix}/include -DLINUX "
-    export CPPFLAGS="$linux_cppflags"
-    export linux_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include "
-    export CXXFLAGS="$linux_cxxflags"
-    export linux_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -Wl,-rpath,${dependency_install_prefix}/lib "
-    export LDFLAGS="$linux_ldflags"
-    export LD_LIBRARY_PATH="${dependency_install_prefix}/lib:$LD_LIBRARY_PATH"
 
     case "$host_arch" in
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
+            export host_target="$build_triple"
+            export CROSS_COMPILE=
+            export CC=gcc
+            export CXX=g++
+            export AR=ar
+            export AS=as
+            export RANLIB=ranlib
+            export LD=ld
+            export STRIP=strip
+            unset SYSROOT PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
             ;;
-        # TODO: Add support for aarch64
-        # "aarch64"|"arm64"|"arm64-v8a")
-        #     export host_arch="aarch64"
-        #     export cmake_host_arch="aarch64"
-        #     ;;
+        "aarch64"|"arm64"|"arm64-v8a")
+            if [[ ! -x "/usr/local/arm-gnu-toolchain/sys-bin/aarch64-linux-gnu-gcc" || ! -e "/opt/sysroots/aarch64-linux-gnu/lib64/libc.so.6" || ! -e "/opt/sysroots/aarch64-linux-gnu/usr/lib64/libgcc_s.so" ]] || ! rust_target_installed "aarch64-unknown-linux-gnu"; then
+                run_toolchain_setup "setup-linux-arm64.sh"
+            fi
+            export host_arch="aarch64"
+            export cmake_host_arch="aarch64"
+            export platform_arch="aarch64"
+            export SYSROOT=/opt/sysroots/aarch64-linux-gnu
+            export host_target="aarch64-linux-gnu"
+            export CROSS_COMPILE="$host_target-"
+            export CC="clang"
+            export CXX="clang++"
+            export AR=aarch64-linux-gnu-ar
+            export AS=aarch64-linux-gnu-as
+            export RANLIB=aarch64-linux-gnu-ranlib
+            export LD="aarch64-linux-gnu-ld"
+            export STRIP=aarch64-linux-gnu-strip
+            export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+            export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+            export build_cross_compile=y
+            ;;
         *)
             exit_message 1 "setup_linux_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    export rust_target="$host_arch-unknown-linux-gnu"
+    
+    if [[ "$host_arch" == "aarch64" ]]; then
+        export PKG_CONFIG_PATH="$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/pkgconfig:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+    else
+        export PKG_CONFIG_PATH="$original_pkg_config_path:$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+    fi
+    if [[ "$host_arch" == "aarch64" ]]; then
+        export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:/usr/local/arm-gnu-toolchain/sys-bin:$original_path"
+    else
+        export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:$original_path"
+    fi
+    
+    export linux_cflags="$original_cflags -Wno-pedantic -I${dependency_install_prefix}/include "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_cflags+=" --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT "
+    fi
+    export CFLAGS="$linux_cflags"
+    export linux_cppflags="$original_cppflags -I${dependency_install_prefix}/include -DLINUX "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_cppflags+=" --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT "
+    fi
+    export CPPFLAGS="$linux_cppflags"
+    export linux_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_cxxflags+=" --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT -I$SYSROOT/usr/include/c++/8 -I$SYSROOT/usr/include/c++/8/aarch64-redhat-linux "
+    fi
+    export CXXFLAGS="$linux_cxxflags"
+    export linux_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -Wl,-rpath,${dependency_install_prefix}/lib "
+    if [[ "$host_arch" == "aarch64" ]]; then
+        linux_ldflags+=" --sysroot=$SYSROOT -fuse-ld=lld -B/usr/local/arm-gnu-toolchain/lib/gcc/aarch64-none-linux-gnu/13.2.1 -L$SYSROOT/usr/lib/gcc/aarch64-redhat-linux/8 -L$SYSROOT/usr/lib64 -L$SYSROOT/lib64 -L/usr/local/arm-gnu-toolchain/lib/gcc/aarch64-none-linux-gnu/13.2.1 "
+    fi
+    export LDFLAGS="$linux_ldflags"
+    export LD_LIBRARY_PATH="${dependency_install_prefix}/lib:$LD_LIBRARY_PATH"
     
     source /opt/rh/gcc-toolset-14/enable
     
     export NASM=nasm
-    export CC=gcc
-    export AR=ar
-    export AS=as
-    export RANLIB=ranlib
-    export LD=ld
-    export STRIP=strip
-    export CXX=g++
 
     create_dir "$install_pkgconfig_dir"
     create_dir "$work_dir/pkgconfig"
@@ -522,6 +867,13 @@ setup_linux_environment() {
 
 setup_android_environment() {
     export PATCHDIR="$SCRIPTDIR/android/patches"
+
+    if [[ ! -x "/usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager" || ! -d "/usr/local/android-sdk/ndk/29.0.14206865" ]] || \
+        ! rust_target_installed "x86_64-linux-android" || \
+        ! rust_target_installed "aarch64-linux-android" || \
+        ! rust_target_installed "armv7-linux-androideabi"; then
+        run_toolchain_setup "setup-android.sh"
+    fi
 
     # Detect Android SDK/NDK
     if [[ -z "$ANDROID_HOME" ]]; then
@@ -559,6 +911,7 @@ setup_android_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export platform_arch="x86_64"
             export host_target="x86_64-linux-android"
             export rust_target="x86_64-linux-android"
             export clang_arch="x86_64"
@@ -567,6 +920,7 @@ setup_android_environment() {
         "aarch64"|"arm64"|"arm64-v8a")
             export host_arch="aarch64"
             export cmake_host_arch="aarch64"
+            export platform_arch="aarch64"
             export host_target="aarch64-linux-android"
             export rust_target="aarch64-linux-android"
             export clang_arch="aarch64"
@@ -575,6 +929,7 @@ setup_android_environment() {
         "armv7a"|"arm"|"armeabi-v7a")
             export host_arch="armv7a"
             export cmake_host_arch="armv7-a"
+            export platform_arch="armv7a"
             export host_target="armv7a-linux-androideabi"
             export rust_target="armv7-linux-androideabi"
             export clang_arch="arm"
@@ -645,7 +1000,6 @@ setup_macos_environment() {
     export dependency_install_prefix="$work_dir/libraries"
     export install_pkgconfig_dir="${dependency_install_prefix}/lib/pkgconfig"
     export toolchain_sys="macosx"
-    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$ffmpeg_install_prefix/lib/pkgconfig:/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
     export SDKROOT=$(xcrun --sdk "$toolchain_sys" --show-sdk-path)
     export MIN_MACOS_VERSION="13.0"
 
@@ -653,6 +1007,8 @@ setup_macos_environment() {
         "x86_64")
             export host_arch="x86_64"
             export cmake_host_arch="x86_64"
+            export meson_cpu_family="x86_64"
+            export platform_arch="x86_64"
             export build_cross_compile=y
             export PATH="$original_path"
             export host_target="x86_64-apple-darwin"
@@ -664,6 +1020,7 @@ setup_macos_environment() {
             export host_arch="arm64"
             export cmake_host_arch="arm64"
             export meson_cpu_family="aarch64"
+            export platform_arch="aarch64"
             export PATH="$ffmpeg_install_prefix/bin:$dependency_install_prefix/bin:$original_path"
             export host_target="arm64-apple-darwin"
             export rust_target="aarch64-apple-darwin"
@@ -674,6 +1031,22 @@ setup_macos_environment() {
             exit_message 1 "setup_macos_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    configure_apple_pkg_config_environment
+
+    apply_apple_homebrew_environment
+
+    if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
+        export PATH="${HOME}/.cargo/bin:$PATH"
+    fi
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+        # shellcheck source=/dev/null
+        source "${HOME}/.cargo/env"
+    fi
+    if ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
+        [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
+    fi
     
     export macos_cflags="$original_cflags -Wno-pedantic -arch $host_arch -I${dependency_install_prefix}/include -isysroot $SDKROOT $macos_version_flag -target $cflags_target"
     export CFLAGS="$macos_cflags"
@@ -711,7 +1084,6 @@ setup_ios_environment() {
     export SDKROOT="$IOS_SDK_PATH"
     export IOS_SYSROOT="$IOS_SDK_PATH"
 
-    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$ffmpeg_install_prefix/lib/pkgconfig"
     export PATH="$original_path"
 
     export MIN_IOS_VERSION="13.0"
@@ -721,6 +1093,7 @@ setup_ios_environment() {
             export host_arch="arm64"
             export cmake_host_arch="arm64"
             export meson_cpu_family="aarch64"
+            export platform_arch="aarch64"
             export ios_arch="arm64"
             if [ "$toolchain_sys" = "iphonesimulator" ]; then
                 export host_target="arm64-apple-ios-simulator"
@@ -736,6 +1109,22 @@ setup_ios_environment() {
             exit_message 1 "setup_ios_environment: Unsupported host arch '$host_arch' for $host_platform"
             ;;
     esac
+
+    configure_apple_pkg_config_environment
+
+    apply_apple_homebrew_environment
+
+    if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
+        export PATH="${HOME}/.cargo/bin:$PATH"
+    fi
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+        # shellcheck source=/dev/null
+        source "${HOME}/.cargo/env"
+    fi
+    if ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
+        [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
+    fi
 
     reset_cross_vars
 
@@ -786,7 +1175,6 @@ setup_tvos_environment() {
     export SDKROOT="$TVOS_SDK_PATH"
     export TVOS_SYSROOT="$TVOS_SDK_PATH"
 
-    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$ffmpeg_install_prefix/lib/pkgconfig"
     export PATH="$original_path"
 
     # Minimum tvOS version (check your deployment target requirements)
@@ -797,6 +1185,7 @@ setup_tvos_environment() {
             export host_arch="arm64"
             export cmake_host_arch="arm64"
             export meson_cpu_family="aarch64"
+            export platform_arch="aarch64"
             export tvos_arch="arm64"
             if [ "$toolchain_sys" = "appletvsimulator" ]; then
                 export host_target="arm64-apple-tvos-simulator"
@@ -812,6 +1201,22 @@ setup_tvos_environment() {
             exit_message 1 "setup_tvos_environment: Unsupported host arch '$host_arch'"
             ;;
     esac
+
+    configure_apple_pkg_config_environment
+
+    apply_apple_homebrew_environment
+
+    if [[ ":$PATH:" != *":${HOME}/.cargo/bin:"* ]]; then
+        export PATH="${HOME}/.cargo/bin:$PATH"
+    fi
+    if [[ -f "${HOME}/.cargo/env" ]]; then
+        # shellcheck source=/dev/null
+        source "${HOME}/.cargo/env"
+    fi
+    if ! rust_target_installed "$rust_target"; then
+        run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
+        [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
+    fi
 
     reset_cross_vars
 
@@ -878,29 +1283,36 @@ ismacos() {
   return 1
 }
 
-isios() {
-  if [[ "$host_platform" == "ios" || "$host_platform" == "iphonesimulator" ]]; then
-    return 0
-  fi
-  return 1
-}
-
 isiossimulator() {
-  if [[ "$host_platform" == "iphonesimulator" ]]; then
+  if [[ "$host_platform" == "iphonesimulator" || "$host_platform" == "iossim"* || "$host_platform" == "ios-sim"* ]]; then
     return 0
   fi
   return 1
 }
 
-istvos() {
-  if [[ "$host_platform" == "tvos" || "$host_platform" == "appletvos" || "$host_platform" == "appletvsimulator" ]]; then
+isios() {
+  if [[ "$host_platform" == "ios" ]] || isiossimulator; then
     return 0
   fi
   return 1
 }
 
 istvossimulator() {
-  if [[ "$host_platform" == "appletvsimulator" ]]; then
+  if [[ "$host_platform" == "appletvsimulator" || "$host_platform" == "tvossim"* || "$host_platform" == "tvos-sim"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+istvos() {
+  if [[ "$host_platform" == "appletvos" ]] || istvossimulator; then
+    return 0
+  fi
+  return 1
+}
+
+isapple() {
+  if ismacos || isios || istvos; then
     return 0
   fi
   return 1
@@ -960,7 +1372,12 @@ native_cross_vars() {
     export LD=ld
     export STRIP=strip
     export NM=nm
-    export PKG_CONFIG_PATH="$original_pkg_config_path:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+    export CFLAGS="$original_cflags -Wno-pedantic"
+    export CPPFLAGS="$original_cppflags -DLINUX"
+    export CXXFLAGS="$original_cxxflags"
+    export LDFLAGS="$original_ldflags"
+    unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+    export PKG_CONFIG_PATH="$original_pkg_config_path:/usr/lib/$build_triple/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
   elif [[ "$BUILD_OS" == "macos" ]]; then
     export CROSS_COMPILE=
     export CC="$(xcrun --sdk macosx --find clang)"
@@ -981,7 +1398,43 @@ native_cross_vars() {
 }
 
 reset_cross_vars() {
-  if iswindows; then
+  if islinux; then
+    if [[ "$host_arch" == "aarch64" ]]; then
+      export SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
+      export CROSS_COMPILE="$host_target-"
+      export CC="clang"
+      export CXX="clang++"
+      export AR="${host_target}-ar"
+      export AS="${host_target}-as"
+      export RANLIB="${host_target}-ranlib"
+      export LD="${host_target}-ld"
+      export STRIP="${host_target}-strip"
+      export NM="${host_target}-nm"
+      export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+      export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+      export PKG_CONFIG_PATH="$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/pkgconfig:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+      export CFLAGS="$linux_cflags"
+      export CPPFLAGS="$linux_cppflags"
+      export CXXFLAGS="$linux_cxxflags"
+      export LDFLAGS="$linux_ldflags"
+    else
+      export CROSS_COMPILE=
+      export CC=gcc
+      export CXX=g++
+      export AR=ar
+      export AS=as
+      export RANLIB=ranlib
+      export LD=ld
+      export STRIP=strip
+      export NM=nm
+      unset SYSROOT PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+      export PKG_CONFIG_PATH="$original_pkg_config_path:$dependency_install_prefix/share/pkgconfig:$install_pkgconfig_dir:$dependency_install_prefix/lib/$host_target/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig:/usr/lib/$host_target/pkgconfig:/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+      export CFLAGS="$linux_cflags"
+      export CPPFLAGS="$linux_cppflags"
+      export CXXFLAGS="$linux_cxxflags"
+      export LDFLAGS="$linux_ldflags"
+    fi
+  elif iswindows; then
     export CROSS_COMPILE="$host_target-"
     export CC=${cross_prefix}gcc
     export CXX=${cross_prefix}g++
@@ -1002,7 +1455,7 @@ reset_cross_vars() {
     export RANLIB="${toolchain_bin_path}/llvm-ranlib"
     export STRIP="${toolchain_bin_path}/llvm-strip"
     export LD="${toolchain_bin_path}/ld.lld"
-  elif isios || ismacos || istvos; then
+  elif isapple; then
     export CC="$(xcrun --sdk "$toolchain_sys" --find clang)"
     export CXX="$(xcrun --sdk "$toolchain_sys" --find clang++)"
     export AR="$(xcrun --sdk "$toolchain_sys" --find ar)"
@@ -1224,7 +1677,7 @@ get_concurrent_proc() {
 }
 
 display_version() {
-	COMMAND=$(echo -e "$0" | sed -e 's/\.\///g')
+	COMMAND=$(echo -e "$0" | gsed -e 's/\.\///g')
 
 	echo -e "\
 $COMMAND v$(get_latest_version_from_changelog)
@@ -1237,99 +1690,99 @@ either version 3 of the License, or (at your option) any later version."
 }
 
 get_ffmpeg_libavcodec_version() {
-	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVCODEC_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVCODEC_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | sed -e 's|LIBAVCODEC_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | gsed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVCODEC_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | gsed -e 's|LIBAVCODEC_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVCODEC_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version.h | gsed -e 's|LIBAVCODEC_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavcodec_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | sed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVCODEC_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavcodec/version_major.h | gsed -e 's|LIBAVCODEC_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavdevice_version() {
-	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVDEVICE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | sed -e 's|LIBAVDEVICE_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | gsed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | gsed -e 's|LIBAVDEVICE_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVDEVICE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version.h | gsed -e 's|LIBAVDEVICE_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavdevice_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | sed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVDEVICE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavdevice/version_major.h | gsed -e 's|LIBAVDEVICE_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavfilter_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVFILTER_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVFILTER_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | sed -e 's|LIBAVFILTER_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | gsed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVFILTER_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | gsed -e 's|LIBAVFILTER_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVFILTER_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version.h | gsed -e 's|LIBAVFILTER_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavfilter_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | sed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFILTER_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavfilter/version_major.h | gsed -e 's|LIBAVFILTER_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavformat_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVFORMAT_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | sed -e 's|LIBAVFORMAT_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | gsed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | gsed -e 's|LIBAVFORMAT_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVFORMAT_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavformat/version.h | gsed -e 's|LIBAVFORMAT_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavformat_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | sed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVFORMAT_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavformat/version_major.h | gsed -e 's|LIBAVFORMAT_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libavutil_version() {
-	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBAVUTIL_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBAVUTIL_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | sed -e 's|LIBAVUTIL_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | gsed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBAVUTIL_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | gsed -e 's|LIBAVUTIL_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBAVUTIL_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libavutil/version.h | gsed -e 's|LIBAVUTIL_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libavutil_major_version() {
-	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version_major.h | sed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBAVUTIL_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libavutil/version_major.h | gsed -e 's|LIBAVUTIL_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libswresample_version() {
-	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | sed -e 's|LIBSWRESAMPLE_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswresample/version.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libswresample_major_version() {
-	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | sed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWRESAMPLE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswresample/version_major.h | gsed -e 's|LIBSWRESAMPLE_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
 
 get_ffmpeg_libswscale_version() {
-	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
-	local MINOR=$(grep -Eo ' LIBSWSCALE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MINOR||g;s| ||g')
-	local MICRO=$(grep -Eo ' LIBSWSCALE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | sed -e 's|LIBSWSCALE_VERSION_MICRO||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | gsed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
+	local MINOR=$(grep -Eo ' LIBSWSCALE_VERSION_MINOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | gsed -e 's|LIBSWSCALE_VERSION_MINOR||g;s| ||g')
+	local MICRO=$(grep -Eo ' LIBSWSCALE_VERSION_MICRO .*' "${BASEDIR}"/src/ffmpeg/libswscale/version.h | gsed -e 's|LIBSWSCALE_VERSION_MICRO||g;s| ||g')
 
 	echo -e "${MAJOR}.${MINOR}.${MICRO}"
 }
 
 get_ffmpeg_libswscale_major_version() {
-	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | sed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
+	local MAJOR=$(grep -Eo ' LIBSWSCALE_VERSION_MAJOR .*' "${BASEDIR}"/src/ffmpeg/libswscale/version_major.h | gsed -e 's|LIBSWSCALE_VERSION_MAJOR||g;s| ||g')
 
 	echo -e "${MAJOR}"
 }
@@ -1478,10 +1931,12 @@ autoreconf_library() {
 	EXTRACT_RC=$?
 	if [[ ${EXTRACT_RC} -eq 0 ]]; then
 		echo -e "\nDEBUG: autoreconf completed successfully for $1\n" >>"$LOG_FILE"
+    create_touch_file 0 "$touch_name"
+		return
 	else
 		echo -e "\nDEBUG: Default autoreconf with include for $1 failed\n" >>"$LOG_FILE"
 	fi
-  create_touch_file 0 "$touch_name"
+  return "${EXTRACT_RC}"
 }
 
 clean_ffmpeg_builds() {
@@ -1538,9 +1993,9 @@ function sortable_version { echo -e "$@" | awk -F. '{ printf("%d%03d%03d%03d\n",
 
 at_least_required_version() { # params: required actual
 	local sortable_required=$(sortable_version "$1")
-	sortable_required=$(echo -e "$sortable_required" | sed -e  's/^0*//') # remove preceding zeroes, which bash later interprets as octal or screwy
+	sortable_required=$(echo -e "$sortable_required" | gsed -e  's/^0*//') # remove preceding zeroes, which bash later interprets as octal or screwy
 	local sortable_actual=$(sortable_version "$2")
-	sortable_actual=$(echo -e "$sortable_actual" | sed -e  's/^0*//')
+	sortable_actual=$(echo -e "$sortable_actual" | gsed -e  's/^0*//')
 	[[ "$sortable_actual" -ge "$sortable_required" ]]
 }
 
@@ -1589,104 +2044,117 @@ get_missing_packages() {
 
 check_missing_packages() {
   determine_distro
-  # apt install autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake 
-  # coreutils curl cvs ed ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm
-  # p7zip-full patch pax pkg-config python3 python3-setuptools python3-venv ragel subversion unzip wget
-  # xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin sudo apt install binutils llvm lld
-  # xutils-dev python3-numpy cython3
-	# zeranoe's build scripts use wget, though we don't here...
-	local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
-'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
-'bzip2' 'python3' 'bc')
-  # autoconf-archive is just for leptonica FWIW
-	# I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
-	# that being said, if it where set I would imagine it would be set to centos... And this contition will satisfy the "Is not initially set"
-	# case because the above code will assign "redhat" all the time.
-	if [ -z "${VENDOR}" ] || [ "${VENDOR}" != "redhat" ] && [ "${VENDOR}" != "centos" ]; then
-		check_packages+=('cmake')
-  elif [ "${VENDOR}" == "redhat" ]; then
-    check_packages+=('libzstd-devel')
-  elif [ "${VENDOR}" == "canonical" ]; then
-    check_packages+=('zstd' 'cython3' 'xutils-dev' 'python3-venv' 'python3-numpy')
-  elif [ "${VENDOR}" == "macos" ]; then
-    # also needs 'python@3.10' 'python@3.12' 'python@3.14'
-    check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'gsed' 'coreutils')
-  else
-    check_packages+=('libtoolize' 'g++' 'patch' 'realpath' 'clang' 'autopoint' 'ld') # the rest of the world
-	fi
+  if ! truthy "$skip_package_check"; then
+    # apt install autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake 
+    # coreutils curl cvs ed ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm
+    # p7zip-full patch pax pkg-config python3 python3-setuptools python3-venv ragel subversion unzip wget
+    # xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin sudo apt install binutils llvm lld
+    # xutils-dev python3-numpy cython3
+    # zeranoe's build scripts use wget, though we don't here...
+    local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
+  'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
+  'bzip2' 'python3' 'bc' 'ripgrep' 'libdatrie' 'jq' 'asciidoc' 'compiler-rt' 'clang-tools-extra' 'doxygen' \
 
-  if [ "${VENDOR}" != "macos" ]; then
-    check_packages+=('makeinfo' 'glib-mkenums' 'ld.lld')
+  )
+    # autoconf-archive is just for leptonica FWIW
+    # I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
+    # that being said, if it where set I would imagine it would be set to centos... And this contition will satisfy the "Is not initially set"
+    # case because the above code will assign "redhat" all the time.
+    if [ -z "${VENDOR}" ] || [ "${VENDOR}" != "redhat" ] && [ "${VENDOR}" != "centos" ]; then
+      check_packages+=('cmake')
+    elif [ "${VENDOR}" == "redhat" ]; then
+      check_packages+=('libzstd-devel' 'alsa-lib-devel' 'gcc-gfortran' 'gcc-c++' 'gcc-toolset-14-libasan-devel' \
+'gcc-toolset-14-libubsan-devel' 'gcc-toolset-14-libtsan-devel' 'gettext-devel' 'glib2-devel' 'glibc-static' 'libstdc++-static' \
+'libzstd-devel' 'llvm-compat-libs' 'libasan' 'openssl-devel' 'perl-IPC-Cmd' 'perl-Thread-Queue' 'perl-Time-Piece' \
+'pkgconf-pkg-config' 'python3.11' 'python3.11-devel' 'python3-pip' 'SDL2-devel' 'valgrind-devel' 'libXmu-devel' \
+'xorg-x11-util-macros' 'xorg-x11-xtrans-devel' 'xorg-x11-proto-devel' 'libXext-devel' 'libXdmcp-devel' \
+'libXrender-devel' 'libXft-devel' 'libX11-devel' 'libXau-devel' 'libxcb-devel' 'libpciaccess-devel' 'zlib-devel' \
+'dbus-devel' 'libsmbclient-devel' 'ocl-icd-devel' 'wayland-devel' 'wayland-protocols-devel' 'libxkbcommon-devel' \
+'libXcursor-devel' 'libXi-devel' 'libXinerama-devel' 'libXrandr-devel' 'mesa-libGL-devel' 'mesa-libGLU-devel')
+    elif [ "${VENDOR}" == "debian" ]; then
+      check_packages+=('zstd' 'cython3' 'xutils-dev' 'python3-venv' 'python3-numpy')
+    elif [ "${VENDOR}" == "macos" ]; then
+      # also needs 'python@3.10' 'python@3.12' 'python@3.14'
+      check_packages+=('libtool' 'texinfo' 'glib' 'llvm' 'lld' 'pipx' 'autoconf-archive' 'bc' 'binutils' 'gpatch' 'gsed' 'coreutils' 'bash')
+    else
+      check_packages+=('libtoolize' 'g++' 'patch' 'realpath' 'clang' 'autopoint' 'ld') # the rest of the world
+    fi
+
+    if [ "${VENDOR}" != "macos" ]; then
+      check_packages+=('makeinfo' 'glib-mkenums' 'ld.lld')
+    fi
+    # Use hash to check if the packages exist or not. Type is a bash builtin which I'm told behaves differently between different versions of bash.
+    ! truthy "$skip_package_check" && mapfile -t missing_packages < <(get_missing_packages "${check_packages[@]}")
+
+    if [ "${VENDOR}" = "redhat" ] || [ "${VENDOR}" = "centos" ]; then
+      if [ -n "$(hash cmake 2>&1)" ] && [ -n "$(hash cmake3 2>&1)" ]; then missing_packages=('cmake' "${missing_packages[@]}"); fi
+    fi
+
+    if [[ ${#missing_packages[@]} -gt 0 ]]; then
+      clear
+      echo -e "DEBUG:" | tee -a "$LOG_FILE"
+      echo -e "Could not find the following execs (svn is actually package subversion, makeinfo is actually package texinfo if you're missing them): ${missing_packages[*]}" | tee -a "$LOG_FILE"
+      echo -e 'Install the missing packages before running this script.' | tee -a "$LOG_FILE"
+      
+      apt_pkgs='autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake coreutils curl cvs ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm p7zip-full patch pax pkg-config python3 python3-setuptools ragel subversion unzip wget xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin'
+
+      [[ ${DISTRO,,} == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
+      case "${DISTRO,,}" in
+      *almalinux*)
+        echo "AlmaLinux detected"
+        ;;
+      *ubuntu*)
+        echo -e "for ubuntu:" | tee -a "$LOG_FILE"
+        echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
+        ubuntu_ver="$(lsb_release -rs)"
+        if [ "$(sortable_version "$ubuntu_ver")" -lt "$(sortable_version "24.04")" ]; then
+          echo "Ubuntu < 24.04 not supported."
+        fi
+        if at_least_required_version "22.04" "$ubuntu_ver"; then
+          apt_pkgs="$apt_pkgs ninja-build" # needed
+        fi
+        echo -e "$ sudo $INSTALL_COMMAND install $apt_pkgs -y" | tee -a "$LOG_FILE"
+        ;;
+      *debian*)
+        echo -e "for debian:" | tee -a "$LOG_FILE"
+        echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
+        # Debian version is always encoded in the /etc/debian_version
+        # This file is deployed via the base-files package which is the essential one - deployed in all installations.
+        # See their content for individual debian releases - https://sources.debian.org/src/base-files/
+        # Stable releases contain a version number.
+        # Testing/Unstable releases contain a textual codename description (e.g. bullseye/sid)
+        #
+        deb_ver="$(cat /etc/debian_version)"
+        # Upcoming codenames taken from https://en.wikipedia.org/wiki/Debian_version_history
+        #
+        if [[ $deb_ver =~ bullseye ]]; then
+          deb_ver="11"
+        elif [[ $deb_ver =~ bookworm ]]; then
+          deb_ver="12"
+        elif [[ $deb_ver =~ trixie ]]; then
+          deb_ver="13"
+        fi
+        if at_least_required_version "10" "$deb_ver"; then
+          apt_pkgs="$apt_pkgs python3-distutils" # guess it's no longer built-in, lensfun requires it...
+        fi
+        if at_least_required_version "11" "$deb_ver"; then
+          apt_pkgs="$apt_pkgs python-is-python3" # needed
+        fi
+        apt_missing="$(apt_not_installed "$apt_pkgs")"
+        echo -e "$ sudo $INSTALL_COMMAND install $apt_missing -y" | tee -a "$LOG_FILE"
+        ;;
+      *macos*)
+        xcode-select -s /Library/Developer/CommandLineTools > >(redirect_output) 2>&1
+        xcode-select -s /Applications/Xcode.app/Contents/Developer > >(redirect_output) 2>&1
+        xcodebuild -license accept
+        ;;
+      *)
+        echo "check_missing_packages: Build platform: ${DISTRO,,} not supported. The build script may not run correctly on unsupported platforms. Please use a container with Ubuntu >= 24.04 (noble)"
+        ;;
+      esac
+      exit_message 1 "check_missing_packages: couldnt check missing packages"
+    fi
   fi
-	# Use hash to check if the packages exist or not. Type is a bash builtin which I'm told behaves differently between different versions of bash.
-	! truthy "$skip_pkg_check" && mapfile -t missing_packages < <(get_missing_packages "${check_packages[@]}")
-
-	if [ "${VENDOR}" = "redhat" ] || [ "${VENDOR}" = "centos" ]; then
-		if [ -n "$(hash cmake 2>&1)" ] && [ -n "$(hash cmake3 2>&1)" ]; then missing_packages=('cmake' "${missing_packages[@]}"); fi
-	fi
-
-	if [[ ${#missing_packages[@]} -gt 0 ]]; then
-		clear
-		echo -e "DEBUG:" | tee -a "$LOG_FILE"
-		echo -e "Could not find the following execs (svn is actually package subversion, makeinfo is actually package texinfo if you're missing them): ${missing_packages[*]}" | tee -a "$LOG_FILE"
-		echo -e 'Install the missing packages before running this script.' | tee -a "$LOG_FILE"
-		
-		apt_pkgs='autoconf-archive autoconf autogen automake autopoint bc bison bzip2 cargo clang cmake coreutils curl cvs ed flex g++ gcc gettext git gperf help2man libtool libtool-bin make meson nasm p7zip-full patch pax pkg-config python3 python3-setuptools ragel subversion unzip wget xz-utils yasm zlib1g-dev libglib2.0-dev libglib2.0-dev-bin'
-
-		[[ ${DISTRO,,} == "debian" ]] && apt_pkgs="$apt_pkgs libtool-bin ed" # extra for debian
-		case "${DISTRO,,}" in
-		ubuntu)
-			echo -e "for ubuntu:" | tee -a "$LOG_FILE"
-			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
-			ubuntu_ver="$(lsb_release -rs)"
-			if [ "$(sortable_version "$ubuntu_ver")" -lt "$(sortable_version "24.04")" ]; then
-        echo "Ubuntu < 24.04 not supported."
-      fi
-			if at_least_required_version "22.04" "$ubuntu_ver"; then
-				apt_pkgs="$apt_pkgs ninja-build" # needed
-			fi
-			echo -e "$ sudo $INSTALL_COMMAND install $apt_pkgs -y" | tee -a "$LOG_FILE"
-			;;
-		debian)
-			echo -e "for debian:" | tee -a "$LOG_FILE"
-			echo -e "$ sudo $INSTALL_COMMAND update" | tee -a "$LOG_FILE"
-			# Debian version is always encoded in the /etc/debian_version
-			# This file is deployed via the base-files package which is the essential one - deployed in all installations.
-			# See their content for individual debian releases - https://sources.debian.org/src/base-files/
-			# Stable releases contain a version number.
-			# Testing/Unstable releases contain a textual codename description (e.g. bullseye/sid)
-			#
-			deb_ver="$(cat /etc/debian_version)"
-			# Upcoming codenames taken from https://en.wikipedia.org/wiki/Debian_version_history
-			#
-			if [[ $deb_ver =~ bullseye ]]; then
-				deb_ver="11"
-			elif [[ $deb_ver =~ bookworm ]]; then
-				deb_ver="12"
-			elif [[ $deb_ver =~ trixie ]]; then
-				deb_ver="13"
-			fi
-			if at_least_required_version "10" "$deb_ver"; then
-				apt_pkgs="$apt_pkgs python3-distutils" # guess it's no longer built-in, lensfun requires it...
-			fi
-			if at_least_required_version "11" "$deb_ver"; then
-				apt_pkgs="$apt_pkgs python-is-python3" # needed
-			fi
-			apt_missing="$(apt_not_installed "$apt_pkgs")"
-			echo -e "$ sudo $INSTALL_COMMAND install $apt_missing -y" | tee -a "$LOG_FILE"
-			;;
-    macos)
-      xcode-select -s /Library/Developer/CommandLineTools > >(redirect_output) 2>&1
-      xcode-select -s /Applications/Xcode.app/Contents/Developer > >(redirect_output) 2>&1
-      xcodebuild -license
-      ;;
-		*)
-			exit_message 1 "check_missing_packages: Build platform: ${DISTRO,,} not supported. Please use a container with Ubuntu >= 24.04 (noble)"
-			;;
-		esac
-		exit_message 1 "check_missing_packages: couldnt check missing packages"
-	fi
-
 	export REQUIRED_CMAKE_VERSION="3.0.0"
 	for cmake_binary in 'cmake' 'cmake3'; do
 		# We need to check both binaries the same way because the check for installed packages will work if *only* cmake3 is installed or
@@ -1695,7 +2163,7 @@ check_missing_packages() {
 		# the version of cmake required move up to, say, 3.1.0 and the cmake3 package still only pulls in 3.0.0 flat, then the user having manually
 		# installed cmake at a higher version wouldn't be detected.
 		if hash "$cmake_binary" &>/dev/null; then
-			cmake_version="$("${cmake_binary}" --version | sed -e "s#${cmake_binary}##g" | head -n 1 | tr -cd '0-9.\n')"
+			cmake_version="$("${cmake_binary}" --version | gsed -e "s#${cmake_binary}##g" | head -n 1 | tr -cd '0-9.\n')"
 			if at_least_required_version "${REQUIRED_CMAKE_VERSION}" "${cmake_version}"; then
 				export cmake_command="${cmake_binary}"
 				break
@@ -1721,7 +2189,7 @@ check_missing_packages() {
 	# because of all the trailing lines of stuff
 	export REQUIRED_YASM_VERSION="1.2.0" # export ???
 	local yasm_binary=yasm
-	local yasm_version="$("${yasm_binary}" --version | sed -e "s#${yasm_binary}##g" | head -n 1 | tr -dc '0-9.\n')"
+	local yasm_version="$("${yasm_binary}" --version | gsed -e "s#${yasm_binary}##g" | head -n 1 | tr -dc '0-9.\n')"
 	if ! at_least_required_version "${REQUIRED_YASM_VERSION}" "${yasm_version}"; then
 		exit_message 1 "check_missing_packages: your yasm version is too old $yasm_version wanted ${REQUIRED_YASM_VERSION}"
 	fi
@@ -1733,16 +2201,9 @@ check_missing_packages() {
 	# also check missing "setup" so it's early LOL
 
 	#check if WSL
-	# check WSL for interop setting make sure its disabled
 	# check WSL for kernel version look for version 4.19.128 current as of 11/01/2020
 	if uname -a | grep -iq -- "-microsoft"; then
 		# shellcheck disable=SC2002
-		if cat /proc/sys/fs/binfmt_misc/WSLInterop 2>/dev/null | grep -q enabled; then
-			echo -e "windows WSL detected: you must first disable 'binfmt' by running this
-      sudo bash -c 'echo -e 0 > /proc/sys/fs/binfmt_misc/WSLInterop'
-      then try again" | tee -a "$LOG_FILE"
-			#exit_message 1
-		fi
 		export MINIMUM_KERNEL_VERSION="4.19.128"
 		KERNVER=$(uname -a | awk -F'[ ]' '{ print $3 }' | awk -F- '{ print $1 }')
 
@@ -1758,109 +2219,193 @@ check_missing_packages() {
 determine_distro() {
   local os_id=""
   local os_id_like=""
+  local os_name=""
+  local token=""
 
   unset VENDOR
   unset BUILD_OS
   unset BUILD_ARCH
+  unset DISTRO
   unset INSTALL_COMMAND
   unset SEARCH_COMMAND
+  unset CHECK_INSTALLED_CMD
 
-  if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    os_id="$ID"
-    os_id_like="$ID_LIKE"
-  elif [ -f /etc/lsb-release ]; then
-    . /etc/lsb-release
-    os_id="$DISTRIB_ID"
-  else
-    os_id=$(uname -s | tr '[:upper:]' '[:lower:]')
-  fi
-  export BUILD_ARCH=$(uname -m)
-  # shellcheck disable=2222,2221
-  case "${os_id}|${os_id_like}" in
-    *rhel*|*centos*|*fedora*|*rocky*|*almalinux*|*amzn*)
-      export BUILD_OS="linux"
-      export VENDOR="redhat"
-      export INSTALL_COMMAND="dnf"
-      export SEARCH_COMMAND="dnf list"
-      export CHECK_INSTALLED_CMD="rpm -q"
+  BUILD_ARCH="$(uname -m)"
+  export BUILD_ARCH
+
+  case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
+    darwin)
+      BUILD_OS="macos"
+      VENDOR="macos"
+      DISTRO="macos"
+      INSTALL_COMMAND="brew"
+      SEARCH_COMMAND="brew search"
+      CHECK_INSTALLED_CMD="brew list"
+      export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
+      return 0
       ;;
-    *ubuntu*|*debian*|*mint*|*kali*|*pop*|*raspbian*)
-      export BUILD_OS="linux"
-      export VENDOR="canonical"
-      export INSTALL_COMMAND="apt-get"
-      export SEARCH_COMMAND="apt-cache show"
-      export CHECK_INSTALLED_CMD="dpkg -s"
-      ;;
-    *arch*|*manjaro*|*endeavouros*)
-      export BUILD_OS="linux"
-      export VENDOR="arch"
-      export INSTALL_COMMAND="pacman"
-      export SEARCH_COMMAND="pacman -Ss"
-      export CHECK_INSTALLED_CMD="pacman -Q"
-      ;;
-    *alpine*)
-      export BUILD_OS="linux"
-      export VENDOR="alpine"
-      export INSTALL_COMMAND="apk"
-      export SEARCH_COMMAND="apk search"
-      export CHECK_INSTALLED_CMD="apk info -e"
-      ;;
-    *void*)
-      export BUILD_OS="linux"
-      export VENDOR="void"
-      export INSTALL_COMMAND="xbps-install"
-      export SEARCH_COMMAND="xbps-query -Rs"
-      export CHECK_INSTALLED_CMD="xbps-query" 
-      ;;
-    *gentoo*)
-      export BUILD_OS="linux"
-      export VENDOR="gentoo"
-      export INSTALL_COMMAND="emerge"
-      export SEARCH_COMMAND="emerge --search"
-      export CHECK_INSTALLED_CMD="qlist -I"
-      ;;
-    *freebsd*)
-      export BUILD_OS="linux"
-      export VENDOR="freebsd"
-      export INSTALL_COMMAND="pkg"
-      export SEARCH_COMMAND="pkg search"
-      export CHECK_INSTALLED_CMD="pkg info"
-      ;;
-    *sles*|*suse*)
-      export BUILD_OS="linux"
-      export VENDOR="sles"
-      export INSTALL_COMMAND="zypper"
-      export SEARCH_COMMAND="zypper search"
-      export CHECK_INSTALLED_CMD="rpm -q"
-      ;;
-    *nix*)
-      export BUILD_OS="linux"
-      export VENDOR="nix"
-      export INSTALL_COMMAND="nix-env"
-      export SEARCH_COMMAND="nix-env -qa"
-      export CHECK_INSTALLED_CMD="nix-env -q"
-      ;;
-    *guix*)
-      export BUILD_OS="linux"
-      export VENDOR="guix"
-      export INSTALL_COMMAND="guix"
-      export SEARCH_COMMAND="guix package -A"
-      export CHECK_INSTALLED_CMD="guix package -I"
-      ;;
-    *macos*|*darwin*)
-      export BUILD_OS="macos"
-      export VENDOR="macos"
-      export DISTRO="macos"
-      export INSTALL_COMMAND="brew"
-      export SEARCH_COMMAND="brew search"
-      export CHECK_INSTALLED_CMD="brew list"
-      ;;
-    *)
-      export VENDOR="unknown"
-      return 1
+
+    freebsd)
+      BUILD_OS="freebsd"
+      VENDOR="freebsd"
+      DISTRO="freebsd"
+      INSTALL_COMMAND="pkg"
+      SEARCH_COMMAND="pkg search"
+      CHECK_INSTALLED_CMD="pkg info"
+      export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
+      return 0
       ;;
   esac
+
+  if [ -f /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+
+    os_id="${ID:-}"
+    os_id_like="${ID_LIKE:-}"
+    os_name="${PRETTY_NAME:-${NAME:-$os_id}}"
+  elif [ -f /etc/lsb-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/lsb-release
+
+    os_id="${DISTRIB_ID:-}"
+    os_id_like="${DISTRIB_CODENAME:-}"
+    os_name="${DISTRIB_DESCRIPTION:-${DISTRIB_ID:-unknown}}"
+  else
+    os_id="$(uname -s)"
+    os_name="$os_id"
+  fi
+
+  os_id="$(printf '%s' "$os_id" | tr '[:upper:]' '[:lower:]')"
+  os_id_like="$(printf '%s' "$os_id_like" | tr '[:upper:]' '[:lower:]')"
+  DISTRO="$os_name"
+
+  for token in $os_id $os_id_like; do
+    case "$token" in
+      rhel|centos|fedora|rocky|almalinux|amzn|ol)
+        BUILD_OS="linux"
+        VENDOR="redhat"
+        INSTALL_COMMAND="dnf"
+        SEARCH_COMMAND="dnf list"
+        CHECK_INSTALLED_CMD="rpm -q"
+        ;;
+
+      ubuntu|debian|mint|kali|pop|raspbian)
+        BUILD_OS="linux"
+        VENDOR="debian"
+        INSTALL_COMMAND="apt-get"
+        SEARCH_COMMAND="apt-cache show"
+        CHECK_INSTALLED_CMD="dpkg -s"
+        ;;
+
+      arch|manjaro|endeavouros)
+        BUILD_OS="linux"
+        VENDOR="arch"
+        INSTALL_COMMAND="pacman"
+        SEARCH_COMMAND="pacman -Ss"
+        CHECK_INSTALLED_CMD="pacman -Q"
+        ;;
+
+      alpine)
+        BUILD_OS="linux"
+        VENDOR="alpine"
+        INSTALL_COMMAND="apk"
+        SEARCH_COMMAND="apk search"
+        CHECK_INSTALLED_CMD="apk info -e"
+        ;;
+
+      void)
+        BUILD_OS="linux"
+        VENDOR="void"
+        INSTALL_COMMAND="xbps-install"
+        SEARCH_COMMAND="xbps-query -Rs"
+        CHECK_INSTALLED_CMD="xbps-query -p pkgver"
+        ;;
+
+      gentoo)
+        BUILD_OS="linux"
+        VENDOR="gentoo"
+        INSTALL_COMMAND="emerge"
+        SEARCH_COMMAND="emerge --search"
+        CHECK_INSTALLED_CMD="qlist -I"
+        ;;
+
+      sles|suse|opensuse|opensuse-leap|opensuse-tumbleweed)
+        BUILD_OS="linux"
+        VENDOR="suse"
+        INSTALL_COMMAND="zypper"
+        SEARCH_COMMAND="zypper search"
+        CHECK_INSTALLED_CMD="rpm -q"
+        ;;
+
+      nix|nixos)
+        BUILD_OS="linux"
+        VENDOR="nix"
+        INSTALL_COMMAND="nix-env"
+        SEARCH_COMMAND="nix-env -qa"
+        CHECK_INSTALLED_CMD="nix-env -q"
+        ;;
+
+      guix)
+        BUILD_OS="linux"
+        VENDOR="guix"
+        INSTALL_COMMAND="guix"
+        SEARCH_COMMAND="guix package -A"
+        CHECK_INSTALLED_CMD="guix package -I"
+        ;;
+    esac
+
+    if [ -n "${VENDOR:-}" ]; then
+      export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
+      return 0
+    fi
+  done
+
+  # Fallback by package manager. Useful for derivative/minimal containers.
+  if command -v dnf >/dev/null 2>&1 || command -v rpm >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="redhat"
+    INSTALL_COMMAND="dnf"
+    SEARCH_COMMAND="dnf list"
+    CHECK_INSTALLED_CMD="rpm -q"
+  elif command -v apt-get >/dev/null 2>&1 && command -v dpkg >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="debian"
+    INSTALL_COMMAND="apt-get"
+    SEARCH_COMMAND="apt-cache show"
+    CHECK_INSTALLED_CMD="dpkg -s"
+  elif command -v pacman >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="arch"
+    INSTALL_COMMAND="pacman"
+    SEARCH_COMMAND="pacman -Ss"
+    CHECK_INSTALLED_CMD="pacman -Q"
+  elif command -v apk >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="alpine"
+    INSTALL_COMMAND="apk"
+    SEARCH_COMMAND="apk search"
+    CHECK_INSTALLED_CMD="apk info -e"
+  elif command -v zypper >/dev/null 2>&1; then
+    BUILD_OS="linux"
+    VENDOR="suse"
+    INSTALL_COMMAND="zypper"
+    SEARCH_COMMAND="zypper search"
+    CHECK_INSTALLED_CMD="rpm -q"
+  elif command -v brew >/dev/null 2>&1; then
+    BUILD_OS="macos"
+    VENDOR="macos"
+    DISTRO="macos"
+    INSTALL_COMMAND="brew"
+    SEARCH_COMMAND="brew search"
+    CHECK_INSTALLED_CMD="brew list"
+  else
+    VENDOR="unknown"
+    export VENDOR DISTRO BUILD_ARCH
+    return 1
+  fi
+
+  export BUILD_OS VENDOR DISTRO INSTALL_COMMAND SEARCH_COMMAND CHECK_INSTALLED_CMD
 }
 
 package_exists() {
@@ -2207,18 +2752,33 @@ is_current_git_ref() {
 # 1. repo_url
 # 2. to_dir
 # 3. desired_branch
+# optional: --alt=<repo_url> alternate git URL used if the primary clone fails
 do_git_checkout() {
-	local repo_url="$1"
-	local to_dir="$2"
-	if [[ -n "$3" ]]; then
-		desired_branch="$3"
-	else
-		desired_branch="master"
+	local repo_url="${1:-}"
+  shift || true
+	local to_dir="${1:-}"
+  [[ $# -gt 0 ]] && shift
+  local desired_branch="master"
+	if [[ $# -gt 0 && "$1" != --* ]]; then
+		desired_branch="$1"
+    shift
 	fi
+  local alt_repo_url=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --alt=*)
+        alt_repo_url="${1#--alt=}"
+        ;;
+      *)
+        echo "WARNING: do_git_checkout: ignoring unknown argument '$1'" >>"$LOG_FILE"
+        ;;
+    esac
+    shift
+  done
   local touch_file="$host_touch"
 	echo -e "INFO: Starting git checkout $repo_url" >>"$LOG_FILE"
 	if [[ -z $to_dir ]]; then
-		to_dir=$(basename "$repo_url" | sed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
+		to_dir=$(basename "$repo_url" | gsed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
 	fi
 	if [ -d "$to_dir" ] && is_valid_git_dir "$to_dir"; then
     echo -e "INFO: Directory already exists $to_dir." >>"$LOG_FILE"
@@ -2262,7 +2822,15 @@ do_git_checkout() {
       remove_path -rf "$to_dir"
     fi
 		echo -e "INFO: Downloading $repo_url $desired_branch into $to_dir" >>"$LOG_FILE"
-		retry_git_or_die "$repo_url" "$to_dir" "$desired_branch" || exit_message 1 "do_git_checkout: could not checkout $desired_branch from $repo_url"
+		if ! retry_git_or_die "$repo_url" "$to_dir" "$desired_branch"; then
+      if [[ -n "$alt_repo_url" ]]; then
+        echo "WARNING: do_git_checkout: could not checkout $desired_branch from $repo_url, trying alternate $alt_repo_url" >>"$LOG_FILE"
+        remove_path -rf "$to_dir.tmp"
+        retry_git_or_die "$alt_repo_url" "$to_dir" "$desired_branch" || exit_message 1 "do_git_checkout: could not checkout $desired_branch from $repo_url or alternate $alt_repo_url"
+      else
+        exit_message 1 "do_git_checkout: could not checkout $desired_branch from $repo_url"
+      fi
+    fi
     mv "$to_dir.tmp" "$to_dir" 2>>"$LOG_FILE"
 		chmod -R a+rwx "$to_dir" 2>>"$LOG_FILE"
     add_src_dir "$(validate_path "$to_dir")"
@@ -2276,7 +2844,7 @@ do_git_sparse_checkout() {
   local path="$3"
 	echo -e "INFO: Starting git checkout $repo_url" >>"$LOG_FILE"
 	if [[ -z $to_dir ]]; then
-		to_dir=$(basename "$repo_url" | sed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
+		to_dir=$(basename "$repo_url" | gsed -e  's/\.git$//; s/[?#].*$//') # http://y/abc.git -> abc
 	fi
   local touch_file="$host_touch"
   if truthy "$build_force" || [[ ! -f "${to_dir}/$host_touch" ]]; then
@@ -2381,13 +2949,13 @@ get_small_touchfile_name() { # have to call with assignment like a=$(get_small..
 	local beginning="$1"
 	local extra_stuff="$2"
 	local touch_name="${beginning}_$(echo -e -- "$extra_stuff" | /usr/bin/env md5sum)" # md5sum to make it smaller, cflags to force rebuild if changes
-	touch_name=$(echo -e "$touch_name" | sed -e  "s/ //g")                                                      # md5sum introduces spaces, remove them
+	touch_name=$(echo -e "$touch_name" | gsed -e  "s/ //g")                                                      # md5sum introduces spaces, remove them
 	echo -e "$touch_name.touch"                                                                                   # bash cruddy return system LOL
 }
 
 redirect_output() {
-	local term_width="${COLUMNS:-80}"
-  local max_length=$((term_width > 10 ? term_width - 2 : 78))
+	local term_width="${COLUMNS:-256}"
+  local max_length=$((term_width > 10 ? term_width - 2 : 254))
   while IFS= read -r line; do
     if [[ "$line" == *"<command-line>: warning:"* ]]; then
       continue
@@ -2444,8 +3012,10 @@ do_python() {
     wget https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1
     chmod +x waf
   fi
+  setup_default_python
+  local python_cmd="${PYTHON_BIN:-${PYTHON3:-python3}}"
   # shellcheck disable=SC2206,SC2128
-  configure_command=(python3 ${configure_name[*]})
+  configure_command=("$python_cmd" ${configure_name[*]})
 	local cur_dir2=$(pwd)
 	local english_name=$(basename "$cur_dir2")
   local touch_prefix="${host_name}${touch_postfix}already_python"
@@ -2458,9 +3028,9 @@ do_python() {
       reset_touch "$cur_dir2" "${touch_prefix}*.touch"
       if [[ -f $src_touch ]]; then
         echo -e "INFO: $src_touch found during do_python(). Uninstalling existing installation..." >>"$LOG_FILE"
-        { eval "python3 ./waf uninstall" > >(redirect_output) 2>&1 || true; }
+        { eval "\"$python_cmd\" ./waf uninstall" > >(redirect_output) 2>&1 || true; }
       fi
-      { eval "python3 ./waf clean" > >(redirect_output) 2>&1 || true; }
+      { eval "\"$python_cmd\" ./waf clean" > >(redirect_output) 2>&1 || true; }
     else
 		  reset_touch "$cur_dir2" "${touch_prefix}_$(basename "${configure_name[*]}")*.touch"
     fi
@@ -2512,10 +3082,12 @@ do_cargo_build() {
     echo "INFO: (Re-)do_cargo_build() because $touch_name not found with \"cargo build $extra_build_args\"." >>"$LOG_FILE"
     reset_touch "$cur_dir2" "${touch_prefix}*.touch"
     { cargo clean --release >>"$LOG_FILE" 2>&1 || true; }
+    ensure_rust_target_ready "$rust_target"
+    local cargo_cmd
+    cargo_cmd="$(cargo_command_for_target "$rust_target")"
     export RUSTFLAGS+=" -C relocation-model=pic"
-		echo -e "INFO: Running cargo build with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"cargo build --target $rust_target $extra_build_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-    rustup target add $rust_target > >(redirect_output) 2>&1
-		cargo build --target "$rust_target" $extra_build_args > >(redirect_output) 2>&1 || {
+		echo -e "INFO: Running cargo build with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cargo_cmd} build --target $rust_target $extra_build_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+		eval "${cargo_cmd} build --target \"$rust_target\" $extra_build_args" > >(redirect_output) 2>&1 || {
 			exit_message 1 "do_cargo_build: failed cargo build with $extra_build_args\n see $LOG_FILE for more details"
 		}
 		create_touch_file 0 "$touch_name"
@@ -2537,6 +3109,7 @@ do_cargo_install() {
   local touch_prefix="${host_name}${touch_postfix}already_cargo"
 	local touch_name=$(get_small_touchfile_name "${touch_prefix}_install" "cargo install $extra_install_args")
   local src_touch="$(validate_path "$host_touch")"
+  local cargo_home_dir="${CARGO_HOME:-${HOME}/.cargo}"
   [[ ! -f "$src_touch" ]] && echo -e "INFO: $src_touch not found during do_cargo_install()" >>"$LOG_FILE"
 	if truthy "$build_force" || [[ ! -f "$src_touch" ]]; then
     echo -e "INFO: Force requested in do_cargo_install(): build_force: $build_force" >>"$LOG_FILE"
@@ -2545,10 +3118,21 @@ do_cargo_install() {
 	if [ ! -f "$touch_name" ]; then
     echo "INFO: (Re-)do_cargo_install() because $touch_name not found with \"cargo install $extra_install_args\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_install"*
+    ensure_rust_target_ready "$rust_target"
+    if isapple; then
+      apply_apple_homebrew_environment
+    fi
+    prepend_path_once "${cargo_home_dir}/bin"
+    if ! ensure_cargo_cinstall_available; then
+      echo -e "INFO: cargo-cinstall not found. Installing cargo-c..." >>"$LOG_FILE"
+      cargo install --locked cargo-c > >(redirect_output) 2>&1 || exit_message 1 "do_cargo_install: failed to install cargo-c"
+    fi
+    local cargo_cmd
+    cargo_cmd="$(cargo_command_for_target "$rust_target")"
     export RUSTFLAGS+=" -C relocation-model=pic"
 		echo -e "INFO: Running cargo install cargo-c" >>"$LOG_FILE"
-    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"cargo cinstall --prefix=$dependency_install_prefix --target $rust_target $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-    cargo cinstall --prefix="$dependency_install_prefix" --target "$rust_target" $extra_install_args > >(redirect_output) 2>&1 || {
+    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cargo_cmd} cinstall --prefix=$dependency_install_prefix --target $rust_target $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+    eval "${cargo_cmd} cinstall --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args" > >(redirect_output) 2>&1 || {
 			exit_message 1 "do_cargo_install: failed cargo cinstall with $extra_install_args\n see $LOG_FILE for more details"
 		}
 		create_touch_file 0 "$touch_name"
@@ -2588,9 +3172,11 @@ needs_autoreconf() {
     if [ -f "$src_dir/ltmain.sh" ]; then
         # ltmain.sh is the most reliable source for the version
         src_ver=$(grep -E '^VERSION=' "$src_dir/ltmain.sh" | cut -d= -f2 | tr -d '"')
+    elif [ -f "$src_dir/build-aux/ltmain.sh" ]; then
+        src_ver=$(grep -E '^VERSION=' "$src_dir/build-aux/ltmain.sh" | cut -d= -f2 | tr -d '"')
     elif [ -f "$src_dir/aclocal.m4" ]; then
         # Fallback to aclocal.m4 with a more flexible search
-        src_ver=$(grep -E "LT_PACKAGE_VERSION|macro_version" "$src_dir/aclocal.m4" | sed -e 's/.*([2-9]\.[0-9]+\.[0-9]+).*/\1/' | head -n1)
+        src_ver=$(grep -E "LT_PACKAGE_VERSION|macro_version" "$src_dir/aclocal.m4" | gsed -e 's/.*([2-9]\.[0-9]+\.[0-9]+).*/\1/' | head -n1)
     fi
 
     # 3. If we can't find a version, it's safer to autoreconf than to fail
@@ -2608,15 +3194,73 @@ needs_autoreconf() {
     return 1
 }
 
+needs_libtoolize() {
+    local src_dir="${1:-"$(pwd)"}"
+    local sys_ver
+    sys_ver=$("$LIBTOOLIZE" --version 2>/dev/null | head -n1 | awk '{print $NF}')
+
+    local touch_prefix="${host_name}${touch_postfix}already"
+    local touch_name
+    touch_name=$(get_small_touchfile_name "${touch_prefix}_libtoolize" "libtoolize: $sys_ver")
+
+    echo "INFO: Checking if libtoolize is needed..."
+    if [[ -f "$touch_name" ]]; then
+      echo "INFO: libtoolize touch file found in directory. Skipping libtoolize."
+      return 1
+    fi
+
+    if [[ ! -f "$src_dir/config.rpath" && ! -f "$src_dir/build-aux/config.rpath" && ! -f "$src_dir/../build-aux/config.rpath" && ! -f "$src_dir/../../build-aux/config.rpath" ]] || \
+      [[ ! -f "$src_dir/ltmain.sh" && ! -f "$src_dir/build-aux/ltmain.sh" && ! -f "$src_dir/../build-aux/ltmain.sh" && ! -f "$src_dir/../../build-aux/ltmain.sh" ]] || \
+      [[ ! -f "$src_dir/config.guess" && ! -f "$src_dir/build-aux/config.guess" && ! -f "$src_dir/../build-aux/config.guess" && ! -f "$src_dir/../../build-aux/config.guess" ]] || \
+      [[ ! -f "$src_dir/config.sub" && ! -f "$src_dir/build-aux/config.sub" && ! -f "$src_dir/../build-aux/config.sub" && ! -f "$src_dir/../../build-aux/config.sub" ]] || \
+      [[ ! -f "$src_dir/install-sh" && ! -f "$src_dir/build-aux/install-sh" && ! -f "$src_dir/../build-aux/install-sh" && ! -f "$src_dir/../../build-aux/install-sh" ]]; then
+      echo "INFO: libtoolize is needed because libtool build-aux files are missing." >>"$LOG_FILE"
+      return 0
+    fi
+
+    echo "INFO: libtoolize is not needed." >>"$LOG_FILE"
+    return 1
+}
+
+needs_automake_missing() {
+    local src_dir="${1:-"$(pwd)"}"
+    local auto_ver
+    auto_ver=$(automake --version 2>/dev/null | head -n1 | awk '{print $NF}')
+
+    local touch_prefix="${host_name}${touch_postfix}already"
+    local touch_name
+    touch_name=$(get_small_touchfile_name "${touch_prefix}_automake_missing" "automake: $auto_ver")
+
+    echo "INFO: Checking if automake --add-missing is needed..."
+    if [[ -f "$touch_name" ]]; then
+      echo "INFO: automake --add-missing touch file found in directory. Skipping automake."
+      return 1
+    fi
+
+    if [[ ! -f "$src_dir/Makefile.am" ]]; then
+      echo "INFO: automake --add-missing is not needed because Makefile.am is missing." >>"$LOG_FILE"
+      return 1
+    fi
+
+    if [[ ! -f "$src_dir/Makefile.in" && ! -f "$src_dir/Makefile" ]] || \
+      [[ ! -f "$src_dir/compile" && ! -f "$src_dir/build-aux/compile" && ! -f "$src_dir/../build-aux/compile" && ! -f "$src_dir/../../build-aux/compile" ]] || \
+      [[ ! -f "$src_dir/missing" && ! -f "$src_dir/build-aux/missing" && ! -f "$src_dir/../build-aux/missing" && ! -f "$src_dir/../../build-aux/missing" ]] || \
+      [[ ! -f "$src_dir/depcomp" && ! -f "$src_dir/build-aux/depcomp" && ! -f "$src_dir/../build-aux/depcomp" && ! -f "$src_dir/../../build-aux/depcomp" ]]; then
+      echo "INFO: automake --add-missing is needed because automake generated files are missing." >>"$LOG_FILE"
+      return 0
+    fi
+
+    echo "INFO: automake --add-missing is not needed." >>"$LOG_FILE"
+    return 1
+}
+
 get_config_sub() {
   local dest="$1"
   if [[ -d "$dest" ]]; then
-    curl -L -o "$dest/config.sub" 'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' > >(redirect_output) 2>&1 || {
-      if ! is_valid_git_dir "$src_dir/config"; then
-        do_git_checkout "$src_dir/config"
-      fi
-      copy_path "$src_dir/config/config.sub" "$dest/config.sub"
-    }
+    fetch_config_helper "$dest" "config.sub" \
+      'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' \
+      'https://gitlab.com/cinc-project/upstream/config/-/raw/master/config.sub?ref_type=heads'
+    chmod +x "$dest/config.sub"
   else
     exit_message 1 "DEBUG: Destination directory $dest does not exist"
   fi
@@ -2625,15 +3269,68 @@ get_config_sub() {
 get_config_guess() {
   local dest="$1"
   if [[ -d "$dest" ]]; then
-    curl -L -o "$dest/config.guess" 'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' > >(redirect_output) 2>&1 || {
-      if ! is_valid_git_dir "$src_dir/config"; then
-        do_git_checkout "$src_dir/config"
-      fi
-      copy_path "$src_dir/config/config.guess" "$dest/config.guess"
-    }
+    fetch_config_helper "$dest" "config.guess" \
+      'https://gitweb.git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' \
+      'https://gitlab.com/cinc-project/upstream/config/-/raw/master/config.guess?ref_type=heads'
+    chmod +x "$dest/config.guess"
   else
     exit_message 1 "DEBUG: Destination directory $dest does not exist"
   fi
+}
+
+is_valid_config_script() {
+  local file_path="$1"
+  [[ -s "$file_path" ]] || return 1
+  head -n 1 "$file_path" | grep -Eq '^#![[:space:]]*/bin/(sh|bash)' || return 1
+  grep -q "timestamp='" "$file_path" || return 1
+}
+
+is_valid_shell_script() {
+  local file_path="$1"
+  [[ -s "$file_path" ]] || return 1
+  head -n 1 "$file_path" | grep -Eq '^#![[:space:]]*/bin/(sh|bash)' || return 1
+}
+
+download_config_script() {
+  local url="$1"
+  local output_path="$2"
+  local validation_mode="${3:-config}"
+  local tmp_path="${output_path}.tmp"
+
+  rm -f "$tmp_path"
+  curl --connect-timeout 10 --max-time 3 -fL -o "$tmp_path" "$url" > >(redirect_output) 2>&1 || {
+    rm -f "$tmp_path"
+    return 1
+  }
+
+  if [[ "$validation_mode" == "shell" ]]; then
+    is_valid_shell_script "$tmp_path"
+  else
+    is_valid_config_script "$tmp_path"
+  fi || {
+    echo "WARNING: download_config_script: invalid response for $url" >>"$LOG_FILE"
+    rm -f "$tmp_path"
+    return 1
+  }
+
+  mv "$tmp_path" "$output_path"
+}
+
+fetch_config_helper() {
+  local dest="$1"
+  local config_name="$2"
+  local primary_url="$3"
+  local mirror_url="$4"
+  local output_path="$dest/$config_name"
+
+  download_config_script "$primary_url" "$output_path" || \
+  download_config_script "$mirror_url" "$output_path" || {
+    if ! is_valid_git_dir "$src_dir/config"; then
+      do_git_checkout "$src_dir/config"
+    fi
+    copy_path "$src_dir/config/$config_name" "$output_path"
+    is_valid_config_script "$output_path" || exit_message 1 "DEBUG: downloaded fallback $config_name is invalid at $output_path"
+  }
 }
 
 # 1. configure_options
@@ -2655,6 +3352,8 @@ do_configure() {
   if [[ $(uname -s | tr '[:upper:]' '[:lower:]') == "darwin" ]]; then
       echo "INFO: Setting up libtoolize for macOS" >> "$LOG_FILE"
       LIBTOOLIZE="glibtoolize"
+  else
+      LIBTOOLIZE="libtoolize"
   fi
 	local cur_dir2=$(pwd)
 	local english_name=$(basename "$cur_dir2")
@@ -2683,35 +3382,46 @@ do_configure() {
 		if [[ ! -f $configure_name && -f bootstrap.sh ]]; then # fftw wants to only run this if no configure :|
 			(./bootstrap.sh) > >(redirect_output) 2>&1
 		fi
-    if [[ ! -f config.rpath && ! -f /build-aux/config.rpath ]] || \
-      [[ ! -f ltmain.sh && ! -f /build-aux/ltmain.sh ]] || \
-      [[ ! -f config.guess && ! -f /build-aux/config.guess ]] || \
-      [[ ! -f config.sub && ! -f /build-aux/config.sub ]] || \
-      [[ ! -f install-sh && ! -f /build-aux/install-sh ]]; then
-      if [[ ! -f "no.autoreconf" ]]; then
-        echo "INFO: Required build-aux files not found. running libtoolize..." >>"$LOG_FILE"
-        "$LIBTOOLIZE" --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize"
+    if [[ -f $configure_name && ! -f configure.ac ]]; then
+      echo "INFO: $configure_name exists and configure.ac is missing. Skipping autotools regeneration for $english_name." >>"$LOG_FILE"
+    else
+      if [[ -f autogen.sh && ! -f "no.autogen" && ! -f $configure_name ]]; then
+        echo "INFO: autogen.sh found. Running autogen.sh..."
+        do_autogen
       fi
-    fi
-    if [[ ! -f Makefile.in && ! -f Makefile && -f Makefile.am ]]; then
-      echo -e "INFO: Makefile and Makefile.in not found. running autoreconf and automake..." >>"$LOG_FILE"
-      automake --force-missing --add-missing > >(redirect_output) 2>&1
-    fi
-    if [[ ! -f $configure_name && -f configure.ac ]] || needs_autoreconf > >(redirect_output) 2>&1 ; then
-      echo -e "INFO: Configure not found. Running autoreconf with existing configure.ac..." >>"$LOG_FILE"
-			autoreconf_library # a handful of them require this to create ./configure :|
-    fi
-		if [[ ! -f $configure_name ]]; then
       if [[ -f gitsub.sh ]]; then
         echo "INFO: gitsub.sh found. Running gitsub.sh..."
         (./gitsub.sh pull) > >(redirect_output) 2>&1
       fi
-      if [ -f autogen.sh ]; then
-        echo "INFO: autogen.sh found. Running autogen.sh..."
-			  (./autogen.sh) > >(redirect_output) 2>&1 # some need this to create ./configure :|
-		  fi
-		fi
-    if [[ ! -f config.h.in && -f configure.ac ]]; then
+      if [[ -f "no.autoreconf" ]]; then
+        echo "INFO: no.autoreconf found. Skipping autotools regeneration for $english_name." >>"$LOG_FILE"
+      else
+        if [[ ! -f $configure_name && -f configure.ac ]] || needs_autoreconf > >(redirect_output) 2>&1 ; then
+          echo -e "INFO: Configure not found. Running autoreconf with existing configure.ac..." >>"$LOG_FILE"
+			    autoreconf_library || exit_message 1 "Failed to autoreconf $english_name"
+        fi
+        if needs_libtoolize "$cur_dir2" > >(redirect_output) 2>&1; then
+          echo "INFO: Required libtool build-aux files not found. running libtoolize..." >>"$LOG_FILE"
+          "$LIBTOOLIZE" --force --copy > >(redirect_output) 2>&1 || exit_message 1 "Failed to run libtoolize for $english_name"
+          local libtoolize_ver
+          libtoolize_ver=$("$LIBTOOLIZE" --version 2>/dev/null | head -n1 | awk '{print $NF}')
+          create_touch_file 0 "$(get_small_touchfile_name "${touch_prefix}_libtoolize" "libtoolize: $libtoolize_ver")"
+        fi
+        if needs_automake_missing "$cur_dir2" > >(redirect_output) 2>&1; then
+          echo -e "INFO: Makefile/build-aux files not found. running automake..." >>"$LOG_FILE"
+          if ! automake --copy --force-missing --add-missing > >(redirect_output) 2>&1; then
+            if needs_automake_missing "$cur_dir2" > >(redirect_output) 2>&1; then
+              exit_message 1 "Failed to run automake for $english_name"
+            fi
+            echo "WARN: automake returned non-zero for $english_name, but required missing files were installed. Continuing." >>"$LOG_FILE"
+          fi
+          local automake_ver
+          automake_ver=$(automake --version 2>/dev/null | head -n1 | awk '{print $NF}')
+          create_touch_file 0 "$(get_small_touchfile_name "${touch_prefix}_automake_missing" "automake: $automake_ver")"
+        fi
+      fi
+    fi
+    if [[ ! -f "no.autoreconf" && ! -f config.h.in && -f configure.ac ]]; then
       echo -e "INFO: config.h.in not found. Running autoheader..." >>"$LOG_FILE"
       autoheader > >(redirect_output) 2>&1
     fi
@@ -2758,6 +3468,8 @@ generic_configure() {
 # 2. touch_postfix
 # shellcheck disable=SC2086
 do_autogen() {
+  [[ -f "no.autogen" ]] && return 0
+  [[ ! -f "autogen.sh" ]] && return 0
   local extra_build_args="$1"
 	local cur_dir2=$(pwd)
   [[ -n $2 ]] && touch_postfix="_${2}_" || touch_postfix="_"
@@ -2777,6 +3489,7 @@ do_autogen() {
 			exit_message 1 "do_autogen: failed ./autogen.sh with $extra_build_args\n see $LOG_FILE for more details"
     }
 		create_touch_file 0 "$touch_name"
+    touch "no.autoreconf"
     add_src_dir "$(pwd)"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files
 		echo -e "INFO: Done with ./autogen.sh" >>"$LOG_FILE"
@@ -2888,6 +3601,7 @@ do_make_install() {
 	if [ ! -f "$touch_name" ]; then
     echo "INFO: (Re-)do_make_install() because $touch_name not found with \"make install $make_install_options\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_install"*
+    local make_install_jobs="${MAKE_INSTALL_JOBS:-$(get_concurrent_proc)}"
     if truthy "$build_cross_compile"; then
       [[ "$extra_make_options" != *"CC="* ]] && extra_make_options+=" CC=$CC"
       [[ "$extra_make_options" != *"AR="* ]] && extra_make_options+=" AR=$AR"
@@ -2900,8 +3614,8 @@ do_make_install() {
       [[ "$extra_make_options" != *"RC="* ]] && extra_make_options+=" RC=$RC"
       [[ "$extra_make_options" != *"CROSS_COMPILE="* ]] && extra_make_options+=" CROSS_COMPILE=$CROSS_COMPILE"
     fi
-		echo -e "INFO: do_make_install() with:\n  DIR=$(pwd)\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  nice running: \"make $make_install_options\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-		eval "nice make -j$(get_concurrent_proc) $make_install_options" > >(redirect_output) 2>&1 || exit_message 1 "do_make_install: could not make with $make_install_options"
+		echo -e "INFO: do_make_install() with:\n  DIR=$(pwd)\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  nice running: \"make -j$make_install_jobs $make_install_options\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+		eval "nice make -j$make_install_jobs $make_install_options" > >(redirect_output) 2>&1 || exit_message 1 "do_make_install: could not make with $make_install_options"
 		create_touch_file 0 "$touch_name"
     add_src_dir "$(pwd)"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files
@@ -2944,6 +3658,7 @@ do_cmake() {
 	local source_dir="$2"
 	local touch_postfix=""
   local cur_dir2=$(pwd)
+  local cmake_command="${cmake_command:-cmake}"
 	[[ -n $3 ]] && touch_postfix="_${3}_" || touch_postfix="_"
 	if [[ -z $source_dir ]]; then
 		source_dir="$cur_dir2"
@@ -2975,7 +3690,7 @@ do_cmake() {
 		command+=" $extra_args"
 		echo -e "INFO: do_cmake() nice running:\n  DIR=$cur_dir2\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cmake_command} -G\"Unix Makefiles\" $command\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
 		# shellcheck disable=SC2086
-		eval "nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command" > >(redirect_output) 2>&1 || exit_message 1 "do_cmake: could not run nice: \"${cmake_command} -G\"Unix Makefiles\" $command\""
+		eval "nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command" > >(redirect_output) 2>&1 || exit_message 1 "do_cmake: could not run nice: \"nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command\""
 		create_touch_file 0 "$touch_name"
     add_src_dir "$(pwd)" "$source_dir"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files
@@ -3022,6 +3737,11 @@ generic_cmake() {
   [[ "$extra_args" != *"-DCMAKE_OSX_ARCHITECTURES"* ]] && extra_args+=" -DCMAKE_OSX_ARCHITECTURES=$host_arch"
   [[ "$extra_args" != *"-DCMAKE_OSX_DEPLOYMENT_TARGET"* ]] && extra_args+=" -DCMAKE_OSX_DEPLOYMENT_TARGET=$MIN_IOS_VERSION"
   [[ "$extra_args" != *"-DCMAKE_OSX_SYSROOT"* ]] && extra_args+=" -DCMAKE_OSX_SYSROOT=$(xcrun --sdk "$toolchain_sys" --show-sdk-path)"
+  elif istvos; then
+  [[ "$extra_args" != *"-DCMAKE_SYSTEM_NAME"* ]] && extra_args+=" -DCMAKE_SYSTEM_NAME=tvOS"
+  [[ "$extra_args" != *"-DCMAKE_OSX_ARCHITECTURES"* ]] && extra_args+=" -DCMAKE_OSX_ARCHITECTURES=$host_arch"
+  [[ "$extra_args" != *"-DCMAKE_OSX_DEPLOYMENT_TARGET"* ]] && extra_args+=" -DCMAKE_OSX_DEPLOYMENT_TARGET=$MIN_TVOS_VERSION"
+  [[ "$extra_args" != *"-DCMAKE_OSX_SYSROOT"* ]] && extra_args+=" -DCMAKE_OSX_SYSROOT=$(xcrun --sdk "$toolchain_sys" --show-sdk-path)"
   else
   [[ "$extra_args" != *"-DCMAKE_SYSTEM_NAME"* ]] && extra_args+=" -DCMAKE_SYSTEM_NAME=${host_platform^}"
   fi
@@ -3060,6 +3780,7 @@ do_cmake_and_install() {
 }
 
 activate_meson() {
+  setup_default_python
 	echo -e "INFO: Activating meson" >>"$LOG_FILE"
 	change_dir "$src_dir" # requires python3-full
 	if [[ ! -d "$src_dir/meson" ]]; then
@@ -3098,8 +3819,10 @@ do_meson() {
     configure_name=$($input_configure)
     command_name="${configure_name[*]}"
 	fi
+  setup_default_python
+  local meson_python="${PYTHON_BIN:-${PYTHON3:-python3}}"
 	if [[ -e "$local_meson" ]]; then
-    configure_command=(python3 "$local_meson" "${configure_name[*]}")
+    configure_command=("$meson_python" "$local_meson" "${configure_name[*]}")
 	else
 		configure_command=(meson)
 	fi
@@ -3118,8 +3841,8 @@ do_meson() {
     fi
     [[ -f ninja.build ]] && { nice ninja uninstall > >(redirect_output) 2>&1 || true; }
     [[ -f Makefile ]] && { nice make uninstall > >(redirect_output) 2>&1 || true; }
-    { python3 "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
-    { python3 "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
+    { "$meson_python" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
+    { "$meson_python" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
     [[ "$command_name" == "setup_build" ]] && [[ -d "$(pwd)/build" ]] && { remove_path -rf "build" || true; }
 	fi
 	if [ ! -f "$touch_name" ]; then
@@ -3128,8 +3851,8 @@ do_meson() {
       reset_touch "$cur_dir2" "${touch_prefix}*.touch"
       [[ -f ninja.build ]] && { nice ninja uninstall > >(redirect_output) 2>&1 || true; }
       [[ -f Makefile ]] && { nice make uninstall > >(redirect_output) 2>&1 || true; }
-      { python3 "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
-      { python3 "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
+      { "$meson_python" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
+      { "$meson_python" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
       [[ "$command_name" == "setup_build" ]] && [[ -d "build" ]] && { remove_path -rf "build" || true; }
 			echo -e "INFO: Adding --reconfigure to meson config because there is an existing previous build" >>"$LOG_FILE"
 			configure_options+=" --reconfigure"
@@ -3258,11 +3981,26 @@ validate_path() {
   echo "$abs_path"
 }
 # takes a url, output_dir as params, output_dir optional
+# optional: --alt=<url> alternate download URL used if the primary URL fails
 download_and_unpack_file() {
     local url="$1"
     local dest_folder="$(validate_path "$2")"
+    local alt_url=""
+    shift 2
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --alt=*)
+                alt_url="${1#--alt=}"
+                ;;
+            *)
+                echo "WARNING: download_and_unpack_file: ignoring unknown argument '$1'" >>"$LOG_FILE"
+                ;;
+        esac
+        shift
+    done
+    local download_url="$url"
     local filename
-    filename=$(basename "$url")
+    filename=$(basename "$download_url")
     if [[ -n "$dest_folder" ]]; then
         if [ ! -d "$dest_folder" ]; then
             create_dir "$dest_folder" || exit_message 1 "download_and_unpack_file: could not create dir $dest_folder"
@@ -3283,9 +4021,22 @@ download_and_unpack_file() {
         if [[ -f "$filename" ]]; then
             rm -f "$filename"
         fi
-        curl -v -4 "$url" --retry 5 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
-            exit_message 1 "download_and_unpack_file: unable to download $url"
-        }
+        if ! curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
+            if [[ -n "$alt_url" ]]; then
+                echo "WARNING: download_and_unpack_file: unable to download $url, trying alternate $alt_url" >>"$LOG_FILE"
+                remove_path -f "$filename"
+                download_url="$alt_url"
+                filename=$(basename "$download_url")
+                if [[ -f "$filename" ]]; then
+                    rm -f "$filename"
+                fi
+                curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
+                    exit_message 1 "download_and_unpack_file: unable to download $url or alternate $alt_url"
+                }
+            else
+                exit_message 1 "download_and_unpack_file: unable to download $url"
+            fi
+        fi
         echo "INFO: Unzipping $filename inside $dest_folder ..." >>"$LOG_FILE"
         if [[ "${filename,,}" =~ \.(zip|whl|nupkg)$ ]]; then
             extract_zip "$filename" "$dest_folder" > >(redirect_output) 2>&1
@@ -3305,7 +4056,7 @@ download_and_unpack_file() {
 }
 extract_tar() {
     local archive="$1"
-    local dest_dir=${2:-"$(basename "$archive" | sed -e  s/\.tar\.*//)"}
+    local dest_dir=${2:-"$(basename "$archive" | gsed -e  s/\.tar\.*//)"}
     
     # Get unique top-level items using mapfile
     local top_items
@@ -3321,7 +4072,7 @@ extract_tar() {
 }
 extract_zip() {
     local archive="$1"
-    local dest_dir=${2:-"$(basename "$archive" | sed -e  s/\.zip//)"}
+    local dest_dir=${2:-"$(basename "$archive" | gsed -e  s/\.zip//)"}
     
     # Get unique top-level items using mapfile
     local top_items
@@ -3348,7 +4099,7 @@ extract_zip() {
 # 3. extra_configure_options
 generic_download_and_make_and_install() {
 	local url="$1"
-	local to_dir=${2:-"$(basename "$url" | sed -e  s/\.tar\.*//)"}
+	local to_dir=${2:-"$(basename "$url" | gsed -e  s/\.tar\.*//)"}
 	local extra_configure_options="$3"
 	change_dir "$src_dir"
   download_and_unpack_file "$url" "$to_dir"
@@ -3378,7 +4129,7 @@ generic_configure_make_install() {
 # 3. version
 do_git_checkout_and_make_install() {
 	local url=$1
-	local git_checkout_name=${2:-"$(basename "$url" | sed -e  s/\.git//)"} # http://y/abc.git -> abc
+	local git_checkout_name=${2:-"$(basename "$url" | gsed -e  s/\.git//)"} # http://y/abc.git -> abc
   local git_version="$3"
   change_dir "$src_dir"
 	do_git_checkout "$url" "$git_checkout_name" "$git_version"
@@ -3448,30 +4199,35 @@ generate_pkg_config() {
 
     local libs_list=()
     local found_files
+    _pkg_config_lib_flag() {
+        local name
+        name=$(basename "$1")
+        name="${name#lib}"
+        name=$(printf '%s\n' "$name" | gsed -E 's/\.(dll\.a|so|a|dll|dylib)(\.[0-9.]+)?$//')
+        [[ -n "$name" ]] && printf '%s\n' "-l$name"
+    }
 
     if [[ -n "$EXTRA_LIBS" ]]; then
-      while IFS= read -r lib_name; do
-          if [[ "$lib_name" == -l* ]]; then
-              libs_list+=("${lib_name//lib/}")
-          else
-              libs_list+=("-l${lib_name//lib/}")
-          fi
+      while IFS= read -r libs_line; do
+          local extra_lib_tokens=()
+          read -r -a extra_lib_tokens <<< "$libs_line"
+          for lib_name in "${extra_lib_tokens[@]}"; do
+              [[ -z "$lib_name" ]] && continue
+              if [[ "$lib_name" == -l* ]]; then
+                  libs_list+=("$lib_name")
+              else
+                  libs_list+=("$(_pkg_config_lib_flag "$lib_name")")
+              fi
+          done
       done <<< "$EXTRA_LIBS"
     fi
 
     if [[ -n "$TARGET_SCAN_DIR" ]]; then
       # Use process substitution to avoid subshell variable scope issues
       while IFS= read -r -d '' file_path; do
-          local filename
-          filename=$(basename "$file_path")
-          local name=$(basename "$file_path")
-          name="${name#lib}"
-          name=$(echo "$name" | sed -e 's/\.(dll\.a|so|a|dll|dylib)(\.[0-9.]+)?$//')
-          # Avoid duplicates in the list
-          # shellcheck disable=2076
-          if [[ ! " ${libs_list[*]} " =~ " ${name} " ]]; then
-              libs_list+=("-l${name//lib/}")
-          fi
+          local lib_flag
+          lib_flag=$(_pkg_config_lib_flag "$file_path")
+          [[ -n "$lib_flag" ]] && libs_list+=("$lib_flag")
       done < <(find "$TARGET_SCAN_DIR" -maxdepth 1 -type f \( -name "*.dll*" -o -name "*.dll.a*" -o -name "*.a*" -o -name "*.so*" -o -name "*.dylib" \) -print0)
     fi
     [[ ! -d "$(dirname "$OUTPUT_FILE")" ]] && create_dir "$(dirname "$OUTPUT_FILE")"
@@ -3479,7 +4235,9 @@ generate_pkg_config() {
     # Generate .pc File Content
     # ---------------------------------------------------------
     # de-duplicate libs_list
-    libs_list=("$(echo "${libs_list[*]}" | tr " " "\n" | sort -u)")
+    if [[ ${#libs_list[@]} -gt 0 ]]; then
+        mapfile -t libs_list < <(printf '%s\n' "${libs_list[@]}" | sort -u)
+    fi
     cat > "$OUTPUT_FILE" <<EOF
 prefix=${INSTALL_PREFIX}
 exec_prefix=\${prefix}
@@ -3669,6 +4427,8 @@ run_valid_build_functions() {
 	# Create a clean array without empty elements
 	local steps=0
 	local current_step=0
+  local last_built_step=""
+  local workflow_requested_step="${WORKFLOW_REQUESTED_STEP:-${build_only:-${start_from:-}}}"
   create_dir "$dependency_install_prefix/{lib/pkgconfig,include,bin}"
   # Count non-empty steps first
   for step_name in "${OPTIMIZED_BUILD_STEPS[@]}"; do
@@ -3676,7 +4436,19 @@ run_valid_build_functions() {
       ((steps++))
     fi
   done
-
+  if [[ -n "$start_from" ]]; then
+    # check if start_from is in OPTIMIZED_BUILD_STEPS
+    local found=false
+    for step_name in "${OPTIMIZED_BUILD_STEPS[@]}"; do
+      if [[ -n "${step_name// /}" ]] && [[ "$step_name" == "$start_from" ]]; then
+        found=true
+        break
+      fi
+    done
+    if [[ "$found" == false ]]; then
+      exit_message 1 "Invalid start_from value: $start_from. Must be one of: ${OPTIMIZED_BUILD_STEPS[*]}"
+    fi
+  fi
   # If start_from is empty, start from beginning
   if [[ -z "$start_from" ]]; then
     skip_mode=false
@@ -3701,9 +4473,17 @@ run_valid_build_functions() {
     fi
     ((current_step++))
     print_progress "$current_step" "$steps" "$step_name"
-    run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step.\n See $LOG_FILE for details"
+    run_valid_function "$step_name" 2>&1 || exit_message 1 "There was an error running $step_name.\n See ${LOG_FILE} for details"
+    last_built_step="$step_name"
   done
   printf "\r\033[KAll dependencies built successfully!\n"
+  change_dir "$BASEDIR"
+  # should only upload deps when running in "multi-step with requested build_only step and its dependencies" mode, ideally only from workflow-runner.sh, but optionally can be run from local runner.
+  # upload script uploads everything in prebuilt/${platform}-${arch}/libraries directory so it packages the final step as well as its dependencies into a neat self contained package.
+  if truthy "$upload_deps" && [[ -n "$last_built_step" ]] && [[ "$last_built_step" == "$build_only" ]]; then
+    echo "INFO: Uploading dependencies for $host_platform-$platform_arch-$last_built_step" | tee -a "${LOG_FILE}"
+    sudo -E "$SCRIPTDIR/upload-deps-release.sh" "$host_platform" "$platform_arch" "${last_built_step#build_}" | tee -a "${LOG_FILE}"
+  fi
   static_link_check "$install_pkgconfig_dir"
   reset_ldflags
 }
@@ -3749,44 +4529,74 @@ run_valid_function() {
   local arg=()
   arg+=("$@")
   reset_allflags
-  if ! ismacos && ! isios; then
+  local workflow_requested_step="${WORKFLOW_REQUESTED_STEP:-${build_only}}"
+  if ! isapple && ! { islinux && [[ "$host_arch" == "aarch64" ]]; }; then
     export LDFLAGS=" $LDFLAGS -static-libstdc++ "
   fi
   iswindows && export LDFLAGS=" -static $LDFLAGS"
+  reset_and_exit() {
+    local return_code=$1
+    set_run_state
+    reset_allflags
+    return "$return_code"
+  }
+  # Download a prebuilt artifact for this step when this run is not forcing a
+  # rebuild. A successful self-artifact download satisfies the step and must not
+  # fall through to the local build function.
+  if ! truthy "$build_force"; then
+    sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" \
+      "$SCRIPTDIR/workflow-get-deps.sh" \
+      "$host_platform" "$platform_arch" "$step" --self 2>&1 | tee -a "$LOG_FILE"
+    result=${PIPESTATUS[0]}
+    if [[ $result -eq 0 ]]; then
+      echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
+      set_run_state "$step"
+      mark_as_built "$step"
+      reset_and_exit 0
+      return $?
+    else
+      echo "INFO: No reusable release artifact for $step (workflow-get-deps exit ${result}). Building locally." >>"${LOG_FILE}"
+    fi
+  fi
 	if [[ -n "$step" ]]; then
     if [[ "$step" == build_* ]] && check_if_built "$step"; then
       echo "INFO: $step already built. Skipping." >>"$LOG_FILE"
-      return 0
+      reset_and_exit 0
+      return $?
     fi
 		change_dir "$src_dir"
 		if declare -F "$step" >/dev/null; then
 			echo -e "INFO: --- Executing step: $step ---" >>"$LOG_FILE"
       set_run_state "$step"
-			"$step" "${arg[@]}" 2>&1 || exit_message 1 "There was an error running $step.\n See $LOG_FILE for details"
+			"$step" "${arg[@]}" 2>&1
       local status=$?
 			if [[ $status -eq 0 ]]; then
          echo -e "INFO: --- Finished executing step: $step ---" >>"$LOG_FILE"
          # 2. OPTIMIZATION: Mark as built on success
          mark_as_built "$step"
-         return 0
+         reset_and_exit 0
+         return $?
       else
          echo -e "ERROR: Step $step failed with status $status" | tee -a "$LOG_FILE"
-         return "$status"
+         reset_and_exit "$status"
+         return $?
       fi
 		else
 			echo -e "WARNING: Function '$step' not found. Attempting eval..." >>"$LOG_FILE"
-      eval "$step ${arg[*]}" || return 1
+      eval "$step ${arg[*]}" || { reset_and_exit 1; return $?; }
 		fi
 	else
 		echo -e "ERROR: Step argument is missing." | tee -a "$LOG_FILE"
-		return 1
+    reset_and_exit 1
+    return $?
 	fi
   set_run_state
   reset_allflags
 }
 
 get_gas_preprocessor() {
-  if ismacos || isios || isiossimulator; then
+  if isapple; then
+    echo "INFO: Getting gas preprocessor" | tee -a "$LOG_FILE"
     if [[ ! -f /usr/local/bin/gas-preprocessor.pl ]]; then
       {
       wget -O gas-preprocessor.pl https://raw.githubusercontent.com/FFmpeg/gas-preprocessor/master/gas-preprocessor.pl
@@ -3794,6 +4604,7 @@ get_gas_preprocessor() {
       chmod +x "/usr/local/bin/gas-preprocessor.pl"
       } > >(redirect_output) 2>&1 || exit_message 1 "configure_ffmpeg: Failed to download gas-preprocessor.pl"
     fi
+    [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
   fi
 }
 
@@ -3833,21 +4644,34 @@ configure_ffmpeg() {
     init_options+=" --host-cc=$(command -v cc)"
   fi
   # Common compiler flags for Windows    
-  if ismacos || isios || isiossimulator; then
+  if isapple; then
     get_gas_preprocessor
+    [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
+    export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
     init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
+    
   fi
   if iswindows; then
-    export LDFLAGS="$LDFLAGS -Wl,-Bstatic -l:libpthreadGC3.a"
+    local pthread_win32_static_lib=""
+    local pthread_win32_static_dir=""
+    pthread_win32_static_lib="$(find_windows_static_pthread_win32)" || exit_message 1 "configure_ffmpeg: static pthread-win32 library not found. Build build_pthread_win32 before configuring FFmpeg."
+    pthread_win32_static_dir="$(dirname "$pthread_win32_static_lib")"
+    export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+    export CXXFLAGS="$CXXFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+    export CPPFLAGS="$CPPFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
+    export LDFLAGS="$LDFLAGS -L${pthread_win32_static_dir}"
     export CFLAGS="$CFLAGS -mstackrealign"
     export LD=${cross_prefix}gcc # ld weirdness with windows
 	  init_options+=" --target-os=mingw32"
     # init_options+=" --enable-w32threads"
     init_options+=" --disable-w32threads"
     init_options+=" --enable-pthreads"
-    init_options+=" --extra-cflags=\" -DPTW32_STATIC_LIB \""
+    init_options+=" --extra-cflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
+    init_options+=" --extra-cxxflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
+    init_options+=" --extra-ldflags=\" -L${pthread_win32_static_dir} \""
     init_options+=" --disable-filter=gfxcapture"
-    init_options+=" --extra-ldflags=\" -L${deps_install_prefix}/lib \""
+    init_options+=" --extra-ldflags=\" -L${dependency_install_prefix}/lib \""
+    add_extra_libs "$pthread_win32_static_lib"
   elif isandroid; then
     # unset PKG_CONFIG_PATH
     export PKG_CONFIG_SYSROOT_DIR="/"
@@ -3860,6 +4684,8 @@ configure_ffmpeg() {
     init_options+=" --ranlib=$RANLIB"
     init_options+=" --nm=$NM"
     init_options+=" --ld=$CXX"
+    init_options+=" --cc=$CC"
+    init_options+=" --cxx=$CXX"
     init_options+=" --strip=$STRIP"
 	  init_options+=" --target-os=android"
     init_options+=" --enable-jni"
@@ -3882,7 +4708,7 @@ configure_ffmpeg() {
       export LD="$CXX"
       init_options+=" --ld=$CXX"
     fi
-  elif isios || isiossimulator; then
+  elif isios || istvos; then
     init_options+=" --target-os=darwin"
     init_options+=" --disable-programs"
     init_options+=" --host-cc=$(xcrun --sdk macosx --find clang)"
@@ -3897,7 +4723,7 @@ configure_ffmpeg() {
     init_options+=" --extra-cflags='-isysroot $(xcrun --sdk "$toolchain_sys" --show-sdk-path)'"
     init_options+=" --extra-ldflags='-isysroot $(xcrun --sdk "$toolchain_sys" --show-sdk-path)'"
   fi
-  if ! ismacos && ! isios; then
+  if ! isapple; then
     init_options+=" --extra-ldflags=\" -Wl,--allow-multiple-definition \""
   fi
   init_options+=" --pkg-config=pkg-config"
@@ -3913,7 +4739,7 @@ configure_ffmpeg() {
 
 	if ! islinux; then
     init_options+=" --enable-cross-compile"
-    ! isandroid && ! isios && init_options+=" --cross-prefix=$cross_prefix"
+    ! isandroid && ! isios && ! istvos && init_options+=" --cross-prefix=$cross_prefix"
   fi
 
   if iswindows; then
@@ -3930,7 +4756,7 @@ configure_ffmpeg() {
 	  init_options+=" --extra-cflags=\" -pipe \""
     init_options+=" --extra-ldflags=\" $stdcpp_path $stdgcc_path \""
     init_options+=" --extra-cflags=\" $extra_ffmpeg_c_flags \""
-    add_extra_libs "$stdcpp_path -l:libpthreadGC3.a"
+    add_extra_libs "$stdcpp_path"
     init_options+=" --extra-cflags=\" -Wno-pedantic -Wno-cpp -Wno-variadic-macros \""
   fi
 
@@ -4001,7 +4827,7 @@ configure_ffmpeg() {
   truthy "$enable_amf" && config_options+=" --enable-amf"                             # enable AMF video encoding code [autodetect]
   truthy "$enable_vulkan" && config_options+=" --enable-vulkan"                       # enable Vulkan code [autodetect]
   truthy "$enable_libmfx" && config_options+=" --enable-libmfx"                       # enable Intel MediaSDK (AKA Quick Sync Video) code via libmfx [no]
-  if ! ismacos && ! isios; then
+  if ! isapple; then
     truthy "$enable_libvpl" && config_options+=" --enable-libvpl"                     # enable Intel oneVPL code via libvpl if libmfx is not used [no]
   fi
   truthy "$enable_vulkan_static" && config_options+=" --enable-vulkan-static"         # enable statically link to libvulkan [no]
@@ -4068,7 +4894,7 @@ configure_ffmpeg() {
   truthy "$enable_libaribb24" && config_options+=" --enable-libaribb24"               # enable ARIB text and caption decoding via libaribb24 [no]
   truthy "$enable_libaribcaption" && config_options+=" --enable-libaribcaption"       # enable ARIB text and caption decoding via libaribcaption [no]
   truthy "$enable_libass" && config_options+=" --enable-libass"                       # enable libass subtitles rendering, needed for subtitles and ass filter [no]
-  if ! isandroid && ! isios; then
+  if ! isandroid && ! isios && ! istvos; then
     truthy "$enable_libbluray" && config_options+=" --enable-libbluray"                 # enable BluRay reading using libbluray [no]
     truthy "$enable_libbluray" && ismacos && add_extra_libs "-framework DiskArbitration"
     truthy "$enable_libcdio" && config_options+=" --enable-libcdio"                     # enable audio CD grabbing with libcdio [no]
@@ -4099,7 +4925,10 @@ configure_ffmpeg() {
   truthy "$enable_libkvazaar" && config_options+=" --enable-libkvazaar"               # enable HEVC encoding via libkvazaar [no]
   truthy "$enable_liblc3" && config_options+=" --enable-liblc3"                       # enable LC3 de/encoding via liblc3 [no]
   truthy "$enable_liblc3" && add_extra_libs "-llc3"                                   # enable LC3 de/encoding via liblc3 [no]
-  truthy "$enable_liblensfun" && config_options+=" --enable-liblensfun"               # enable lensfun lens correction [no]
+  truthy "$enable_liblensfun" && { 
+    config_options+=" --enable-liblensfun"
+    isios && add_extra_libs "-lglib-2.0 -liconv"
+  }              # enable lensfun lens correction [no]
   truthy "$enable_libmodplug" && config_options+=" --enable-libmodplug"               # enable ModPlug via libmodplug [no]
   truthy "$enable_libmp3lame" && config_options+=" --enable-libmp3lame"               # enable MP3 encoding via libmp3lame [no]
   truthy "$enable_libmysofa" && config_options+=" --enable-libmysofa"                 # enable libmysofa, needed for sofalizer filter [no]
@@ -4126,7 +4955,7 @@ configure_ffmpeg() {
   truthy "$enable_librtmp" && config_options+=" --enable-librtmp"                     # enable RTMP[E] support via librtmp [no]
   truthy "$enable_librubberband" && config_options+=" --enable-librubberband"         # enable rubberband needed for rubberband filter [no]
   truthy "$enable_libshaderc" && config_options+=" --enable-libshaderc"               # enable GLSL->SPIRV compilation via libshaderc [no]
-  truthy "$enable_libshaderc" && (ismacos || isios || isiossimulator) \
+  truthy "$enable_libshaderc" && isapple \
   && add_extra_libs "-lglslang -lSPIRV -lSPIRV-Tools -lSPIRV-Tools-opt"
   truthy "$enable_libshine" && config_options+=" --enable-libshine"                   # enable fixed-point MP3 encoding via libshine [no]
   truthy "$enable_libsnappy" && config_options+=" --enable-libsnappy"                 # enable Snappy compression, needed for hap encoding [no]
@@ -4166,12 +4995,27 @@ configure_ffmpeg() {
   truthy "$enable_openal" && config_options+=" --enable-openal"                       # enable OpenAL 1.1 capture support [no]
   truthy "$enable_opencl" && config_options+=" --enable-opencl"                       # enable OpenCL processing [no]
   truthy "$enable_opengl" && config_options+=" --enable-opengl"                       # enable OpenGL rendering [no]
+  if [[ "$host_arch" == "x86_64" ]]; then
+    truthy "$enable_libsvtjpegxs" && config_options+=" --enable-libsvtjpegxs"         # enable SVT-JPEGXS code [autodetect]
+  else
+    # SVT-JPEGXS is not supported on arm architectures
+    config_options+=" --disable-libsvtjpegxs"
+  fi
+  truthy "$enable_libopencolorio" && {
+    config_options+=" --enable-libopencolorio"
+    ! isios && ! istvos && add_extra_libs "-lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"
+    iswindows && { 
+      config_options+=" --extra-cflags='-DOpenColorIO_SKIP_IMPORTS' --extra-cxxflags='-DOpenColorIO_SKIP_IMPORTS'" 
+      add_extra_libs "-L${dependency_install_prefix}/lib -l:libOpenColorIO.a -lyaml-cpp -lpystring -lz -lImath-3_2 -lminizip-ng"
+    }
+  }                                                                                   # enable OpenColorIO code [autodetect]
+  truthy "$enable_libmpeghdec" && config_options+=" --enable-libmpeghdec"             # enable MPEG-H 3D Audio decoder code [autodetect]
   if truthy "$enable_opengl" && ismacos ; then
     add_extra_libs "-framework OpenGL -framework CoreVideo"
   fi
-  if isios && truthy "$enable_opengl"; then
+  if { isios || istvos; } && truthy "$enable_opengl"; then
     add_extra_libs "-framework OpenGLES -framework CoreVideo -framework VideoToolbox -framework CoreMedia -framework CoreFoundation"
-    sed -i'.bak' \
+    gsed -i \
     -e "s|check_lib opengl ES2/gl.h glGetError \"-isysroot=\${sysroot} -framework OpenGLES\"|check_lib opengl OpenGLES/ES2/gl.h glGetError \"-F${IOS_SYSROOT}/System/Library/Frameworks -framework OpenGLES\"|g" \
     configure
   fi
@@ -4180,8 +5024,8 @@ configure_ffmpeg() {
     config_options+=" --extra-cflags=\"-I$toolchain_include_path\""
     config_options+=" --extra-cflags=\"-DglXGetProcAddress=eglGetProcAddress\""
     # patch ffmpeg configure for Android
-    sed -i'' -e 's|check_lib opengl ES2/gl.h glGetError "-isysroot=${sysroot} -framework OpenGLES"|check_lib opengl GLES2/gl2.h glGetError "-lGLESv2 -lEGL"|g' configure
-    sed -i'' -e 's|check_lib opencl OpenCL/cl.h clEnqueueNDRangeKernel "-framework OpenCL"|check_lib opencl CL/cl.h clEnqueueNDRangeKernel "-lOpenCL"|g' configure
+    gsed -i -e 's|check_lib opengl ES2/gl.h glGetError "-isysroot=${sysroot} -framework OpenGLES"|check_lib opengl GLES2/gl2.h glGetError "-lGLESv2 -lEGL"|g' configure
+    gsed -i -e 's|check_lib opencl OpenCL/cl.h clEnqueueNDRangeKernel "-framework OpenCL"|check_lib opencl CL/cl.h clEnqueueNDRangeKernel "-lOpenCL"|g' configure
   fi
   truthy "$enable_openssl" && config_options+=" --enable-openssl"                     # enable openssl, needed for https support if gnutls, libtls or mbedtls is not used [no]
   truthy "$enable_pocketsphinx" && config_options+=" --enable-pocketsphinx"           # enable PocketSphinx, needed for asr filter [no]
@@ -4189,8 +5033,8 @@ configure_ffmpeg() {
   truthy "$enable_vapoursynth" && config_options+=" --enable-vapoursynth"             # enable VapourSynth demuxer [no]
   truthy "$enable_whisper" && { config_options+=" --enable-whisper" \
   && add_extra_libs "-lwhisper -lggml -lggml-cpu -lggml-base"; }                      # enable whisper filter [no]
-  truthy "$enable_whisper" && ! isandroid && ! ismacos && ! isios && add_extra_libs "-lgomp"
-  truthy "$enable_whisper" && { ismacos || isios; } && add_extra_libs "$dependency_install_prefix/lib/libomp.a -lresolv"
+  truthy "$enable_whisper" && ! isandroid && ! isapple && add_extra_libs "-lgomp"
+  truthy "$enable_whisper" && isapple && add_extra_libs "-lomp -lresolv"
 
   # ------------------------------ windows features -------------------------------     
   if iswindows; then
@@ -4201,7 +5045,7 @@ configure_ffmpeg() {
     truthy "$enable_mediafoundation" && config_options+=" --enable-mediafoundation"     # enable encoding via MediaFoundation [auto]
   fi
   # ------------------------------ apple features -------------------------------     
-  if ismacos || isios; then
+  if isapple; then
     truthy "$enable_avfoundation" && config_options+=" --enable-avfoundation"           # enable Apple AVFoundation framework [autodetect]
     truthy "$enable_avfoundation" && add_extra_libs "-framework AVFoundation"
     truthy "$enable_appkit" && config_options+=" --enable-appkit"                       # enable Apple AppKit framework [autodetect]
@@ -4216,10 +5060,10 @@ configure_ffmpeg() {
     truthy "$enable_securetransport" && add_extra_libs "-framework Security"
     truthy "$enable_videotoolbox" && config_options+=" --enable-videotoolbox"           # enable VideoToolbox code [autodetect]
     truthy "$enable_videotoolbox" && add_extra_libs "-framework VideoToolbox"
-    if isios; then
-      sed -i'.bak' 's/framework="$1"/framework="$1"\n\theader_file="${2:-$1}"/' configure
-      sed -i'.bak' 's/${framework}\.h/${header_file}\.h/g' configure
-      sed -i'.bak' 's/check_apple_framework CoreAudio/check_apple_framework CoreAudio CoreAudioTypes/g' configure
+    if isios || istvos; then
+      gsed -i 's/framework="$1"/framework="$1"\n\theader_file="${2:-$1}"/' configure
+      gsed -i 's/${framework}\.h/${header_file}\.h/g' configure
+      gsed -i 's/check_apple_framework CoreAudio/check_apple_framework CoreAudio CoreAudioTypes/g' configure
     fi
   fi
 
@@ -4246,7 +5090,7 @@ configure_ffmpeg() {
 	else
 		postpend_configure_opts+=" --disable-debug --enable-stripping --enable-optimizations"
 	fi
-  if ismacos || isios; then
+  if isapple; then
     postpend_configure_opts+=" --extra-cflags=\"-std=gnu17\" --extra-ldflags=\"-Wl,-dead_strip -Wl,-dead_strip\" --extra-libs=\"$extra_libs -lc++\" $ff_flags_values"
   else
     postpend_configure_opts+=" --extra-cflags=\"-std=gnu17\" --extra-libs=\"-Wl,--start-group $extra_libs -Wl,--end-group\" $ff_flags_values"
@@ -4336,10 +5180,11 @@ install_ffmpeg() {
   ffmpeg_patches
   iswindows && export LD=${cross_prefix}gcc # ld weirdness with windows
   isandroid && export AS="$CC" && export LD="$CC"
-  if ismacos || isios || isiossimulator; then 
+  if isapple; then 
     export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
     local bin2c_py=$(create_bin2c_py)
-    sed -i '.bak' 's|RUN_BIN2C = $(BIN2C)|RUN_BIN2C = python3 ffbuild/bin2c.py|' "$ffmpeg_source_dir/ffbuild/common.mak"
+    setup_default_python
+    gsed -i 's|RUN_BIN2C = $(BIN2C)|RUN_BIN2C = python3 ffbuild/bin2c.py|' "$ffmpeg_source_dir/ffbuild/common.mak"
   fi
 	do_make "AS=\"$AS\" PREFIX=\"$ffmpeg_install_prefix\"" "${touch_postfix}" 1 || exit_message 1 "install_ffmpeg: unable to make ffmpeg. see $LOG_FILE for details."
   do_make_install "PREFIX=\"$ffmpeg_install_prefix\"" "" "${touch_postfix}" 1 || exit_message 1 "install_ffmpeg: unable to make install ffmpeg. see $LOG_FILE for details."
@@ -4431,7 +5276,7 @@ install_ffmpeg_kit() {
   elif isandroid; then
     CLANG_RT_DIR=$($CC -print-libgcc-file-name | xargs dirname)
     export LDFLAGS="${LDFLAGS} -Wl,--allow-multiple-definition -L$CLANG_RT_DIR -lclang_rt.builtins-$host_arch-android -Wl,--exclude-libs,libunwind.a"
-    export LDFLAGS=$(echo "${LDFLAGS}" | sed -e 's/-Wl,--fatal-warnings//g')
+    export LDFLAGS=$(echo "${LDFLAGS}" | gsed -e 's/-Wl,--fatal-warnings//g')
   fi
   
   change_dir "${ffmpeg_kit_src_dir}/build" 1
@@ -4462,13 +5307,13 @@ install_pkg_config_file() {
 	fi
 
 	# UPDATE PATHS
-	sed -i'.bak' -e "s|${ffmpeg_kit_install}|${location_prefix}|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|libdir=${ffmpeg_kit_install}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|includedir=${ffmpeg_kit_install}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
+	gsed -i -e "s|${ffmpeg_kit_install}|${location_prefix}|g" "$DESTINATION" || return 1
+  gsed -i -e "s|libdir=${ffmpeg_kit_install}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
+  gsed -i -e "s|includedir=${ffmpeg_kit_install}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
 
-	sed -i'.bak' -e "s|${ffmpeg_source_dir}|${location_prefix}|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|libdir=${ffmpeg_source_dir}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
-  sed -i'.bak' -e "s|includedir=${ffmpeg_source_dir}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
+	gsed -i -e "s|${ffmpeg_source_dir}|${location_prefix}|g" "$DESTINATION" || return 1
+  gsed -i -e "s|libdir=${ffmpeg_source_dir}|libdir=\${prefix}/lib|g" "$DESTINATION" || return 1
+  gsed -i -e "s|includedir=${ffmpeg_source_dir}|includedir=\${prefix}/include|g" "$DESTINATION" || return 1
 
   chmod -R a+rwx "$work_dir"
 }
@@ -4476,7 +5321,7 @@ install_pkg_config_file() {
 create_ffmpeg_kit_bundle() {
   if isandroid && truthy "$create_bundle"; then
     create_android_aar
-  elif (isios || isiossimulator) && truthy "$create_bundle"; then
+  elif { isios || istvos; } && truthy "$create_bundle"; then
     create_ios_xcframework
   elif ismacos && truthy "$create_bundle"; then
     create_macos_xcframework
@@ -4505,7 +5350,7 @@ create_ffmpeg_kit_bundle() {
       [[  -f "$ffmpeg_kit_src_dir/build/libffmpegkit.map" ]] && cp -rP "$ffmpeg_kit_src_dir/build/libffmpegkit.map" "${ffmpeg_kit_bundle}/bin"
     } > >(redirect_output) 2>&1
 
-    find "${ffmpeg_kit_bundle}/lib/pkgconfig" -type f -name "*.pc" -exec sed -i'.bak' \
+    find "${ffmpeg_kit_bundle}/lib/pkgconfig" -type f -name "*.pc" -exec gsed -i \
     -e "s|prefix=.*|prefix=${ffmpeg_kit_bundle}|g" \
     -e "s|exec_prefix=.*|exec_prefix=\${prefix}|g" \
     -e "s|libdir=.*|libdir=\${prefix}/lib|g" \
@@ -4547,7 +5392,7 @@ uninstall_manifest() {
   local manifest="$1"
   if [[ -f "$manifest" ]]; then
     echo "WARNING: found $manifest. Uninstalling files from $manifest if installed"
-    sed -i'' -e '/^$/d' "$manifest" | xargs --verbose -r -d '\n' rm -rf
+    gsed -i -e '/^$/d' "$manifest" | xargs --verbose -r -d '\n' rm -rf
     echo
     remove_path -f "$manifest"
   else
@@ -5166,7 +6011,7 @@ pick_ssl_type() {
     if iswindows; then
       export ssl_type="system"
       enable_library "schannel"
-    elif ismacos || isios; then
+    elif isapple; then
       export ssl_type="system"
       enable_library "securetransport"
     else
@@ -5382,6 +6227,7 @@ print_build_steps() {
 	for i in "${!OPTIMIZED_BUILD_STEPS[@]}"; do
 		echo "Index $i: ${OPTIMIZED_BUILD_STEPS[i]}"
 	done
+  printf 'WORKFLOW_BUILD_STEPS=%s\n' "${OPTIMIZED_BUILD_STEPS[*]}"
 }
 
 check_and_resolve() {
@@ -5457,7 +6303,7 @@ unversion_library() {
   find "$TARGET_DIR" -maxdepth 1 \( -name "*.so.*" -o -name "*.a.*" \) | sort -Vr | while read -r full_path; do
     filename=$(basename "$full_path")
     # shellcheck disable=2001
-    base_name=$(echo "$filename" | sed -e 's/\.so\..*/.so/')
+    base_name=$(echo "$filename" | gsed -e 's/\.so\..*/.so/')
     # check if excluded
     excluded=false
     for exclude_pattern in "${excludes[@]}"; do
@@ -5514,6 +6360,39 @@ disable_autodetected() {
   disable_preset "$CONFIG_AUTODETECT"
 }
 
+disable_unsupported() {
+case "${host_platform,,}" in
+  linux)
+  apply_preset "$CONFIG_LINUX_UNSUPPORTED"
+  ;;
+  windows)
+  apply_preset "$CONFIG_WINDOWS_UNSUPPORTED"
+  ;;
+  android)
+  apply_preset "$CONFIG_ANDROID_UNSUPPORTED"
+  ;;
+  ios|macos|iphonesimulator|appletvos|appletvsimulator)
+  apply_preset "$CONFIG_APPLE_UNSUPPORTED"
+  if [[ "$host_platform" == "macos" ]]; then
+    apply_preset "$CONFIG_MACOS_UNSUPPORTED"
+  elif [[ "$host_platform" == "ios" ]]; then
+    apply_preset "$CONFIG_IOS_UNSUPPORTED"
+  fi
+  if [[ "$host_platform" == "appletvos" || "$host_platform" == "appletvsimulator" ]]; then
+    apply_preset "$CONFIG_TVOS_UNSUPPORTED"
+  fi
+  ;;
+  rpi)
+  apply_preset "$CONFIG_RPI_UNSUPPORTED"
+  ;;
+  oh|openharmony|open-harmony|open_harmony|harmony)
+  apply_preset "$CONFIG_OH_UNSUPPORTED"
+  ;;
+  *)
+  ;;
+esac
+}
+
 add_src_dir() {
   local dirs=()
   dirs+=("$@")
@@ -5523,16 +6402,18 @@ add_src_dir() {
     create_touch_file 0 "$dir/$host_touch"
     if iswindows; then
       find "$dependency_install_prefix/lib" -name "*.la" -delete
-      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec sed -i'.bak' -e -E 's/[[:space:]]-lm\b//g' \
-        -e 's|/usr/local/mingw-w64/[^ ]+/lib/lib([a-zA-Z0-9]+)\.a|-l\1|g' \
-        -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' \
-        -e 's|-Wl,--export-dynamic||g' {} +
-    elif ismacos || isios || isiossimulator; then
+      find "$install_pkgconfig_dir" -type f -name "*.pc" \
+        -exec gsed -i -E \
+          -e 's/[[:space:]]-lm\b//g' \
+          -e 's|/usr/local/mingw-w64/[^ ]+/lib/lib([a-zA-Z0-9]+)\.a|-l\1|g' \
+          -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' \
+          -e 's|-Wl,--export-dynamic||g' {} +
+    elif isapple; then
       find "$dependency_install_prefix/lib" -name "*.la" -delete
-      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec sed -i'.bak' -e 's|-Wl,--export-dynamic||g' \
+      find "$install_pkgconfig_dir" -type f -name "*.pc" -exec gsed -i -e 's|-Wl,--export-dynamic||g' \
         -e 's|-L/opt/homebrew/opt/([a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*)/lib||g' {} +
     else
-      find "$dependency_install_prefix/lib" -type f -name "*.la" -exec sed -i'.bak' -e 's|=\/|/|g' {} +
+      find "$dependency_install_prefix/lib" -type f -name "*.la" -exec gsed -i -e 's|=\/|/|g' {} +
     fi
     if [[ -f "$dir_file" ]]; then
       if ! grep -q "$dir" "$dir_file"; then
@@ -5589,8 +6470,8 @@ reset_and_clean() {
       mapfile -t sub_dirs < <(find "$dir" -name "meson.build" -exec dirname {} \; | sort -u 2>/dev/null)
       if [[ -f meson.build ]] && [[ "${#sub_dirs[@]}" -gt 0 ]]; then
         echo "Cleaning meson artifacts at $sub_dir..." > >(redirect_output)
-        { python3 "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
-        { python3 "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
+        { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
+        { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
       fi
       mapfile -t sub_dirs < <(find "$dir" -name "CMakeList.txt" -exec dirname {} \; | sort -u 2>/dev/null)
       for sub_dir in "${sub_dirs[@]}"; do
@@ -5629,7 +6510,7 @@ reset_and_clean() {
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f waf ]]; then
           echo "Cleaning waf artifacts at $sub_dir..." > >(redirect_output)
-          { eval "python3 ./waf clean" > >(redirect_output) 2>&1 || true; }
+          { "${PYTHON_BIN:-${PYTHON3:-python3}}" ./waf clean > >(redirect_output) 2>&1 || true; }
         fi
         cd "$dir" 2>/dev/null || continue
       done
@@ -6120,7 +7001,7 @@ static_link_check() {
         if iswindows; then 
           sys_libs="-lcrypt32 -lwindowscodecs -ldwrite -ld2d1 -lshlwapi -lole32 -lshell32 -luuid -lws2_32 -ladvapi32 -luser32 -lkernel32 -lmsvcrt -lwinmm"
           ext="dll"
-        elif ismacos || isios; then
+        elif isapple; then
           ext="dylib"
         fi
         local out_bin="${tmp}/${name}.${ext}"
@@ -6138,7 +7019,7 @@ static_link_check() {
                     cmd+=("$lib")
                 else
                     # It is a true static archive (Linux, Windows, or Mac). Force merge it.
-                    if ismacos || isios; then
+                    if isapple; then
                         cmd+=("-Wl,-force_load" "$lib")
                     else
                         cmd+=("-Wl,--whole-archive" "$lib" "-Wl,--no-whole-archive")
@@ -6153,13 +7034,13 @@ static_link_check() {
                 cmd+=("$lib")
             fi
         done
-        if ! ismacos && ! isios; then
+        if ! isapple; then
             cmd+=("-static" "-static-libgcc" "-static-libstdc++" "$stdcpp_path" "$stdgcc_path")
         fi
-        if [ "$use_map" = true ] && ! ismacos && ! isios; then
+        if [ "$use_map" = true ] && ! isapple; then
             cmd+=("-Wl,--version-script=$map_file" "-Wl,-Bsymbolic")
         fi
-        if ismacos || isios; then
+        if isapple; then
             cmd+=("-undefined" "dynamic_lookup")
         else
             cmd+=("-Wl,--allow-multiple-definition" "-Wl,--unresolved-symbols=ignore-all")
@@ -6209,7 +7090,7 @@ static_link_check() {
                     shared_libs+="libgcc.dll "
                 fi
             fi
-        elif ismacos || isios; then
+        elif isapple; then
             # MacOS/iOS: Use otool to check for shared library dependencies
             if command -v otool >/dev/null 2>&1; then
                 if otool -L "$binary" 2>/dev/null | grep -q "libstdc++.*\.dylib"; then
@@ -6293,7 +7174,7 @@ static_link_check() {
             local resolved_libs=""
             local -a stats=(0 0 0)
             if ! _slc_resolve_libs "$target" "$log_file" resolved_libs stats; then
-                local err=$(sed -i'' -e 's|.*libraries/lib|...libraries/lib|' \
+                local err=$(gsed -i -e 's|.*libraries/lib|...libraries/lib|' \
                 -e 's/^/        | /' "$log_file")
                 a_failed+=("  [FAIL] $pkg_name (Config Parse Error)\n$err")
                 continue
@@ -6314,7 +7195,7 @@ static_link_check() {
                 a_success+=("$(printf "  %-8s %-30s %-12d %-12d %-12d" "$bin_size" "$pkg_name" "${stats[0]}" "${stats[1]}" "${stats[2]}")")
             else
                 local reason="${verify_result#fail:}"
-                local err=$(sed -i'' -e 's|.*libraries/lib|...libraries/lib|' \
+                local err=$(gsed -i -e 's|.*libraries/lib|...libraries/lib|' \
                 -e 's/^/        | /' "$log_file")
                 a_failed+=("  [FAIL] $pkg_name ($reason)\n        Libraries: $resolved_libs\n$err")
             fi
@@ -6378,18 +7259,18 @@ add_libs_to_pkg() {
                 token="-l$name"
             fi
             # shellcheck disable=2001
-            local regex_token=$(echo "$token" | sed -e  's/[][()\.^$?*+{|}]/\\&/g')
+            local regex_token=$(echo "$token" | gsed -e 's/[][()\.^$?*+{|}]/\\&/g')
             local sed_pattern="${regex_token//#/\\#}"
             if grep "^$field:" "$pc" | grep -E -q "(^|[[:space:]])${sed_pattern}($|[[:space:]])"; then
-                sed -i'.bak' -e -E "s#([[:space:]]|^)${sed_pattern}([[:space:]]|$)# #g" "$pc"
+                gsed -i -E -e "s#([[:space:]]|^)${sed_pattern}([[:space:]]|$)# #g" "$pc"
             fi
             insertion_buffer="${insertion_buffer} ${token}"
         done
         if [[ -n "$insertion_buffer" ]]; then
             if [[ "$mode" == "prepend" ]]; then
-                sed -i'.bak' -e "s|^$field:|&${insertion_buffer}|" "$pc"
+                gsed -i -e "s|^$field:|&${insertion_buffer}|" "$pc"
             else
-                sed -i'.bak' -e "s|^$field:.*|&${insertion_buffer}|" "$pc"
+                gsed -i -e "s|^$field:.*|&${insertion_buffer}|" "$pc"
             fi
         fi
     }
@@ -6609,10 +7490,10 @@ optimize_dependencies() {
     done
     # Output the final ordered array
     OPTIMIZED_BUILD_STEPS=("${sorted_order[@]}")
-    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-all-steps"($|[[:space:]]) ]]; then
+    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-all-steps"($|[[:space:]]) ]] || truthy "$dry_run"; then
       print_build_steps | tee -a "$LOG_FILE"
     fi
-    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-total-steps"($|[[:space:]]) ]]; then
+    if [[ " ${RUN_ARGS[*]} " =~ (^|[[:space:]])"--print-total-steps"($|[[:space:]]) ]] || truthy "$dry_run"; then
       echo "INFO: Number of build steps: ${#OPTIMIZED_BUILD_STEPS[@]}" | tee -a "$LOG_FILE"
     fi
 }
@@ -6667,7 +7548,7 @@ set_version() {
 
 get_latest_version_from_changelog() {
   local version_file="$BASEDIR/CHANGELOG.md"
-  local version=$(awk '/## Version / && ++c==1 {print; exit}' "$version_file" | sed -e 's/## Version //')
+  local version=$(awk '/## Version / && ++c==1 {print; exit}' "$version_file" | gsed -e 's/## Version //')
   set_version "$version"
   echo "$version"
 }
@@ -6677,7 +7558,7 @@ get_previous_version_from_changelog() {
   if [[ ! -f "$version_file" ]]; then
     exit_message 1 "Changelog file not found" | tee -a "$LOG_FILE"
   fi
-  local version=$(awk '/## Version / && ++c==2 {print; exit}' "$version_file" | sed -e 's/## Version //')
+  local version=$(awk '/## Version / && ++c==2 {print; exit}' "$version_file" | gsed -e 's/## Version //')
   echo "$version"
 }
 
@@ -6692,55 +7573,99 @@ get_changes_from_changelog() {
   fi
 
   # Escape dots so they are treated literally in regex
-  local cur_esc=$(echo "$cur_version" | sed 's/\./\\./g')
-  local prev_esc=$(echo "$prev_version" | sed 's/\./\\./g')
+  local cur_esc=$(echo "$cur_version" | gsed 's/\./\\./g')
+  local prev_esc=$(echo "$prev_version" | gsed 's/\./\\./g')
 
   # Extract from current version header to line before previous version header
-  # sed -n:    suppress automatic printing
+  # gsed -n:    suppress automatic printing
   # /pat1/,/pat2/p: print the range (both headers included)
-  # sed '$d':  delete last line (the previous version header) – works on macOS
-  local changes=$(sed -n "/^## Version $cur_esc/,/^## Version $prev_esc/p" "$changelog_file" | sed '$d')
+  # gsed '$d':  delete last line (the previous version header) – works on macOS
+  local changes=$(gsed -n "/^## Version $cur_esc/,/^## Version $prev_esc/p" "$changelog_file" | gsed '$d')
 
   # (Optional) Remove the current version header line if you only want the bullet points:
-  # changes=$(echo "$changes" | sed '1d')
+  # changes=$(echo "$changes" | gsed '1d')
 
   # Trim leading/trailing blank lines (preserve your original trimming logic)
-  echo "$changes" | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+  echo "$changes" | gsed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+}
+
+get_userhome() {
+  local original_user=""
+  local original_home=""
+
+  if [[ -n "${FF_BUILD_ORIGINAL_HOME:-}" && "${FF_BUILD_ORIGINAL_HOME:-}" != "/root" ]]; then
+    original_home="$FF_BUILD_ORIGINAL_HOME"
+  fi
+
+  if [[ -n "${FF_BUILD_ORIGINAL_USER:-}" && "${FF_BUILD_ORIGINAL_USER:-}" != "root" ]]; then
+    original_user="$FF_BUILD_ORIGINAL_USER"
+  elif [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != "root" ]]; then
+    original_user="$SUDO_USER"
+  elif [[ -n "${SUDO_UID:-}" && "${SUDO_UID:-}" != "0" ]]; then
+    original_user="$(getent passwd "$SUDO_UID" | cut -d: -f1)"
+  elif [[ -n "${PKEXEC_UID:-}" ]]; then
+    original_user="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"
+  elif [[ "$(id -u)" -ne 0 ]]; then
+    original_user="$(id -un)"
+  fi
+
+  if [[ -z "$original_home" && -n "$original_user" ]]; then
+    if command -v getent >/dev/null 2>&1; then
+      original_home="$(getent passwd "$original_user" | cut -d: -f6)"
+    else
+      original_home="$(dscl . -read "/Users/$original_user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')"
+    fi
+  fi
+
+  if [[ -z "$original_home" && -n "${HOME:-}" && "${HOME:-}" != "/root" ]]; then
+    original_home="$HOME"
+  fi
+
+  echo "$original_home"
 }
 
 get_keystore(){
-  # Ensure the script is running with sudo
-  if [ -z "$SUDO_USER" ]; then
-    ORIGINAL_USER=$(whoami)
-    ORIGINAL_HOME=$(eval echo ~"$ORIGINAL_USER")
-  else
-    ORIGINAL_USER="$SUDO_USER"
-    ORIGINAL_HOME=$(eval echo ~"$SUDO_USER")
+  local original_user=""
+  local original_home=""
+  local keystore_dir=""
+
+  original_user="${FF_BUILD_ORIGINAL_USER:-${SUDO_USER:-$(id -un)}}"
+  original_home="$(get_userhome)"
+
+  if [[ -n "$original_home" ]]; then
+    keystore_dir="$original_home/.config/keystore"
+    if [[ -d "$keystore_dir" ]]; then
+      realpath "$keystore_dir"
+      return 0
+    fi
   fi
 
-  if [[ -d "$ORIGINAL_HOME/.config/keystore" ]]; then
-    echo "$ORIGINAL_HOME/.config/keystore"
-  elif [[ -d "$HOME/.config/keystore" ]]; then
-    # $HOME is root's home when running with sudo; this matches original ~ expansion
-    realpath "$HOME/.config/keystore"
-  else
-    exit_message 1 "Keystore directory not found" | tee -a "$LOG_FILE"
-  fi
+  exit_message 1 "Keystore directory not found for user '${original_user}' at '${keystore_dir:-<unknown>}'" | tee -a "$LOG_FILE" >&2
+  return 1
 }
 
 get_maven_keystore_file() {
-  if [[ -f "$(realpath "$(get_keystore)"/maven/maven)" ]]; then
-    echo "$(realpath "$(get_keystore)"/maven/maven)"
+  local keystore_dir
+  if ! keystore_dir="$(get_keystore)"; then
+    return 1
+  fi
+
+  if [[ -f "$keystore_dir/maven/maven" ]]; then
+    realpath "$keystore_dir/maven/maven"
   else
-    exit_message 1 "Keystore file not found. Please create a .env or $(get_keystore)/maven/maven file with the following format: \n\
+    exit_message 1 "Keystore file not found. Please create a .env or ${keystore_dir}/maven/maven file with the following format: \n\
     OSSRH_USERNAME=<your-maven-username>\n\
     OSSRH_PASSWORD=<your-maven-password>\n\
-    OSSRH_BASE64=<your-maven-username:password-base64>" | tee -a "$LOG_FILE"
+    OSSRH_BASE64=<your-maven-username:password-base64>" | tee -a "$LOG_FILE" >&2
+    return 1
   fi
 }
 
 get_maven_username() {
-  local keystore="$(get_maven_keystore_file)"
+  local keystore
+  if ! keystore="$(get_maven_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local maven_username=$(grep '^OSSRH_USERNAME=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$maven_username" ]]; then
@@ -6753,7 +7678,10 @@ get_maven_username() {
 }
 
 get_maven_password() {
-  local keystore="$(get_maven_keystore_file)"
+  local keystore
+  if ! keystore="$(get_maven_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local maven_password=$(grep '^OSSRH_PASSWORD=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$maven_password" ]]; then
@@ -6766,7 +7694,10 @@ get_maven_password() {
 }
 
 get_maven_base64() {
-  local keystore="$(get_maven_keystore_file)"
+  local keystore
+  if ! keystore="$(get_maven_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local maven_base64=$(grep '^OSSRH_BASE64=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$maven_base64" ]]; then
@@ -6779,21 +7710,33 @@ get_maven_base64() {
 }
 
 get_keystore_file() {
+  local keystore_dir
   if [[ -f .env ]]; then
     echo ".env"
-  elif [[ -f "$(realpath "$(get_keystore)"/github)" ]]; then
-    echo "$(realpath "$(get_keystore)"/github)"
+    return 0
+  fi
+
+  if ! keystore_dir="$(get_keystore)"; then
+    return 1
+  fi
+
+  if [[ -f "$keystore_dir/github" ]]; then
+    realpath "$keystore_dir/github"
   else
-    exit_message 1 "Keystore file not found. Please create a .env or $(get_keystore)/github file with the following format: \n\
+    exit_message 1 "Keystore file not found. Please create a .env or ${keystore_dir}/github file with the following format: \n\
     GH_TOKEN=<your-github-token>\n\
     GH_TOKEN_CLASSIC=<your-github-token-classic>\n\
     GH_OWNER=<your-github-owner>\n\
-    GH_REPO=<your-github-repo>" | tee -a "$LOG_FILE"
+    GH_REPO=<your-github-repo>" | tee -a "$LOG_FILE" >&2
+    return 1
   fi
 }
 
 get_github_token() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_token=$(grep '^GH_TOKEN=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_token" ]]; then
@@ -6806,7 +7749,10 @@ get_github_token() {
 }
 
 get_github_token_classic() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_token=$(grep '^GH_TOKEN_CLASSIC=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_token" ]]; then
@@ -6819,7 +7765,10 @@ get_github_token_classic() {
 }
 
 get_github_repo() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_repo=$(grep '^GH_REPO=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_repo" ]]; then
@@ -6832,7 +7781,10 @@ get_github_repo() {
 }
 
 get_github_owner() {
-  local keystore="$(get_keystore_file)"
+  local keystore
+  if ! keystore="$(get_keystore_file)"; then
+    return 1
+  fi
   if [[ -f "$keystore" ]]; then
     local github_owner=$(grep '^GH_OWNER=' "$keystore" | cut -d '=' -f2- | tr -d '\r')
     if [[ -z "$github_owner" ]]; then
@@ -6845,9 +7797,20 @@ get_github_owner() {
 }
 
 authorize_github() {
-  local github_token="$(get_github_token)"
-  local github_repo="$(get_github_repo)"
-  local github_owner="$(get_github_owner)"
+  local github_token="${1:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
+  local github_repo="${2:-${GITHUB_REPO:-}}"
+  local github_owner="${3:-${GITHUB_USERNAME:-}}"
+
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+  if [[ -z "$github_repo" ]]; then
+    github_repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$github_owner" ]]; then
+    github_owner="$(get_github_owner)" || return 1
+  fi
+
   if curl -f --request GET \
     --url "https://api.github.com/octocat" \
     --header "Authorization: Bearer $github_token" \
@@ -6861,16 +7824,32 @@ authorize_github() {
 }
 
 create_github_release() {
-  if ! authorize_github; then
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
-  fi
   local attachment="$1"
   local version=$(get_version)
   local tag="v$version-$host_platform"
-  local repo="$(get_github_repo)"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token)"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$attachment" || ! -f "$attachment" ]]; then
+    echo "Invalid attachment. File doesn't exist or attachment is blank: $attachment" | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
   # check if tag exists
   if git show-ref --verify --tags "refs/tags/$tag"; then
     echo "Tag $tag already exists." | tee -a "$LOG_FILE"
@@ -6912,8 +7891,18 @@ create_github_release() {
       echo "Release $tag created successfully." | tee -a "$LOG_FILE"
       upload_release_asset "$attachment"
     else
-      echo "Failed to create release $tag." | tee -a "$LOG_FILE"
-      return 1
+      # GitHub can return an error here even if another concurrent or retried run
+      # has already created the release. Re-check by tag before failing.
+      if curl -f -s -H "Authorization: Bearer $github_token" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" \
+        >> "$LOG_FILE" 2>&1; then
+        echo "Release $tag became available after create attempt. Continuing..." | tee -a "$LOG_FILE"
+        upload_release_asset "$attachment"
+      else
+        echo "Failed to create release $tag." | tee -a "$LOG_FILE"
+        return 1
+      fi
     fi
   fi
 }
@@ -6923,9 +7912,24 @@ upload_release_asset() {
   local asset_name=$(basename "$attachment")
   local version=$(get_version)
   local tag="v$version-$host_platform"
-  local repo="$(get_github_repo)"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token)"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   # Retrieve release metadata
   local release_json=$(curl -f -s -H "Authorization: Bearer $github_token" \
@@ -6970,9 +7974,25 @@ upload_release_asset() {
 check_existing_package() {
   local package_name="$1"
   local package_version="$2"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token_classic)"
   local package_type="maven"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   echo "Checking for existing package $package_name version $package_version..." > >(redirect_output)
 
@@ -7008,9 +8028,25 @@ check_existing_package() {
 delete_existing_package() {
   local package_name="$1"
   local package_version="$2"
-  local owner="$(get_github_owner)"
-  local github_token="$(get_github_token_classic)"
   local package_type="maven"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   # 1. Get all versions for the package
   local versions_json=$(curl -s \
@@ -7061,10 +8097,28 @@ delete_existing_package() {
 check_maven_package_status() {
   local package_name="$1"
   local package_version="$2"
-  local username="$(get_maven_username)"
-  local password="$(get_maven_password)"
+  local username="${OSSRH_USERNAME:-$(get_maven_username)}"
+  local password="${OSSRH_PASSWORD:-$(get_maven_password)}"
   local endpoint="https://central.sonatype.com/api/v1/publisher/published"
-  local namespace="io.github.akashskypatel.ffmpegkit"
+  local namespace="io.github.$owner.ffmpegkit"
+  local repo="${GITHUB_REPO:-}"
+  local owner="${GITHUB_USERNAME:-}"
+  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  if [[ -z "$repo" ]]; then
+    repo="$(get_github_repo)" || return 1
+  fi
+  if [[ -z "$owner" ]]; then
+    owner="$(get_github_owner)" || return 1
+  fi
+  if [[ -z "$github_token" ]]; then
+    github_token="$(get_github_token)" || return 1
+  fi
+
+  if ! authorize_github "$github_token" "$repo" "$owner"; then
+    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+    return 1
+  fi
 
   echo "Checking for existing package $package_name version $package_version on Maven Central..." > >(redirect_output)
   auth_token="$(echo -n "$username:$password" | base64)"
@@ -7097,4 +8151,32 @@ check_maven_package_status() {
   fi
 
   return 1
+}
+
+disable_git_lfs_and_checkout() {
+  local previous_git_lfs_skip_smudge="${GIT_LFS_SKIP_SMUDGE:-}"
+  local previous_git_config_count="${GIT_CONFIG_COUNT:-}"
+  local git_lfs_config_index="${GIT_CONFIG_COUNT:-0}"
+  export GIT_LFS_SKIP_SMUDGE=1
+  export GIT_CONFIG_COUNT=$((git_lfs_config_index + 3))
+  export "GIT_CONFIG_KEY_${git_lfs_config_index}=filter.lfs.required"
+  export "GIT_CONFIG_VALUE_${git_lfs_config_index}=false"
+  export "GIT_CONFIG_KEY_$((git_lfs_config_index + 1))=filter.lfs.smudge"
+  export "GIT_CONFIG_VALUE_$((git_lfs_config_index + 1))=cat"
+  export "GIT_CONFIG_KEY_$((git_lfs_config_index + 2))=filter.lfs.process"
+  export "GIT_CONFIG_VALUE_$((git_lfs_config_index + 2))="
+  do_git_checkout "$1" "$2" "$3"
+  if [[ -n "$previous_git_lfs_skip_smudge" ]]; then
+    export GIT_LFS_SKIP_SMUDGE="$previous_git_lfs_skip_smudge"
+  else
+    unset GIT_LFS_SKIP_SMUDGE
+  fi
+  unset "GIT_CONFIG_KEY_${git_lfs_config_index}" "GIT_CONFIG_VALUE_${git_lfs_config_index}"
+  unset "GIT_CONFIG_KEY_$((git_lfs_config_index + 1))" "GIT_CONFIG_VALUE_$((git_lfs_config_index + 1))"
+  unset "GIT_CONFIG_KEY_$((git_lfs_config_index + 2))" "GIT_CONFIG_VALUE_$((git_lfs_config_index + 2))"
+  if [[ -n "$previous_git_config_count" ]]; then
+    export GIT_CONFIG_COUNT="$previous_git_config_count"
+  else
+    unset GIT_CONFIG_COUNT
+  fi
 }

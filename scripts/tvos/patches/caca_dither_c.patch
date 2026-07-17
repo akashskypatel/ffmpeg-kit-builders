@@ -1,0 +1,15 @@
+diff --git a/caca/dither.c b/caca/dither.c
+index b2e24e5..0c603eb 100755
+--- a/caca/dither.c
++++ b/caca/dither.c
+@@ -1323,8 +1323,8 @@ static void get_rgba_default(caca_dither_t const *d, uint8_t const *pixels,
+             break;
+         case 3:
+         {
+-#if defined(HAVE_ENDIAN_H)
+-            if(__BYTE_ORDER == __BIG_ENDIAN)
++#if defined(__BIG_ENDIAN__) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
++            if(1)
+ #else
+             /* This is compile-time optimised with at least -O1 or -Os */
+             uint32_t const tmp = 0x12345678;

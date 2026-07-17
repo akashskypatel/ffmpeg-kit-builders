@@ -1,6 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2312,2250,2292,2249
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 set_toolchain_paths() {
 	export PATH="${PATH}:${toolchain_bin_path}:${dependency_install_prefix}/bin"
@@ -42,7 +55,7 @@ configure_ffmpeg_kit() {
 	UNWIND_STATIC=$($CXX -print-file-name=libunwind.a)
     BUILTINS_STATIC=$($CXX -print-file-name=libclang_rt.builtins-"${clang_arch}"-android.a)
     export LDFLAGS="${LDFLAGS} -Wl,--allow-multiple-definition -Wl,--exclude-libs,libunwind.a $UNWIND_STATIC $BUILTINS_STATIC"
-    export LDFLAGS=$(echo "${LDFLAGS}" | sed 's/-Wl,--fatal-warnings//g')
+    export LDFLAGS=$(echo "${LDFLAGS}" | gsed 's/-Wl,--fatal-warnings//g')
 	export LDFLAGS="${LDFLAGS//-static /} -static-libstdc++ -L${ffmpeg_install_prefix}/lib -L${dependency_install_prefix}/lib"
 
 	local cmake_params="-DCMAKE_SYSTEM_NAME=Android \
@@ -55,6 +68,7 @@ configure_ffmpeg_kit() {
 -DCMAKE_MODULE_LINKER_FLAGS_INIT=\"-L${ffmpeg_install_prefix}/lib -L${dependency_install_prefix}/lib\" \
 -DFFMPEG_SRC_DIR=\"$ffmpeg_source_dir\" \
 -DFFMPEG_BUILD_DIR=\"$ffmpeg_install_prefix\" \
+-DDEPENDENCY_BUILD_DIR=\"$dependency_install_prefix\" \
 -DCMAKE_INSTALL_PREFIX=\"$ffmpeg_kit_install\" \
 -DFFMPEG_KIT_BUNDLE_TYPE=\"$(get_bundle_type)\" \
 -DCMAKE_SHARED_LINKER_FLAGS=\"-Wl,--allow-multiple-definition -Wl,--exclude-libs,libunwind.a $UNWIND_STATIC $BUILTINS_STATIC\" \
@@ -203,7 +217,7 @@ EOF
 
 fix_pkgconfig_flags() {
 	echo "INFO: Fixing pkgconfig files for Android in $install_pkgconfig_dir"
-	find "$install_pkgconfig_dir" -name "*.pc" -exec sed -i -E \
+	find "$install_pkgconfig_dir" -name "*.pc" -exec gsed -i -E \
 	-e 's/(^|[[:space:]])-lrt([[:space:]]|$)/ /g' \
 	-e 's/(^|[[:space:]])-lpthread([[:space:]]|$)/ -pthread /g' \
 	-e 's/(^|[[:space:]])-l([[:space:]]|$)/ /g' "{}" + \
@@ -217,7 +231,7 @@ ffmpeg_patches() {
 		copy_path "$PATCHDIR/binder.c" "$ffmpeg_source_dir/compat/android/binder.c" "-f"
 		if [[ "$host_arch" == "armv7a" ]]; then		
 			if [[ -f "$ffmpeg_source_dir/libavutil/hwcontext_vulkan.c" ]]; then
-				sed -i 's/static VkBool32 VKAPI_CALL vk_dbg_callback/static VKAPI_ATTR VkBool32 VKAPI_CALL vk_dbg_callback/' "$ffmpeg_source_dir/libavutil/hwcontext_vulkan.c"
+				gsed -i 's/static VkBool32 VKAPI_CALL vk_dbg_callback/static VKAPI_ATTR VkBool32 VKAPI_CALL vk_dbg_callback/' "$ffmpeg_source_dir/libavutil/hwcontext_vulkan.c"
 			fi
 		fi
 		echo "INFO: Done patching ffmpeg for Android." >>"$LOG_FILE"
@@ -249,8 +263,8 @@ create_android_aar() {
 
   cp -fv "${work_dir}/${kit_dir}/lib/pkgconfig/ffmpegkit.pc" "${jni_libs_dir}/lib/pkgconfig/ffmpegkit.pc" > >(redirect_output)
   cp -fv "${work_dir}/${kit_dir}/lib/libffmpegkit${lib_ext}" "${jni_libs_dir}/${arch_pfx}/libffmpegkit${lib_ext}" > >(redirect_output)
-
-  FFMPEG_KIT_NAMESPACE="io.github.akashskypatel.ffmpegkit"
+	local owner="$(get_github_owner)"
+  FFMPEG_KIT_NAMESPACE="io.github.$owner.ffmpegkit"
   FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
   FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")-SNAPSHOT"
   FFMPEG_KIT_JNI_LIBS_DIR=$(realpath "${jni_libs_dir}")

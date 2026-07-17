@@ -1,0 +1,26 @@
+diff --git a/source/Lib/Utilities/NoMallocThreadPool.h b/source/Lib/Utilities/NoMallocThreadPool.h
+index 49d7076..781c5f3 100644
+--- a/source/Lib/Utilities/NoMallocThreadPool.h
++++ b/source/Lib/Utilities/NoMallocThreadPool.h
+@@ -506,7 +506,7 @@ private:
+     void join();
+ 
+   private:
+-    pthread_t m_id       = 0;
++    pthread_t m_id       = pthread_t{};
+     bool      m_joinable = false;
+   };
+ #endif   // HAVE_PTHREADS
+diff --git a/source/Lib/Utilities/NoMallocThreadPool.cpp b/source/Lib/Utilities/NoMallocThreadPool.cpp
+index 688bcdf..9d06e2c 100644
+--- a/source/Lib/Utilities/NoMallocThreadPool.cpp
++++ b/source/Lib/Utilities/NoMallocThreadPool.cpp
+@@ -334,7 +334,7 @@ NoMallocThreadPool::PThread& NoMallocThreadPool::PThread::operator=( PThread&& o
+ {
+   m_id             = other.m_id;
+   m_joinable       = other.m_joinable;
+-  other.m_id       = 0;
++  other.m_id       = pthread_t{};
+   other.m_joinable = false;
+   return *this;
+ }

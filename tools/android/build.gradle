@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'com.vanniktech.maven.publish'
+    id 'signing'
 }
 
 /**
@@ -95,9 +96,21 @@ if (!binariesExist) {
     }
 }
 
+signing {
+    def signPublications = providers.gradleProperty('FFMPEG_KIT_SIGN_PUBLICATIONS')
+        .map { it.toBoolean() }
+        .getOrElse(false)
+    if (signPublications) {
+        useGpgCmd()
+    }
+}
+
 mavenPublishing {
     def githubUsername = getSafeProperty('GITHUB_USERNAME', 'akashskypatel')
     def githubRepo = getSafeProperty('GITHUB_REPO', 'ffmpeg-kit-builders')
+    def signPublications = providers.gradleProperty('FFMPEG_KIT_SIGN_PUBLICATIONS')
+        .map { it.toBoolean() }
+        .getOrElse(false)
 
     coordinates(
         getSafeProperty('FFMPEG_KIT_NAMESPACE', 'io.github.akashskypatel.ffmpegkit'),
@@ -105,7 +118,9 @@ mavenPublishing {
         getSafeProperty('FFMPEG_KIT_VERSION', '1.0.0') // Ensure this is NOT a SNAPSHOT
     )
     publishToMavenCentral(true)
-    signAllPublications()
+    if (signPublications) {
+        signAllPublications()
+    }
 
     pom {
         name = 'FFmpegKit Extended'

@@ -1,4 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
 
 SCRIPT_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")" # FFmpegKit/scripts
 PROJECT_ROOT="$(realpath "$(dirname "$SCRIPT_DIR")")" # FFmpegKit
@@ -41,7 +54,7 @@ rsync -am --include='*/' \
 "$FFMPEG_SRC_DIR/fftools/" "$CURRENT_SOURCE_DIR/fftools.tmp"
 
 # remove "fftools/" from includes
-find "$CURRENT_SOURCE_DIR/fftools.tmp" -type f -name "*.c" -o -name "*.h" -exec sed -i'' 's|#include "fftools/|#include "|g' {} +
+find "$CURRENT_SOURCE_DIR/fftools.tmp" -type f -name "*.c" -o -name "*.h" -exec gsed -i 's|#include "fftools/|#include "|g' {} +
 
 # move from fftools to src
 cp -r "$CURRENT_SOURCE_DIR/fftools.tmp/"* "$CURRENT_SOURCE_DIR/src/"

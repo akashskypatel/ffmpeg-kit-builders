@@ -1,6 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+
+if (( BASH_VERSINFO[0] < 4 )); then
+    for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        if [[ -x "$bash" ]]; then
+            exec "$bash" "$0" "$@"
+        fi
+    done
+
+    echo "GNU Bash 4+ is required." >&2
+    exit 1
+fi
+
+: "${LOG_FILE:=/dev/null}"
 
 configure_ffmpeg_kit() {
   echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
@@ -27,13 +40,19 @@ configure_ffmpeg_kit() {
 	make distclean > >(redirect_output) 2>&1
 
   local cmake_params="-DCMAKE_SYSTEM_NAME=Linux \
--DCMAKE_C_COMPILER=$CC \
--DCMAKE_CXX_COMPILER=$CXX \
+-DCMAKE_SYSTEM_PROCESSOR=\"$cmake_host_arch\" \
+-DCMAKE_C_COMPILER=\"$CC\" \
+-DCMAKE_CXX_COMPILER=\"$CXX\" \
 -DFFMPEG_SRC_DIR=\"$ffmpeg_source_dir\" \
 -DFFMPEG_BUILD_DIR=\"$ffmpeg_install_prefix\" \
+-DDEPENDENCY_BUILD_DIR=\"$dependency_install_prefix\" \
 -DCMAKE_INSTALL_PREFIX=\"$ffmpeg_kit_install\" \
 -DFFMPEG_KIT_BUNDLE_TYPE=\"$(get_bundle_type)\" \
 -DFFMPEG_KIT_VERSION=\"$(get_latest_version_from_changelog)\""
+
+  if [[ "$host_arch" == "aarch64" && -n "$SYSROOT" ]]; then
+    cmake_params+=" -DCMAKE_SYSROOT=\"$SYSROOT\""
+  fi
 
 	if [[ "$build_ffmpeg_kit_type" == "static" ]]; then
     cmake_params+=" -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON"
@@ -90,14 +109,35 @@ detect_clang_version() {
 }
 
 set_toolchain_paths() {
-  export CC=gcc
-  export CXX=g++
-  export AS=as
-  export AR=ar
-  export LD=ld
-  export RANLIB=ranlib
-  export STRIP=strip
-  export NM=nm
+  if [[ "$host_arch" == "aarch64" ]]; then
+    export SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
+    export host_target="${host_target:-aarch64-linux-gnu}"
+    export CROSS_COMPILE="$host_target-"
+    export CC="clang"
+    export CXX="clang++"
+    export AS="${host_target}-as"
+    export AR="${host_target}-ar"
+    export LD="${host_target}-ld"
+    export RANLIB="${host_target}-ranlib"
+    export STRIP="${host_target}-strip"
+    export NM="${host_target}-nm"
+    export CFLAGS="$CFLAGS --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT"
+    export CXXFLAGS="$CXXFLAGS --target=aarch64-redhat-linux-gnu --sysroot=$SYSROOT -I$SYSROOT/usr/include/c++/8 -I$SYSROOT/usr/include/c++/8/aarch64-redhat-linux"
+    export LDFLAGS="$LDFLAGS --sysroot=$SYSROOT -fuse-ld=lld -B/usr/local/arm-gnu-toolchain/lib/gcc/aarch64-none-linux-gnu/13.2.1 -L$SYSROOT/usr/lib/gcc/aarch64-redhat-linux/8 -L$SYSROOT/usr/lib64 -L$SYSROOT/lib64 -L/usr/local/arm-gnu-toolchain/lib/gcc/aarch64-none-linux-gnu/13.2.1"
+    export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+    export PKG_CONFIG_LIBDIR="$SYSROOT/usr/lib64/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+  else
+    export CROSS_COMPILE=
+    export CC=gcc
+    export CXX=g++
+    export AS=as
+    export AR=ar
+    export LD=ld
+    export RANLIB=ranlib
+    export STRIP=strip
+    export NM=nm
+    unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+  fi
   export CFLAGS="$CFLAGS -Wl,--allow-multiple-definition,--warn-once -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat"
   export CXXFLAGS="$CXXFLAGS -I${ffmpeg_source_dir} -I${ffmpeg_source_dir}/compat"
   export LDFLAGS="$LDFLAGS -Wl,--allow-multiple-definition,--warn-once -ljsoncpp -L${ffmpeg_install_prefix}/lib"

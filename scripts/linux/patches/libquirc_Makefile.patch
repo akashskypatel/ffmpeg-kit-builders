@@ -106,11 +106,15 @@ index 8327b4e..ec03ec8 100755
 +	mkdir -p $(DESTDIR)$(PREFIX)/include
 +	mkdir -p $(DESTDIR)$(PREFIX)/lib
 +	mkdir -p $(DESTDIR)$(PREFIX)/lib/pkgconfig
- 	install -o root -g root -m 0644 lib/quirc.h $(DESTDIR)$(PREFIX)/include
- 	install -o root -g root -m 0644 libquirc.a $(DESTDIR)$(PREFIX)/lib
- 	install -o root -g root -m 0755 libquirc.$(VERSIONED_LIB_SUFFIX) \
- 		$(DESTDIR)$(PREFIX)/lib
-+	install -o root -g root -m 0644 quirc.pc $(DESTDIR)$(PREFIX)/lib/pkgconfig
+-	install -o root -g root -m 0644 lib/quirc.h $(DESTDIR)$(PREFIX)/include
+-	install -o root -g root -m 0644 libquirc.a $(DESTDIR)$(PREFIX)/lib
+-	install -o root -g root -m 0755 libquirc.$(VERSIONED_LIB_SUFFIX) \
+-		$(DESTDIR)$(PREFIX)/lib
++	install -m 0644 lib/quirc.h $(DESTDIR)$(PREFIX)/include
++	install -m 0644 libquirc.a $(DESTDIR)$(PREFIX)/lib
++	install -m 0755 libquirc.$(VERSIONED_LIB_SUFFIX) \
++		$(DESTDIR)$(PREFIX)/lib
++	install -m 0644 quirc.pc $(DESTDIR)$(PREFIX)/lib/pkgconfig
  	cp -d libquirc.$(LIB_SUFFIX) $(DESTDIR)$(PREFIX)/lib
 -	install -o root -g root -m 0755 quirc-demo $(DESTDIR)$(PREFIX)/bin
 -	# install -o root -g root -m 0755 quirc-demo-opencv $(DESTDIR)$(PREFIX)/bin
