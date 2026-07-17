@@ -2,7 +2,7 @@ diff --git a/pthread.h b/pthread.h
 index 9e3819a..3b7798f 100644
 --- a/pthread.h
 +++ b/pthread.h
-@@ -405,6 +405,49 @@ typedef struct
+@@ -405,6 +405,50 @@ typedef struct
  } __ptw32_handle_t;
  
  typedef __ptw32_handle_t pthread_t;
