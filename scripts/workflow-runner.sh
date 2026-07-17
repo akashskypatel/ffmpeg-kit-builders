@@ -75,6 +75,48 @@ trim() {
   printf '%s' "$value"
 }
 
+print_workflow_progress() {
+  local current_step="$1"
+  local total_steps="$2"
+  local combo="$3"
+  local step_name="$4"
+  local percent=100
+  local bars=40
+  local bar_width=40
+  local bar_str=""
+  local j
+
+  if [[ "$total_steps" -gt 0 ]]; then
+    percent=$((current_step * 100 / total_steps))
+    bars=$((percent * bar_width / 100))
+  fi
+
+  for ((j = 0; j < bars; j++)); do bar_str="${bar_str}#"; done
+  for ((j = bars; j < bar_width; j++)); do bar_str="${bar_str}-"; done
+
+  printf '::notice::Workflow progress %s [%s] %3d%% (%d/%d) %s\n' \
+    "$combo" "$bar_str" "$percent" "$current_step" "$total_steps" "$step_name"
+}
+
+count_workflow_steps_to_run() {
+  local start_building=true
+  local count=0
+  local step
+
+  [[ -n "${WORKFLOW_BUILD_FROM:-}" ]] && start_building=false
+
+  for step in "$@"; do
+    if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$step" == "$WORKFLOW_BUILD_FROM" ]]; then
+      start_building=true
+    fi
+    if [[ "$start_building" == "true" ]]; then
+      ((++count))
+    fi
+  done
+
+  printf '%s\n' "$count"
+}
+
 contains_csv_value() {
   local csv="$1"
   local needle="$2"
@@ -569,6 +611,8 @@ done
 for combo in "${workflow_target_combos[@]}"; do
     platform="${combo%-*}"
     arch="${combo#*-}"
+    workflow_step_number=0
+    workflow_step_total=0
     ran_any=true
     ensure_target_toolchain "$platform" "$arch"
     echo "Preparing build steps for $combo"
@@ -581,18 +625,23 @@ for combo in "${workflow_target_combos[@]}"; do
       WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh "${runner_args[@]}" --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
     fi
     echo "WORKFLOW_BUILD_STEPS for $combo: $WORKFLOW_BUILD_STEPS"
+    read -ra workflow_build_steps <<< "$WORKFLOW_BUILD_STEPS"
+    workflow_step_total="$(count_workflow_steps_to_run "${workflow_build_steps[@]}")"
+    echo "::notice::High-level build plan for $combo: $workflow_step_total step(s) to run from WORKFLOW_BUILD_STEPS"
 
     start_building=true
     found_build_from=false
     [[ -n "${WORKFLOW_BUILD_FROM:-}" ]] && start_building=false
 
-    for build in $WORKFLOW_BUILD_STEPS; do
+    for build in "${workflow_build_steps[@]}"; do
       set_workflow_current_step "$build"
       if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$build" == "$WORKFLOW_BUILD_FROM" ]]; then
         start_building=true
         found_build_from=true
       fi
       if [[ ${start_building} == "true" ]]; then
+        ((++workflow_step_number))
+        print_workflow_progress "$workflow_step_number" "$workflow_step_total" "$combo" "$build"
         echo "Running $build for $combo"
         step_runner_args=("${runner_args[@]}" --build-only="$build")
         [[ "$workflow_mode" != "ffmpeg_bundle" ]] && step_runner_args+=(--upload-deps)
