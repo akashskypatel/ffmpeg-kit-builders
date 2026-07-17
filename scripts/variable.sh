@@ -99,6 +99,7 @@ CONFIG_WINDOWS="\
 --enable-d3d12va \
 --enable-dxva2 \
 --enable-schannel \
+--enable-pthread-win32 \
 --enable-mediafoundation"
 
 CONFIG_MACOS="\
