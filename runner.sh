@@ -613,12 +613,6 @@ while [ $# -gt 0 ]; do
 done
 }
 
-if truthy "$skip_pkg_check"; then
-  echo "Skipping package check"
-else
-  check_missing_packages # do this first since it's annoying to go through prompts then be rejected
-fi
-
 export RUN_STATE_FILE="$BASEDIR/~run.state"
 export BUILT_STATE_FILE="$BASEDIR/~built.state"
 
