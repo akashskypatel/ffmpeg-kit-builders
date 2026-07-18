@@ -75,6 +75,15 @@ function(replace_static_with_shared INPUT_LIB OUTPUT_VAR)
             set(${OUTPUT_VAR} "${SHARED_PATH}" PARENT_SCOPE)
             message(STATUS "Replaced ${INPUT_LIB} with ${SHARED_PATH}")
         else()
+            if(WIN32)
+                string(REPLACE "/lib/" "/bin/" BIN_SHARED_PATH "${SHARED_PATH}")
+                if(EXISTS "${BIN_SHARED_PATH}")
+                    set(${OUTPUT_VAR} "${BIN_SHARED_PATH}" PARENT_SCOPE)
+                    message(STATUS "Replaced ${INPUT_LIB} with ${BIN_SHARED_PATH}")
+                    return()
+                endif()
+            endif()
+
             message(STATUS "Shared library not found: ${SHARED_PATH}")
             set(${OUTPUT_VAR} "${INPUT_LIB}" PARENT_SCOPE)
         endif()
@@ -155,7 +164,9 @@ function(get_static_library_basename INPUT_LIB OUTPUT_VAR)
     else()
         get_filename_component(_file_name "${INPUT_LIB}" NAME)
 
-        if(_file_name MATCHES "^lib(.+)\\.a$")
+        if(_file_name MATCHES "^lib(.+)\\.dll\\.a$")
+            set(_name "${CMAKE_MATCH_1}")
+        elseif(_file_name MATCHES "^lib(.+)\\.a$")
             set(_name "${CMAKE_MATCH_1}")
         elseif(_file_name MATCHES "^lib(.+)\\.dylib$")
             set(_name "${CMAKE_MATCH_1}")
@@ -380,6 +391,176 @@ function(replace_shared_with_static INPUT_LIB OUTPUT_VAR)
     endif()
 endfunction()
 
+function(resolve_mingw_static_runtime_library INPUT_LIB OUTPUT_VAR)
+    set(_static_runtime_library "")
+
+    if(MINGW)
+        get_static_library_basename("${INPUT_LIB}" _lib_name)
+        if(_lib_name MATCHES "^(ssp)$")
+            execute_process(
+                COMMAND "${CMAKE_CXX_COMPILER}" "-print-file-name=lib${_lib_name}.a"
+                OUTPUT_VARIABLE _candidate_static_runtime_library
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+            if(EXISTS "${_candidate_static_runtime_library}")
+                set(_static_runtime_library "${_candidate_static_runtime_library}")
+            endif()
+        endif()
+    endif()
+
+    set(${OUTPUT_VAR} "${_static_runtime_library}" PARENT_SCOPE)
+endfunction()
+
+function(replace_mingw_runtime_imports_with_static INPUT_VAR)
+    set(_fixed_libs "")
+
+    foreach(_lib IN LISTS ${INPUT_VAR})
+        resolve_mingw_static_runtime_library("${_lib}" _static_runtime_library)
+        if(_static_runtime_library)
+            message(STATUS "Replaced MinGW runtime import ${_lib} with ${_static_runtime_library}")
+            list(APPEND _fixed_libs "${_static_runtime_library}")
+        else()
+            list(APPEND _fixed_libs "${_lib}")
+        endif()
+    endforeach()
+
+    ffmpegkit_dedupe_link_list(_fixed_libs)
+    set(${INPUT_VAR} "${_fixed_libs}" PARENT_SCOPE)
+endfunction()
+
+function(append_mingw_shared_cxx_runtime_dlls INPUT_VAR)
+    if(NOT MINGW)
+        return()
+    endif()
+
+    set(_fixed_libs ${${INPUT_VAR}})
+
+    execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" "-print-file-name=libstdc++-6.dll"
+        OUTPUT_VARIABLE _mingw_stdcxx_dll
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(EXISTS "${_mingw_stdcxx_dll}")
+        list(APPEND _fixed_libs "${_mingw_stdcxx_dll}")
+        message(STATUS "Bundling MinGW C++ runtime DLL: ${_mingw_stdcxx_dll}")
+    endif()
+
+    get_filename_component(_mingw_compiler_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    get_filename_component(_mingw_root "${_mingw_compiler_dir}/.." ABSOLUTE)
+    find_file(_mingw_winpthread_dll
+        NAMES libwinpthread-1.dll
+        PATHS
+            "${_mingw_root}/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/bin"
+            "${_mingw_root}/${CMAKE_SYSTEM_PROCESSOR}-w64-mingw32/lib"
+            "${_mingw_root}/x86_64-w64-mingw32/bin"
+            "${_mingw_root}/x86_64-w64-mingw32/lib"
+            "${_mingw_root}/i686-w64-mingw32/bin"
+            "${_mingw_root}/i686-w64-mingw32/lib"
+        NO_DEFAULT_PATH
+    )
+    if(EXISTS "${_mingw_winpthread_dll}")
+        list(APPEND _fixed_libs "${_mingw_winpthread_dll}")
+        message(STATUS "Bundling MinGW winpthread runtime DLL: ${_mingw_winpthread_dll}")
+    endif()
+
+    ffmpegkit_dedupe_link_list(_fixed_libs)
+    set(${INPUT_VAR} "${_fixed_libs}" PARENT_SCOPE)
+endfunction()
+
+function(move_mingw_pthread_win32_shared_to_tail INPUT_VAR)
+    if(NOT MINGW)
+        return()
+    endif()
+
+    set(_fixed_libs "")
+    set(_pthread_win32_dlls "")
+
+    foreach(_lib IN LISTS ${INPUT_VAR})
+        is_mingw_pthread_win32_library("${_lib}" _is_pthread_win32)
+        if(_is_pthread_win32 AND "${_lib}" MATCHES "\\.dll$")
+            list(APPEND _pthread_win32_dlls "${_lib}")
+        else()
+            list(APPEND _fixed_libs "${_lib}")
+        endif()
+    endforeach()
+
+    if(_pthread_win32_dlls)
+        list(APPEND _fixed_libs ${_pthread_win32_dlls})
+        ffmpegkit_dedupe_link_list(_fixed_libs)
+        set(${INPUT_VAR} "${_fixed_libs}" PARENT_SCOPE)
+    endif()
+endfunction()
+
+function(is_mingw_pthread_win32_library INPUT_LIB OUTPUT_VAR)
+    set(_is_pthread_win32 OFF)
+
+    if(MINGW)
+        get_static_library_basename("${INPUT_LIB}" _lib_name)
+        if(_lib_name MATCHES "^pthreadGC(E)?3$")
+            set(_is_pthread_win32 ON)
+        endif()
+    endif()
+
+    set(${OUTPUT_VAR} "${_is_pthread_win32}" PARENT_SCOPE)
+endfunction()
+
+function(remove_mingw_pthread_win32_link_options LIBRARY_NAME)
+    if(NOT MINGW)
+        return()
+    endif()
+
+    get_target_property(_link_options PkgConfig::${LIBRARY_NAME} INTERFACE_LINK_OPTIONS)
+    if(_link_options)
+        set(_fixed_link_options "")
+        foreach(_link_option IN LISTS _link_options)
+            is_mingw_pthread_win32_library("${_link_option}" _is_pthread_win32)
+            if(_is_pthread_win32 OR _link_option MATCHES "^-l?pthread(GC(E)?3)?$")
+                message(STATUS "Removed pthread link option from PkgConfig::${LIBRARY_NAME}: ${_link_option}")
+                continue()
+            endif()
+
+            list(APPEND _fixed_link_options "${_link_option}")
+        endforeach()
+
+        set_target_properties(PkgConfig::${LIBRARY_NAME} PROPERTIES INTERFACE_LINK_OPTIONS "${_fixed_link_options}")
+    endif()
+
+    get_target_property(_link_libraries PkgConfig::${LIBRARY_NAME} INTERFACE_LINK_LIBRARIES)
+    if(_link_libraries)
+        set(_fixed_link_libraries "")
+        foreach(_link_library IN LISTS _link_libraries)
+            is_mingw_pthread_win32_library("${_link_library}" _is_pthread_win32)
+            if(_link_library MATCHES "^-pthread$" OR _link_library MATCHES "^-lpthread$" OR _link_library MATCHES "^-lpthreadGC(E)?3$")
+                message(STATUS "Removed pthread link library from PkgConfig::${LIBRARY_NAME}: ${_link_library}")
+                continue()
+            elseif(_is_pthread_win32)
+                replace_static_with_shared("${_link_library}" _resolved_pthread_win32)
+                list(APPEND _fixed_link_libraries "${_resolved_pthread_win32}")
+                continue()
+            endif()
+
+            list(APPEND _fixed_link_libraries "${_link_library}")
+        endforeach()
+
+        set_target_properties(PkgConfig::${LIBRARY_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES "${_fixed_link_libraries}")
+    endif()
+
+    get_target_property(_compile_options PkgConfig::${LIBRARY_NAME} INTERFACE_COMPILE_OPTIONS)
+    if(_compile_options)
+        set(_fixed_compile_options "")
+        foreach(_compile_option IN LISTS _compile_options)
+            if(_compile_option MATCHES "^-D(PTW32_STATIC_LIB|PTHREADGC3_STATIC|PTHREADGCE3_STATIC)$")
+                message(STATUS "Removed pthread-win32 static compile option from PkgConfig::${LIBRARY_NAME}: ${_compile_option}")
+                continue()
+            endif()
+
+            list(APPEND _fixed_compile_options "${_compile_option}")
+        endforeach()
+
+        set_target_properties(PkgConfig::${LIBRARY_NAME} PROPERTIES INTERFACE_COMPILE_OPTIONS "${_fixed_compile_options}")
+    endif()
+endfunction()
+
 function(replace_dll_a_with_dll INPUT_LIB OUTPUT_VAR)
     if(INPUT_LIB MATCHES "\\.dll\\.a$")
         string(REPLACE ".dll.a" ".dll" DLL_PATH "${INPUT_LIB}")
@@ -450,7 +631,10 @@ function(configure_static_linking LIBRARY_NAME STATIC_LINKING)
                 set(LIB_PATH "${${LIB_PATH}_ABSOLUTE_PATH}")
             endif()
         endif()
-        if(STATIC_LINKING)
+        is_mingw_pthread_win32_library("${LIB_PATH}" _is_pthread_win32)
+        if(_is_pthread_win32)
+            replace_static_with_shared("${LIB_PATH}" RESOLVED_LIB)
+        elseif(STATIC_LINKING)
             replace_shared_with_static("${LIB_PATH}" RESOLVED_LIB ${${LIBRARY_NAME}_LIBRARY_DIRS})
         else()
             if(MINGW)
@@ -462,6 +646,7 @@ function(configure_static_linking LIBRARY_NAME STATIC_LINKING)
         list(APPEND FIXED_LIBS "${RESOLVED_LIB}")
     endforeach()
     set_target_properties(PkgConfig::${LIBRARY_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES "${FIXED_LIBS}")
+    remove_mingw_pthread_win32_link_options(${LIBRARY_NAME})
     list(APPEND BUNDLE_LIBRARIES ${FIXED_LIBS})
     list(REMOVE_DUPLICATES BUNDLE_LIBRARIES)
     set(BUNDLE_LIBRARIES "${BUNDLE_LIBRARIES}" PARENT_SCOPE)
@@ -507,6 +692,7 @@ function(configure_shared_linking LIBRARY_NAME SHARED_LINKING)
         list(APPEND FIXED_LIBS "${RESOLVED_LIB}")
     endforeach()
     set_target_properties(PkgConfig::${LIBRARY_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES "${FIXED_LIBS}")
+    remove_mingw_pthread_win32_link_options(${LIBRARY_NAME})
     list(APPEND BUNDLE_LIBRARIES ${FIXED_LIBS})
     list(REMOVE_DUPLICATES BUNDLE_LIBRARIES)
     set(BUNDLE_LIBRARIES "${BUNDLE_LIBRARIES}" PARENT_SCOPE)

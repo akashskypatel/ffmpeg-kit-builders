@@ -14,7 +14,7 @@ endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfmpegKitSources.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfmpegKitDependencies.cmake")
 
-# set(CMAKE_MESSAGE_LOG_LEVEL DEBUG)
+set(CMAKE_MESSAGE_LOG_LEVEL DEBUG)
 
 # Enforce MinGW when building for Windows
 if(WIN32 AND NOT MINGW)
@@ -162,22 +162,21 @@ if(WIN32)
     )
 
     if(MINGW)
-        find_library(FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB
-            NAMES libpthreadGC3.a libpthreadGCE3.a pthreadGC3 pthreadGCE3
-            PATHS
-                "${DEPENDENCY_BUILD_DIR}/lib"
-                "${FFMPEG_BUILD_DIR}/lib"
-            NO_DEFAULT_PATH
-        )
-        set(FFMPEGKIT_PTHREAD_STATIC_LIB "${FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB}")
-        if(NOT EXISTS "${FFMPEGKIT_PTHREAD_STATIC_LIB}")
-            message(FATAL_ERROR "Static pthread-win32 library not found. Expected libpthreadGC3.a or libpthreadGCE3.a in the dependency or FFmpeg library paths.")
-        endif()
+        # find_library(FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB
+        #     NAMES libpthreadGC3.a libpthreadGCE3.a pthreadGC3 pthreadGCE3
+        #     PATHS
+        #         "${DEPENDENCY_BUILD_DIR}/lib"
+        #         "${FFMPEG_BUILD_DIR}/lib"
+        #     NO_DEFAULT_PATH
+        # )
+        # set(FFMPEGKIT_PTHREAD_STATIC_LIB "${FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB}")
+        # if(NOT EXISTS "${FFMPEGKIT_PTHREAD_STATIC_LIB}")
+        #     message(FATAL_ERROR "Static pthread-win32 library not found. Expected libpthreadGC3.a or libpthreadGCE3.a in the dependency or FFmpeg library paths.")
+        # endif()
 
         target_compile_definitions(ffmpegkit PRIVATE
             _WIN32_WINNT=0x0600
             _FORTIFY_SOURCE=2
-            PTW32_STATIC_LIB
             _POSIX_C_SOURCE=200112L
         )
 
@@ -192,12 +191,10 @@ if(WIN32)
         target_link_options(ffmpegkit PRIVATE
             "-v"
             "-static-libgcc"
-            "-static-libstdc++"
             # "-nodefaultlibs"
             # "-Wl,--entry,_DllMainCRTStartup"
             "-Wl,--enable-runtime-pseudo-reloc"
             "-Wl,-u,__mingw_raise_matherr"
-            "-Wl,--exclude-libs,libstdc++.a"
             "-Wl,--exclude-libs,libgcc.a"
             "-Wl,--exclude-libs,libgomp.a"
             "-Wl,--exclude-libs,libssp.a"
@@ -414,27 +411,24 @@ if(BUILD_SHARED_LIBS)
         )
 
         if(MINGW)
-            target_link_libraries(ffmpegkit PRIVATE
-                # 1. CRT and threading - must resolve before anything else
-                "-Wl,-Bstatic"
-                "-lstdc++"
-                "-lgcc"
-                "-Wl,-Bdynamic"
+            move_mingw_pthread_win32_shared_to_tail(BUNDLE_LIBRARIES)
+            append_mingw_shared_cxx_runtime_dlls(BUNDLE_LIBRARIES)
 
-                # 2. FFmpeg core - whole-archive to prevent dead-stripping of
+            target_link_libraries(ffmpegkit PRIVATE
+                # 1. FFmpeg core - whole-archive to prevent dead-stripping of
                 #    codecs and muxers that are referenced only by string tables
                 "-Wl,--whole-archive"
                 ${FFMPEG_STATIC_LIBS}
                 "-Wl,--no-whole-archive"
 
-                # 3. External dependency libs from pkg-config (SDL2, openmpt, rist,
+                # 2. External dependency libs from pkg-config (SDL2, openmpt, rist,
                 #    etc.) - grouped to resolve circular references between them.
                 #    This is the block that was previously misplaced after -Bdynamic.
                 "-Wl,--start-group"
                 ${BUNDLE_LIBRARIES}
                 "-Wl,--end-group"
 
-                # 4. Windows system DLLs - always dynamic, always last
+                # 3. Windows system DLLs - always dynamic, always last
                 "-lkernel32"
                 "-ladvapi32"
                 "-luser32"
