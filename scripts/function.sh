@@ -4652,26 +4652,16 @@ configure_ffmpeg() {
     
   fi
   if iswindows; then
-    local pthread_win32_static_lib=""
-    local pthread_win32_static_dir=""
-    pthread_win32_static_lib="$(find_windows_static_pthread_win32)" || exit_message 1 "configure_ffmpeg: static pthread-win32 library not found. Build build_pthread_win32 before configuring FFmpeg."
-    pthread_win32_static_dir="$(dirname "$pthread_win32_static_lib")"
-    export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
-    export CXXFLAGS="$CXXFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
-    export CPPFLAGS="$CPPFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
-    export LDFLAGS="$LDFLAGS -L${pthread_win32_static_dir}"
+    export LDFLAGS="$LDFLAGS -Wl,-Bstatic -l:libpthreadGC3.a"
     export CFLAGS="$CFLAGS -mstackrealign"
     export LD=${cross_prefix}gcc # ld weirdness with windows
 	  init_options+=" --target-os=mingw32"
     # init_options+=" --enable-w32threads"
     init_options+=" --disable-w32threads"
     init_options+=" --enable-pthreads"
-    init_options+=" --extra-cflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
-    init_options+=" --extra-cxxflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
-    init_options+=" --extra-ldflags=\" -L${pthread_win32_static_dir} \""
+    init_options+=" --extra-cflags=\" -DPTW32_STATIC_LIB \""
     init_options+=" --disable-filter=gfxcapture"
-    init_options+=" --extra-ldflags=\" -L${dependency_install_prefix}/lib \""
-    add_extra_libs "$pthread_win32_static_lib"
+    init_options+=" --extra-ldflags=\" -L${deps_install_prefix}/lib \""
   elif isandroid; then
     # unset PKG_CONFIG_PATH
     export PKG_CONFIG_SYSROOT_DIR="/"
@@ -4756,7 +4746,7 @@ configure_ffmpeg() {
 	  init_options+=" --extra-cflags=\" -pipe \""
     init_options+=" --extra-ldflags=\" $stdcpp_path $stdgcc_path \""
     init_options+=" --extra-cflags=\" $extra_ffmpeg_c_flags \""
-    add_extra_libs "$stdcpp_path"
+    add_extra_libs "$stdcpp_path -l:libpthreadGC3.a"
     init_options+=" --extra-cflags=\" -Wno-pedantic -Wno-cpp -Wno-variadic-macros \""
   fi
 
