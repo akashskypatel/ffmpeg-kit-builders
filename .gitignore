@@ -43,6 +43,6 @@ QWEN.md
 .DS_Store
 .aider*
 .codex
-_prebuilt/
-.prebuilt/
-/*.zip
+**/_prebuilt/*
+**/.prebuilt/*
+**/*.zip
