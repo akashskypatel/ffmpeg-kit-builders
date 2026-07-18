@@ -177,7 +177,6 @@ if(WIN32)
         target_compile_definitions(ffmpegkit PRIVATE
             _WIN32_WINNT=0x0600
             _FORTIFY_SOURCE=2
-            _POSIX_C_SOURCE=200112L
         )
 
         target_include_directories(ffmpegkit PRIVATE
@@ -188,20 +187,20 @@ if(WIN32)
             -fstack-protector-strong
         )
 
-        target_link_options(ffmpegkit PRIVATE
+        target_link_options(ffmpegkit PRIVATE 
             "-v"
-            "-static-libgcc"
+            "-static-libgcc" 
+            "-static-libstdc++" 
             # "-nodefaultlibs"
             # "-Wl,--entry,_DllMainCRTStartup"
             "-Wl,--enable-runtime-pseudo-reloc"
             "-Wl,-u,__mingw_raise_matherr"
+            "-Wl,--exclude-libs,libstdc++.a"
             "-Wl,--exclude-libs,libgcc.a"
             "-Wl,--exclude-libs,libgomp.a"
             "-Wl,--exclude-libs,libssp.a"
-            "-Wl,--exclude-libs,libpthreadGC3.a"
-            "-Wl,--exclude-libs,libpthreadGCE3.a"
-            "-Wl,--nxcompat"          # Data Execution Prevention (DEP)
-            "-Wl,--dynamicbase"       # ASLR
+            "-Wl,--nxcompat"        # Data Execution Prevention (DEP)
+            "-Wl,--dynamicbase"     # ASLR
             "-Wl,--high-entropy-va"   # 64-bit ASLR
             "-Wl,--enable-auto-import"
             "-Wl,--allow-multiple-definition"
@@ -411,24 +410,32 @@ if(BUILD_SHARED_LIBS)
         )
 
         if(MINGW)
-            move_mingw_pthread_win32_shared_to_tail(BUNDLE_LIBRARIES)
-            append_mingw_shared_cxx_runtime_dlls(BUNDLE_LIBRARIES)
+            # append_mingw_shared_cxx_runtime_dlls(BUNDLE_LIBRARIES)
+            replace_mingw_runtime_imports_with_static(BUNDLE_LIBRARIES)
+            # move_mingw_pthread_win32_shared_to_tail(BUNDLE_LIBRARIES)
 
             target_link_libraries(ffmpegkit PRIVATE
-                # 1. FFmpeg core - whole-archive to prevent dead-stripping of
+                # 1. CRT and threading - must resolve before anything else
+                "-Wl,-Bstatic"
+                "-lstdc++"
+                "-lgcc"
+                "-lwinpthread"
+                "-Wl,-Bdynamic"
+
+                # 2. FFmpeg core - whole-archive to prevent dead-stripping of
                 #    codecs and muxers that are referenced only by string tables
                 "-Wl,--whole-archive"
                 ${FFMPEG_STATIC_LIBS}
                 "-Wl,--no-whole-archive"
 
-                # 2. External dependency libs from pkg-config (SDL2, openmpt, rist,
+                # 3. External dependency libs from pkg-config (SDL2, openmpt, rist,
                 #    etc.) - grouped to resolve circular references between them.
                 #    This is the block that was previously misplaced after -Bdynamic.
                 "-Wl,--start-group"
                 ${BUNDLE_LIBRARIES}
                 "-Wl,--end-group"
 
-                # 3. Windows system DLLs - always dynamic, always last
+                # 4. Windows system DLLs - always dynamic, always last
                 "-lkernel32"
                 "-ladvapi32"
                 "-luser32"
@@ -492,7 +499,9 @@ if(BUILD_SHARED_LIBS)
         if(MINGW)
             target_link_libraries(ffmpegkit PRIVATE 
                 "-Wl,--start-group"
+                "${PTW32_STATIC_LIB}"
                 ${BUNDLE_LIBRARIES}
+                "pthread"
                 "ws2_32" 
                 "bcrypt"
                 "-Wl,--end-group"

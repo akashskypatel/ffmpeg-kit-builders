@@ -9,6 +9,7 @@ function(ffmpegkit_prepare_sources OUT_SOURCES OUT_HEADERS)
 
     message(STATUS "Patching config.h for SDL compatibility...")
     file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/config.h" CONFIG_H_CONTENT)
+    string(REPLACE "#define HAVE_PTHREAD_SETNAME_NP 0" "" CONFIG_H_CONTENT "${CONFIG_H_CONTENT}")
     file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/src/config.h" "${CONFIG_H_CONTENT}")
 
     file(GLOB_RECURSE KIT_SOURCES

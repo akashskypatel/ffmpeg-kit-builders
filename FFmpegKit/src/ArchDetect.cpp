@@ -22,6 +22,10 @@ extern "C" {
 #include <libavutil/avutil.h>
 }
 
+extern void *ffmpegKitInitialize();
+
+const void *_archDetectInitializer{ffmpegKitInitialize()};
+
 std::string ffmpegkit::ArchDetect::getArch() {
   std::string buildConfiguration = avutil_configuration();
   std::string key = "--arch=";

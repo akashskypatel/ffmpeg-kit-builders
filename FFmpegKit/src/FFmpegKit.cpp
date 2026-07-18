@@ -25,6 +25,10 @@ extern "C" {
 void cancel_operation(long id);
 }
 
+extern void *ffmpegKitInitialize();
+
+const void *_ffmpegKitInitializeri{ffmpegKitInitialize()};
+
 std::shared_ptr<ffmpegkit::FFmpegSession>
 ffmpegkit::FFmpegKit::executeWithArguments(
     const std::list<std::string> &arguments) {

@@ -379,6 +379,8 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
 #if defined(_WIN32)
     // Windows: 'dummy' driver provides an in-memory surface without a visible window.
     SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
+    if (!SDL_getenv("SDL_AUDIODRIVER"))
+        SDL_setenv("SDL_AUDIODRIVER", "wasapi", 0);
 #elif defined(__APPLE__)
     // iOS/macOS: SDL used as a library — bypass SDLUIKitDelegate/SDLAppDelegate
     // startup requirements (identical to the Android SDL_SetMainReady() call above).

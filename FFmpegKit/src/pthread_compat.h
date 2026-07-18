@@ -80,32 +80,29 @@ extern "C++" {
         operator size_t() const { return reinterpret_cast<size_t>(this->p); }
     };
 
-    #ifndef PTW32_CPP_HANDLE_COMPARATORS
-    #define PTW32_CPP_HANDLE_COMPARATORS
-        // GCC 15+ Comparisons
-        inline bool operator==(const pthread_t& lhs, const pthread_t& rhs) {
-            return lhs.p == rhs.p && lhs.x == rhs.x;
-        }
-        
-        inline bool operator!=(const pthread_t& lhs, const pthread_t& rhs) {
-            return !(lhs == rhs);
-        }
+    // GCC 15+ Comparisons
+    inline bool operator==(const pthread_t& lhs, const pthread_t& rhs) {
+        return lhs.p == rhs.p && lhs.x == rhs.x;
+    }
+    
+    inline bool operator!=(const pthread_t& lhs, const pthread_t& rhs) {
+        return !(lhs == rhs);
+    }
 
-        #if __cplusplus >= 202002L
-            inline std::strong_ordering operator<=>(const pthread_t& lhs, const pthread_t& rhs) {
-                if (lhs.p < rhs.p) return std::strong_ordering::less;
-                if (lhs.p > rhs.p) return std::strong_ordering::greater;
-                if (lhs.x < rhs.x) return std::strong_ordering::less;
-                if (lhs.x > rhs.x) return std::strong_ordering::greater;
-                return std::strong_ordering::equal;
-            }
-        #else
-            inline bool operator<(const pthread_t& lhs, const pthread_t& rhs) {
-                if (lhs.p < rhs.p) return true;
-                if (lhs.p > rhs.p) return false;
-                return lhs.x < rhs.x;
-            }
-        #endif
+    #if __cplusplus >= 202002L
+        inline std::strong_ordering operator<=>(const pthread_t& lhs, const pthread_t& rhs) {
+            if (lhs.p < rhs.p) return std::strong_ordering::less;
+            if (lhs.p > rhs.p) return std::strong_ordering::greater;
+            if (lhs.x < rhs.x) return std::strong_ordering::less;
+            if (lhs.x > rhs.x) return std::strong_ordering::greater;
+            return std::strong_ordering::equal;
+        }
+    #else
+        inline bool operator<(const pthread_t& lhs, const pthread_t& rhs) {
+            if (lhs.p < rhs.p) return true;
+            if (lhs.p > rhs.p) return false;
+            return lhs.x < rhs.x;
+        }
     #endif
 }
 
