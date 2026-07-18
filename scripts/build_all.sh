@@ -79,7 +79,7 @@ APPLE_PLATFORM_ARCHS=()
 BUILD_ARRAY=()
 build_aars=false
 declare -A PLATFORMS
-build_ffmpeg=false
+do_build_ffmpeg=false
 build_kit=false
 build_bundle=false
 no_clean=true
@@ -243,7 +243,7 @@ parse_builds() {
       if [[ "$b" == "$valid_b" ]]; then
         valid=true
         if [[ "$b" == "ffmpeg" ]]; then
-            build_ffmpeg=true
+            do_build_ffmpeg=true
             build_commands+=" --ffmpeg"
         elif [[ "$b" == "kit" ]]; then
             build_kit=true

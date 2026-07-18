@@ -4544,18 +4544,22 @@ run_valid_function() {
   # rebuild. A successful self-artifact download satisfies the step and must not
   # fall through to the local build function.
   if ! truthy "$build_force"; then
-    sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" \
-      "$SCRIPTDIR/workflow-get-deps.sh" \
-      "$host_platform" "$platform_arch" "$step" --self 2>&1 | tee -a "$LOG_FILE"
-    result=${PIPESTATUS[0]}
-    if [[ $result -eq 0 ]]; then
-      echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
-      set_run_state "$step"
-      mark_as_built "$step"
-      reset_and_exit 0
-      return $?
+    if truthy "$force_self" && [[ "$workflow_requested_step" == "$step" ]]; then
+      echo "INFO: Skipping self-artifact download for $step (force_self enabled)." >>"${LOG_FILE}"
     else
-      echo "INFO: No reusable release artifact for $step (workflow-get-deps exit ${result}). Building locally." >>"${LOG_FILE}"
+      sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" \
+        "$SCRIPTDIR/workflow-get-deps.sh" \
+        "$host_platform" "$platform_arch" "$step" --self 2>&1 | tee -a "$LOG_FILE"
+      result=${PIPESTATUS[0]}
+      if [[ $result -eq 0 ]]; then
+        echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
+        set_run_state "$step"
+        mark_as_built "$step"
+        reset_and_exit 0
+        return $?
+      else
+        echo "INFO: No reusable release artifact for $step (workflow-get-deps exit ${result}). Building locally." >>"${LOG_FILE}"
+      fi
     fi
   fi
 	if [[ -n "$step" ]]; then
@@ -4606,6 +4610,56 @@ get_gas_preprocessor() {
     fi
     [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
   fi
+}
+
+ffmpeg_pattern_for_bundle() {
+  local platform="$1"
+  local arch="$2"
+  local bundle="$3"
+
+  if [[ "$bundle" == "debug" ]]; then
+    printf 'ffmpeg-base-%s-%s-static-debug*' "$platform" "$arch"
+  else
+    printf 'ffmpeg-%s-%s-%s-static*' "$bundle" "$platform" "$arch"
+  fi
+}
+
+check_ffmpeg() {
+  local old_pkg_path="$PKG_CONFIG_PATH"
+  export PKG_CONFIG_PATH="$work_dir/$(get_ffmpeg_directory)/lib/pkgconfig"
+  echo "INFO: Checking ffmpeg with pkg-config in $PKG_CONFIG_PATH..." | tee -a "$LOG_FILE"
+  pkg-config --exists libavcodec libavdevice libavfilter libavformat libavutil libswresample libswscale
+  local result=$?
+  export PKG_CONFIG_PATH="$old_pkg_path"
+  [[ $result -eq 0 ]] && echo "INFO: ffmpeg is already built." | tee -a "$LOG_FILE"
+  return $result
+}
+
+build_ffmpeg() {
+  if ! truthy "$build_force"; then
+    if check_ffmpeg; then
+      echo "INFO: ffmpeg is already built. Skipping build." >>"${LOG_FILE}"
+      return 0
+    fi
+    local pattern
+    pattern="$(get_ffmpeg_directory)"
+    sudo -E env "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$pattern" --artifact-pattern 2>&1 | tee -a "$LOG_FILE"
+    result=${PIPESTATUS[0]}
+    if [[ $result -eq 0 ]]; then
+      echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
+      return 0
+    fi
+  fi
+  download_ffmpeg
+  configure_ffmpeg
+  install_ffmpeg
+}
+
+build_ffmpeg_kit() {
+  build_ffmpeg
+  download_ffmpeg
+  configure_ffmpeg_kit
+  install_ffmpeg_kit
 }
 
 # shellcheck disable=SC2120

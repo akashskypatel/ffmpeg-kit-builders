@@ -321,7 +321,7 @@ while [ $# -gt 0 ]; do
 		;;
   --build-ffmpeg-only|--build-ffmpeg|--ffmpeg)
     export build_ffmpeg_type=static
-    export build_ffmpeg=y
+    export do_build_ffmpeg=y
     shift
     ;;
 	--build-ffmpeg-only=*|--build-ffmpeg=*|--ffmpeg=*)
@@ -337,12 +337,12 @@ while [ $# -gt 0 ]; do
       export build_ffmpeg_type=shared
       ;;
     esac
-    export build_ffmpeg=y
+    export do_build_ffmpeg=y
 		shift
 		;;
   --build-ffmpeg-kit-only|--build-ffmpeg-kit|--ffmpeg-kit|--kit)
     export build_ffmpeg_kit_type=shared
-    export build_ffmpeg_kit=y
+    export do_build_ffmpeg_kit=y
     shift
     ;;
 	--build-ffmpeg-kit-only=*|--build-ffmpeg-kit=*|--ffmpeg-kit=*|--kit=*)
@@ -358,7 +358,7 @@ while [ $# -gt 0 ]; do
       export build_ffmpeg_kit_type=shared
       ;;
     esac
-    export build_ffmpeg_kit=y
+    export do_build_ffmpeg_kit=y
 		shift
 		;;
   --build-tests|--build-test|--test|--tests)
@@ -985,17 +985,9 @@ main() {
     # builds all dependencies
     truthy "$build_dependencies" && run_valid_build_functions
     # build ffmpeg mode
-    truthy "$build_ffmpeg" && { 
-      download_ffmpeg
-      configure_ffmpeg
-      install_ffmpeg
-    }
+    truthy "$do_build_ffmpeg" && build_ffmpeg
     # build ffmpeg-kit mode
-    truthy "$build_ffmpeg_kit" && {
-      download_ffmpeg
-      configure_ffmpeg_kit
-      install_ffmpeg_kit
-     }
+    truthy "$do_build_ffmpeg_kit" && build_ffmpeg_kit
      # build ffmpeg-kit bundle mode
     truthy "$create_bundle" && create_ffmpeg_kit_bundle
   fi
