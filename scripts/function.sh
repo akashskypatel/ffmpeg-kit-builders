@@ -385,7 +385,7 @@ setup_build_environment() {
     determine_distro
     setup_gsed
     export host_name="$host_platform-$host_arch"
-    echo -e "\n************** Setting up environment for $host_name build... **************" | tee -a "$LOG_FILE"
+    truthy "$hide_banner" || echo -e "\nINFO: Setting up environment for $host_name build..." | tee -a "$LOG_FILE"
     
     export work_dir="$(validate_path "$WORKDIR"/"$host_name")"
     export build_triple="${build_triple:-$(gcc -dumpmachine)}"
@@ -5576,6 +5576,7 @@ ts() {
 
 intro() {
   setup_build_environment
+  truthy "$hide_banner" && return 0
 	cat <<EOL
      ##################### Welcome ######################
   Welcome to the ffmpeg and ffmpeg-kit builder-helper script.
@@ -5589,14 +5590,14 @@ intro() {
   hard coded paths in there. You can, of course, rebuild ffmpeg 
   ffmpeg-kit and bundle.
 EOL
-	echo -e "$(ts)" | tee -a "$LOG_FILE"
+	echo -e "INFO: Started at $(ts)" | tee -a "$LOG_FILE"
 	if [[ ! -d $WORKDIR ]]; then
 		echo -e
-		echo -e "Building in $WORKDIR, will use ~ 285GB space!" | tee -a "$LOG_FILE"
+		echo -e "INFO: Building in $WORKDIR, will use ~ 285GB space!" | tee -a "$LOG_FILE"
 		echo -e
 	fi
 	change_dir "$WORKDIR" 1 || exit_message 1 "intro: could not change to $WORKDIR"
-	echo -e "sit back, this may take awhile..." | tee -a "$LOG_FILE"
+	echo -e "INFO: sit back, this may take awhile..." | tee -a "$LOG_FILE"
 }
 
 # Only adds step if it is UNIQUE and EXISTS

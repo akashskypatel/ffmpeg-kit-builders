@@ -14,7 +14,7 @@ endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfmpegKitSources.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfmpegKitDependencies.cmake")
 
-set(CMAKE_MESSAGE_LOG_LEVEL DEBUG)
+# set(CMAKE_MESSAGE_LOG_LEVEL DEBUG)
 
 # Enforce MinGW when building for Windows
 if(WIN32 AND NOT MINGW)

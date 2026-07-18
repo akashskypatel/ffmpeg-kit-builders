@@ -462,9 +462,9 @@ for platform in "${!PLATFORMS[@]}"; do
             no_bundle="--no-bundle"
           fi
           if [[ "${bundle}" == "debug" ]]; then
-            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --base-bundle --build-debug $commands $no_bundle $clean $remote --skip")
+            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --base-bundle --build-debug $commands $no_bundle $clean $remote --skip --hide-banner")
           else
-            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --${bundle//_/-}-bundle $commands $no_bundle $clean $remote --skip")
+            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --${bundle//_/-}-bundle $commands $no_bundle $clean $remote --skip --hide-banner")
           fi
         done
       done

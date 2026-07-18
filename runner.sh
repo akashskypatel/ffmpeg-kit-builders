@@ -200,7 +200,11 @@ while [ $# -gt 0 ]; do
 		;;
   -y)
     export accept_defaults=y
-    echo "Skipping interactive. Accepting defult selections."
+    echo "INFO: Skipping interactive. Accepting defult selections." | tee -a "$LOG_FILE"
+    shift
+    ;;
+  --hide-banner)
+    export hide_banner=y
     shift
     ;;
   --debug-build|--build-debug|--enable-debug)
@@ -232,7 +236,7 @@ while [ $# -gt 0 ]; do
         export create_release=remote
         ;;
       *)
-        echo "Invalid release type: ${1#*=}. Defaulting to local."
+        echo "Invalid release type: ${1#*=}. Defaulting to local." | tee -a "$LOG_FILE"
         export create_release=local
         ;;
     esac
@@ -273,22 +277,22 @@ while [ $# -gt 0 ]; do
 		;;
 	--cflags=*)
 		append_cflags "${1#*=}"
-		echo -e "setting CFLAGS as $original_cflags"
+		echo -e "setting CFLAGS as $original_cflags" | tee -a "$LOG_FILE"
 		shift
 		;;
   --cxxflags=*)
 		append_cxxflags "${1#*=}"
-		echo -e "setting CXXFLAGS as $original_cxxflags"
+		echo -e "setting CXXFLAGS as $original_cxxflags" | tee -a "$LOG_FILE"
 		shift
 		;;
   --cppflags=*)
 		append_cppflags "${1#*=}"
-		echo -e "setting CPPFLAGS as $original_cppflags"
+		echo -e "setting CPPFLAGS as $original_cppflags" | tee -a "$LOG_FILE"
 		shift
 		;;
   --ldflags=*)
 		append_ldflags "${1#*=}"
-		echo -e "setting LDFLAGS as $original_ldflags"
+		echo -e "setting LDFLAGS as $original_ldflags" | tee -a "$LOG_FILE"
 		shift
 		;;
 	--git-get-latest=*)
@@ -610,11 +614,11 @@ while [ $# -gt 0 ]; do
 		shift
 		;;
 	-*)
-		echo -e "Error, unknown option: '$1'."
+		echo -e "Error, unknown option: '$1'." | tee -a "$LOG_FILE"
 		exit 1
 		;;
 	*)
-    echo "Unknown argument: $1"
+    echo "Unknown argument: $1" | tee -a "$LOG_FILE"
     shift 
     ;;
 	esac
@@ -658,7 +662,7 @@ if [[ "$*" == *"--resume"* ]]; then
     echo "INFO: Resuming previous run with: ${RUN_ARGS[*]}" | tee -a "$LOG_FILE"
     parse_arguments "${RUN_ARGS[@]}"
   else
-    echo "Error: could not find previous run.state file."
+    echo "Error: could not find previous run.state file." | tee -a "$LOG_FILE"
     exit 1
   fi
 else
