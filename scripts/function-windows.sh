@@ -172,8 +172,6 @@ configure_ffmpeg_kit() {
 	local type_postfix="$build_ffmpeg_kit_type"
 	
 	iswindows && fix_pkgconfig_flags
-	
-	run_valid_function build_pthread_win32
 
 	if truthy "$build_force"; then
 		remove_path -rf "$ffmpeg_kit_src_dir"/already_configured_*
@@ -291,7 +289,7 @@ fix_pkgconfig_flags() {
 	find "${dependency_install_prefix}/lib" -name "*.dll.a" | while read -r dll_a; do
 		static_a="${dll_a%.dll.a}.a"
 		if [ -f "$static_a" ]; then
-			echo "Removing $dll_a (found static alternative: $static_a)" > >(redirect_output)
+			echo "Removing $dll_a (found static alternative: $static_a)" >>"${LOG_FILE}"
 			rm "$dll_a"
 		fi
 	done

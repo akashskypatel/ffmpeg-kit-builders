@@ -41,7 +41,7 @@ build_pthread_win32() {
 #include <exception>\
 #endif
 }}' pthread.c || exit_message 1 "Failed gsed pthread.c"
-  apply_patch "$PATCHDIR/pthreads-win32_libstdcxx_thread_id.patch" || exit_message 1 "Failed apply_patch pthreads-win32_libstdcxx_thread_id.patch"
+  # apply_patch "$PATCHDIR/pthreads-win32_libstdcxx_thread_id.patch" || exit_message 1 "Failed apply_patch pthreads-win32_libstdcxx_thread_id.patch"
   gsed -i 's/ terminate ();/std::terminate();/g' ptw32_callUserDestroyRoutines.c || exit_message 1 "Failed gsed ptw32_callUserDestroyRoutines.c"
 	change_dir "$src_dir/$lib/build" 1 || exit_message 1 "Failed change_dir"
   local cmake_args="-DTARGET_ARCH=$host_arch \
@@ -1620,9 +1620,21 @@ build_libmysofa() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params" 
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	change_dir "$src_dir"
 }
 # build_decklink          # config_options+= --enable-decklink            # enable Blackmagic DeckLink I/O support [no]
@@ -1740,14 +1752,15 @@ build_libsrt() {
   truthy "$enable_openssl" && enclib=openssl
   truthy "$enable_gnutls" && enclib=gnutls
   truthy "$enable_mbedtls" && enclib=mbedtls
-	generic_cmake "-DUSE_ENCLIB=$enclib \
+	generic_cmake "-DUSE_ENCLIB=${enclib:-openssl} \
 -DENABLE_SHARED=OFF \
 -DENABLE_STATIC=ON \
 -DENABLE_APPS=OFF \
 -DUSE_STATIC_LIBSTDCXX=ON \
+-DOPENSSL_USE_STATIC_LIBS=ON \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DENABLE_CXX11=OFF"
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -1813,9 +1826,9 @@ build_libtesseract() {
 --with-extra-includes=\"$dependency_install_prefix/include\" \
 LIBLEPT_HEADERSDIR=$dependency_install_prefix/include \
 LDFLAGS=\"$LDFLAGS\" \
-CFLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
-CPPFLAGS=\"$CPPFLAGS -static -static-libgcc -static-libstdc++ -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
-CXXFLAGS=\"$CXXFLAGS -static -static-libgcc -static-libstdc++ -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+CFLAGS=\"$CFLAGS\" \
+CPPFLAGS=\"$CPPFLAGS -static -static-libgcc -static-libstdc++\" \
+CXXFLAGS=\"$CXXFLAGS -static -static-libgcc -static-libstdc++\" \
 LIBS=\"$LIBS\" \
 --datadir=\"$dependency_install_prefix/bin\""
 	disable_nonessential "$src_dir/$lib"
@@ -2221,8 +2234,8 @@ build_libjxl() {
 -DJPEGXL_BUNDLE_LIBPNG=OFF \
 -DBUILD_TESTING=OFF \
 -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DJPEGXL_FORCE_SYSTEM_LCMS2=ON"
   gsed -i '1s/^/set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Force PIC" FORCE)\n/' "$src_dir/$lib/third_party/CMakeLists.txt"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
@@ -2630,8 +2643,8 @@ build_openal() {
 -DALSOFT_BACKEND_DSOUND=ON \
 -DALSOFT_BACKEND_ALSA=OFF \
 -DALSOFT_BACKEND_PULSEAUDIO=OFF \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DALSOFT_BACKEND_PIPEWIRE=OFF"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
@@ -2668,9 +2681,21 @@ build_pcre2() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	change_dir "$src_dir"
 }
 build_bison() {
@@ -2832,7 +2857,7 @@ build_whisper() {
 -DGGML_F16C=ON \
 -DGGML_OPENMP=OFF \
 -DGGML_NATIVE=OFF \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\""
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\""
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
@@ -3021,9 +3046,21 @@ build_libssh() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	change_dir "$src_dir"
   add_libs_to_pkg -t="$install_pkgconfig_dir/libssh.pc" -l="-lssl -lcrypto -lcrypt32 -lws2_32 -lz -liphlpapi" -c="-DLIBSSH_STATIC"
 }
@@ -3533,8 +3570,8 @@ build_liblcevc_dec() {
 -DVN_SDK_DOCS=OFF \
 -DVN_SDK_SAMPLE_SOURCE=OFF \
 -DVN_SDK_PIPELINE_VULKAN=OFF \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DVN_SDK_PIPELINE_LEGACY=OFF"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   # disable_nonessential "$src_dir/$lib"
@@ -4046,8 +4083,8 @@ build_libopencv() {
 -DOPENCV_EXTRA_EXE_LINKER_FLAGS=\"-L${dependency_install_prefix}/lib -Wl,--start-group $LIBS -Wl,--end-group\" \
 -DCMAKE_SHARED_LINKER_FLAGS=\"-L${dependency_install_prefix}/lib -Wl,--start-group $LIBS -Wl,--end-group\" \
 -DOPENCV_LINKER_LIBS=\"$LIBS\" \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DCMAKE_CXX_STANDARD_LIBRARIES=\" -lwinmm -luser32 -lgdi32\" \
 -DOPENCV_INCLUDE_INSTALL_PATH=${dependency_install_prefix}/include \
 -DHAVE_DSHOW=1"
@@ -4101,8 +4138,8 @@ build_libshaderc() {
 -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
 -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
 -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DBUILD_SHARED_LIBS=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
@@ -4417,9 +4454,21 @@ build_libleptonica() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib" "prog"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	reset_cflags
   reset_cppflags
 	change_dir "$src_dir"
@@ -4626,8 +4675,8 @@ build_flac() {
 -DBUILD_STATIC_LIBS=ON \
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_BUILD_TYPE=Release \
--DCMAKE_C_FLAGS=\"$CFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_CXX_FLAGS=\"$CXXFLAGS -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_C_FLAGS=\"$CFLAGS\" \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DINSTALL_MANPAGES=OFF"
   disable_nonessential "$src_dir/$lib"
 	do_make_and_make_install
@@ -4710,8 +4759,8 @@ build_cpuinfo() {
 -DBENCHMARK_ENABLE_TESTING=OFF \
 -DBENCHMARK_ENABLE_GTEST_TESTS=OFF \
 -DBENCHMARK_ENABLE_ASSEMBLY_TESTS=OFF \
--DCMAKE_CXX_FLAGS=\"${CXXFLAGS} -D_WIN32_WINNT=0x0601 -D_GNU_SOURCE -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
--DCMAKE_C_FLAGS=\"${CFLAGS} -D_WIN32_WINNT=0x0601 -include $ffmpeg_kit_src_dir/src/pthread_compat.h\" \
+-DCMAKE_CXX_FLAGS=\"${CXXFLAGS} -D_WIN32_WINNT=0x0601 -D_GNU_SOURCE\" \
+-DCMAKE_C_FLAGS=\"${CFLAGS} -D_WIN32_WINNT=0x0601\" \
 -DGOOGLETEST_PATH=\"$src_dir/$lib/deps/googletest\" \
 -DBENCHMARK_ENABLE_WERROR=OFF \
 -DBUILD_SHARED_LIBS=OFF"

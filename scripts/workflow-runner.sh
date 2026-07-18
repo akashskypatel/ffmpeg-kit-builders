@@ -518,7 +518,7 @@ workflow_step_build_bundle_batches() {
     [[ -z "$combo_csv" ]] && continue
 
     set_workflow_current_step "build_bundle"
-    build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build=kit,bundle --remote)
+    build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build="kit,bundle" --remote)
     if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
       build_all_args+=(--bundle="${WORKFLOW_BUNDLES}")
     fi

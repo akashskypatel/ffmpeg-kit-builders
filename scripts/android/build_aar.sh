@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2207
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2207,2012
 
 # Build AARs for Android
 if (( BASH_VERSINFO[0] < 4 )); then
@@ -425,7 +425,7 @@ verify_maven_signing_configuration() {
   fi
 
   case "$signing_keyring_file" in
-    "~/"*) signing_keyring_file="${HOME}/${signing_keyring_file#"~/"}" ;;
+    "${HOME}/"*) signing_keyring_file="${HOME}/${signing_keyring_file#"${HOME}/"}" ;;
     /*) ;;
     *) signing_keyring_file="${GRADLE_HOME}/${signing_keyring_file}" ;;
   esac
@@ -438,7 +438,7 @@ verify_maven_signing_configuration() {
     signing_gnupg_home="${SIGNING_HOME}/.gnupg"
   fi
   case "$signing_gnupg_home" in
-    "~/"*) signing_gnupg_home="${HOME}/${signing_gnupg_home#"~/"}" ;;
+    "${HOME}/"*) signing_gnupg_home="${HOME}/${signing_gnupg_home#"${HOME}/"}" ;;
     /*) ;;
     *) signing_gnupg_home="${GRADLE_HOME}/${signing_gnupg_home}" ;;
   esac
@@ -670,7 +670,7 @@ for key in "${!PLATFORMS[@]}"; do
                   debug_pfx="-debug"
               fi
               FFMPEG_KIT_OUTPUT_NAME="bundle-${bundle_pfx}-shared${debug_pfx}${small_pfx}${license_pfx}"
-              echo "jniLibs dir: ${FFMPEG_KIT_JNI_LIBS_DIR}" > >(redirect_output)
+              echo "jniLibs dir: ${FFMPEG_KIT_JNI_LIBS_DIR}" >>"${LOG_FILE}"
               if [[ "$has_native_binaries" == "true" ]]; then
                 [[ "${create_aar}" == "true" ]] && { create_aar_artifact "${FFMPEG_KIT_JNI_LIBS_DIR}" "${FFMPEG_KIT_OUTPUT_NAME}" || exit_message 1 "Failed to create AAR artifact"; }
                 if [[ "${create_release}" == "true" ]]; then

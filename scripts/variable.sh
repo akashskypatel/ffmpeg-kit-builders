@@ -99,7 +99,6 @@ CONFIG_WINDOWS="\
 --enable-d3d12va \
 --enable-dxva2 \
 --enable-schannel \
---enable-pthread-win32 \
 --enable-mediafoundation"
 
 CONFIG_MACOS="\
@@ -361,11 +360,236 @@ CONFIG_AUTODETECT="\
 --disable-securetransport \
 --disable-videotoolbox"
 
-CONFIG_TVOS_UNSUPPORTED=" \
+CONFIG_WINDOWS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-jni \
+--disable-mediacodec \
+--disable-appkit \
+--disable-avfoundation \
+--disable-audiotoolbox \
+--disable-coreimage \
+--disable-metal \
+--disable-securetransport \
+--disable-videotoolbox \
+--disable-libtorch \
+--disable-cuda-nvcc \
+--disable-libsmbclient"
+
+CONFIG_LINUX_UNSUPPORTED="\
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-avfoundation \
+--disable-audiotoolbox \
+--disable-coreimage \
+--disable-metal \
+--disable-securetransport \
+--disable-videotoolbox \
+--disable-cuda-llvm"
+
+CONFIG_MACOS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-libvpl \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-cuda-nvcc \
+--disable-cuda-llvm"
+
+CONFIG_TVOS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
 --disable-frei0r \
 --disable-liblensfun \
 --disable-librsvg \
---disable-pocketsphinx"
+--disable-pocketsphinx \
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-libvpl \
+--disable-cuvid \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-libtorch \
+--disable-libopenvino \
+--disable-libtensorflow \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-avisynth \
+--disable-libsmbclient \
+--disable-libbluray \
+--disable-libcdio \
+--disable-libdvdnav \
+--disable-libdvdread \
+--disable-libsvtjpegxs"
+
+CONFIG_IOS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-libvpl \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-libtorch \
+--disable-libopenvino \
+--disable-libtensorflow \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-avisynth \
+--disable-libsmbclient \
+--disable-libbluray \
+--disable-libcdio \
+--disable-libdvdnav \
+--disable-libdvdread \
+--disable-libsvtjpegxs"
+
+CONFIG_ANDROID_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-avfoundation \
+--disable-audiotoolbox \
+--disable-coreimage \
+--disable-metal \
+--disable-securetransport \
+--disable-videotoolbox \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-libtorch \
+--disable-libopenvino \
+--disable-libtensorflow \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-avisynth \
+--disable-libsmbclient \
+--disable-libbluray \
+--disable-libcdio \
+--disable-libdvdnav \
+--disable-libdvdread"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
 # build_mediacodec        # config_options+= --disable-mediacodec         # Video  # enable Android MediaCodec support [no]

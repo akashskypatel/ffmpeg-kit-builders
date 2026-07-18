@@ -3386,11 +3386,11 @@ do_configure() {
       echo "INFO: $configure_name exists and configure.ac is missing. Skipping autotools regeneration for $english_name." >>"$LOG_FILE"
     else
       if [[ -f autogen.sh && ! -f "no.autogen" && ! -f $configure_name ]]; then
-        echo "INFO: autogen.sh found. Running autogen.sh..."
+        echo "INFO: autogen.sh found. Running autogen.sh..." >>"$LOG_FILE"
         do_autogen
       fi
       if [[ -f gitsub.sh ]]; then
-        echo "INFO: gitsub.sh found. Running gitsub.sh..."
+        echo "INFO: gitsub.sh found. Running gitsub.sh..." >>"$LOG_FILE"
         (./gitsub.sh pull) > >(redirect_output) 2>&1
       fi
       if [[ -f "no.autoreconf" ]]; then
@@ -4021,7 +4021,7 @@ download_and_unpack_file() {
         if [[ -f "$filename" ]]; then
             rm -f "$filename"
         fi
-        if ! curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
+        if ! curl -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
             if [[ -n "$alt_url" ]]; then
                 echo "WARNING: download_and_unpack_file: unable to download $url, trying alternate $alt_url" >>"$LOG_FILE"
                 remove_path -f "$filename"
@@ -4030,7 +4030,7 @@ download_and_unpack_file() {
                 if [[ -f "$filename" ]]; then
                     rm -f "$filename"
                 fi
-                curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
+                curl -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
                     exit_message 1 "download_and_unpack_file: unable to download $url or alternate $alt_url"
                 }
             else
@@ -4636,6 +4636,7 @@ check_ffmpeg() {
 }
 
 build_ffmpeg() {
+  iswindows && run_valid_function build_pthread_win32
   if ! truthy "$build_force"; then
     if check_ffmpeg; then
       echo "INFO: ffmpeg is already built. Skipping build." >>"${LOG_FILE}"
@@ -6505,7 +6506,7 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f Makefile ]]; then
-          echo "Cleaning Makefile artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning Makefile artifacts at $sub_dir..." >>"${LOG_FILE}"
           { nice make clean -j"$(get_concurrent_proc)" > >(redirect_output) 2>&1 || true; }
           { nice make distclean -j"$(get_concurrent_proc)" > >(redirect_output) 2>&1 || true; }
         fi
@@ -6513,7 +6514,7 @@ reset_and_clean() {
       done
       mapfile -t sub_dirs < <(find "$dir" -name "meson.build" -exec dirname {} \; | sort -u 2>/dev/null)
       if [[ -f meson.build ]] && [[ "${#sub_dirs[@]}" -gt 0 ]]; then
-        echo "Cleaning meson artifacts at $sub_dir..." > >(redirect_output)
+        echo "Cleaning meson artifacts at $sub_dir..." >>"${LOG_FILE}"
         { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
         { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
       fi
@@ -6521,7 +6522,7 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f CMakeList.txt ]]; then
-          echo "Cleaning CMake artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning CMake artifacts at $sub_dir..." >>"${LOG_FILE}"
           clean_cmake_cache "$(pwd)"
         fi
         cd "$dir" 2>/dev/null || continue
@@ -6530,7 +6531,7 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f CMakeCache.txt ]]; then
-          echo "Cleaning CMake artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning CMake artifacts at $sub_dir..." >>"${LOG_FILE}"
           clean_cmake_cache "$(pwd)"
         fi
         cd "$dir" 2>/dev/null || continue
@@ -6539,21 +6540,21 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f Cargo.toml ]]; then
-          echo "Cleaning Cargo artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning Cargo artifacts at $sub_dir..." >>"${LOG_FILE}"
           { cargo clean --release > >(redirect_output) 2>&1 || true; }
         fi
         cd "$dir" 2>/dev/null || continue
       done
       mapfile -t sub_dirs < <(find "$dir" -name "build.ninja" -exec dirname {} \; | sort -u 2>/dev/null)
       if [[ -f build.ninja ]] && [[ "${#sub_dirs[@]}" -gt 0 ]]; then
-        echo "Cleaning ninja artifacts at $sub_dir..." > >(redirect_output)
+        echo "Cleaning ninja artifacts at $sub_dir..." >>"${LOG_FILE}"
         { nice ninja -t clean >/dev/null 2>&1 || true; }
       fi
       mapfile -t sub_dirs < <(find "$dir" -name "waf" -exec dirname {} \; | sort -u 2>/dev/null)
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f waf ]]; then
-          echo "Cleaning waf artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning waf artifacts at $sub_dir..." >>"${LOG_FILE}"
           { "${PYTHON_BIN:-${PYTHON3:-python3}}" ./waf clean > >(redirect_output) 2>&1 || true; }
         fi
         cd "$dir" 2>/dev/null || continue
@@ -7903,7 +7904,7 @@ create_github_release() {
     git push origin "$tag"
   fi
   # check if release exists
-  if curl -f -v -s -H "Authorization: Bearer $github_token" \
+  if curl -f -s -H "Authorization: Bearer $github_token" \
     -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" \
     >> "$LOG_FILE" 2>&1; then
@@ -7927,7 +7928,7 @@ create_github_release() {
             make_latest: "true"
         }')
     echo "$json_payload" >> "$LOG_FILE"
-    if curl -f -v -s -H "Authorization: Bearer $github_token" \
+    if curl -f -s -H "Authorization: Bearer $github_token" \
         -H "Accept: application/vnd.github+json" \
         -d "$json_payload" \
         "https://api.github.com/repos/$owner/$repo/releases" \
@@ -8038,7 +8039,7 @@ check_existing_package() {
     return 1
   fi
 
-  echo "Checking for existing package $package_name version $package_version..." > >(redirect_output)
+  echo "Checking for existing package $package_name version $package_version..." >>"${LOG_FILE}"
 
   # Retrieve package versions metadata
   local versions_json=$(curl -s \
@@ -8053,7 +8054,7 @@ check_existing_package() {
   
   if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
     # Return nothing and exit 1 so the caller knows it doesn't exist/error
-    echo "Error: $error_msg" > >(redirect_output)
+    echo "Error: $error_msg" >>"${LOG_FILE}"
     return 1
   fi
 
@@ -8061,7 +8062,7 @@ check_existing_package() {
   local version_id=$(echo "$versions_json" | jq -r ".[]? | select(.name == \"$package_version\") | .id")
 
   if [[ -n "$version_id" && "$version_id" != "null" ]]; then
-    echo "Found existing package version: $version_id" > >(redirect_output)
+    echo "Found existing package version: $version_id" >>"${LOG_FILE}"
     echo "$version_id"
     return 0
   fi
@@ -8164,7 +8165,7 @@ check_maven_package_status() {
     return 1
   fi
 
-  echo "Checking for existing package $package_name version $package_version on Maven Central..." > >(redirect_output)
+  echo "Checking for existing package $package_name version $package_version on Maven Central..." >>"${LOG_FILE}"
   auth_token="$(echo -n "$username:$password" | base64)"
   # Retrieve package versions metadata
   local status_json=$(curl -X 'GET' \
@@ -8178,7 +8179,7 @@ check_maven_package_status() {
   
   if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
     # Return nothing and exit 1 so the caller knows it doesn't exist/error
-    echo "Error checking package status: $error_msg body: $status_json" > >(redirect_output)
+    echo "Error checking package status: $error_msg body: $status_json" >>"${LOG_FILE}"
     return 1
   fi
 
@@ -8186,7 +8187,7 @@ check_maven_package_status() {
   local status=$(echo "$status_json" | jq -r '.published')
 
   if [[ -n "$status" && "$status" != "null" ]]; then
-    echo "Package status: $status" > >(redirect_output)
+    echo "Package status: $status" >>"${LOG_FILE}"
     if [[ "$status" == "true" ]]; then
       return 0
     else

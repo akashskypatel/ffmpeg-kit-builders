@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2086
 
 if (( BASH_VERSINFO[0] < 4 )); then
     for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
@@ -3935,7 +3935,7 @@ build_libxevd() {
     { cp -fv "$src_dir/$lib/build/xevd.pc" "$install_pkgconfig_dir/" >>"$LOG_FILE"; } || exit_message 1 "build_libxevd: could not install $lib pkg-config"
     change_dir "$src_dir"
   else
-    echo -e "INFO: $lib does not support $bits_target bits, skipping" > >(redirect_output) 2>&1
+    echo -e "INFO: $lib does not support $bits_target bits, skipping" >>"${LOG_FILE}"
     disable_library "$lib"
   fi
 }
@@ -3991,7 +3991,7 @@ build_libxeve() {
     change_dir "$src_dir"
     reset_cflags
   else
-    echo -e "INFO: $lib does not support $bits_target bits, skipping" > >(redirect_output) 2>&1
+    echo -e "INFO: $lib does not support $bits_target bits, skipping" >>"${LOG_FILE}"
     disable_library "$lib"
   fi
 }
