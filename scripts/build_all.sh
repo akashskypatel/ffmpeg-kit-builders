@@ -244,10 +244,10 @@ parse_builds() {
         valid=true
         if [[ "$b" == "ffmpeg" ]]; then
             do_build_ffmpeg=true
-            build_commands+=" --ffmpeg"
+            build_commands+=" --ffmpeg -ff --ff-disable-programs"
         elif [[ "$b" == "kit" ]]; then
             build_kit=true
-            build_commands+=" --kit"
+            build_commands+=" --kit -fk"
         elif [[ "$b" == "bundle" ]]; then
             build_bundle=true
         fi
@@ -462,9 +462,9 @@ for platform in "${!PLATFORMS[@]}"; do
             no_bundle="--no-bundle"
           fi
           if [[ "${bundle}" == "debug" ]]; then
-            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --base-bundle --build-debug $commands $no_bundle $clean $remote --skip -f --ff-disable-programs")
+            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --base-bundle --build-debug $commands $no_bundle $clean $remote --skip")
           else
-            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --${bundle//_/-}-bundle $commands $no_bundle $clean $remote --skip -f --ff-disable-programs")
+            BUILD_STEPS+=("./runner.sh --host=${platform} --arch=${arch} -y ${deps} --${bundle//_/-}-bundle $commands $no_bundle $clean $remote --skip")
           fi
         done
       done

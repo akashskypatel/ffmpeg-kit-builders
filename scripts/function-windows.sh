@@ -109,7 +109,7 @@ configure_ffmpeg_kit() {
 	
 	iswindows && fix_pkgconfig_flags
 
-	if truthy "$build_force"; then
+	if truthy "$force_kit"; then
 		remove_path -rf "$ffmpeg_kit_src_dir"/already_configured_*
 		remove_path -rf "$ffmpeg_kit_install"
 		remove_path -rf "$ffmpeg_kit_src_dir"/build

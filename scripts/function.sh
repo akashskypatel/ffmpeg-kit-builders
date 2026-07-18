@@ -4637,7 +4637,7 @@ check_ffmpeg() {
 
 build_ffmpeg() {
   iswindows && run_valid_function build_pthread_win32
-  if ! truthy "$build_force"; then
+  if ! truthy "$force_ffmpeg"; then
     if check_ffmpeg; then
       echo "INFO: ffmpeg is already built. Skipping build." >>"${LOG_FILE}"
       return 0
@@ -4649,6 +4649,8 @@ build_ffmpeg() {
     if [[ $result -eq 0 ]]; then
       echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
       return 0
+    else
+      echo "INFO: No existing release artifact found for $step. Building instead..." >>"${LOG_FILE}"
     fi
   fi
   download_ffmpeg
@@ -4669,7 +4671,7 @@ configure_ffmpeg() {
 	
 	change_dir "$ffmpeg_source_dir" || return 1
 
-	if truthy "$build_force"; then
+	if truthy "$force_ffmpeg"; then
 		reset_touch "${ffmpeg_source_dir}" "already_configured_$build_ffmpeg_type*"
     git_hard_reset "${ffmpeg_source_dir}" || exit_message 1 "git_hard_reset: could not reset ffmpeg git repository"
     touch "no.autoreconf"
@@ -5182,7 +5184,7 @@ build_exists() {
 
 	if [[ $build_ffmpeg_type == "static" ]]; then
 		echo -e "INFO: Static build requested..." | tee -a "$LOG_FILE"
-		if ! truthy "$static_build_exists" || truthy "$build_force"; then
+		if ! truthy "$static_build_exists" || truthy "$force_ffmpeg"; then
 			build_dir="$work_dir/$(get_ffmpeg_directory static)" #ffmpeg_install_prefix
 			echo -e "INFO: Static build does not exist or force requested. (Re-)configuring Ffmpeg for static build..." | tee -a "$LOG_FILE"
 			# shellcheck disable=SC2129
@@ -5195,7 +5197,7 @@ build_exists() {
 		fi
 	elif [[ $build_ffmpeg_type == "static" ]]; then
 		echo -e "INFO: Shared build requested..." | tee -a "$LOG_FILE"
-		if ! truthy "$shared_build_exists" || truthy "$build_force"; then
+		if ! truthy "$shared_build_exists" || truthy "$force_ffmpeg"; then
 			build_dir="$work_dir/$(get_ffmpeg_directory shared)" #ffmpeg_install_prefix
 			echo -e "INFO: Shared build does not exist or force requested. (Re-)configuring Ffmpeg for shared build..." | tee -a "$LOG_FILE"
 			# shellcheck disable=SC2129
@@ -5262,7 +5264,7 @@ install_ffmpeg_pkg() {
 
   local touch_prefix="${touch_postfix}_already"
 	
-  if truthy "$build_force"; then
+  if truthy "$force_ffmpeg"; then
 		remove_path -rf "${ffmpeg_source_dir}/${touch_prefix}_pkgconfig"*.touch
 	fi
   required_files=(

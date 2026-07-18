@@ -25,6 +25,8 @@ export GCC_BRANCH="releases/gcc-14"
 # variables with their defaults
 export build_cross_compile=n
 export build_force=n
+export force_kit=n
+export force_ffmpeg=n
 export build_dvbtee=n
 export build_libmxf=n
 export build_mp4box=n

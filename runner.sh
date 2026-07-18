@@ -190,6 +190,14 @@ while [ $# -gt 0 ]; do
     export force_self=y
     shift
 		;;
+  -ff | --force-ffmpeg)
+    export force_ffmpeg=y
+    shift
+		;;
+  -fk | --force-kit)
+    export force_kit=y
+    shift
+		;;
   -y)
     export accept_defaults=y
     echo "Skipping interactive. Accepting defult selections."
