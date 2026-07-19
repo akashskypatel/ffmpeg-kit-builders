@@ -2991,6 +2991,18 @@ confirm_libgcc_eh() {
         cp "$file" "${file%/*}/libgcc_eh.a" && echo "Created: ${file%/*}/libgcc_eh.a"
     done < <(find "$search_dir" -name "libgcc.a" -type f -print0 2>/dev/null)
 }
+get_latest_waf() {
+  local lib="waf"
+  local repo="https://gitlab.com/ita1024/waf"
+  local repo_ver="waf-2.1.9"
+  local cur_dir="$(pwd)"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  local python_cmd="${PYTHON_BIN:-${PYTHON3:-python3}}"
+  eval "$python_cmd ./waf-light configure build" > >(redirect_output) 2>&1
+  change_dir "$cur_dir"
+}
 # 1. configure_options
 # 2. configure_name
 # 2. configure_env
@@ -3009,8 +3021,15 @@ do_python() {
     remove_path -rf __pycache__
     [[ -d "waflib" ]] && remove_path -rf waflib
     echo -e "DEBUG: updating waf to latest version..." >>"$LOG_FILE"
-    wget https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1
-    chmod +x waf
+    if wget --timeout=3 https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1; then
+      chmod +x waf
+    elif wget --timeout=3 https://web.archive.org/web/20260331120944if_/https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1; then
+      chmod +x waf
+    else
+      get_latest_waf
+      copy_path "$src_dir/waf/waf" "$(pwd)/waf" "-f"
+      chmod +x waf
+    fi
   fi
   setup_default_python
   local python_cmd="${PYTHON_BIN:-${PYTHON3:-python3}}"

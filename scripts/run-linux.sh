@@ -1610,6 +1610,14 @@ build_libjack() {
   do_python "" "./waf install"
   reset_allflags
   add_libs_to_pkg -t="$install_pkgconfig_dir/jack.pc" -l="-lxcb -liconv"
+  find "$dependency_install_prefix/lib" -type l -name "libjack*" -exec rm -f {} \;
+  if [[ -f "$dependency_install_prefix/lib/libjack.so.0.1.0" ]]; then
+    mv -f "$dependency_install_prefix/lib/libjack.so.0.1.0" "$dependency_install_prefix/lib/libjack.so"
+  fi
+  if [[ -f "$dependency_install_prefix/lib/libjackserver.so.0.1.0" ]]; then
+    mv -f "$dependency_install_prefix/lib/libjackserver.so.0.1.0" "$dependency_install_prefix/lib/libjackserver.so"
+  fi
+  change_dir "$src_dir"
 }
 # build_libjxl            # config_options+= --enable-libjxl              # enable JPEG XL de/encoding via libjxl [no]
 build_libjxl() {
