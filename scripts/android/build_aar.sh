@@ -77,6 +77,9 @@ local_build=false
 declare -a BUILD_STEPS
 create_aar=true
 create_release=true
+SNAPSHOT=false
+FFMPEG_KIT_VERSION_QUALIFIER="${FFMPEG_KIT_VERSION_QUALIFIER:-RC1}"
+FFMPEG_KIT_BUILD_NUMBER="${FFMPEG_KIT_BUILD_NUMBER:-$(date -u +%Y%m%d%H%M%S)}"
 
 parse_arch() {
     case "$1" in
@@ -346,6 +349,7 @@ for arg; do
       echo "  --local           Create local release."
       echo "  --remote          Publish release to remote repository."
       echo "  --snapshot        Create snapshot version."
+      echo "  --qualifier=*     Maven version qualifier used for timestamped releases (default: ${FFMPEG_KIT_VERSION_QUALIFIER})."
       echo "  --help            Show this help message"
       echo ""
       echo "State file location: ${STATE_FILE}"
@@ -365,6 +369,9 @@ for arg; do
       shift;;
     --snapshot)
       SNAPSHOT=true
+      shift;;
+    --qualifier=*)
+      FFMPEG_KIT_VERSION_QUALIFIER="${arg#*=}"
       shift;;
     *)  
       echo "Invalid argument: ${arg}"
@@ -533,11 +540,15 @@ else
   verify_maven_signing_configuration "${GRADLE_HOME}/gradle.properties"
 fi
 
-# FFMPEG_KIT_VERSION: from version file
+if [[ ! "${FFMPEG_KIT_VERSION_QUALIFIER}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+  exit_message 1 "Invalid Maven version qualifier: ${FFMPEG_KIT_VERSION_QUALIFIER}"
+fi
+
+# FFMPEG_KIT_VERSION: Maven artifact version.
 if [[ "$SNAPSHOT" == true ]]; then
   FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")-SNAPSHOT"
 else
-  FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")"
+  FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")-${FFMPEG_KIT_VERSION_QUALIFIER}-${FFMPEG_KIT_BUILD_NUMBER}"
 fi
 
 cd "${BASEDIR}" || { exit_message 1 "Failed to change directory to ${BASEDIR}"; }
@@ -571,7 +582,7 @@ create_aar_artifact() {
   AAR_ARTIFACT_QUEUED=false
   FFMPEG_KIT_NAMESPACE="io.github.${OWNER}.ffmpegkit"
   ANDROID_NDK="${latest_ndk}"
-  FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
+  FFMPEG_KIT_VERSION_CODE="$(date -u +%Y%m%d)"
   build_step="GNUPGHOME=\"${SIGNING_HOME}/.gnupg\" ./gradlew :tools:android:${GRADLE_COMMAND} \
   --no-daemon --info --warning-mode all --gradle-user-home \"${GRADLE_HOME}\" \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \

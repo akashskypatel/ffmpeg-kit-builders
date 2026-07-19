@@ -115,7 +115,7 @@ mavenPublishing {
     coordinates(
         getSafeProperty('FFMPEG_KIT_NAMESPACE', 'io.github.akashskypatel.ffmpegkit'),
         getSafeProperty('FFMPEG_KIT_OUTPUT_NAME', 'bundle'),
-        getSafeProperty('FFMPEG_KIT_VERSION', '1.0.0') // Ensure this is NOT a SNAPSHOT
+        getSafeProperty('FFMPEG_KIT_VERSION', '1.0.0')
     )
     publishToMavenCentral(true)
     if (signPublications) {
