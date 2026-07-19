@@ -3025,8 +3025,11 @@ do_python() {
       chmod +x waf
     elif wget --timeout=3 https://web.archive.org/web/20260331120944if_/https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1; then
       chmod +x waf
-    else
+    elif [[ ! -f "$src_dir/waf/waf" ]]; then
       get_latest_waf
+      copy_path "$src_dir/waf/waf" "$(pwd)/waf" "-f"
+      chmod +x waf
+    else
       copy_path "$src_dir/waf/waf" "$(pwd)/waf" "-f"
       chmod +x waf
     fi
