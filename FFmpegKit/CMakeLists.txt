@@ -105,6 +105,7 @@ set_source_files_properties(
 )
 
 ffmpegkit_configure_dependencies(ffmpegkit BUNDLE_LIBRARIES)
+set(FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES ${BUNDLE_LIBRARIES})
 
 # Do NOT rewrite BUNDLE_LIBRARIES here.
 #
@@ -269,7 +270,6 @@ elseif(ANDROID)
         android
         jnigraphics
         m
-        z
         atomic
         dl
     )
@@ -291,6 +291,11 @@ elseif(ANDROID)
         "-Wl,--allow-multiple-definition"
         "-Wl,--as-needed"
         # "-Wl,--verbose"
+    )
+    ffmpegkit_configure_android_static_cxx_runtime(
+        ffmpegkit
+        ANDROID_CXX_STATIC_LIBRARY
+        ANDROID_CXXABI_STATIC_LIBRARY
     )
 elseif(APPLE)
     # iOS/macOS platform configuration
@@ -437,13 +442,17 @@ if(BUILD_SHARED_LIBS)
                 ${BUNDLE_LIBRARIES}
             )
         elseif(ANDROID)
+            ffmpegkit_filter_android_bundle_libraries(BUNDLE_LIBRARIES ANDROID_BUNDLE_LIBRARIES)
+
             target_link_libraries(ffmpegkit PRIVATE
                 "-Wl,--whole-archive"
                 ${FFMPEG_STATIC_LIBS}
                 "-Wl,--no-whole-archive"
-                ${BUNDLE_LIBRARIES}
-                c++_static
+                ${ANDROID_BUNDLE_LIBRARIES}
+                "${ANDROID_CXX_STATIC_LIBRARY}"
+                "${ANDROID_CXXABI_STATIC_LIBRARY}"
             )
+            set(FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES ${ANDROID_BUNDLE_LIBRARIES})
         elseif(APPLE)
             if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
                 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfmpegKitiOSStripLzma.cmake")
@@ -582,10 +591,11 @@ __ZTVN4Json*
     endif()
 
     message(DEBUG "BUNDLE_LIBRARIES: ${BUNDLE_LIBRARIES}")
+    message(DEBUG "FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES: ${FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES}")
 
     # Bundling Manifest (Requires shared-library.sh)
     add_custom_command(TARGET ffmpegkit POST_BUILD
-        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/shared-library.sh" "${FFMPEG_BUILD_DIR}" "\"${BUNDLE_LIBRARIES}\""
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/shared-library.sh" "${FFMPEG_BUILD_DIR}" "\"${FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES}\""
         COMMENT "Generating bundle manifest for shared dependencies..."
     )
 else()

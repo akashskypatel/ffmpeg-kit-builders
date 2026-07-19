@@ -280,6 +280,94 @@ function(ffmpegkit_get_cached_link_resolution CACHE_NAMESPACE INPUT_LIB OUTPUT_V
     set(${FOUND_VAR} FALSE PARENT_SCOPE)
 endfunction()
 
+function(ffmpegkit_configure_android_static_cxx_runtime TARGET_NAME OUT_CXX_STATIC_LIBRARY OUT_CXXABI_STATIC_LIBRARY)
+    if(NOT ANDROID)
+        set(${OUT_CXX_STATIC_LIBRARY} "" PARENT_SCOPE)
+        set(${OUT_CXXABI_STATIC_LIBRARY} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    target_link_options(${TARGET_NAME} PRIVATE "-nostdlib++")
+
+    set(_android_cxx_runtime_abi "${CMAKE_ANDROID_ARCH_ABI}")
+    if(NOT _android_cxx_runtime_abi)
+        set(_android_cxx_runtime_abi "${ANDROID_ABI}")
+    endif()
+
+    if(_android_cxx_runtime_abi STREQUAL "arm64-v8a")
+        set(_android_cxx_runtime_triple "aarch64-linux-android")
+    elseif(_android_cxx_runtime_abi STREQUAL "armeabi-v7a")
+        set(_android_cxx_runtime_triple "arm-linux-androideabi")
+    elseif(_android_cxx_runtime_abi STREQUAL "x86")
+        set(_android_cxx_runtime_triple "i686-linux-android")
+    elseif(_android_cxx_runtime_abi STREQUAL "x86_64")
+        set(_android_cxx_runtime_triple "x86_64-linux-android")
+    else()
+        message(FATAL_ERROR "Unsupported Android ABI for static libc++ lookup: ${_android_cxx_runtime_abi}")
+    endif()
+
+    find_library(_android_cxx_static_library
+        NAMES libc++_static.a c++_static
+        PATHS "${CMAKE_SYSROOT}/usr/lib/${_android_cxx_runtime_triple}"
+        NO_DEFAULT_PATH
+    )
+    find_library(_android_cxxabi_static_library
+        NAMES libc++abi.a c++abi
+        PATHS "${CMAKE_SYSROOT}/usr/lib/${_android_cxx_runtime_triple}"
+        NO_DEFAULT_PATH
+    )
+
+    if(EXISTS "${_android_cxx_static_library}")
+        get_filename_component(_android_cxx_static_library "${_android_cxx_static_library}" REALPATH)
+    else()
+        message(FATAL_ERROR "Android static libc++ not found in ${CMAKE_SYSROOT}/usr/lib/${_android_cxx_runtime_triple}")
+    endif()
+
+    if(EXISTS "${_android_cxxabi_static_library}")
+        get_filename_component(_android_cxxabi_static_library "${_android_cxxabi_static_library}" REALPATH)
+    else()
+        message(FATAL_ERROR "Android static libc++abi not found in ${CMAKE_SYSROOT}/usr/lib/${_android_cxx_runtime_triple}")
+    endif()
+
+    set(${OUT_CXX_STATIC_LIBRARY} "${_android_cxx_static_library}" PARENT_SCOPE)
+    set(${OUT_CXXABI_STATIC_LIBRARY} "${_android_cxxabi_static_library}" PARENT_SCOPE)
+endfunction()
+
+function(ffmpegkit_filter_android_bundle_libraries INPUT_VAR OUTPUT_VAR)
+    set(_filtered_libraries "")
+
+    foreach(_bundle_lib IN LISTS ${INPUT_VAR})
+        if("${_bundle_lib}" MATCHES "^-lc\\+\\+(_shared|_static)?$"
+            OR "${_bundle_lib}" MATCHES "^-lstdc\\+\\+$"
+            OR "${_bundle_lib}" MATCHES "^-lc\\+\\+abi$")
+            message(STATUS "Removed Android dynamic/default C++ runtime link entry: ${_bundle_lib}")
+            continue()
+        endif()
+
+        get_filename_component(_bundle_lib_name "${_bundle_lib}" NAME)
+        if(EXISTS "${_bundle_lib}" AND _bundle_lib_name MATCHES "^(.+)\\.so(\\..*)?$")
+            get_filename_component(_bundle_lib_dir "${_bundle_lib}" DIRECTORY)
+            set(_bundle_static_candidate "${_bundle_lib_dir}/${CMAKE_MATCH_1}.a")
+            list(FIND ${INPUT_VAR} "${_bundle_static_candidate}" _bundle_static_index)
+            if(EXISTS "${_bundle_static_candidate}" OR NOT _bundle_static_index EQUAL -1)
+                message(STATUS "Removed Android shared library with static counterpart: ${_bundle_lib}")
+                continue()
+            endif()
+        endif()
+
+        if(_bundle_lib_name MATCHES "^libc\\+\\+(_shared|_static)?\\.(so|a)$"
+            OR _bundle_lib_name MATCHES "^libstdc\\+\\+\\.so$"
+            OR _bundle_lib_name MATCHES "^libc\\+\\+abi\\.a$")
+            message(STATUS "Removed Android dynamic/default C++ runtime link entry: ${_bundle_lib}")
+            continue()
+        endif()
+
+        list(APPEND _filtered_libraries "${_bundle_lib}")
+    endforeach()
+
+    set(${OUTPUT_VAR} "${_filtered_libraries}" PARENT_SCOPE)
+endfunction()
+
 function(find_static_library_in_dir SEARCH_DIR LIB_NAME OUTPUT_VAR)
     if(NOT IS_DIRECTORY "${SEARCH_DIR}")
         set(${OUTPUT_VAR} "" PARENT_SCOPE)
@@ -612,12 +700,15 @@ function(configure_static_linking LIBRARY_NAME STATIC_LINKING)
             get_filename_component(LIB_PATH_REALPATH "${LIB_PATH}" REALPATH)
             set(LIB_PATH "${LIB_PATH_REALPATH}")
         endif()
+        if(STATIC_LINKING)
             replace_shared_with_static("${LIB_PATH}" RESOLVED_LIB ${${LIBRARY_NAME}_REAL_LIBRARY_DIRS})
+        else()
             if(MINGW)
                 replace_dll_a_with_dll("${LIB_PATH}" RESOLVED_LIB)
             else()
                 set(RESOLVED_LIB ${LIB_PATH})
             endif()
+        endif()
         if(EXISTS "${RESOLVED_LIB}")
             get_filename_component(RESOLVED_LIB_REALPATH "${RESOLVED_LIB}" REALPATH)
             set(RESOLVED_LIB "${RESOLVED_LIB_REALPATH}")
