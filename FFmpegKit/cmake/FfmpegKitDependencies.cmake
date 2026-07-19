@@ -27,13 +27,6 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
     )
     configure_static_linking(FFMPEG ON)
 
-    # if(MINGW)
-    #     pkg_check_modules(PTHREAD_WIN32 QUIET IMPORTED_TARGET pthreadGC3)
-    #     if(PTHREAD_WIN32_FOUND AND TARGET PkgConfig::PTHREAD_WIN32)
-    #         configure_shared_linking(PTHREAD_WIN32 ON)
-    #     endif()
-    # endif()
-
     if(ENABLE_LIBPLACEBO)
         set(_OLD_PKG_CONFIG_USE_STATIC_LIBS ${PKG_CONFIG_USE_STATIC_LIBS})
         set(PKG_CONFIG_USE_STATIC_LIBS OFF)

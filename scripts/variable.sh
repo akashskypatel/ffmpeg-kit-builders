@@ -103,6 +103,10 @@ CONFIG_WINDOWS="\
 --enable-schannel \
 --enable-mediafoundation"
 
+CONFIG_OPENHARMONY="\
+--enable-openssl \
+--enable-ohcodec"
+
 CONFIG_MACOS="\
 --enable-appkit"
 
@@ -360,7 +364,8 @@ CONFIG_AUTODETECT="\
 --disable-coreimage \
 --disable-metal \
 --disable-securetransport \
---disable-videotoolbox"
+--disable-videotoolbox \
+--disable-ohcodec"
 
 CONFIG_WINDOWS_UNSUPPORTED="\
 --disable-alsa \
@@ -394,7 +399,8 @@ CONFIG_WINDOWS_UNSUPPORTED="\
 --disable-videotoolbox \
 --disable-libtorch \
 --disable-cuda-nvcc \
---disable-libsmbclient"
+--disable-libsmbclient \
+--disable-ohcodec"
 
 CONFIG_LINUX_UNSUPPORTED="\
 --disable-jni \
@@ -411,7 +417,8 @@ CONFIG_LINUX_UNSUPPORTED="\
 --disable-metal \
 --disable-securetransport \
 --disable-videotoolbox \
---disable-cuda-llvm"
+--disable-cuda-llvm \
+--disable-ohcodec"
 
 CONFIG_MACOS_UNSUPPORTED="\
 --disable-alsa \
@@ -446,7 +453,8 @@ CONFIG_MACOS_UNSUPPORTED="\
 --disable-nvdec \
 --disable-nvenc \
 --disable-cuda-nvcc \
---disable-cuda-llvm"
+--disable-cuda-llvm \
+--disable-ohcodec"
 
 CONFIG_TVOS_UNSUPPORTED="\
 --disable-alsa \
@@ -497,7 +505,8 @@ CONFIG_TVOS_UNSUPPORTED="\
 --disable-libcdio \
 --disable-libdvdnav \
 --disable-libdvdread \
---disable-libsvtjpegxs"
+--disable-libsvtjpegxs \
+--disable-ohcodec"
 
 CONFIG_IOS_UNSUPPORTED="\
 --disable-alsa \
@@ -543,7 +552,8 @@ CONFIG_IOS_UNSUPPORTED="\
 --disable-libcdio \
 --disable-libdvdnav \
 --disable-libdvdread \
---disable-libsvtjpegxs"
+--disable-libsvtjpegxs \
+--disable-ohcodec"
 
 CONFIG_ANDROID_UNSUPPORTED="\
 --disable-alsa \
@@ -591,7 +601,8 @@ CONFIG_ANDROID_UNSUPPORTED="\
 --disable-libbluray \
 --disable-libcdio \
 --disable-libdvdnav \
---disable-libdvdread"
+--disable-libdvdread \
+--disable-ohcodec"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
 # build_mediacodec        # config_options+= --disable-mediacodec         # Video  # enable Android MediaCodec support [no]

@@ -162,18 +162,6 @@ if(WIN32)
     )
 
     if(MINGW)
-        # find_library(FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB
-        #     NAMES libpthreadGC3.a libpthreadGCE3.a pthreadGC3 pthreadGCE3
-        #     PATHS
-        #         "${DEPENDENCY_BUILD_DIR}/lib"
-        #         "${FFMPEG_BUILD_DIR}/lib"
-        #     NO_DEFAULT_PATH
-        # )
-        # set(FFMPEGKIT_PTHREAD_STATIC_LIB "${FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB}")
-        # if(NOT EXISTS "${FFMPEGKIT_PTHREAD_STATIC_LIB}")
-        #     message(FATAL_ERROR "Static pthread-win32 library not found. Expected libpthreadGC3.a or libpthreadGCE3.a in the dependency or FFmpeg library paths.")
-        # endif()
-
         target_compile_definitions(ffmpegkit PRIVATE
             _WIN32_WINNT=0x0600
             _FORTIFY_SOURCE=2
@@ -191,8 +179,6 @@ if(WIN32)
             "-v"
             "-static-libgcc" 
             "-static-libstdc++" 
-            # "-nodefaultlibs"
-            # "-Wl,--entry,_DllMainCRTStartup"
             "-Wl,--enable-runtime-pseudo-reloc"
             "-Wl,-u,__mingw_raise_matherr"
             "-Wl,--exclude-libs,libstdc++.a"
@@ -371,8 +357,6 @@ elseif(APPLE)
         "-Wl,-w"
         "-Wl,-dead_strip"
         "-Wl,-twolevel_namespace"
-        # "-Wl,-flat_namespace"
-        # "-Wl,-undefined,dynamic_lookup"
     )
 endif()
 
@@ -458,6 +442,7 @@ if(BUILD_SHARED_LIBS)
                 ${FFMPEG_STATIC_LIBS}
                 "-Wl,--no-whole-archive"
                 ${BUNDLE_LIBRARIES}
+                c++_static
             )
         elseif(APPLE)
             if(CMAKE_SYSTEM_NAME STREQUAL "iOS")

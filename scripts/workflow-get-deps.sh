@@ -352,6 +352,19 @@ PY
                 -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
                 -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
                 -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
+        
+        find "${workspace}/prebuilt/${platform}-${arch}" -xtype l -print0 | while IFS= read -r -d '' link; do
+            old_target=$(readlink "$link")
+            
+            new_target=$(echo "$old_target" | gsed \
+                -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+                -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+                -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g")
+            
+            if [ "$old_target" != "$new_target" ]; then
+                ln -sf "$new_target" "$link"
+            fi
+        done
     fi
 
     cp -a "$staging_dir"/. "$extract_dir"/
