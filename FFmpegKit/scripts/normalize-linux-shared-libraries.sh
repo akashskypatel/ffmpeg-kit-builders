@@ -39,7 +39,7 @@ is_elf_shared_library() {
 canonical_shared_name() {
   local name="$1"
 
-  if [[ "$name" =~ ^(libgomp)-[A-Za-z0-9_]+\.so$ ]]; then
+  if [[ "$name" =~ ^(libgomp)-[A-Za-z0-9_]+\.so(\..*)?$ ]]; then
     printf '%s.so\n' "${BASH_REMATCH[1]}"
     return
   fi
@@ -110,6 +110,13 @@ for file in "${elf_files[@]}"; do
 
     while IFS= read -r needed; do
       replacement="${normalized_by_name[$needed]:-${normalized_by_soname[$needed]:-}}"
+      if [[ -z "$replacement" ]]; then
+        canonical_needed="$(canonical_shared_name "$needed")"
+        if [[ "$canonical_needed" != "$needed" && -e "$lib_dir/$canonical_needed" ]]; then
+          replacement="$canonical_needed"
+        fi
+      fi
+
       if [[ -n "$replacement" && "$replacement" != "$needed" ]]; then
         patchelf --replace-needed "$needed" "$replacement" "$file"
         echo "Normalized Linux DT_NEEDED in $name: $needed -> $replacement"
