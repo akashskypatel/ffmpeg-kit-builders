@@ -39,6 +39,11 @@ is_elf_shared_library() {
 canonical_shared_name() {
   local name="$1"
 
+  if [[ "$name" =~ ^(libgomp)-[A-Za-z0-9_]+\.so$ ]]; then
+    printf '%s.so\n' "${BASH_REMATCH[1]}"
+    return
+  fi
+
   if [[ "$name" =~ ^(lib.+\.so)(\..*)?$ ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
     return

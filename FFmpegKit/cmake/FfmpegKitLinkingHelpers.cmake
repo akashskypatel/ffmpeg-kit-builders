@@ -570,6 +570,78 @@ function(replace_shared_with_static INPUT_LIB OUTPUT_VAR)
     endif()
 endfunction()
 
+function(resolve_linux_shared_openmp_runtime INPUT_LIB OUTPUT_VAR)
+    set(_shared_openmp_runtime "")
+
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(${OUTPUT_VAR} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    get_static_library_basename("${INPUT_LIB}" _lib_name)
+    if(NOT _lib_name STREQUAL "gomp")
+        set(${OUTPUT_VAR} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    set(_search_dirs "")
+    foreach(_prefix "${DEPENDENCY_BUILD_DIR}" "${FFMPEG_BUILD_DIR}")
+        if(_prefix AND IS_DIRECTORY "${_prefix}")
+            list(APPEND _search_dirs "${_prefix}/lib" "${_prefix}/lib64")
+        endif()
+    endforeach()
+
+    if(EXISTS "${INPUT_LIB}")
+        get_filename_component(_input_lib_dir "${INPUT_LIB}" DIRECTORY)
+        list(APPEND _search_dirs "${_input_lib_dir}")
+    endif()
+
+    execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" "-print-file-name=libgomp.so"
+        OUTPUT_VARIABLE _compiler_shared_openmp_runtime
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(EXISTS "${_compiler_shared_openmp_runtime}")
+        get_filename_component(_compiler_shared_openmp_runtime_dir "${_compiler_shared_openmp_runtime}" DIRECTORY)
+        list(APPEND _search_dirs "${_compiler_shared_openmp_runtime_dir}")
+    endif()
+
+    list(APPEND _search_dirs "/usr/lib64" "/usr/lib" "/lib64" "/lib")
+    list(REMOVE_DUPLICATES _search_dirs)
+
+    foreach(_dir IN LISTS _search_dirs)
+        if(NOT IS_DIRECTORY "${_dir}")
+            continue()
+        endif()
+
+        foreach(_candidate_name
+            "libgomp.so"
+            "libgomp.so.1"
+            "libgomp.so.1.0.0"
+            "libgomp-*.so"
+            "libgomp*.so.*")
+            file(GLOB _candidates "${_dir}/${_candidate_name}")
+            list(SORT _candidates)
+            foreach(_candidate IN LISTS _candidates)
+                if(EXISTS "${_candidate}" AND NOT "${_candidate}" MATCHES "\\.a$")
+                    get_filename_component(_shared_openmp_runtime "${_candidate}" REALPATH)
+                    break()
+                endif()
+            endforeach()
+            if(_shared_openmp_runtime)
+                break()
+            endif()
+        endforeach()
+
+        if(_shared_openmp_runtime)
+            break()
+        endif()
+    endforeach()
+
+    set(${OUTPUT_VAR} "${_shared_openmp_runtime}" PARENT_SCOPE)
+endfunction()
+
 function(resolve_mingw_static_runtime_library INPUT_LIB OUTPUT_VAR)
     set(_static_runtime_library "")
 
@@ -700,7 +772,11 @@ function(configure_static_linking LIBRARY_NAME STATIC_LINKING)
             get_filename_component(LIB_PATH_REALPATH "${LIB_PATH}" REALPATH)
             set(LIB_PATH "${LIB_PATH_REALPATH}")
         endif()
-        if(STATIC_LINKING)
+        resolve_linux_shared_openmp_runtime("${LIB_PATH}" RESOLVED_SHARED_OPENMP_RUNTIME)
+        if(RESOLVED_SHARED_OPENMP_RUNTIME)
+            set(RESOLVED_LIB "${RESOLVED_SHARED_OPENMP_RUNTIME}")
+            message(STATUS "configure_static_linking(${LIBRARY_NAME}): keeping OpenMP runtime shared: ${RESOLVED_LIB}")
+        elseif(STATIC_LINKING)
             replace_shared_with_static("${LIB_PATH}" RESOLVED_LIB ${${LIBRARY_NAME}_REAL_LIBRARY_DIRS})
         else()
             if(MINGW)
