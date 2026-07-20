@@ -255,7 +255,7 @@ while [ $# -gt 0 ]; do
     export create_release_clean_type="all"
     shift
     ;;
-  --host-platform=*|--host=*)
+  --host-platform=*|--host=*|--platform=*)
     export host_platform="${1#*=}"
     shift
     ;;
