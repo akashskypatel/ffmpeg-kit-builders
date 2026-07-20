@@ -56,6 +56,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     openssl-devel \
     p7zip \
     patch \
+    patchelf \
     pax \
     perl-IPC-Cmd \
     perl-Thread-Queue \

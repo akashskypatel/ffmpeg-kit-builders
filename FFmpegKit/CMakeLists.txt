@@ -250,10 +250,10 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
         message(FATAL_ERROR "ALSA not found. Checked DEPENDENCY_BUILD_DIR='${DEPENDENCY_BUILD_DIR}', FFMPEG_BUILD_DIR='${FFMPEG_BUILD_DIR}', and system paths")
     endif()
 
-    # Allow libffmpegkit.so to find sibling libs (e.g. libpulsecommon) in the
-    # same directory it is installed into (Flutter bundle's lib/ folder)
+    # Allow libffmpegkit.so to find bundled Linux dependencies in the same
+    # directory it is installed into (Flutter bundle's lib/ folder).
     set_target_properties(ffmpegkit PROPERTIES
-        INSTALL_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN:$ORIGIN/pulseaudio"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
 elseif(ANDROID)
@@ -662,6 +662,20 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/"
 configure_file("src/ffmpegkit.pc.in" "ffmpegkit.pc" @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.pc" DESTINATION lib/pkgconfig)
 
+if(BUILD_SHARED_LIBS AND CMAKE_SYSTEM_NAME MATCHES "Linux")
+    install(CODE "
+        execute_process(
+            COMMAND bash \"${CMAKE_CURRENT_SOURCE_DIR}/scripts/normalize-linux-shared-libraries.sh\"
+                    \"\${CMAKE_INSTALL_PREFIX}/lib\"
+                    \"\\\$ORIGIN:\\\$ORIGIN/pulseaudio\"
+            RESULT_VARIABLE NORMALIZE_LINUX_SHARED_LIBRARIES_RESULT
+        )
+        if(NOT NORMALIZE_LINUX_SHARED_LIBRARIES_RESULT EQUAL 0)
+            message(FATAL_ERROR \"Linux shared library normalization failed\")
+        endif()
+    ")
+endif()
+
 # =============================================================================
 # 8. TESTING: Unit Test Framework Integration
 # =============================================================================
@@ -671,11 +685,6 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.pc" DESTINATION lib/pkgconf
 # - Add test directory to build system
 # ==============================================================================
 if(BUILD_TESTS)
-    set_target_properties(ffmpegkit PROPERTIES
-        INSTALL_RPATH "$ORIGIN:$ORIGIN/pulseaudio:/usr/lib/pulseaudio:/usr/lib64/pulseaudio:${CMAKE_SOURCE_DIR}/../prebuilt/linux-x86_64/libraries/lib:${CMAKE_SOURCE_DIR}/../prebuilt/linux-x86_64/libraries/lib/pulseaudio"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
-
     enable_testing()
 
     include(FetchContent)

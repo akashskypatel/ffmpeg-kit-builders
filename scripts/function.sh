@@ -2052,9 +2052,8 @@ check_missing_packages() {
     # xutils-dev python3-numpy cython3
     # zeranoe's build scripts use wget, though we don't here...
     local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
-  'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
+  'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' 'patchelf' \
   'bzip2' 'python3' 'bc' 'ripgrep' 'libdatrie' 'jq' 'asciidoc' 'compiler-rt' 'clang-tools-extra' 'doxygen' \
-
   )
     # autoconf-archive is just for leptonica FWIW
     # I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
