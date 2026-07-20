@@ -88,8 +88,6 @@ print_workflow_progress() {
   for ((j = bars; j < 100; j++)); do bar_str="${bar_str}░"; done
 
   echo "Workflow progress: ${combo}" | tee -a "$LOG_FILE"
-  printf "[%s] %3d%% (%2d/%2d) | %s\n" "$bar_str" "$percent" "$current_step" "$steps" "$step_name" | tee -a "$LOG_FILE"
-  # change bar color to red
   printf "\r\033[K\033[1;31m[%s]\033[0m %3d%% (%2d/%2d) | \033[1;36m%s\033[0m" "$bar_str" "$percent" "$current_step" "$steps" "$step_name" | tee -a "$LOG_FILE"
   echo "" | tee -a "$LOG_FILE"
 }
