@@ -519,8 +519,8 @@ GITHUB_PASSWORD="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
 GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
 OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}"
 OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
-GRADLE_COMMAND="publishToMavenCentral"
-GRADLE_SIGN_PUBLICATIONS="true"
+GRADLE_COMMAND="publishToMavenLocal" # "publishToMavenCentral"
+GRADLE_SIGN_PUBLICATIONS="false" # "true"
 SIGNING_HOME="${GITHUB_WORKSPACE:-$(get_userhome)}"
 SIGNING_HOME="${SIGNING_HOME:-$HOME}"
 GRADLE_HOME="${SIGNING_HOME}/.gradle"
@@ -530,15 +530,15 @@ if [[ -z "$SIGNING_HOME" || ! -d "$SIGNING_HOME" ]]; then
   exit_message 1 "Unable to determine user home"
 fi
 
-echo "Checking signing configuration at ${GRADLE_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
-if [[ ! -f "${GRADLE_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
-  echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
-  GRADLE_COMMAND="publishToMavenLocal"
-  GRADLE_SIGN_PUBLICATIONS="false"
-else
-  echo "Maven signing configured, using remote build" | tee -a "${LOG_FILE}"
-  verify_maven_signing_configuration "${GRADLE_HOME}/gradle.properties"
-fi
+# echo "Checking signing configuration at ${GRADLE_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
+# if [[ ! -f "${GRADLE_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
+#   echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
+#   GRADLE_COMMAND="publishToMavenLocal"
+#   GRADLE_SIGN_PUBLICATIONS="false"
+# else
+#   echo "Maven signing configured, using remote build" | tee -a "${LOG_FILE}"
+#   verify_maven_signing_configuration "${GRADLE_HOME}/gradle.properties"
+# fi
 
 if [[ ! "${FFMPEG_KIT_VERSION_QUALIFIER}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
   exit_message 1 "Invalid Maven version qualifier: ${FFMPEG_KIT_VERSION_QUALIFIER}"
@@ -583,7 +583,8 @@ create_aar_artifact() {
   FFMPEG_KIT_NAMESPACE="io.github.${OWNER}.ffmpegkit"
   ANDROID_NDK="${latest_ndk}"
   FFMPEG_KIT_VERSION_CODE="$(date -u +%Y%m%d)"
-  build_step="GNUPGHOME=\"${SIGNING_HOME}/.gnupg\" ./gradlew :tools:android:${GRADLE_COMMAND} \
+  # GNUPGHOME=\"${SIGNING_HOME}/.gnupg\" 
+  build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
   --no-daemon --info --warning-mode all --gradle-user-home \"${GRADLE_HOME}\" \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \
   -PANDROID_NDK=\"${ANDROID_NDK}\" \
