@@ -2399,11 +2399,24 @@ build_libpulse() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
+  add_libs_to_pkg -t="$install_pkgconfig_dir/libpulse.pc" -l="-lxcb -lXau -lX11 -liconv -lXdmcp"
+  find "$dependency_install_prefix/lib" -type l -name "libpulse*" -exec rm -f {} \;
+  if [[ -f "$dependency_install_prefix/lib/libpulse-simple.so.0.1.1" ]]; then
+    mv -f "$dependency_install_prefix/lib/libpulse-simple.so.0.1.1" "$dependency_install_prefix/lib/libpulse-simple.so"
+    copy_path "$dependency_install_prefix/lib/libpulse-simple.so" "$dependency_install_prefix/lib/libpulse-simple.so.0" -f
+    copy_path "$dependency_install_prefix/lib/libpulse-simple.so" "$dependency_install_prefix/lib/libpulse-simple.so.0.1" -f
+    copy_path "$dependency_install_prefix/lib/libpulse-simple.so" "$dependency_install_prefix/lib/libpulse-simple.so.0.1.1" -f
+  fi
+  if [[ -f "$dependency_install_prefix/lib/libpulse.so.0.24.3" ]]; then
+    mv -f "$dependency_install_prefix/lib/libpulse.so.0.24.3" "$dependency_install_prefix/lib/libpulse.so"
+    copy_path "$dependency_install_prefix/lib/libpulse.so" "$dependency_install_prefix/lib/libpulse.so.0" -f
+    copy_path "$dependency_install_prefix/lib/libpulse.so" "$dependency_install_prefix/lib/libpulse.so.0.24" -f
+    copy_path "$dependency_install_prefix/lib/libpulse.so" "$dependency_install_prefix/lib/libpulse.so.0.24.3" -f
+  fi
   change_dir "$src_dir"
   reset_cflags
   reset_cxxflags
   unset LIBS
-  add_libs_to_pkg -t="$install_pkgconfig_dir/libpulse.pc" -l="-lxcb -lXau -lX11 -liconv -lXdmcp"
 }
 # build_libqrencode       # config_options+= --enable-libqrencode         # enable QR encode generation via libqrencode [no]
 build_libqrencode() {
