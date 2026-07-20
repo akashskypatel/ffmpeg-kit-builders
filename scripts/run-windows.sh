@@ -26,28 +26,22 @@ build_pthread_win32() {
   local repo="https://github.com/GerHobbelt/pthread-win32"
   local lib="pthread-win32"
   local repo_ver="version-3.1.0-release"
-  local pthread_static_lib=""
-  local pthread_static_name=""
-  local pthread_gc3_lib="$dependency_install_prefix/lib/libpthreadGC3.a"
-  local pthread_gce3_lib="$dependency_install_prefix/lib/libpthreadGCE3.a"
 	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver" || exit_message 1 "Failed git_checkout"
   change_dir "$src_dir/$lib" || exit_message 1 "Failed change_dir"
   cp -f "CMakeLists.txt" "CMakeLists.txt.bak" || exit_message 1 "Failed copy_path"
   apply_patch "$PATCHDIR/pthreads-win32_cmake.patch" || exit_message 1 "Failed apply_patch"
-  apply_patch "$PATCHDIR/pthreads-win32_config_macros.patch" || exit_message 1 "Failed apply_patch pthreads-win32_config_macros.patch"
-  gsed -i '1{/^#ifdef __cplusplus/!{i\
+  sed -i '1{/^#ifdef __cplusplus/!{i\
 #ifdef __cplusplus\
 #include <exception>\
 #endif
-}}' pthread.c || exit_message 1 "Failed gsed pthread.c"
-  apply_patch "$PATCHDIR/pthreads-win32_libstdcxx_thread_id.patch" || exit_message 1 "Failed apply_patch pthreads-win32_libstdcxx_thread_id.patch"
-  gsed -i 's/ terminate ();/std::terminate();/g' ptw32_callUserDestroyRoutines.c || exit_message 1 "Failed gsed ptw32_callUserDestroyRoutines.c"
+}}' pthread.c || exit_message 1 "Failed sed pthread.c"
+  sed -i 's/ terminate ();/std::terminate();/g' ptw32_callUserDestroyRoutines.c || exit_message 1 "Failed sed ptw32_callUserDestroyRoutines.c"
 	change_dir "$src_dir/$lib/build" 1 || exit_message 1 "Failed change_dir"
   local cmake_args="-DTARGET_ARCH=$host_arch \
 -DCMAKE_CXX_STANDARD=11 \
 -DCMAKE_CXX_FLAGS=\"-fpermissive\" \
--DCMAKE_C_FLAGS=\"-DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L -DPTW32_BUILD_INLINED -fcommon\""
+-DCMAKE_C_FLAGS=\"-DPTW32_STATIC_LIB -DPTW32_BUILD_INLINED -fcommon\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args" || exit_message 1 "Failed do_cmake_from_build_dir"
   do_make_and_make_install || exit_message 1 "Failed do_make_and_make_install"
 	change_dir "$src_dir" || exit_message 1 "Failed change_dir"
@@ -79,7 +73,6 @@ build_pthread_win32() {
     -n="PthreadWin32" \
     -d="PthreadWin32 library (${pthread_static_name})" \
     -l="$pthread_static_lib" > >(redirect_output) 2>&1
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
 }
 build_dlfcn() {
   # vcpkg https://vcpkg.io/en/package/dlfcn-win32
@@ -112,8 +105,6 @@ build_libxavs() {
 	if [[ ! -f Makefile.bak ]]; then
 		gsed -i "s/O4/O2/" configure # Change CFLAGS.
 	fi
-  gsed -i '/CFLAGS="\$CFLAGS -DPTW32_STATIC_LIB"/d' configure || exit_message 1 "Failed gsed configure PTW32_STATIC_LIB cleanup for xavs"
-  use_pthread_win32_flags
   clear_cross_vars AS
   # wget "https://patch-diff.githubusercontent.com/raw/Distrotech/xavs/pull/1.patch" > >(redirect_output) 2>&1
 	# apply_patch "1.patch"
@@ -126,14 +117,7 @@ build_libxavs() {
 --host=$host_target \
 --prefix=$dependency_install_prefix \
 --cross-prefix=$cross_prefix"
-  apply_patch "$PATCHDIR/xavs_pthread_win32_attach.patch" || exit_message 1 "Failed apply_patch xavs_pthread_win32_attach.patch"
-  gsed -i '/pthread_win32_process_attach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread attach cleanup"
-  gsed -i '/pthread_win32_thread_attach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread thread attach cleanup"
-  gsed -i '/pthread_win32_thread_detach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread thread detach cleanup"
-  gsed -i '/pthread_win32_process_detach_np[[:space:]]*()/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs pthread process detach cleanup"
-  gsed -i '/^#ifdef PTW32_STATIC_LIB$/N;/^#ifdef PTW32_STATIC_LIB$\n#endif$/d' "$src_dir/$lib/xavs.c" || exit_message 1 "Failed gsed xavs empty PTW32 blocks cleanup"
 	do_make_and_make_install "AS= " "AS= "
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/xavs.pc"
 	if [[ -d NUL ]]; then
 		remove_path -f NUL # cygwin causes windows explorer to not be able to delete this folder if it has this oddly named file in it...
 	fi
@@ -647,6 +631,8 @@ build_libpng() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  remove_path -f "$dependency_install_prefix/lib/libpng.a"
+  copy_path "$dependency_install_prefix/lib/libpng16.a" "$dependency_install_prefix/lib/libpng.a" -f
 	change_dir "$src_dir"
 }
 # build_libwebp           # config_options+= --enable-libwebp             # enable WebP encoding via libwebp [no]
@@ -790,14 +776,11 @@ build_libvmaf() {
   local repo_ver="v3.0.0"
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-	change_dir "$src_dir/$lib/libvmaf"
-  use_pthread_win32_flags
+  change_dir "$src_dir/$lib/libvmaf"
 	local meson_options="-Denable_float=true -Dbuilt_in_models=true -Denable_tests=false -Denable_docs=false"
 	generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
 	do_ninja_and_ninja_install
-  add_libs_to_pkg -t="$install_pkgconfig_dir/libvmaf.pc" -l=""
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/libvmaf.pc"
 	change_dir "$src_dir"
 }
 # build_libfontconfig     # config_options+= --enable-libfontconfig       # enable libfontconfig, useful for drawtext filter [no]
@@ -1201,13 +1184,13 @@ build_sdl12_compat() {
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   # Patch 1: Remove OS restriction for static builds 
-  sed -i 's/if(STATICDEVEL AND NOT (CMAKE_SYSTEM_NAME MATCHES "Linux"))/if(FALSE)/' CMakeLists.txt
+  gsed -i 's/if(STATICDEVEL AND NOT (CMAKE_SYSTEM_NAME MATCHES "Linux"))/if(FALSE)/' CMakeLists.txt
   # Patch 2: Force the main SDL target to be STATIC 
-  sed -i 's/add_library(SDL SHARED/add_library(SDL STATIC/' CMakeLists.txt
+  gsed -i 's/add_library(SDL SHARED/add_library(SDL STATIC/' CMakeLists.txt
   # Patch 3: Remove -nostdlib causing Win32 API issues 
-  sed -i '/set_target_properties(SDL PROPERTIES LINK_FLAGS "-nostdlib")/d' CMakeLists.txt
+  gsed -i '/set_target_properties(SDL PROPERTIES LINK_FLAGS "-nostdlib")/d' CMakeLists.txt
   # Patch 4: Skip version.rc 
-  sed -i 's/set(WIN32_SRCS "src\/version.rc")/set(WIN32_SRCS "")/' CMakeLists.txt
+  gsed -i 's/set(WIN32_SRCS "src\/version.rc")/set(WIN32_SRCS "")/' CMakeLists.txt
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DSDL12TESTS=OFF \
 -DSDL12DEVEL=ON \
@@ -1235,7 +1218,6 @@ build_libopenmpt() {
   #do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
-  use_pthread_win32_flags
   generic_configure "--enable-shared=no \
 --enable-static=yes \
 --without-pulseaudio \
@@ -1275,7 +1257,6 @@ OPENMPT123=0 \
 TEST=0" # OPENMPT123=1 >>> fail
   add_libs_to_pkg -t="$install_pkgconfig_dir/libopenmpt.pc" -p="-lrpcrt4"
   add_libs_to_pkg -t="$install_pkgconfig_dir/libout123.pc" -p="-lwinmm"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/libopenmpt.pc"
 	change_dir "$src_dir"
 }
 # build_libopencore_amrnb # config_options+= --enable-libopencore-amrnb   # enable AMR-NB de/encoding via libopencore-amrnb [no]
@@ -1632,9 +1613,21 @@ build_libmysofa() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params" 
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	change_dir "$src_dir"
 }
 # build_decklink          # config_options+= --enable-decklink            # enable Blackmagic DeckLink I/O support [no]
@@ -1663,7 +1656,6 @@ build_libzvbi() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export LIBS="-lpng -lz -liconv"
-  use_pthread_win32_flags
   export LDFLAGS="$LDFLAGS $LIBS"
   do_autogen "--build-w$bits_target" || exit_message 1 "There was an error running autogen.\n See $LOG_FILE for details"
   change_dir "$src_dir/$lib"
@@ -1682,7 +1674,6 @@ build_libzvbi() {
 --with-libiconv-prefix=\"$dependency_install_prefix\""
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/zvbi-0.2.pc"
   reset_allflags
   unset LIBS
   change_dir "$src_dir"
@@ -1747,7 +1738,6 @@ build_libsrt() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
 	apply_patch "$PATCHDIR/srt.app.patch"
-  use_pthread_win32_flags
 	# CMake Warning at CMakeLists.txt:893 (message):
 	#   On MinGW, some C++11 apps are blocked due to lacking proper C++11 headers
 	#   for <thread>.  FIX IF POSSIBLE.
@@ -1755,20 +1745,18 @@ build_libsrt() {
   truthy "$enable_openssl" && enclib=openssl
   truthy "$enable_gnutls" && enclib=gnutls
   truthy "$enable_mbedtls" && enclib=mbedtls
-  enclib=${enclib:-"openssl"}
-	generic_cmake "-DUSE_ENCLIB=$enclib \
+	generic_cmake "-DUSE_ENCLIB=${enclib:-openssl} \
 -DENABLE_SHARED=OFF \
 -DENABLE_STATIC=ON \
 -DENABLE_APPS=OFF \
 -DUSE_STATIC_LIBSTDCXX=ON \
+-DOPENSSL_USE_STATIC_LIBS=ON \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 -DCMAKE_C_FLAGS=\"$CFLAGS\" \
 -DCMAKE_CXX_FLAGS=\"$CXXFLAGS\" \
 -DENABLE_CXX11=OFF"
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/srt.pc"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/haisrt.pc"
 	change_dir "$src_dir"
 }
 # build_libaribcaption    # config_options+= --enable-libaribcaption      # enable ARIB text and caption decoding via libaribcaption [no]
@@ -1819,7 +1807,6 @@ build_libtesseract() {
   export CXXFLAGS="$CXXFLAGS -DJBG_STATIC "
   export LIBS="-lleptonica -lz -larchive -ltiff -lpng16 -ljpeg -lgif -lwebpmux -lwebp -lopenjp2 -ljbig -lLerc -lsharpyuv -llzma -lzstd -ldeflate -lwinmm -lcrypt32 -lws2_32" 
   export LDFLAGS=" -Wl,--allow-multiple-definition $LDFLAGS -static -static-libgcc -static-libstdc++ "
-  use_pthread_win32_flags
 	generic_configure "--disable-openmp \
 --with-archive \
 --disable-graphics \
@@ -1840,7 +1827,6 @@ LIBS=\"$LIBS\" \
 	disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   add_libs_to_pkg -t="$install_pkgconfig_dir/tesseract.pc" -l="-ltesseract $LIBS  -lws2_32 -lgdi32" -rp="lept libarchive liblzma libtiff-4"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/tesseract.pc"
 	# TODO: add ability to download tessdata
   # https://github.com/tesseract-ocr/tessdata
   # https://github.com/tesseract-ocr/tessdata_best
@@ -1882,7 +1868,6 @@ build_libvpx() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
 	# apply_patch $PATCHDIR/vpx_160_semaphore.patch -p1 # perhaps someday can remove this after 1.6.0 or mingw fixes it LOL
 	if [[ "$bits_target" = "32" ]]; then
 		local config_options="--target=x86-win32-gcc"
@@ -1915,7 +1900,6 @@ build_libvpx() {
 	do_make_and_make_install "AS= " "AS= "
 	change_dir "$src_dir"
   unset CROSS
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/vpx.pc"
   reset_cross_vars
 }
 # build_libx265           # config_options+= --enable-libx265             # enable HEVC encoding via x265 [no]
@@ -2006,11 +1990,9 @@ build_libopenh264() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   local meson_options="-Dtests=disabled"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/openh264.pc"
 	change_dir "$src_dir"
 }
 # build_libaom            # config_options+= --enable-libaom              # enable AV1 video encoding/decoding via libaom [no]
@@ -2021,7 +2003,6 @@ build_libaom() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
 	if [ "$bits_target" = "32" ]; then
 		local config_options="-DCMAKE_TOOLCHAIN_FILE=../build/cmake/toolchains/x86-mingw-gcc.cmake -DAOM_TARGET_CPU=x86"
 	else
@@ -2041,7 +2022,6 @@ build_libaom() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/aom.pc"
 	change_dir "$src_dir"
 }
 # build_libdav1d          # config_options+= --enable-libdav1d            # enable AV1 decoding via libdav1d [no]
@@ -2080,6 +2060,8 @@ build_vulkan() {
 $extra_args" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  remove_path -f "$dependency_install_prefix/lib/libvulkan.a"
+  copy_path "$dependency_install_prefix/lib/libvulkan-1.a" "$dependency_install_prefix/lib/libvulkan.a" -f
 	change_dir "$src_dir"
 }
 # build_vulkan_static     # config_options+= --enable-vulkan-static       # enable statically link to libvulkan [no]
@@ -2122,7 +2104,7 @@ build_libplacebo() {
 -Dvulkan=enabled \
 -Dvk-proc-addr=disabled \
 -Dglslang=disabled \
- -Dshaderc=disabled \
+-Dshaderc=disabled \
 -Dc_link_args=\"-L$dependency_install_prefix/lib -lshaderc_combined -lspirv-cross-c -static -static-libgcc -static-libstdc++\" \
 -Dcpp_link_args=\"-static -static-libgcc -static-libstdc++ $config_options\"" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined
   gsed -i '/windows\.compile_resources(/,/)/ s/^/# /' "$src_dir/$lib/src/meson.build"
@@ -2153,10 +2135,7 @@ build_libvvenc() {
   local repo_ver="v1.13.1"
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  apply_patch "$PATCHDIR/vvenc_pthread_t_value_init.patch" || exit_message 1 "Failed apply_patch vvenc_pthread_t_value_init.patch"
   change_dir "$src_dir/$lib/build" 1
-  use_pthread_win32_flags
 	do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=0 \
 -DVVENC_ENABLE_LINK_TIME_OPT=OFF \
@@ -2164,7 +2143,6 @@ build_libvvenc() {
 	disable_nonessential "$src_dir/$lib"
 	do_make_and_make_install
   gsed -i 's/interface_libs-NOTFOUND//g' "$install_pkgconfig_dir/libvvenc.pc"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/libvvenc.pc"
 	change_dir "$src_dir"
 }
 
@@ -2214,7 +2192,6 @@ build_libjxl() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  use_pthread_win32_flags
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
@@ -2259,7 +2236,6 @@ build_libjxl() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
   reset_ldflags
 	change_dir "$src_dir"
 }
@@ -2272,7 +2248,6 @@ build_libkvazaar() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   export ASFLAGS="$ASFLAGS -DPIC"
 	local cmake_params="-DCMAKE_BUILD_TESTS=OFF \
 -DCMAKE_ASM_NASM_FLAGS=\"-DPIC\" \
@@ -2286,7 +2261,6 @@ build_libkvazaar() {
 	change_dir "$src_dir"
   unset ASFLAGS
   add_libs_to_pkg -t="$install_pkgconfig_dir/kvazaar.pc" -c="-DKVZ_STATIC_LIB"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/kvazaar.pc"
 }
 # build_openssl           # config_options+= --enable-openssl             # enable openssl, needed for https support if gnutls, libtls or mbedtls is not used [no]
 build_openssl() {
@@ -2491,7 +2465,6 @@ build_zix() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   local meson_options="-Dtests=disabled -Dtests_cpp=disabled -Ddocs=disabled -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
@@ -2501,8 +2474,6 @@ build_zix() {
   cp -f "libzix-0.a" "libzix.a"
   change_dir "$install_pkgconfig_dir"
   cp -f "zix-0.pc" "zix.pc"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/zix-0.pc"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/zix.pc"
 	change_dir "$src_dir"
 }
 build_lilv() {
@@ -2656,7 +2627,6 @@ build_openal() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  use_pthread_win32_flags
 	local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DLIBTYPE=STATIC \
 -DALSOFT_UTILS=OFF \
@@ -2676,7 +2646,6 @@ build_openal() {
   do_make_and_make_install
 	change_dir "$src_dir"
   add_libs_to_pkg -t="$install_pkgconfig_dir/openal.pc" -l="-lole32 -lshell32 -luuid"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/openal.pc"
 }
 build_pcre2() {
   # run_valid_function "build_zlib" 1
@@ -2707,9 +2676,21 @@ build_pcre2() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	change_dir "$src_dir"
 }
 build_bison() {
@@ -2859,8 +2840,6 @@ build_whisper() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  use_pthread_win32_flags
-  export LDFLAGS="$LDFLAGS -lgomp"
 	local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DWHISPER_BUILD_EXAMPLES=OFF \
 -DWHISPER_BUILD_TESTS=OFF \
@@ -2871,7 +2850,9 @@ build_whisper() {
 -DGGML_AVX2=ON \
 -DGGML_FMA=ON \
 -DGGML_F16C=ON \
--DGGML_NATIVE=OFF"
+-DGGML_OPENMP=OFF \
+-DGGML_NATIVE=OFF \
+-DCMAKE_CXX_FLAGS=\"$CXXFLAGS\""
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
 	disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
@@ -2882,9 +2863,8 @@ build_whisper() {
       fi
   done
   while IFS= read -r -d '' file; do
-    add_libs_to_pkg -t="$file" -l="-lwhisper -lggml -lggml-base -lggml-cpu -lgomp -lws2_32 -lwinmm"
+    add_libs_to_pkg -t="$file" -l="-lwhisper -lggml -lggml-base -lggml-cpu -lws2_32 -lwinmm"
   done < <(find "$install_pkgconfig_dir" -name "whisper*.pc" -print0)
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
 	change_dir "$src_dir"
 }
 
@@ -2912,7 +2892,6 @@ build_librist() {
   export LDFLAGS="$LDFLAGS -static -static-libgcc -static-libgcc -static-libstdc++"
   export CFLAGS="$CFLAGS -static -static-libgcc -static-libstdc++"
   export CXXFLAGS="$CXXFLAGS -static -static-libgcc -static-libstdc++"
-  use_pthread_win32_flags
   activate_meson
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver" 
@@ -2929,9 +2908,8 @@ build_librist() {
 -Dcpp_link_args=\"-static -static-libgcc -static-libstdc++\""
 	meson_options+=" --cross-file=$cross_file"
   do_meson "$meson_options"
-  do_ninja_and_ninja_install
+	do_ninja_and_ninja_install
   gsed -i 's|^Libs:.*|Libs: -lrist -lws2_32 -liphlpapi|g' "$install_pkgconfig_dir/librist.pc"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/librist.pc"
 	change_dir "$src_dir"
   reset_allflags
 }
@@ -3026,7 +3004,6 @@ build_libssh() {
   # run_valid_function "build_openssl" 1
   # run_valid_function "build_zlib" 1
   reset_allflags
-  use_pthread_win32_flags
 	# https://github.com/canonical/libssh
 	local lib="libssh"
   # https://github.com/canonical/libssh
@@ -3064,12 +3041,23 @@ build_libssh() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	change_dir "$src_dir"
   add_libs_to_pkg -t="$install_pkgconfig_dir/libssh.pc" -l="-lssl -lcrypto -lcrypt32 -lws2_32 -lz -liphlpapi" -c="-DLIBSSH_STATIC"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/libssh.pc"
 }
 # build_libtls            # config_options+= --enable-libtls              # enable LibreSSL (via libtls), needed for https support if openssl, gnutls or mbedtls is not used [no]
 build_libtls() {
@@ -3103,7 +3091,6 @@ build_libzmq() {
   export CFLAGS="-static -static-libgcc -static-libstdc++ -O3 -I$dependency_install_prefix/include -L$dependency_install_prefix/lib -Wno-incompatible-pointer-types"
   export CXXFLAGS="-static -static-libgcc -static-libstdc++ -DZE_MQ_STATIC -O2 -Wno-error -Wno-unknown-pragmas -I$dependency_install_prefix/include -L$dependency_install_prefix/lib"
   export LDFLAGS="-static -static-libgcc -static-libstdc++ -I$dependency_install_prefix/include -L$dependency_install_prefix/lib"
-  use_pthread_win32_flags
   generic_configure "--enable-static \
 --disable-shared \
 --without-docs \
@@ -3112,7 +3099,7 @@ build_libzmq() {
 --disable-perf \
 --disable-werror \
 --disable-curve-keygen \
---disable-curve"' LIBS="$PTHREAD_WIN32_STATIC_LIB -lws2_32"'
+--disable-curve"' LIBS="-lws2_32"'
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
 	change_dir "$src_dir"
@@ -3120,7 +3107,6 @@ build_libzmq() {
   reset_cxxflags
   reset_ldflags
   add_libs_to_pkg -t="$install_pkgconfig_dir/libzmq.pc" -l="-lws2_32"
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/libzmq.pc"
 }
 # build_mbedtls           # config_options+= --enable-mbedtls             # enable mbedTLS, needed for https support if openssl, gnutls or libtls is not used [no]
 build_mbedtls() {
@@ -3429,11 +3415,9 @@ build_lcms2() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
 	local meson_options="-Dtests=disabled -Dutils=false"
 	generic_meson "$meson_options"
 	do_ninja_and_ninja_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/lcms2.pc"
 	change_dir "$src_dir"
 }
 
@@ -3486,7 +3470,6 @@ build_libglslang() {
   local repo_ver="Release 16.1.0"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   local cmake_params="-DCMAKE_INSTALL_PREFIX=${dependency_install_prefix} \
 -DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
@@ -3513,9 +3496,9 @@ Requires:
 Libs: -L\${libdir} -lglslang -lMachineIndependent -lGenericCodeGen -lOSDependent -lSPIRV -lSPVRemapper -lSPIRV-Tools-opt -lSPIRV-Tools 
 Cflags: -I\${includedir}
 EOF
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/glslang.pc"
 	change_dir "$src_dir"
 }
+
 
 # build_libklvanc         # config_options+= --enable-libklvanc           # enable Kernel Labs VANC processing [no]
 build_libklvanc() {
@@ -3526,7 +3509,6 @@ build_libklvanc() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   gsed -i 's#<sys/errno.h>#<errno.h>#g' src/libklvanc/vanc.h src/libklvanc/vanc-packets.h src/core-private.h src/libklvanc/vanc-lines.h
   touch "no.autogen"
   generic_configure "--enable-static \
@@ -3546,7 +3528,6 @@ Version: 1.6.0
 Libs: -L\${libdir} -lklvanc
 Cflags: -I\${includedir}
 EOF
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/libklvanc.pc"
     change_dir "$src_dir/$lib"
 	change_dir "$src_dir"
 }
@@ -3575,9 +3556,8 @@ build_liblcevc_dec() {
   local repo="https://github.com/v-novaltd/LCEVCdec"
   local repo_ver="4.0.4"
 	change_dir "$src_dir"
-  disable_git_lfs_and_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  use_pthread_win32_flags
 	local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
 -DVN_SDK_EXECUTABLES=OFF \
@@ -3595,7 +3575,6 @@ build_liblcevc_dec() {
   if [[ -f "$install_pkgconfig_dir/lcevc_dec_utility.pc" ]]; then
     remove_path -f "$install_pkgconfig_dir/lcevc_dec_utility.pc"
   fi
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
 }
 # build_liboapv           # config_options+= --enable-liboapv             # enable APV encoding via liboapv [no]
 build_liboapv() {
@@ -3630,7 +3609,6 @@ build_libqrencode() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib/build" 1
-  use_pthread_win32_flags
 	local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DWITH_TOOLS=NO \
 -DWITH_TESTS=NO \
@@ -3640,7 +3618,6 @@ build_libqrencode() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
 	do_make_and_make_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/libqrencode.pc"
 	change_dir "$src_dir"
 }
 # build_libquirc          # config_options+= --enable-libquirc            # enable QR decoding via libquirc [no]
@@ -3678,7 +3655,6 @@ build_librsvg() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   local static_defs="-DGRAPHITE2_STATIC -DGLIB_2.0_STATIC -DCAIRO_WIN32_STATIC_BUILD -DGLIB_STATIC_COMPILATION"
   local common_args="-mstackrealign $static_defs"
   local meson_options="-Ddocs=disabled \
@@ -3702,7 +3678,6 @@ build_librsvg() {
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib/build"
   do_ninja_and_ninja_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
   change_dir "$src_dir"
   unset RUSTFLAGS
 }
@@ -3717,9 +3692,8 @@ build_libuavs3d() {
   if [[ -f "$src_dir/$lib/version.sh" ]]; then
     chmod -R a+rwx "$src_dir/$lib/version.sh"
     eval "$src_dir/$lib/version.sh" > >(redirect_output) 2>&1
-	fi
+  fi
 	change_dir "$src_dir/$lib/build" 1
-  use_pthread_win32_flags
 	local cmake_params="-DCOMPILE_10BIT=0 \
 -DBUILD_SHARED_LIBS=0 \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -3727,7 +3701,6 @@ build_libuavs3d() {
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
 	do_make_and_make_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/uavs3d.pc"
 	change_dir "$src_dir"
 }
 # build_vapoursynth       # config_options+= --enable-vapoursynth         # enable VapourSynth demuxer [no]
@@ -3752,7 +3725,6 @@ build_vapoursynth() {
   apply_patch "$PATCHDIR/vapoursynth_meson_build.patch"
 	change_dir "$src_dir/$lib"
   export LDFLAGS="$LDFLAGS -static-libgcc -static-libstdc++"
-  use_pthread_win32_flags
 	local meson_options="-Db_lto=false \
 -Denable_vspipe=false \
 -Denable_python_module=false \
@@ -3770,7 +3742,6 @@ build_vapoursynth() {
       -e '/^Libs.private:.*/d' \
       "$pkg_file"
     echo "Libs.private: -L$py_lib_dir -lpython312 -lpython3" >> "$pkg_file"
-    fix_pthread_win32_pkgconfig_flags "$pkg_file"
   fi
 }
 
@@ -4064,7 +4035,6 @@ build_libopencv() {
     local repo="https://github.com/opencv/opencv/"
     local repo_ver="4.12.0"
     export LDFLAGS="$LDFLAGS -static-libgcc -static-libstdc++"
-    use_pthread_win32_flags
 	  change_dir "$src_dir"
     do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
     # apply_patch "$PATCHDIR/opencv.detection_based.patch"
@@ -4077,7 +4047,7 @@ build_libopencv() {
     change_dir "$src_dir/$lib/build" 1
     local original_pkg_path=$PKG_CONFIG_PATH
     export PKG_CONFIG_PATH="$install_pkgconfig_dir"
-    export LIBS="$PTHREAD_WIN32_STATIC_LIB -ltiff -lwebp -lwebpmux -lsharpyuv -lzstd \
+    export LIBS="-ltiff -lwebp -lwebpmux -lsharpyuv -lzstd \
 -lLerc -ldeflate -ljpeg -lz -llzma -ljbig \
  -lwinmm -lversion -lbcrypt -lws2_32 \
 -ladvapi32 -luser32 -lgdi32 -lole32 -lcomdlg32 -luuid"
@@ -4135,7 +4105,6 @@ build_libopencv() {
     while IFS= read -r -d '' file; do
       add_libs_to_pkg -t="$file" -l="-loleaut32"
     done < <(find "$install_pkgconfig_dir" -name "opencv*.pc" -print0)
-    fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
 }
 
 # build_libshaderc        # config_options+= --enable-libshaderc          # enable GLSL->SPIRV compilation via libshaderc [no]
@@ -4147,7 +4116,6 @@ build_libshaderc() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
 	(./utils/git-sync-deps) > >(redirect_output) 2>&1
   gsed -i 's/define_pkg_config_file(shaderc -lshaderc_shared)/define_pkg_config_file(shaderc -lshaderc -lshaderc_util)/' "$src_dir/$lib/CMakeLists.txt"
   change_dir "$src_dir/$lib/build" 1
@@ -4180,7 +4148,6 @@ build_libshaderc() {
   if [[ -f "$install_pkgconfig_dir/SPIRV-Tools-shared.pc" ]]; then
     remove_path -f "$install_pkgconfig_dir/SPIRV-Tools-shared.pc"
   fi
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
   change_dir "$src_dir"
 }
 # build_libvo_amrwbenc    # config_options+= --enable-libvo-amrwbenc      # enable AMR-WB encoding via libvo-amrwbenc [no]
@@ -4343,11 +4310,9 @@ build_pixman() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
 	local meson_options="-Dtests=disabled -Ddemos=disabled"
 	generic_meson "$meson_options"
 	do_ninja_and_ninja_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/pixman-1.pc"
 	change_dir "$src_dir"
 }
 
@@ -4484,9 +4449,21 @@ build_libleptonica() {
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib" "prog"
   do_make_and_make_install
-  [[ -n "$previous_cpath" ]] && export CPATH="$previous_cpath" || unset CPATH
-  [[ -n "$previous_c_include_path" ]] && export C_INCLUDE_PATH="$previous_c_include_path" || unset C_INCLUDE_PATH
-  [[ -n "$previous_cplus_include_path" ]] && export CPLUS_INCLUDE_PATH="$previous_cplus_include_path" || unset CPLUS_INCLUDE_PATH
+  if [[ -n "$previous_cpath" ]]; then
+    export CPATH="$previous_cpath"
+  else
+    unset CPATH
+  fi
+  if [[ -n "$previous_c_include_path" ]]; then
+    export C_INCLUDE_PATH="$previous_c_include_path"
+  else
+    unset C_INCLUDE_PATH
+  fi
+  if [[ -n "$previous_cplus_include_path" ]]; then
+    export CPLUS_INCLUDE_PATH="$previous_cplus_include_path"
+  else
+    unset CPLUS_INCLUDE_PATH
+  fi
 	reset_cflags
   reset_cppflags
 	change_dir "$src_dir"
@@ -4684,7 +4661,6 @@ build_flac() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
 	change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   find . -name "CMakeLists.txt" -exec gsed -i 's/version.rc//g' {} +
   change_dir "$src_dir/$lib/build" 1
 	do_cmake_from_build_dir "$src_dir/$lib" "-DBUILD_DOCS=OFF \
@@ -4699,7 +4675,6 @@ build_flac() {
 -DINSTALL_MANPAGES=OFF"
   disable_nonessential "$src_dir/$lib"
 	do_make_and_make_install
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir/flac.pc"
 	change_dir "$src_dir"
 }
 
@@ -4758,8 +4733,7 @@ build_libssh2() {
 build_cpuinfo() {
   local lib="cpuinfo"
   local repo="https://github.com/pytorch/cpuinfo"
-  export LDFLAGS="$LDFLAGS -static -static-libgcc -static-libstdc++"
-  use_pthread_win32_flags
+  export LDFLAGS="$LDFLAGS -static -static-libgcc -static-libstdc++ -lpthread"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "main"
   change_dir "$src_dir/$lib/build" 1
@@ -4811,7 +4785,6 @@ build_cpuinfo() {
   while IFS= read -r -d '' file; do
     add_libs_to_pkg -t="$file" -l="-lshlwapi"
   done < <(find "$install_pkgconfig_dir" -name "benchmark*.pc" -print0)
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
   reset_ldflags
 }
 
@@ -4830,6 +4803,8 @@ build_vulkan_loader() {
 	generic_cmake "-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DVULKAN_SHIM_IMPERSONATE=ON" "$src_dir/$parentlib/$lib"
   disable_nonessential "$src_dir/$parentlib/$lib"
   do_make_and_make_install
+  remove_path -f "$dependency_install_prefix/lib/libvulkan.a"
+  copy_path "$dependency_install_prefix/lib/libvulkan-1.a" "$dependency_install_prefix/lib/libvulkan.a" -f
 	change_dir "$src_dir"
 }
 
@@ -5094,7 +5069,6 @@ build_libopencolorio() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  use_pthread_win32_flags
   gsed -i \
     's/string(STRIP "${yaml-cpp_CXX_FLAGS}" yaml-cpp_CXX_FLAGS)/set(yaml-cpp_CXX_FLAGS "${yaml-cpp_CXX_FLAGS} -include cstdint")\
         string(STRIP "${yaml-cpp_CXX_FLAGS}" yaml-cpp_CXX_FLAGS)/' \
@@ -5164,7 +5138,6 @@ build_libopencolorio() {
   if [[ -d "$ocio_ext_dist_dir/share" ]]; then
     cp -rfv "$ocio_ext_dist_dir/share" "$dependency_install_prefix" > >(redirect_output) || exit_message 1 "Failed to copy share directory for $lib"
   fi
-  fix_pthread_win32_pkgconfig_flags "$install_pkgconfig_dir"
   change_dir "$src_dir"
 }
 build_libmpeghdec() {

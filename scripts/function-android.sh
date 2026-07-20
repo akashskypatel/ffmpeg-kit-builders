@@ -31,7 +31,7 @@ configure_ffmpeg_kit() {
 	echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
 	local type_postfix="$build_ffmpeg_kit_type"
 
-	if truthy "$build_force"; then
+	if truthy "$force_kit"; then
 		remove_path -rf "$ffmpeg_kit_src_dir/build"
 		remove_path -rf "$ffmpeg_kit_src_dir"/already_configured_*
 		remove_path -rf "$ffmpeg_kit_install"

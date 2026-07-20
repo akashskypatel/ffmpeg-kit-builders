@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2086
 
 if (( BASH_VERSINFO[0] < 4 )); then
     for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
@@ -2465,10 +2465,10 @@ build_librsvg() {
   gsed -i 's/-lrsvg-2/-lrsvg-2 -framework CoreFoundation/g' "$install_pkgconfig_dir/librsvg-2.0.pc"
   if [[ $host_arch == "x86_64" ]]; then
     # png.o always compiles to arm64 for some reason. remove png.o and thin the library
-    if ar t $dependency_install_prefix/lib/librsvg-2.a | grep png.o > /dev/null; then
-      ar d $dependency_install_prefix/lib/librsvg-2.a png.o > >(redirect_output) || exit_message 1 "Failed to remove incorrectly compiled png.o from librsvg-2.a"
-      lipo $dependency_install_prefix/lib/librsvg-2.a -thin x86_64 -output $dependency_install_prefix/lib/librsvg-2.a.thin > >(redirect_output) || exit_message 1 "Failed to thin librsvg-2.a"
-      mv -f $dependency_install_prefix/lib/librsvg-2.a.thin $dependency_install_prefix/lib/librsvg-2.a > >(redirect_output) || exit_message 1 "Failed to replace librsvg-2.a with thin version"
+    if ar t "$dependency_install_prefix/lib/librsvg-2.a" | grep png.o > /dev/null; then
+      ar d "$dependency_install_prefix/lib/librsvg-2.a" png.o > >(redirect_output) || exit_message 1 "Failed to remove incorrectly compiled png.o from librsvg-2.a"
+      lipo "$dependency_install_prefix/lib/librsvg-2.a" -thin x86_64 -output "$dependency_install_prefix/lib/librsvg-2.a.thin" > >(redirect_output) || exit_message 1 "Failed to thin librsvg-2.a"
+      mv -f "$dependency_install_prefix/lib/librsvg-2.a.thin" "$dependency_install_prefix/lib/librsvg-2.a" > >(redirect_output) || exit_message 1 "Failed to replace librsvg-2.a with thin version"
     fi
   fi
 }
@@ -4359,7 +4359,7 @@ build_libopencolorio() {
   fi
 
   if [[ "${#ocio_merge_libs[@]}" -gt 1 ]]; then
-    echo "Merging OpenColorIO private static dependencies into libOpenColorIO.a" > >(redirect_output)
+    echo "Merging OpenColorIO private static dependencies into libOpenColorIO.a" >>"${LOG_FILE}"
     printf '  %s\n' "${ocio_merge_libs[@]}" > >(redirect_output)
 
     rm -f "$ocio_merged_tmp"
@@ -4383,7 +4383,7 @@ build_libopencolorio() {
       > >(redirect_output) \
       || exit_message 1 "Failed to replace installed libOpenColorIO.a with merged archive"
   else
-    echo "No OpenColorIO private ext archives found to merge" > >(redirect_output)
+    echo "No OpenColorIO private ext archives found to merge" >>"${LOG_FILE}"
   fi
 
   if [[ -d "$ocio_ext_dist_dir/lib/pkgconfig" ]]; then
@@ -4456,7 +4456,7 @@ build_libopencolorio() {
   fi
 
   if grep -E 'yaml-cpp|minizip-ng|pystring|Imath' "$ocio_pc" > /dev/null; then
-    echo "OpenColorIO.pc still contains private merged deps:" > >(redirect_output)
+    echo "OpenColorIO.pc still contains private merged deps:" >>"${LOG_FILE}"
     grep -E 'yaml-cpp|minizip-ng|pystring|Imath' "$ocio_pc" > >(redirect_output) || true
     exit_message 1 "OpenColorIO.pc still references private merged dependencies"
   fi
@@ -4479,7 +4479,7 @@ build_libopencolorio() {
       || exit_message 1 "Failed to copy share directory for $lib"
   fi
 
-  echo "Verifying merged OpenColorIO archive symbols..." > >(redirect_output)
+  echo "Verifying merged OpenColorIO archive symbols..." >>"${LOG_FILE}"
 
   if ! nm -m "$ocio_installed_lib" 2>/dev/null \
       | c++filt \
@@ -4491,7 +4491,7 @@ build_libopencolorio() {
             exit(found ? 0 : 1)
           }
         '; then
-    echo "Available YAML-related symbols in merged libOpenColorIO.a:" > >(redirect_output)
+    echo "Available YAML-related symbols in merged libOpenColorIO.a:" >>"${LOG_FILE}"
     nm -m "$ocio_installed_lib" 2>/dev/null \
       | c++filt \
       | grep -E "YAML::" \
@@ -4509,7 +4509,7 @@ build_libopencolorio() {
             exit(found ? 0 : 1)
           }
         '; then
-    echo "Available minizip-related symbols in merged libOpenColorIO.a:" > >(redirect_output)
+    echo "Available minizip-related symbols in merged libOpenColorIO.a:" >>"${LOG_FILE}"
     nm -m "$ocio_installed_lib" 2>/dev/null \
       | grep -E "_mz_zip_" \
       > >(redirect_output) || true

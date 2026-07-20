@@ -190,9 +190,21 @@ while [ $# -gt 0 ]; do
     export force_self=y
     shift
 		;;
+  -ff | --force-ffmpeg)
+    export force_ffmpeg=y
+    shift
+		;;
+  -fk | --force-kit)
+    export force_kit=y
+    shift
+		;;
   -y)
     export accept_defaults=y
-    echo "Skipping interactive. Accepting defult selections."
+    echo "INFO: Skipping interactive. Accepting defult selections." | tee -a "$LOG_FILE"
+    shift
+    ;;
+  --hide-banner)
+    export hide_banner=y
     shift
     ;;
   --debug-build|--build-debug|--enable-debug)
@@ -224,7 +236,7 @@ while [ $# -gt 0 ]; do
         export create_release=remote
         ;;
       *)
-        echo "Invalid release type: ${1#*=}. Defaulting to local."
+        echo "Invalid release type: ${1#*=}. Defaulting to local." | tee -a "$LOG_FILE"
         export create_release=local
         ;;
     esac
@@ -243,7 +255,7 @@ while [ $# -gt 0 ]; do
     export create_release_clean_type="all"
     shift
     ;;
-  --host-platform=*|--host=*)
+  --host-platform=*|--host=*|--platform=*)
     export host_platform="${1#*=}"
     shift
     ;;
@@ -265,22 +277,22 @@ while [ $# -gt 0 ]; do
 		;;
 	--cflags=*)
 		append_cflags "${1#*=}"
-		echo -e "setting CFLAGS as $original_cflags"
+		echo -e "setting CFLAGS as $original_cflags" | tee -a "$LOG_FILE"
 		shift
 		;;
   --cxxflags=*)
 		append_cxxflags "${1#*=}"
-		echo -e "setting CXXFLAGS as $original_cxxflags"
+		echo -e "setting CXXFLAGS as $original_cxxflags" | tee -a "$LOG_FILE"
 		shift
 		;;
   --cppflags=*)
 		append_cppflags "${1#*=}"
-		echo -e "setting CPPFLAGS as $original_cppflags"
+		echo -e "setting CPPFLAGS as $original_cppflags" | tee -a "$LOG_FILE"
 		shift
 		;;
   --ldflags=*)
 		append_ldflags "${1#*=}"
-		echo -e "setting LDFLAGS as $original_ldflags"
+		echo -e "setting LDFLAGS as $original_ldflags" | tee -a "$LOG_FILE"
 		shift
 		;;
 	--git-get-latest=*)
@@ -321,7 +333,7 @@ while [ $# -gt 0 ]; do
 		;;
   --build-ffmpeg-only|--build-ffmpeg|--ffmpeg)
     export build_ffmpeg_type=static
-    export build_ffmpeg=y
+    export do_build_ffmpeg=y
     shift
     ;;
 	--build-ffmpeg-only=*|--build-ffmpeg=*|--ffmpeg=*)
@@ -337,12 +349,12 @@ while [ $# -gt 0 ]; do
       export build_ffmpeg_type=shared
       ;;
     esac
-    export build_ffmpeg=y
+    export do_build_ffmpeg=y
 		shift
 		;;
   --build-ffmpeg-kit-only|--build-ffmpeg-kit|--ffmpeg-kit|--kit)
     export build_ffmpeg_kit_type=shared
-    export build_ffmpeg_kit=y
+    export do_build_ffmpeg_kit=y
     shift
     ;;
 	--build-ffmpeg-kit-only=*|--build-ffmpeg-kit=*|--ffmpeg-kit=*|--kit=*)
@@ -358,7 +370,7 @@ while [ $# -gt 0 ]; do
       export build_ffmpeg_kit_type=shared
       ;;
     esac
-    export build_ffmpeg_kit=y
+    export do_build_ffmpeg_kit=y
 		shift
 		;;
   --build-tests|--build-test|--test|--tests)
@@ -602,11 +614,11 @@ while [ $# -gt 0 ]; do
 		shift
 		;;
 	-*)
-		echo -e "Error, unknown option: '$1'."
+		echo -e "Error, unknown option: '$1'." | tee -a "$LOG_FILE"
 		exit 1
 		;;
 	*)
-    echo "Unknown argument: $1"
+    echo "Unknown argument: $1" | tee -a "$LOG_FILE"
     shift 
     ;;
 	esac
@@ -650,7 +662,7 @@ if [[ "$*" == *"--resume"* ]]; then
     echo "INFO: Resuming previous run with: ${RUN_ARGS[*]}" | tee -a "$LOG_FILE"
     parse_arguments "${RUN_ARGS[@]}"
   else
-    echo "Error: could not find previous run.state file."
+    echo "Error: could not find previous run.state file." | tee -a "$LOG_FILE"
     exit 1
   fi
 else
@@ -985,17 +997,9 @@ main() {
     # builds all dependencies
     truthy "$build_dependencies" && run_valid_build_functions
     # build ffmpeg mode
-    truthy "$build_ffmpeg" && { 
-      download_ffmpeg
-      configure_ffmpeg
-      install_ffmpeg
-    }
+    truthy "$do_build_ffmpeg" && build_ffmpeg
     # build ffmpeg-kit mode
-    truthy "$build_ffmpeg_kit" && {
-      download_ffmpeg
-      configure_ffmpeg_kit
-      install_ffmpeg_kit
-     }
+    truthy "$do_build_ffmpeg_kit" && build_ffmpeg_kit
      # build ffmpeg-kit bundle mode
     truthy "$create_bundle" && create_ffmpeg_kit_bundle
   fi

@@ -25,6 +25,8 @@ export GCC_BRANCH="releases/gcc-14"
 # variables with their defaults
 export build_cross_compile=n
 export build_force=n
+export force_kit=n
+export force_ffmpeg=n
 export build_dvbtee=n
 export build_libmxf=n
 export build_mp4box=n
@@ -33,9 +35,9 @@ export build_vlc=n
 export build_lsw=n # To build x264 with L-Smash-Works.
 export build_dependencies=n
 export build_ffmpeg_type=static
-export build_ffmpeg=n
+export do_build_ffmpeg=n
 export build_ffmpeg_kit_type=shared
-export build_ffmpeg_kit=n
+export do_build_ffmpeg_kit=n
 export build_tests=n
 export skip_validation=n
 export skip_package_check=n
@@ -99,8 +101,11 @@ CONFIG_WINDOWS="\
 --enable-d3d12va \
 --enable-dxva2 \
 --enable-schannel \
---enable-pthread-win32 \
 --enable-mediafoundation"
+
+CONFIG_OPENHARMONY="\
+--enable-openssl \
+--enable-ohcodec"
 
 CONFIG_MACOS="\
 --enable-appkit"
@@ -359,13 +364,245 @@ CONFIG_AUTODETECT="\
 --disable-coreimage \
 --disable-metal \
 --disable-securetransport \
---disable-videotoolbox"
+--disable-videotoolbox \
+--disable-ohcodec"
 
-CONFIG_TVOS_UNSUPPORTED=" \
+CONFIG_WINDOWS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-jni \
+--disable-mediacodec \
+--disable-appkit \
+--disable-avfoundation \
+--disable-audiotoolbox \
+--disable-coreimage \
+--disable-metal \
+--disable-securetransport \
+--disable-videotoolbox \
+--disable-libtorch \
+--disable-cuda-nvcc \
+--disable-libsmbclient \
+--disable-ohcodec"
+
+CONFIG_LINUX_UNSUPPORTED="\
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-avfoundation \
+--disable-audiotoolbox \
+--disable-coreimage \
+--disable-metal \
+--disable-securetransport \
+--disable-videotoolbox \
+--disable-cuda-llvm \
+--disable-ohcodec"
+
+CONFIG_MACOS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-libvpl \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-ohcodec"
+
+CONFIG_TVOS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
 --disable-frei0r \
 --disable-liblensfun \
 --disable-librsvg \
---disable-pocketsphinx"
+--disable-pocketsphinx \
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-libvpl \
+--disable-cuvid \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-libtorch \
+--disable-libopenvino \
+--disable-libtensorflow \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-avisynth \
+--disable-libsmbclient \
+--disable-libbluray \
+--disable-libcdio \
+--disable-libdvdnav \
+--disable-libdvdread \
+--disable-libsvtjpegxs \
+--disable-ohcodec"
+
+CONFIG_IOS_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-libvpl \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-libtorch \
+--disable-libopenvino \
+--disable-libtensorflow \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-avisynth \
+--disable-libsmbclient \
+--disable-libbluray \
+--disable-libcdio \
+--disable-libdvdnav \
+--disable-libdvdread \
+--disable-libsvtjpegxs \
+--disable-ohcodec"
+
+CONFIG_ANDROID_UNSUPPORTED="\
+--disable-alsa \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-libdrm \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-ladspa \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-appkit \
+--disable-avfoundation \
+--disable-audiotoolbox \
+--disable-coreimage \
+--disable-metal \
+--disable-securetransport \
+--disable-videotoolbox \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-libtorch \
+--disable-libopenvino \
+--disable-libtensorflow \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-avisynth \
+--disable-libsmbclient \
+--disable-libbluray \
+--disable-libcdio \
+--disable-libdvdnav \
+--disable-libdvdread \
+--disable-ohcodec"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
 # build_mediacodec        # config_options+= --disable-mediacodec         # Video  # enable Android MediaCodec support [no]

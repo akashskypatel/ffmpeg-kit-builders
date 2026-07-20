@@ -77,25 +77,19 @@ trim() {
 
 print_workflow_progress() {
   local current_step="$1"
-  local total_steps="$2"
+  local steps="$2"
   local combo="$3"
   local step_name="$4"
-  local percent=100
-  local bars=40
-  local bar_width=40
+  local percent=$((current_step * 100 / steps))
+  local bars=$((percent * 100 / 100))
+  
   local bar_str=""
-  local j
+  for ((j = 0; j < bars; j++)); do bar_str="${bar_str}█"; done
+  for ((j = bars; j < 100; j++)); do bar_str="${bar_str}░"; done
 
-  if [[ "$total_steps" -gt 0 ]]; then
-    percent=$((current_step * 100 / total_steps))
-    bars=$((percent * bar_width / 100))
-  fi
-
-  for ((j = 0; j < bars; j++)); do bar_str="${bar_str}#"; done
-  for ((j = bars; j < bar_width; j++)); do bar_str="${bar_str}-"; done
-
-  printf '::notice::Workflow progress %s [%s] %3d%% (%d/%d) %s\n' \
-    "$combo" "$bar_str" "$percent" "$current_step" "$total_steps" "$step_name"
+  echo "Workflow progress: ${combo}" | tee -a "$LOG_FILE"
+  printf "\r\033[K\033[1;31m[%s]\033[0m %3d%% (%2d/%2d) | \033[1;36m%s\033[0m" "$bar_str" "$percent" "$current_step" "$steps" "$step_name" | tee -a "$LOG_FILE"
+  echo "" | tee -a "$LOG_FILE"
 }
 
 count_workflow_steps_to_run() {
@@ -304,7 +298,7 @@ build_runner_args() {
   local -a selected_bundles=()
   local omit_base=false
 
-  runner_args=(--host="$platform" --arch="$arch" --gpl -y --no-bundle --skip)
+  runner_args=(--host="$platform" --arch="$arch" --gpl -y --no-bundle --skip --hide-banner)
 
   if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
     while IFS= read -r bundle; do
@@ -518,7 +512,7 @@ workflow_step_build_bundle_batches() {
     [[ -z "$combo_csv" ]] && continue
 
     set_workflow_current_step "build_bundle"
-    build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build=kit,bundle --remote)
+    build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build="kit,bundle" --remote)
     if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
       build_all_args+=(--bundle="${WORKFLOW_BUNDLES}")
     fi
@@ -622,7 +616,7 @@ for combo in "${workflow_target_combos[@]}"; do
     if [[ "$workflow_mode" == "build_only" ]]; then
       WORKFLOW_BUILD_STEPS="${build_only_steps[*]}"
     else
-      WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh "${runner_args[@]}" --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+      WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh "${runner_args[@]}" --hide-banner --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
     fi
     echo "WORKFLOW_BUILD_STEPS for $combo: $WORKFLOW_BUILD_STEPS"
     read -ra workflow_build_steps <<< "$WORKFLOW_BUILD_STEPS"

@@ -385,7 +385,7 @@ setup_build_environment() {
     determine_distro
     setup_gsed
     export host_name="$host_platform-$host_arch"
-    echo -e "\n************** Setting up environment for $host_name build... **************" | tee -a "$LOG_FILE"
+    truthy "$hide_banner" || echo -e "\nINFO: Setting up environment for $host_name build..." | tee -a "$LOG_FILE"
     
     export work_dir="$(validate_path "$WORKDIR"/"$host_name")"
     export build_triple="${build_triple:-$(gcc -dumpmachine)}"
@@ -2052,9 +2052,8 @@ check_missing_packages() {
     # xutils-dev python3-numpy cython3
     # zeranoe's build scripts use wget, though we don't here...
     local check_packages=('ragel' 'curl' 'pkg-config' 'make' 'git' 'svn' 'gcc' 'autoconf' 'automake' \
-  'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' \
+  'yasm' 'cvs' 'flex' 'bison' 'ed' 'pax' 'unzip' 'wget' 'xz' 'nasm' 'gperf' 'autogen' 'patchelf' \
   'bzip2' 'python3' 'bc' 'ripgrep' 'libdatrie' 'jq' 'asciidoc' 'compiler-rt' 'clang-tools-extra' 'doxygen' \
-
   )
     # autoconf-archive is just for leptonica FWIW
     # I'm not actually sure if VENDOR being set to centos is a thing or not. On all the centos boxes I can test on it's not been set at all.
@@ -2991,6 +2990,18 @@ confirm_libgcc_eh() {
         cp "$file" "${file%/*}/libgcc_eh.a" && echo "Created: ${file%/*}/libgcc_eh.a"
     done < <(find "$search_dir" -name "libgcc.a" -type f -print0 2>/dev/null)
 }
+get_latest_waf() {
+  local lib="waf"
+  local repo="https://gitlab.com/ita1024/waf"
+  local repo_ver="waf-2.1.9"
+  local cur_dir="$(pwd)"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  local python_cmd="${PYTHON_BIN:-${PYTHON3:-python3}}"
+  eval "$python_cmd ./waf-light configure build" > >(redirect_output) 2>&1
+  change_dir "$cur_dir"
+}
 # 1. configure_options
 # 2. configure_name
 # 2. configure_env
@@ -3009,8 +3020,18 @@ do_python() {
     remove_path -rf __pycache__
     [[ -d "waflib" ]] && remove_path -rf waflib
     echo -e "DEBUG: updating waf to latest version..." >>"$LOG_FILE"
-    wget https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1
-    chmod +x waf
+    if wget --timeout=3 https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1; then
+      chmod +x waf
+    elif wget --timeout=3 https://web.archive.org/web/20260331120944if_/https://waf.io/waf-2.1.9 -O waf > >(redirect_output) 2>&1; then
+      chmod +x waf
+    elif [[ ! -f "$src_dir/waf/waf" ]]; then
+      get_latest_waf
+      copy_path "$src_dir/waf/waf" "$(pwd)/waf" "-f"
+      chmod +x waf
+    else
+      copy_path "$src_dir/waf/waf" "$(pwd)/waf" "-f"
+      chmod +x waf
+    fi
   fi
   setup_default_python
   local python_cmd="${PYTHON_BIN:-${PYTHON3:-python3}}"
@@ -3386,11 +3407,11 @@ do_configure() {
       echo "INFO: $configure_name exists and configure.ac is missing. Skipping autotools regeneration for $english_name." >>"$LOG_FILE"
     else
       if [[ -f autogen.sh && ! -f "no.autogen" && ! -f $configure_name ]]; then
-        echo "INFO: autogen.sh found. Running autogen.sh..."
+        echo "INFO: autogen.sh found. Running autogen.sh..." >>"$LOG_FILE"
         do_autogen
       fi
       if [[ -f gitsub.sh ]]; then
-        echo "INFO: gitsub.sh found. Running gitsub.sh..."
+        echo "INFO: gitsub.sh found. Running gitsub.sh..." >>"$LOG_FILE"
         (./gitsub.sh pull) > >(redirect_output) 2>&1
       fi
       if [[ -f "no.autoreconf" ]]; then
@@ -4021,7 +4042,7 @@ download_and_unpack_file() {
         if [[ -f "$filename" ]]; then
             rm -f "$filename"
         fi
-        if ! curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
+        if ! curl -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
             if [[ -n "$alt_url" ]]; then
                 echo "WARNING: download_and_unpack_file: unable to download $url, trying alternate $alt_url" >>"$LOG_FILE"
                 remove_path -f "$filename"
@@ -4030,7 +4051,7 @@ download_and_unpack_file() {
                 if [[ -f "$filename" ]]; then
                     rm -f "$filename"
                 fi
-                curl -v -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
+                curl -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
                     exit_message 1 "download_and_unpack_file: unable to download $url or alternate $alt_url"
                 }
             else
@@ -4544,18 +4565,22 @@ run_valid_function() {
   # rebuild. A successful self-artifact download satisfies the step and must not
   # fall through to the local build function.
   if ! truthy "$build_force"; then
-    sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" \
-      "$SCRIPTDIR/workflow-get-deps.sh" \
-      "$host_platform" "$platform_arch" "$step" --self 2>&1 | tee -a "$LOG_FILE"
-    result=${PIPESTATUS[0]}
-    if [[ $result -eq 0 ]]; then
-      echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
-      set_run_state "$step"
-      mark_as_built "$step"
-      reset_and_exit 0
-      return $?
+    if truthy "$force_self" && [[ "$workflow_requested_step" == "$step" ]]; then
+      echo "INFO: Skipping self-artifact download for $step (force_self enabled)." >>"${LOG_FILE}"
     else
-      echo "INFO: No reusable release artifact for $step (workflow-get-deps exit ${result}). Building locally." >>"${LOG_FILE}"
+      sudo -E env WORKFLOW_REQUESTED_STEP="$workflow_requested_step" \
+        "$SCRIPTDIR/workflow-get-deps.sh" \
+        "$host_platform" "$platform_arch" "$step" --self 2>&1 | tee -a "$LOG_FILE"
+      result=${PIPESTATUS[0]}
+      if [[ $result -eq 0 ]]; then
+        echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
+        set_run_state "$step"
+        mark_as_built "$step"
+        reset_and_exit 0
+        return $?
+      else
+        echo "INFO: No reusable release artifact for $step (workflow-get-deps exit ${result}). Building locally." >>"${LOG_FILE}"
+      fi
     fi
   fi
 	if [[ -n "$step" ]]; then
@@ -4608,13 +4633,66 @@ get_gas_preprocessor() {
   fi
 }
 
+ffmpeg_pattern_for_bundle() {
+  local platform="$1"
+  local arch="$2"
+  local bundle="$3"
+
+  if [[ "$bundle" == "debug" ]]; then
+    printf 'ffmpeg-base-%s-%s-static-debug*' "$platform" "$arch"
+  else
+    printf 'ffmpeg-%s-%s-%s-static*' "$bundle" "$platform" "$arch"
+  fi
+}
+
+check_ffmpeg() {
+  local old_pkg_path="$PKG_CONFIG_PATH"
+  export PKG_CONFIG_PATH="$work_dir/$(get_ffmpeg_directory)/lib/pkgconfig"
+  echo "INFO: Checking ffmpeg with pkg-config in $PKG_CONFIG_PATH..." | tee -a "$LOG_FILE"
+  pkg-config --exists libavcodec libavdevice libavfilter libavformat libavutil libswresample libswscale
+  local result=$?
+  export PKG_CONFIG_PATH="$old_pkg_path"
+  [[ $result -eq 0 ]] && echo "INFO: ffmpeg is already built." | tee -a "$LOG_FILE"
+  return $result
+}
+
+build_ffmpeg() {
+  iswindows && run_valid_function build_pthread_win32
+  if ! truthy "$force_ffmpeg"; then
+    if check_ffmpeg; then
+      echo "INFO: ffmpeg is already built. Skipping build." >>"${LOG_FILE}"
+      return 0
+    fi
+    local pattern
+    pattern="$(get_ffmpeg_directory)"
+    sudo -E env "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$pattern" --artifact-pattern 2>&1 | tee -a "$LOG_FILE"
+    result=${PIPESTATUS[0]}
+    if [[ $result -eq 0 ]]; then
+      echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
+      return 0
+    else
+      echo "INFO: No existing release artifact found for $step. Building instead..." >>"${LOG_FILE}"
+    fi
+  fi
+  download_ffmpeg
+  configure_ffmpeg
+  install_ffmpeg
+}
+
+build_ffmpeg_kit() {
+  build_ffmpeg
+  download_ffmpeg
+  configure_ffmpeg_kit
+  install_ffmpeg_kit
+}
+
 # shellcheck disable=SC2120
 configure_ffmpeg() {
 	echo -e "INFO: Configuring ffmpeg" | tee -a "$LOG_FILE"
 	
 	change_dir "$ffmpeg_source_dir" || return 1
 
-	if truthy "$build_force"; then
+	if truthy "$force_ffmpeg"; then
 		reset_touch "${ffmpeg_source_dir}" "already_configured_$build_ffmpeg_type*"
     git_hard_reset "${ffmpeg_source_dir}" || exit_message 1 "git_hard_reset: could not reset ffmpeg git repository"
     touch "no.autoreconf"
@@ -4652,26 +4730,16 @@ configure_ffmpeg() {
     
   fi
   if iswindows; then
-    local pthread_win32_static_lib=""
-    local pthread_win32_static_dir=""
-    pthread_win32_static_lib="$(find_windows_static_pthread_win32)" || exit_message 1 "configure_ffmpeg: static pthread-win32 library not found. Build build_pthread_win32 before configuring FFmpeg."
-    pthread_win32_static_dir="$(dirname "$pthread_win32_static_lib")"
-    export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
-    export CXXFLAGS="$CXXFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
-    export CPPFLAGS="$CPPFLAGS -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L"
-    export LDFLAGS="$LDFLAGS -L${pthread_win32_static_dir}"
+    export LDFLAGS="$LDFLAGS -Wl,-Bstatic -l:libpthreadGC3.a"
     export CFLAGS="$CFLAGS -mstackrealign"
     export LD=${cross_prefix}gcc # ld weirdness with windows
 	  init_options+=" --target-os=mingw32"
     # init_options+=" --enable-w32threads"
     init_options+=" --disable-w32threads"
     init_options+=" --enable-pthreads"
-    init_options+=" --extra-cflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
-    init_options+=" --extra-cxxflags=\" -I${dependency_install_prefix}/include -DPTW32_STATIC_LIB -D_POSIX_C_SOURCE=200112L \""
-    init_options+=" --extra-ldflags=\" -L${pthread_win32_static_dir} \""
+    init_options+=" --extra-cflags=\" -DPTW32_STATIC_LIB \""
     init_options+=" --disable-filter=gfxcapture"
-    init_options+=" --extra-ldflags=\" -L${dependency_install_prefix}/lib \""
-    add_extra_libs "$pthread_win32_static_lib"
+    init_options+=" --extra-ldflags=\" -L${deps_install_prefix}/lib \""
   elif isandroid; then
     # unset PKG_CONFIG_PATH
     export PKG_CONFIG_SYSROOT_DIR="/"
@@ -4756,7 +4824,7 @@ configure_ffmpeg() {
 	  init_options+=" --extra-cflags=\" -pipe \""
     init_options+=" --extra-ldflags=\" $stdcpp_path $stdgcc_path \""
     init_options+=" --extra-cflags=\" $extra_ffmpeg_c_flags \""
-    add_extra_libs "$stdcpp_path"
+    add_extra_libs "$stdcpp_path -l:libpthreadGC3.a"
     init_options+=" --extra-cflags=\" -Wno-pedantic -Wno-cpp -Wno-variadic-macros \""
   fi
 
@@ -5137,7 +5205,7 @@ build_exists() {
 
 	if [[ $build_ffmpeg_type == "static" ]]; then
 		echo -e "INFO: Static build requested..." | tee -a "$LOG_FILE"
-		if ! truthy "$static_build_exists" || truthy "$build_force"; then
+		if ! truthy "$static_build_exists" || truthy "$force_ffmpeg"; then
 			build_dir="$work_dir/$(get_ffmpeg_directory static)" #ffmpeg_install_prefix
 			echo -e "INFO: Static build does not exist or force requested. (Re-)configuring Ffmpeg for static build..." | tee -a "$LOG_FILE"
 			# shellcheck disable=SC2129
@@ -5150,7 +5218,7 @@ build_exists() {
 		fi
 	elif [[ $build_ffmpeg_type == "static" ]]; then
 		echo -e "INFO: Shared build requested..." | tee -a "$LOG_FILE"
-		if ! truthy "$shared_build_exists" || truthy "$build_force"; then
+		if ! truthy "$shared_build_exists" || truthy "$force_ffmpeg"; then
 			build_dir="$work_dir/$(get_ffmpeg_directory shared)" #ffmpeg_install_prefix
 			echo -e "INFO: Shared build does not exist or force requested. (Re-)configuring Ffmpeg for shared build..." | tee -a "$LOG_FILE"
 			# shellcheck disable=SC2129
@@ -5217,7 +5285,7 @@ install_ffmpeg_pkg() {
 
   local touch_prefix="${touch_postfix}_already"
 	
-  if truthy "$build_force"; then
+  if truthy "$force_ffmpeg"; then
 		remove_path -rf "${ffmpeg_source_dir}/${touch_prefix}_pkgconfig"*.touch
 	fi
   required_files=(
@@ -5529,6 +5597,7 @@ ts() {
 
 intro() {
   setup_build_environment
+  truthy "$hide_banner" && return 0
 	cat <<EOL
      ##################### Welcome ######################
   Welcome to the ffmpeg and ffmpeg-kit builder-helper script.
@@ -5542,14 +5611,14 @@ intro() {
   hard coded paths in there. You can, of course, rebuild ffmpeg 
   ffmpeg-kit and bundle.
 EOL
-	echo -e "$(ts)" | tee -a "$LOG_FILE"
+	echo -e "INFO: Started at $(ts)" | tee -a "$LOG_FILE"
 	if [[ ! -d $WORKDIR ]]; then
 		echo -e
-		echo -e "Building in $WORKDIR, will use ~ 285GB space!" | tee -a "$LOG_FILE"
+		echo -e "INFO: Building in $WORKDIR, will use ~ 285GB space!" | tee -a "$LOG_FILE"
 		echo -e
 	fi
 	change_dir "$WORKDIR" 1 || exit_message 1 "intro: could not change to $WORKDIR"
-	echo -e "sit back, this may take awhile..." | tee -a "$LOG_FILE"
+	echo -e "INFO: sit back, this may take awhile..." | tee -a "$LOG_FILE"
 }
 
 # Only adds step if it is UNIQUE and EXISTS
@@ -6461,7 +6530,7 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f Makefile ]]; then
-          echo "Cleaning Makefile artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning Makefile artifacts at $sub_dir..." >>"${LOG_FILE}"
           { nice make clean -j"$(get_concurrent_proc)" > >(redirect_output) 2>&1 || true; }
           { nice make distclean -j"$(get_concurrent_proc)" > >(redirect_output) 2>&1 || true; }
         fi
@@ -6469,7 +6538,7 @@ reset_and_clean() {
       done
       mapfile -t sub_dirs < <(find "$dir" -name "meson.build" -exec dirname {} \; | sort -u 2>/dev/null)
       if [[ -f meson.build ]] && [[ "${#sub_dirs[@]}" -gt 0 ]]; then
-        echo "Cleaning meson artifacts at $sub_dir..." > >(redirect_output)
+        echo "Cleaning meson artifacts at $sub_dir..." >>"${LOG_FILE}"
         { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" compile --clean -C build > >(redirect_output) 2>&1 || true; }
         { "${PYTHON_BIN:-${PYTHON3:-python3}}" "$local_meson" setup --wipe build > >(redirect_output) 2>&1 || true; }
       fi
@@ -6477,7 +6546,7 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f CMakeList.txt ]]; then
-          echo "Cleaning CMake artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning CMake artifacts at $sub_dir..." >>"${LOG_FILE}"
           clean_cmake_cache "$(pwd)"
         fi
         cd "$dir" 2>/dev/null || continue
@@ -6486,7 +6555,7 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f CMakeCache.txt ]]; then
-          echo "Cleaning CMake artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning CMake artifacts at $sub_dir..." >>"${LOG_FILE}"
           clean_cmake_cache "$(pwd)"
         fi
         cd "$dir" 2>/dev/null || continue
@@ -6495,21 +6564,21 @@ reset_and_clean() {
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f Cargo.toml ]]; then
-          echo "Cleaning Cargo artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning Cargo artifacts at $sub_dir..." >>"${LOG_FILE}"
           { cargo clean --release > >(redirect_output) 2>&1 || true; }
         fi
         cd "$dir" 2>/dev/null || continue
       done
       mapfile -t sub_dirs < <(find "$dir" -name "build.ninja" -exec dirname {} \; | sort -u 2>/dev/null)
       if [[ -f build.ninja ]] && [[ "${#sub_dirs[@]}" -gt 0 ]]; then
-        echo "Cleaning ninja artifacts at $sub_dir..." > >(redirect_output)
+        echo "Cleaning ninja artifacts at $sub_dir..." >>"${LOG_FILE}"
         { nice ninja -t clean >/dev/null 2>&1 || true; }
       fi
       mapfile -t sub_dirs < <(find "$dir" -name "waf" -exec dirname {} \; | sort -u 2>/dev/null)
       for sub_dir in "${sub_dirs[@]}"; do
         cd "$sub_dir" 2>/dev/null || continue
         if [[ -f waf ]]; then
-          echo "Cleaning waf artifacts at $sub_dir..." > >(redirect_output)
+          echo "Cleaning waf artifacts at $sub_dir..." >>"${LOG_FILE}"
           { "${PYTHON_BIN:-${PYTHON3:-python3}}" ./waf clean > >(redirect_output) 2>&1 || true; }
         fi
         cd "$dir" 2>/dev/null || continue
@@ -7859,7 +7928,7 @@ create_github_release() {
     git push origin "$tag"
   fi
   # check if release exists
-  if curl -f -v -s -H "Authorization: Bearer $github_token" \
+  if curl -f -s -H "Authorization: Bearer $github_token" \
     -H "Accept: application/vnd.github+json" \
     "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" \
     >> "$LOG_FILE" 2>&1; then
@@ -7883,7 +7952,7 @@ create_github_release() {
             make_latest: "true"
         }')
     echo "$json_payload" >> "$LOG_FILE"
-    if curl -f -v -s -H "Authorization: Bearer $github_token" \
+    if curl -f -s -H "Authorization: Bearer $github_token" \
         -H "Accept: application/vnd.github+json" \
         -d "$json_payload" \
         "https://api.github.com/repos/$owner/$repo/releases" \
@@ -7994,7 +8063,7 @@ check_existing_package() {
     return 1
   fi
 
-  echo "Checking for existing package $package_name version $package_version..." > >(redirect_output)
+  echo "Checking for existing package $package_name version $package_version..." >>"${LOG_FILE}"
 
   # Retrieve package versions metadata
   local versions_json=$(curl -s \
@@ -8009,7 +8078,7 @@ check_existing_package() {
   
   if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
     # Return nothing and exit 1 so the caller knows it doesn't exist/error
-    echo "Error: $error_msg" > >(redirect_output)
+    echo "Error: $error_msg" >>"${LOG_FILE}"
     return 1
   fi
 
@@ -8017,7 +8086,7 @@ check_existing_package() {
   local version_id=$(echo "$versions_json" | jq -r ".[]? | select(.name == \"$package_version\") | .id")
 
   if [[ -n "$version_id" && "$version_id" != "null" ]]; then
-    echo "Found existing package version: $version_id" > >(redirect_output)
+    echo "Found existing package version: $version_id" >>"${LOG_FILE}"
     echo "$version_id"
     return 0
   fi
@@ -8120,7 +8189,7 @@ check_maven_package_status() {
     return 1
   fi
 
-  echo "Checking for existing package $package_name version $package_version on Maven Central..." > >(redirect_output)
+  echo "Checking for existing package $package_name version $package_version on Maven Central..." >>"${LOG_FILE}"
   auth_token="$(echo -n "$username:$password" | base64)"
   # Retrieve package versions metadata
   local status_json=$(curl -X 'GET' \
@@ -8134,7 +8203,7 @@ check_maven_package_status() {
   
   if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
     # Return nothing and exit 1 so the caller knows it doesn't exist/error
-    echo "Error checking package status: $error_msg body: $status_json" > >(redirect_output)
+    echo "Error checking package status: $error_msg body: $status_json" >>"${LOG_FILE}"
     return 1
   fi
 
@@ -8142,7 +8211,7 @@ check_maven_package_status() {
   local status=$(echo "$status_json" | jq -r '.published')
 
   if [[ -n "$status" && "$status" != "null" ]]; then
-    echo "Package status: $status" > >(redirect_output)
+    echo "Package status: $status" >>"${LOG_FILE}"
     if [[ "$status" == "true" ]]; then
       return 0
     else

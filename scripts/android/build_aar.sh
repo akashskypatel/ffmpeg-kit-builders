@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2207
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,2207,2012
 
 # Build AARs for Android
 if (( BASH_VERSINFO[0] < 4 )); then
@@ -77,6 +77,9 @@ local_build=false
 declare -a BUILD_STEPS
 create_aar=true
 create_release=true
+SNAPSHOT=false
+FFMPEG_KIT_VERSION_QUALIFIER="${FFMPEG_KIT_VERSION_QUALIFIER:-RC1}"
+FFMPEG_KIT_BUILD_NUMBER="${FFMPEG_KIT_BUILD_NUMBER:-$(date -u +%Y%m%d%H%M%S)}"
 
 parse_arch() {
     case "$1" in
@@ -346,6 +349,7 @@ for arg; do
       echo "  --local           Create local release."
       echo "  --remote          Publish release to remote repository."
       echo "  --snapshot        Create snapshot version."
+      echo "  --qualifier=*     Maven version qualifier used for timestamped releases (default: ${FFMPEG_KIT_VERSION_QUALIFIER})."
       echo "  --help            Show this help message"
       echo ""
       echo "State file location: ${STATE_FILE}"
@@ -365,6 +369,9 @@ for arg; do
       shift;;
     --snapshot)
       SNAPSHOT=true
+      shift;;
+    --qualifier=*)
+      FFMPEG_KIT_VERSION_QUALIFIER="${arg#*=}"
       shift;;
     *)  
       echo "Invalid argument: ${arg}"
@@ -425,7 +432,7 @@ verify_maven_signing_configuration() {
   fi
 
   case "$signing_keyring_file" in
-    "~/"*) signing_keyring_file="${HOME}/${signing_keyring_file#"~/"}" ;;
+    "${HOME}/"*) signing_keyring_file="${HOME}/${signing_keyring_file#"${HOME}/"}" ;;
     /*) ;;
     *) signing_keyring_file="${GRADLE_HOME}/${signing_keyring_file}" ;;
   esac
@@ -438,7 +445,7 @@ verify_maven_signing_configuration() {
     signing_gnupg_home="${SIGNING_HOME}/.gnupg"
   fi
   case "$signing_gnupg_home" in
-    "~/"*) signing_gnupg_home="${HOME}/${signing_gnupg_home#"~/"}" ;;
+    "${HOME}/"*) signing_gnupg_home="${HOME}/${signing_gnupg_home#"${HOME}/"}" ;;
     /*) ;;
     *) signing_gnupg_home="${GRADLE_HOME}/${signing_gnupg_home}" ;;
   esac
@@ -512,8 +519,8 @@ GITHUB_PASSWORD="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
 GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
 OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}"
 OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
-GRADLE_COMMAND="publishToMavenCentral"
-GRADLE_SIGN_PUBLICATIONS="true"
+GRADLE_COMMAND="publishToMavenLocal" # "publishToMavenCentral"
+GRADLE_SIGN_PUBLICATIONS="false" # "true"
 SIGNING_HOME="${GITHUB_WORKSPACE:-$(get_userhome)}"
 SIGNING_HOME="${SIGNING_HOME:-$HOME}"
 GRADLE_HOME="${SIGNING_HOME}/.gradle"
@@ -523,21 +530,25 @@ if [[ -z "$SIGNING_HOME" || ! -d "$SIGNING_HOME" ]]; then
   exit_message 1 "Unable to determine user home"
 fi
 
-echo "Checking signing configuration at ${GRADLE_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
-if [[ ! -f "${GRADLE_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
-  echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
-  GRADLE_COMMAND="publishToMavenLocal"
-  GRADLE_SIGN_PUBLICATIONS="false"
-else
-  echo "Maven signing configured, using remote build" | tee -a "${LOG_FILE}"
-  verify_maven_signing_configuration "${GRADLE_HOME}/gradle.properties"
+# echo "Checking signing configuration at ${GRADLE_HOME}/gradle.properties and ${SIGNING_HOME}/.gnupg/secring.gpg" | tee -a "${LOG_FILE}"
+# if [[ ! -f "${GRADLE_HOME}/gradle.properties" || ! -f "${SIGNING_HOME}/.gnupg/secring.gpg" ]] || [[ "$local_build" == "true" || "$SNAPSHOT" == "true" ]]; then
+#   echo "Maven signing not configured, using local build" | tee -a "${LOG_FILE}"
+#   GRADLE_COMMAND="publishToMavenLocal"
+#   GRADLE_SIGN_PUBLICATIONS="false"
+# else
+#   echo "Maven signing configured, using remote build" | tee -a "${LOG_FILE}"
+#   verify_maven_signing_configuration "${GRADLE_HOME}/gradle.properties"
+# fi
+
+if [[ ! "${FFMPEG_KIT_VERSION_QUALIFIER}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+  exit_message 1 "Invalid Maven version qualifier: ${FFMPEG_KIT_VERSION_QUALIFIER}"
 fi
 
-# FFMPEG_KIT_VERSION: from version file
+# FFMPEG_KIT_VERSION: Maven artifact version.
 if [[ "$SNAPSHOT" == true ]]; then
   FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")-SNAPSHOT"
 else
-  FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")"
+  FFMPEG_KIT_VERSION="$(cat "${BASEDIR}/version")-${FFMPEG_KIT_VERSION_QUALIFIER}-${FFMPEG_KIT_BUILD_NUMBER}"
 fi
 
 cd "${BASEDIR}" || { exit_message 1 "Failed to change directory to ${BASEDIR}"; }
@@ -571,8 +582,9 @@ create_aar_artifact() {
   AAR_ARTIFACT_QUEUED=false
   FFMPEG_KIT_NAMESPACE="io.github.${OWNER}.ffmpegkit"
   ANDROID_NDK="${latest_ndk}"
-  FFMPEG_KIT_VERSION_CODE="$(date +%Y%m%d)"
-  build_step="GNUPGHOME=\"${SIGNING_HOME}/.gnupg\" ./gradlew :tools:android:${GRADLE_COMMAND} \
+  FFMPEG_KIT_VERSION_CODE="$(date -u +%Y%m%d)"
+  # GNUPGHOME=\"${SIGNING_HOME}/.gnupg\" 
+  build_step="./gradlew :tools:android:${GRADLE_COMMAND} \
   --no-daemon --info --warning-mode all --gradle-user-home \"${GRADLE_HOME}\" \
   -PFFMPEG_KIT_NAMESPACE=\"${FFMPEG_KIT_NAMESPACE}\" \
   -PANDROID_NDK=\"${ANDROID_NDK}\" \
@@ -670,7 +682,7 @@ for key in "${!PLATFORMS[@]}"; do
                   debug_pfx="-debug"
               fi
               FFMPEG_KIT_OUTPUT_NAME="bundle-${bundle_pfx}-shared${debug_pfx}${small_pfx}${license_pfx}"
-              echo "jniLibs dir: ${FFMPEG_KIT_JNI_LIBS_DIR}" > >(redirect_output)
+              echo "jniLibs dir: ${FFMPEG_KIT_JNI_LIBS_DIR}" >>"${LOG_FILE}"
               if [[ "$has_native_binaries" == "true" ]]; then
                 [[ "${create_aar}" == "true" ]] && { create_aar_artifact "${FFMPEG_KIT_JNI_LIBS_DIR}" "${FFMPEG_KIT_OUTPUT_NAME}" || exit_message 1 "Failed to create AAR artifact"; }
                 if [[ "${create_release}" == "true" ]]; then

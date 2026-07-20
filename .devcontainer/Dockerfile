@@ -36,6 +36,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     gcc-toolset-14-libasan-devel \
     gcc-toolset-14-libubsan-devel \
     gcc-toolset-14-libtsan-devel \
+    git \
     gettext \
     gettext-devel \
     glib2-devel \
@@ -55,6 +56,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     openssl-devel \
     p7zip \
     patch \
+    patchelf \
     pax \
     perl-IPC-Cmd \
     perl-Thread-Queue \

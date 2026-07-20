@@ -105,6 +105,7 @@ set_source_files_properties(
 )
 
 ffmpegkit_configure_dependencies(ffmpegkit BUNDLE_LIBRARIES)
+set(FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES ${BUNDLE_LIBRARIES})
 
 # Do NOT rewrite BUNDLE_LIBRARIES here.
 #
@@ -162,23 +163,9 @@ if(WIN32)
     )
 
     if(MINGW)
-        find_library(FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB
-            NAMES libpthreadGC3.a libpthreadGCE3.a pthreadGC3 pthreadGCE3
-            PATHS
-                "${DEPENDENCY_BUILD_DIR}/lib"
-                "${FFMPEG_BUILD_DIR}/lib"
-            NO_DEFAULT_PATH
-        )
-        set(FFMPEGKIT_PTHREAD_STATIC_LIB "${FFMPEGKIT_PTHREAD_WIN32_STATIC_LIB}")
-        if(NOT EXISTS "${FFMPEGKIT_PTHREAD_STATIC_LIB}")
-            message(FATAL_ERROR "Static pthread-win32 library not found. Expected libpthreadGC3.a or libpthreadGCE3.a in the dependency or FFmpeg library paths.")
-        endif()
-
         target_compile_definitions(ffmpegkit PRIVATE
             _WIN32_WINNT=0x0600
             _FORTIFY_SOURCE=2
-            PTW32_STATIC_LIB
-            _POSIX_C_SOURCE=200112L
         )
 
         target_include_directories(ffmpegkit PRIVATE
@@ -189,22 +176,18 @@ if(WIN32)
             -fstack-protector-strong
         )
 
-        target_link_options(ffmpegkit PRIVATE
+        target_link_options(ffmpegkit PRIVATE 
             "-v"
-            "-static-libgcc"
-            "-static-libstdc++"
-            # "-nodefaultlibs"
-            # "-Wl,--entry,_DllMainCRTStartup"
+            "-static-libgcc" 
+            "-static-libstdc++" 
             "-Wl,--enable-runtime-pseudo-reloc"
             "-Wl,-u,__mingw_raise_matherr"
             "-Wl,--exclude-libs,libstdc++.a"
             "-Wl,--exclude-libs,libgcc.a"
             "-Wl,--exclude-libs,libgomp.a"
             "-Wl,--exclude-libs,libssp.a"
-            "-Wl,--exclude-libs,libpthreadGC3.a"
-            "-Wl,--exclude-libs,libpthreadGCE3.a"
-            "-Wl,--nxcompat"          # Data Execution Prevention (DEP)
-            "-Wl,--dynamicbase"       # ASLR
+            "-Wl,--nxcompat"        # Data Execution Prevention (DEP)
+            "-Wl,--dynamicbase"     # ASLR
             "-Wl,--high-entropy-va"   # 64-bit ASLR
             "-Wl,--enable-auto-import"
             "-Wl,--allow-multiple-definition"
@@ -267,10 +250,10 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
         message(FATAL_ERROR "ALSA not found. Checked DEPENDENCY_BUILD_DIR='${DEPENDENCY_BUILD_DIR}', FFMPEG_BUILD_DIR='${FFMPEG_BUILD_DIR}', and system paths")
     endif()
 
-    # Allow libffmpegkit.so to find sibling libs (e.g. libpulsecommon) in the
-    # same directory it is installed into (Flutter bundle's lib/ folder)
+    # Allow libffmpegkit.so to find bundled Linux dependencies in the same
+    # directory it is installed into (Flutter bundle's lib/ folder).
     set_target_properties(ffmpegkit PROPERTIES
-        INSTALL_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN:$ORIGIN/pulseaudio"
         BUILD_WITH_INSTALL_RPATH TRUE
     )
 elseif(ANDROID)
@@ -287,7 +270,6 @@ elseif(ANDROID)
         android
         jnigraphics
         m
-        z
         atomic
         dl
     )
@@ -309,6 +291,11 @@ elseif(ANDROID)
         "-Wl,--allow-multiple-definition"
         "-Wl,--as-needed"
         # "-Wl,--verbose"
+    )
+    ffmpegkit_configure_android_static_cxx_runtime(
+        ffmpegkit
+        ANDROID_CXX_STATIC_LIBRARY
+        ANDROID_CXXABI_STATIC_LIBRARY
     )
 elseif(APPLE)
     # iOS/macOS platform configuration
@@ -375,8 +362,6 @@ elseif(APPLE)
         "-Wl,-w"
         "-Wl,-dead_strip"
         "-Wl,-twolevel_namespace"
-        # "-Wl,-flat_namespace"
-        # "-Wl,-undefined,dynamic_lookup"
     )
 endif()
 
@@ -414,11 +399,16 @@ if(BUILD_SHARED_LIBS)
         )
 
         if(MINGW)
+            # append_mingw_shared_cxx_runtime_dlls(BUNDLE_LIBRARIES)
+            replace_mingw_runtime_imports_with_static(BUNDLE_LIBRARIES)
+            # move_mingw_pthread_win32_shared_to_tail(BUNDLE_LIBRARIES)
+
             target_link_libraries(ffmpegkit PRIVATE
                 # 1. CRT and threading - must resolve before anything else
                 "-Wl,-Bstatic"
                 "-lstdc++"
                 "-lgcc"
+                "-lwinpthread"
                 "-Wl,-Bdynamic"
 
                 # 2. FFmpeg core - whole-archive to prevent dead-stripping of
@@ -452,12 +442,17 @@ if(BUILD_SHARED_LIBS)
                 ${BUNDLE_LIBRARIES}
             )
         elseif(ANDROID)
+            ffmpegkit_filter_android_bundle_libraries(BUNDLE_LIBRARIES ANDROID_BUNDLE_LIBRARIES)
+
             target_link_libraries(ffmpegkit PRIVATE
                 "-Wl,--whole-archive"
                 ${FFMPEG_STATIC_LIBS}
                 "-Wl,--no-whole-archive"
-                ${BUNDLE_LIBRARIES}
+                ${ANDROID_BUNDLE_LIBRARIES}
+                "${ANDROID_CXX_STATIC_LIBRARY}"
+                "${ANDROID_CXXABI_STATIC_LIBRARY}"
             )
+            set(FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES ${ANDROID_BUNDLE_LIBRARIES})
         elseif(APPLE)
             if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
                 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfmpegKitiOSStripLzma.cmake")
@@ -498,7 +493,9 @@ if(BUILD_SHARED_LIBS)
         if(MINGW)
             target_link_libraries(ffmpegkit PRIVATE 
                 "-Wl,--start-group"
+                "${PTW32_STATIC_LIB}"
                 ${BUNDLE_LIBRARIES}
+                "pthread"
                 "ws2_32" 
                 "bcrypt"
                 "-Wl,--end-group"
@@ -594,10 +591,11 @@ __ZTVN4Json*
     endif()
 
     message(DEBUG "BUNDLE_LIBRARIES: ${BUNDLE_LIBRARIES}")
+    message(DEBUG "FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES: ${FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES}")
 
     # Bundling Manifest (Requires shared-library.sh)
     add_custom_command(TARGET ffmpegkit POST_BUILD
-        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/shared-library.sh" "${FFMPEG_BUILD_DIR}" "\"${BUNDLE_LIBRARIES}\""
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/shared-library.sh" "${FFMPEG_BUILD_DIR}" "\"${FFMPEGKIT_BUNDLE_MANIFEST_LIBRARIES}\""
         COMMENT "Generating bundle manifest for shared dependencies..."
     )
 else()
@@ -664,6 +662,20 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/"
 configure_file("src/ffmpegkit.pc.in" "ffmpegkit.pc" @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.pc" DESTINATION lib/pkgconfig)
 
+if(BUILD_SHARED_LIBS AND CMAKE_SYSTEM_NAME MATCHES "Linux")
+    install(CODE "
+        execute_process(
+            COMMAND bash \"${CMAKE_CURRENT_SOURCE_DIR}/scripts/normalize-linux-shared-libraries.sh\"
+                    \"\${CMAKE_INSTALL_PREFIX}/lib\"
+                    \"\\\$ORIGIN:\\\$ORIGIN/pulseaudio\"
+            RESULT_VARIABLE NORMALIZE_LINUX_SHARED_LIBRARIES_RESULT
+        )
+        if(NOT NORMALIZE_LINUX_SHARED_LIBRARIES_RESULT EQUAL 0)
+            message(FATAL_ERROR \"Linux shared library normalization failed\")
+        endif()
+    ")
+endif()
+
 # =============================================================================
 # 8. TESTING: Unit Test Framework Integration
 # =============================================================================
@@ -673,11 +685,6 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.pc" DESTINATION lib/pkgconf
 # - Add test directory to build system
 # ==============================================================================
 if(BUILD_TESTS)
-    set_target_properties(ffmpegkit PROPERTIES
-        INSTALL_RPATH "$ORIGIN:$ORIGIN/pulseaudio:/usr/lib/pulseaudio:/usr/lib64/pulseaudio:${CMAKE_SOURCE_DIR}/../prebuilt/linux-x86_64/libraries/lib:${CMAKE_SOURCE_DIR}/../prebuilt/linux-x86_64/libraries/lib/pulseaudio"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
-
     enable_testing()
 
     include(FetchContent)

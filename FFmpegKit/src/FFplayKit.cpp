@@ -20,6 +20,10 @@
 #include "FFplayKit.hpp"
 #include "FFmpegKitConfig.hpp"
 
+extern void *ffmpegKitInitialize();
+
+const void *_ffplayKitInitializer{ffmpegKitInitialize()};
+
 std::shared_ptr<ffmpegkit::FFplaySession>
 ffmpegkit::FFplayKit::executeWithArguments(
     const std::list<std::string> &arguments, int timeout) {
