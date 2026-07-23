@@ -59,7 +59,7 @@ This repository provides a comprehensive build system for FFmpeg and FFmpegKit t
 | macOS                    | ✅ Supported | x86_64 and arm64 (aarch64)                          | 13+         |
 | Linux                    | ✅ Supported | x86_64                                              | glibc 2.28+ |
 | Windows                  | ✅ Supported | x86_64                                              | Windows 8+  |
-| tvOS                     | Coming Soon | arm64 (aarch64)                                     |             |
+| tvOS                     | ✅ Supported | arm64 (aarch64)                                     | 13+         |
 
 ## Quick Start
 
