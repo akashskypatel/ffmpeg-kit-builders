@@ -5155,6 +5155,11 @@ configure_ffmpeg() {
 
 	if truthy "$do_debug_build"; then
 		postpend_configure_opts+=" --disable-stripping --disable-optimizations --extra-cflags=\" -Og \" --extra-cflags=\" -fno-omit-frame-pointer \" --enable-debug=3 --extra-cflags=\" -fno-inline \""
+	elif isapple; then
+		# Apple release artifacts need linked DWARF data until dsymutil runs while
+		# packaging the final framework. Keep optimizations enabled; the framework
+		# binary is stripped only after its matching dSYM has been generated.
+		postpend_configure_opts+=" --disable-stripping --enable-optimizations --enable-debug=1"
 	else
 		postpend_configure_opts+=" --disable-debug --enable-stripping --enable-optimizations"
 	fi
