@@ -430,7 +430,7 @@ ensure_ffmpeg_artifacts() {
   local arch="$2"
   local bundle pattern
 
-  if [[ "${WORKFLOW_FORCE_SELF}" == "true" ]]; then
+  if [[ "${WORKFLOW_BUILD_FFMPEG}" == "true" ]]; then
     workflow_build_ffmpeg "$platform" "$arch"
     return
   fi
