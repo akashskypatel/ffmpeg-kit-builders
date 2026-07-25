@@ -2967,7 +2967,7 @@ build_libarchive() {
   if isiossimulator; then
     ffi_host="${host_arch}-apple-darwin"
   fi
-  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared --bindir=$dependency_install_prefix/bin"
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared --without-iconv --bindir=$dependency_install_prefix/bin"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags
