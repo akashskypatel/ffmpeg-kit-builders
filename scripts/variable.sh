@@ -452,6 +452,7 @@ CONFIG_MACOS_UNSUPPORTED="\
 --disable-ffnvcodec \
 --disable-nvdec \
 --disable-nvenc \
+--disable-cuvid \
 --disable-cuda-nvcc \
 --disable-cuda-llvm \
 --disable-ohcodec"
@@ -494,6 +495,7 @@ CONFIG_TVOS_UNSUPPORTED="\
 --disable-ffnvcodec \
 --disable-nvdec \
 --disable-nvenc \
+--disable-cuvid \
 --disable-libtorch \
 --disable-libopenvino \
 --disable-libtensorflow \
@@ -541,6 +543,7 @@ CONFIG_IOS_UNSUPPORTED="\
 --disable-ffnvcodec \
 --disable-nvdec \
 --disable-nvenc \
+--disable-cuvid \
 --disable-libtorch \
 --disable-libopenvino \
 --disable-libtensorflow \
@@ -591,6 +594,7 @@ CONFIG_ANDROID_UNSUPPORTED="\
 --disable-ffnvcodec \
 --disable-nvdec \
 --disable-nvenc \
+--disable-cuvid \
 --disable-libtorch \
 --disable-libopenvino \
 --disable-libtensorflow \
