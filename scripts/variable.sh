@@ -400,6 +400,9 @@ CONFIG_WINDOWS_UNSUPPORTED="\
 --disable-libtorch \
 --disable-cuda-nvcc \
 --disable-libsmbclient \
+--disable-omx \
+--disable-omx-rpi \
+--disable-mmal \
 --disable-ohcodec"
 
 CONFIG_LINUX_UNSUPPORTED="\
@@ -418,6 +421,8 @@ CONFIG_LINUX_UNSUPPORTED="\
 --disable-securetransport \
 --disable-videotoolbox \
 --disable-cuda-llvm \
+--disable-omx-rpi \
+--disable-mmal \
 --disable-ohcodec"
 
 CONFIG_MACOS_UNSUPPORTED="\
@@ -455,6 +460,10 @@ CONFIG_MACOS_UNSUPPORTED="\
 --disable-cuvid \
 --disable-cuda-nvcc \
 --disable-cuda-llvm \
+--disable-omx \
+--disable-omx-rpi \
+--disable-libnpp \
+--disable-mmal \
 --disable-ohcodec"
 
 CONFIG_TVOS_UNSUPPORTED="\
@@ -508,6 +517,10 @@ CONFIG_TVOS_UNSUPPORTED="\
 --disable-libdvdnav \
 --disable-libdvdread \
 --disable-libsvtjpegxs \
+--disable-omx \
+--disable-omx-rpi \
+--disable-libnpp \
+--disable-mmal \
 --disable-ohcodec"
 
 CONFIG_IOS_UNSUPPORTED="\
@@ -556,6 +569,10 @@ CONFIG_IOS_UNSUPPORTED="\
 --disable-libdvdnav \
 --disable-libdvdread \
 --disable-libsvtjpegxs \
+--disable-omx \
+--disable-omx-rpi \
+--disable-libnpp \
+--disable-mmal \
 --disable-ohcodec"
 
 CONFIG_ANDROID_UNSUPPORTED="\
@@ -606,6 +623,9 @@ CONFIG_ANDROID_UNSUPPORTED="\
 --disable-libcdio \
 --disable-libdvdnav \
 --disable-libdvdread \
+--disable-omx-rpi \
+--disable-libnpp \
+--disable-mmal \
 --disable-ohcodec"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
