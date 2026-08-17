@@ -79,6 +79,7 @@ CONFIG_VIDEO_AI="\
 --enable-libquirc \
 --enable-libtensorflow \
 --enable-libtesseract \
+--enable-libonnxruntime \
 --enable-libtorch"
 
 # AI Audio Focused
@@ -506,6 +507,7 @@ CONFIG_TVOS_UNSUPPORTED="\
 --disable-libdvdread \
 --disable-libsvtjpegxs \
 --disable-mmal \
+--disable-libonnxruntime \
 --disable-ohcodec"
 
 CONFIG_IOS_UNSUPPORTED="\
@@ -555,6 +557,7 @@ CONFIG_IOS_UNSUPPORTED="\
 --disable-libdvdread \
 --disable-libsvtjpegxs \
 --disable-mmal \
+--disable-libonnxruntime \
 --disable-ohcodec"
 
 CONFIG_ANDROID_UNSUPPORTED="\
@@ -606,6 +609,7 @@ CONFIG_ANDROID_UNSUPPORTED="\
 --disable-libdvdnav \
 --disable-libdvdread \
 --disable-mmal \
+--disable-libonnxruntime \
 --disable-ohcodec"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]

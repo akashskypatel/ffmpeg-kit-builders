@@ -3218,6 +3218,59 @@ build_opencl() {
     mv -f "$dependency_install_prefix/lib/OpenCL.a" "$dependency_install_prefix/lib/libOpenCL.a"
   fi
 }
+build_libonnxruntime() {
+  local base_lib="libonnxruntime"
+    local lib="$base_lib-$host_name"
+    local repo_ver="1.29.0"
+    local repo="https://github.com/microsoft/onnxruntime/releases/download/v1.29.0/onnxruntime-win-x64-1.29.0.zip"
+    local subdir="cpu"
+    pick_gpu_support
+    if truthy "$gpu_support"; then
+      pick_gpu_type
+      subdir=$gpu_type
+      if [[ $subdir == "rocm" ]]; then
+        echo -e "WARNING: [disabled] $lib ROCm support is not availbale on Windows" >>"$LOG_FILE"
+        disable_library "libonnxruntime"
+        return
+      else
+        local repo="https://github.com/microsoft/onnxruntime/releases/download/v1.29.0/onnxruntime-win-x64-gpu_cuda12-1.29.0.zip"
+        repo_ver="1.29.0"
+        echo "WARNING: uninstalling cpu $base_lib if installed." >> "$LOG_FILE"
+        uninstall_manifest "$install_pkgconfig_dir/${lib}_cpu_manifest" > >(redirect_output) 2>&1
+      fi
+    fi
+
+    local manifest="$work_dir/pkgconfig/${lib}_${subdir}_manifest"
+    [[ ! -f "$manifest" ]] && touch "$manifest"
+    
+    change_dir "$src_dir"
+    local touch_name=$(get_small_touchfile_name "${host_name}_installed" "$repo")
+    
+    truthy "$build_force" && remove_path -rf "$src_dir/$lib/$subdir"
+    if [[ -f "$manifest" && ! -f "$src_dir/$lib/$subdir/$touch_name" ]]; then
+      [[ -d "$src_dir/$lib" ]] && reset_touch "$src_dir/$lib" "${host_name}_installed*.touch"
+      uninstall_manifest "$manifest" >>"$LOG_FILE" 2>&1
+    fi
+
+    change_dir "$src_dir/$lib" 1
+
+    if [ ! -f "$src_dir/$lib/$subdir/$touch_name" ]; then
+        download_and_unpack_file "$repo" "$subdir"
+        
+        install_prebuilt_binary \
+            -n="$base_lib" -v="$repo_ver" \
+            -s="$src_dir/$lib/$subdir" \
+            -I="include" \
+            -L="lib" \
+            -B="lib" \
+            -m="$manifest" \
+            -d="ONNX Runtime C Library ($subdir)" || exit_message 1 "could not install $base_lib"
+
+        change_dir "$src_dir/$lib/$subdir"
+        create_touch_file 0 "$touch_name"
+        echo "$src_dir/$lib/$subdir/$touch_name" >>"$manifest"
+    fi
+}
 # build_libtensorflow     # config_options+= --enable-libtensorflow       # enable TensorFlow as a DNN module backend for DNN based filters like sr [no]
 build_libtensorflow() {
   local base_lib="libtensorflow"

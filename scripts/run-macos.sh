@@ -2863,6 +2863,44 @@ build_libtorch() {
   gsed -i -E 's/\.a//g' "$install_pkgconfig_dir/$base_lib.pc"
   gsed -i -E 's/-lunbox_ /-lunbox_lib /g' "$install_pkgconfig_dir/$base_lib.pc" # unbox_lib becomes unbox_ for some reason
 }
+build_libonnxruntime() {
+  local base_lib="libonnxruntime"
+    local lib="$base_lib-$host_name"
+    local repo_ver="1.29.0"
+    local repo="https://github.com/microsoft/onnxruntime/releases/download/v1.29.0/onnxruntime-osx-arm64-1.29.0.tgz"
+    local subdir="cpu"
+
+    local manifest="$work_dir/pkgconfig/${lib}_${subdir}_manifest"
+    [[ ! -f "$manifest" ]] && touch "$manifest"
+    
+    change_dir "$src_dir"
+    local touch_name=$(get_small_touchfile_name "${host_name}_installed" "$repo")
+    
+    truthy "$build_force" && remove_path -rf "$src_dir/$lib/$subdir"
+    if [[ -f "$manifest" && ! -f "$src_dir/$lib/$subdir/$touch_name" ]]; then
+      [[ -d "$src_dir/$lib" ]] && reset_touch "$src_dir/$lib" "${host_name}_installed*.touch"
+      uninstall_manifest "$manifest" >>"$LOG_FILE" 2>&1
+    fi
+
+    change_dir "$src_dir/$lib" 1
+
+    if [ ! -f "$src_dir/$lib/$subdir/$touch_name" ]; then
+        download_and_unpack_file "$repo" "$subdir"
+        
+        install_prebuilt_binary \
+            -n="$base_lib" -v="$repo_ver" \
+            -s="$src_dir/$lib/$subdir" \
+            -I="include" \
+            -L="lib" \
+            -B="lib" \
+            -m="$manifest" \
+            -d="ONNX Runtime C Library ($subdir)" || exit_message 1 "could not install $base_lib"
+
+        change_dir "$src_dir/$lib/$subdir"
+        create_touch_file 0 "$touch_name"
+        echo "$src_dir/$lib/$subdir/$touch_name" >>"$manifest"
+    fi
+}
 # build_libtensorflow     # config_options+= --enable-libtensorflow       # enable TensorFlow as a DNN module backend for DNN based filters like sr [no]
 build_libtensorflow() {
   # https://github.com/tensorflow/tensorflow
