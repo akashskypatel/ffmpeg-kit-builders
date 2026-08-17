@@ -4917,6 +4917,10 @@ configure_ffmpeg() {
   if iswindows || islinux || ismacos; then
   truthy "$enable_libopenvino" && config_options+=" --enable-libopenvino"             # enable OpenVINO as a DNN module backend for DNN based filters like dnn_processing [no]
   truthy "$enable_libtensorflow" && config_options+=" --enable-libtensorflow"         # enable TensorFlow as a DNN module backend for DNN based filters like sr [no]
+  if ismacos && [[ "$host_arch" == "x86_64" ]]; then
+    disable_library libonnxruntime
+  fi
+  truthy "$enable_libonnxruntime" && config_options+=" --enable-libonnxruntime"       # enable ONNX Runtime as a DNN module backend for DNN based filters like sr [no]
   fi
   if islinux; then
   truthy "$enable_cuda_nvcc" && config_options+=" --enable-cuda-nvcc"
