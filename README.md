@@ -9,12 +9,12 @@
 
 <div align="center">
 
-[![v0.10.5-android](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.5-android/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.5-android)
-[![v0.10.5-ios](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.5-ios/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.5-ios)
-[![v0.10.5-linux](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.5-linux/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.5-linux)
-[![v0.10.5-macos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.5-macos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.5-macos)
-[![v0.10.5-appletvos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.5-appletvos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.5-appletvos)
-[![v0.10.5-windows](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.10.5-windows/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.10.5-windows)
+[![v0.11.0-android](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.0-android/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.0-android)
+[![v0.11.0-ios](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.0-ios/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.0-ios)
+[![v0.11.0-linux](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.0-linux/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.0-linux)
+[![v0.11.0-macos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.0-macos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.0-macos)
+[![v0.11.0-appletvos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.0-appletvos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.0-appletvos)
+[![v0.11.0-windows](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.0-windows/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.0-windows)
 
 </div>
 

@@ -45,7 +45,7 @@ export create_bundle=y
 export git_get_latest=n
 export prefer_stable=y # Only for x264 and x265.
 export build_amd_amf=y
-export ffmpeg_git_checkout_version="release/8.1"
+export ffmpeg_git_checkout_version="release/9.0"
 export build_ismindex=n
 export build_gpl=n
 export build_nonfree=n
@@ -154,7 +154,6 @@ CONFIG_TLS="\
 CONFIG_AUDIO="\
 --enable-alsa \
 --enable-libbs2b \
---enable-libcelt \
 --enable-libcodec2 \
 --enable-libgsm \
 --enable-libilbc \
@@ -262,10 +261,8 @@ CONFIG_VIDEO_EXTRA_NON_FREE="--enable-decklink"
 # Hardware Accel Video Focused
 CONFIG_HARDWARE="\
 --enable-amf \
---enable-libglslang \
 --enable-libmfx \
 --enable-libplacebo \
---enable-libshaderc \
 --enable-libvpl \
 --enable-ohcodec \
 --enable-opencl \
@@ -273,7 +270,6 @@ CONFIG_HARDWARE="\
 --enable-vulkan \
 --enable-vdpau \
 --enable-ffnvcodec \
---enable-libnpp \
 --enable-cuda-llvm \
 --enable-cuvid \
 --enable-nvdec \
@@ -281,7 +277,6 @@ CONFIG_HARDWARE="\
 --enable-libdrm \
 --enable-vaapi \
 --enable-mediacodec \
---enable-omx \
 --enable-rkmpp \
 --enable-v4l2-m2m \
 --enable-vulkan-static"
@@ -295,7 +290,6 @@ CONFIG_HARDWARE_NON_FREE="\
 --enable-mediafoundation \
 --enable-metal \
 --enable-mmal \
---enable-omx-rpi \
 --enable-cuda-nvcc \
 --enable-videotoolbox"
 
@@ -400,8 +394,6 @@ CONFIG_WINDOWS_UNSUPPORTED="\
 --disable-libtorch \
 --disable-cuda-nvcc \
 --disable-libsmbclient \
---disable-omx \
---disable-omx-rpi \
 --disable-mmal \
 --disable-ohcodec"
 
@@ -421,7 +413,6 @@ CONFIG_LINUX_UNSUPPORTED="\
 --disable-securetransport \
 --disable-videotoolbox \
 --disable-cuda-llvm \
---disable-omx-rpi \
 --disable-mmal \
 --disable-ohcodec"
 
@@ -460,9 +451,6 @@ CONFIG_MACOS_UNSUPPORTED="\
 --disable-cuvid \
 --disable-cuda-nvcc \
 --disable-cuda-llvm \
---disable-omx \
---disable-omx-rpi \
---disable-libnpp \
 --disable-mmal \
 --disable-ohcodec"
 
@@ -517,9 +505,6 @@ CONFIG_TVOS_UNSUPPORTED="\
 --disable-libdvdnav \
 --disable-libdvdread \
 --disable-libsvtjpegxs \
---disable-omx \
---disable-omx-rpi \
---disable-libnpp \
 --disable-mmal \
 --disable-ohcodec"
 
@@ -569,9 +554,6 @@ CONFIG_IOS_UNSUPPORTED="\
 --disable-libdvdnav \
 --disable-libdvdread \
 --disable-libsvtjpegxs \
---disable-omx \
---disable-omx-rpi \
---disable-libnpp \
 --disable-mmal \
 --disable-ohcodec"
 
@@ -623,8 +605,6 @@ CONFIG_ANDROID_UNSUPPORTED="\
 --disable-libcdio \
 --disable-libdvdnav \
 --disable-libdvdread \
---disable-omx-rpi \
---disable-libnpp \
 --disable-mmal \
 --disable-ohcodec"
 
@@ -649,7 +629,6 @@ CONFIG_ANDROID_UNSUPPORTED="\
 # build_vulkan            # config_options+= --disable-vulkan             # Video  # disable Vulkan code [autodetect]
 # build_libmfx            # config_options+= --enable-libmfx              # Video  # enable Intel MediaSDK (AKA Quick Sync Video) code via libmfx [no]
 # build_libvpl            # config_options+= --enable-libvpl              # Video  # enable Intel oneVPL code via libvpl if libmfx is not used [no]
-# build_omx               # config_options+= --enable-omx                 # Video  # enable OpenMAX IL code [no]
 # build_vulkan_static     # config_options+= --enable-vulkan-static       # Video  # enable statically link to libvulkan [no]
 # build_avisynth          # config_options+= --enable-avisynth            # Video  # enable reading of AviSynth script files [no]
 # build_bzlib             # config_options+= --disable-bzlib              # System # disable bzlib [autodetect]
@@ -676,7 +655,6 @@ CONFIG_ANDROID_UNSUPPORTED="\
 # build_libbs2b           # config_options+= --enable-libbs2b             # Audio  # enable bs2b DSP library [no]
 # build_libcaca           # config_options+= --enable-libcaca             # Video  # enable textual display using libcaca [no]
 # build_libcdio           # config_options+= --enable-libcdio             # Audio  # enable audio CD grabbing with libcdio [no]
-# build_libcelt           # config_options+= --enable-libcelt             # Audio  # enable CELT decoding via libcelt [no]
 # build_libcodec2         # config_options+= --enable-libcodec2           # Audio  # enable codec2 en/decoding using libcodec2 [no]
 # build_libdav1d          # config_options+= --enable-libdav1d            # Video  # enable AV1 decoding via libdav1d [no]
 # build_libdavs2          # config_options+= --enable-libdavs2            # Video  # enable AVS2 decoding via libdavs2 [no]
@@ -686,7 +664,6 @@ CONFIG_ANDROID_UNSUPPORTED="\
 # build_libfontconfig     # config_options+= --enable-libfontconfig       # Video  # enable libfontconfig, useful for drawtext filter [no]
 # build_libfreetype       # config_options+= --enable-libfreetype         # Video  # enable libfreetype, needed for drawtext filter [no]
 # build_libfribidi        # config_options+= --enable-libfribidi          # Video  # enable libfribidi, improves drawtext filter [no]
-# build_libglslang        # config_options+= --enable-libglslang          # Video  # enable GLSL->SPIRV compilation via libglslang [no]
 # build_libgme            # config_options+= --enable-libgme              # Audio  # enable Game Music Emu via libgme [no]
 # build_libgsm            # config_options+= --enable-libgsm              # Audio  # enable GSM de/encoding via libgsm [no]
 # build_libharfbuzz       # config_options+= --enable-libharfbuzz         # Video  # enable libharfbuzz, needed for drawtext filter [no]
@@ -717,7 +694,6 @@ CONFIG_ANDROID_UNSUPPORTED="\
 # build_librsvg           # config_options+= --enable-librsvg             # Video  # enable SVG rasterization via librsvg [no]
 # build_librtmp           # config_options+= --enable-librtmp             # System # enable RTMP[E] support via librtmp [no]
 # build_librubberband     # config_options+= --enable-librubberband       # Audio  # enable rubberband needed for rubberband filter [no]
-# build_libshaderc        # config_options+= --enable-libshaderc          # Video  # enable GLSL->SPIRV compilation via libshaderc [no]
 # build_libshine          # config_options+= --enable-libshine            # Audio  # enable fixed-point MP3 encoding via libshine [no]
 # build_libsmbclient      # config_options+= --enable-libsmbclient        # System # enable Samba protocol via libsmbclient [no]
 # build_libsnappy         # config_options+= --enable-libsnappy           # System # enable Snappy compression, needed for hap encoding [no]
@@ -768,9 +744,7 @@ CONFIG_ANDROID_UNSUPPORTED="\
 # build_nvenc             # config_options+= --disable-nvenc              # Video  # disable Nvidia video encoding code [autodetect]
 # build_vdpau             # config_options+= --disable-vdpau              # Video  # disable Nvidia Video Decode and Presentation API for Unix code [autodetect]
 # build_cuda_nvcc         # config_options+= --enable-cuda-nvcc           # Video  # enable Nvidia CUDA compiler [no]
-# build_libnpp            # config_options+= --enable-libnpp              # Video  # enable Nvidia Performance Primitives-based code [no]
 # build_mmal              # config_options+= --disable-mmal               # Video  # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
-# build_omx_rpi           # config_options+= --disable-omx-rpi            # Video  # enable OpenMAX IL code for Raspberry Pi [no]
 # build_d3d11va           # config_options+= --disable-d3d11va            # Video  # disable Microsoft Direct3D 11 video acceleration code [autodetect]
 # build_d3d12va           # config_options+= --disable-d3d12va            # Video  # disable Microsoft Direct3D 12 video acceleration code [autodetect]
 # build_dxva2             # config_options+= --disable-dxva2              # Video  # disable Microsoft DirectX 9 video acceleration code [autodetect]

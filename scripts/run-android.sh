@@ -1120,23 +1120,6 @@ ac_cv_func_glob=no"
   do_make_and_make_install
   change_dir "$src_dir"
 }
-# build_libcelt           # config_options+= --enable-libcelt             # enable CELT decoding via libcelt [no]
-build_libcelt() {
-  # run_valid_function "build_libopus" 1
-  local lib="libcelt"
-  echo -e "The celt codec design and implementation have been merged into
-the IETF Codec Working Group's \"Opus\" codec. As such, this
-repository is no longer under active development.
-
-Please see https://git.xiph.org/?p=opus
-and https://git.xiph.org/?p=users/jm/opus-tools.git for more
-current work. Visit http://opus-codec.org/ for more
-information.
-
-We apologize for any inconvenience this has caused.
-" >>"$LOG_FILE"
-    # https://github.com/xiph/opus
-}
 # build_libcodec2         # config_options+= --enable-libcodec2           # enable codec2 en/decoding using libcodec2 [no]
 build_libcodec2_codebook() {
   local lib="libcodec2"
@@ -4826,44 +4809,12 @@ build_cuda_nvcc() {
   echo "INFO: Only available on Desktop build" >>"$LOG_FILE"
   disable_library "cuda-nvcc"
 }
-# build_libnpp            # config_options+= --enable-libnpp              # enable Nvidia Performance Primitives-based code [no]
-build_libnpp() {
-  echo "WARNING: This is FFmpeg does not support modern npp based filters. Older api has been deprecated by Nvidia. Use scale_cuda instead. Disabling libnpp." >>"$LOG_FILE"
-  disable_library "libnpp"
-}
 #endregion
 #region---------- non-gpl linux/unix (Raspberry Pi) features ------------------    
 # build_mmal              # config_options+= --disable-mmal               # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
 build_mmal() {
   echo "INFO: Only available on Raspberry Pi build" >>"$LOG_FILE"
   disable_library "mmal"
-}
-# build_omx               # config_options+= --enable-omx                 # enable OpenMAX IL code [no]
-build_omx() {
-  local repo="https://git.code.sf.net/p/omxil/omxil"
-  local lib="libomxil-bellagio"
-  local repo_ver="0.9.1"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  local orig_path=$PATH
-  export PATH="/usr/local/arm-gnu-toolchain/sys-bin:/usr/local/arm-gnu-toolchain/bin:$PATH"
-  export CFLAGS="$CFLAGS -Wno-error"
-  # disable omxregister utility. not needed for ffmpeg
-  gsed -i 's/bin_PROGRAMS = omxregister-bellagio/#bin_PROGRAMS = omxregister-bellagio/' src/Makefile.am
-  find . -name "configure.ac" -exec gsed -i 's/-Werror//g' {} +
-  find . -exec touch {} +
-  generic_configure "--disable-doc"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  reset_cflags
-  change_dir "$src_dir"
-  export PATH=$orig_path
-}
-# build_omx_rpi           # config_options+= --disable-omx-rpi            # enable OpenMAX IL code for Raspberry Pi [no]
-build_omx_rpi() {
-  echo "INFO: Only available on Raspberry Pi build" >>"$LOG_FILE"
-  disable_library "omx-rpi"
 }
 #endregion
 #region-------------------- non-gpl windows features -------------------------- 

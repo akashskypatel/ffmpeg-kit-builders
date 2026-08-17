@@ -2521,23 +2521,6 @@ build_lv2() {
     gsed -i 's/-lzix-0\b/-lzix/g' *.pc
     gsed -i 's/-lilv-0\b/-llilv/g' *.pc
 }
-
-# build_libcelt           # config_options+= --enable-libcelt             # enable CELT decoding via libcelt [no]
-build_libcelt() {
-  # run_valid_function "build_libopus" 1
-  echo -e "The celt codec design and implementation have been merged into
-the IETF Codec Working Group's \"Opus\" codec. As such, this
-repository is no longer under active development.
-
-Please see https://git.xiph.org/?p=opus
-and https://git.xiph.org/?p=users/jm/opus-tools.git for more
-current work. Visit http://opus-codec.org/ for more
-information.
-
-We apologize for any inconvenience this has caused.
-" >>"$LOG_FILE"
-		# https://github.com/xiph/opus
-}
 # build_libcdio           # config_options+= --enable-libcdio             # enable audio CD grabbing with libcdio [no]
 build_libcdio() {
   local lib="libcdio"
@@ -3995,19 +3978,6 @@ build_libdrm() {
     # https://gitlab.freedesktop.org/mesa/libdrm
     disable_library "libdrm"
 }
-# build_omx_rpi           # config_options+= --disable-omx-rpi            # enable OpenMAX IL code for Raspberry Pi [no]
-build_omx_rpi() {
-  # https://github.com/tizonia/tizonia-openmax-il maybe?
-    echo "Only available on Linux build" >>"$LOG_FILE"
-    disable_library "omx-rpi"
-    #
-}
-# build_omx               # config_options+= --enable-omx                 # enable OpenMAX IL code [no]
-build_omx() {
-  echo "Only available on Linux build" >>"$LOG_FILE"
-    # https://github.com/tizonia/tizonia-openmax-il maybe?
-    disable_library "omx"
-}
 # build_mmal              # config_options+= --disable-mmal               # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
 build_mmal() {
   # https://github.com/raspberrypi/userland/tree/master/interface/mmal maybe?
@@ -4019,11 +3989,6 @@ build_libmfx() {
   echo "WARNING: [disabled] Library has been archived and has security issues." >>"$LOG_FILE"
     # https://github.com/Intel-Media-SDK/MediaSDK
     disable_library "libmfx"
-}
-# build_libnpp            # config_options+= --enable-libnpp              # enable Nvidia Performance Primitives-based code [no]
-build_libnpp() {
-  echo "WARNING: This is FFmpeg does not support modern npp based filters. Older api has been deprecated by Nvidia. Use scale_cuda instead. Disabling libnpp." >>"$LOG_FILE"
-    disable_library "libnpp"
 }
 # build_libopencv         # config_options+= --enable-libopencv           # enable video filtering via libopencv [no]
 build_libopencv() {

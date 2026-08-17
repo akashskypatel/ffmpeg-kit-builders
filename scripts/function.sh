@@ -4925,7 +4925,6 @@ configure_ffmpeg() {
   elif iswindows; then
   truthy "$enable_cuda_llvm" && config_options+=" --enable-cuda-llvm"                 # enable CUDA compilation using clang [autodetect]
   fi
-  truthy "$enable_libnpp" && config_options+=" --enable-libnpp"                       # enable Nvidia Performance Primitives-based code [no]
   #------------------------------------------------------------------------------
   # ----------------------------- windows features ------------------------------ 
   #------------------------------------------------------------------------------
@@ -4973,8 +4972,6 @@ configure_ffmpeg() {
   truthy "$enable_libcaca" && config_options+=" --enable-libcaca"                     # enable textual display using libcaca [no]
   islinux && truthy "$enable_libcaca" && add_extra_libs "-lX11" \
   && config_options+=" --extra-ldflags=-lX11"
-  # libcelt depercated - use libopus instead
-  truthy "$enable_libcelt" && config_options+=" --enable-libopus"                     # enable CELT decoding via libcelt [no]
   truthy "$enable_libcodec2" && config_options+=" --enable-libcodec2"                 # enable codec2 en/decoding using libcodec2 [no]
   truthy "$enable_libdav1d" && config_options+=" --enable-libdav1d"                   # enable AV1 decoding via libdav1d [no]
   truthy "$enable_libdavs2" && config_options+=" --enable-libdavs2"                   # enable AVS2 decoding via libdavs2 [no]
@@ -5148,8 +5145,6 @@ configure_ffmpeg() {
     # --------------------------- linux/unix features -----------------------------    
     if [[ $host_platform == "rpi" ]]; then
     truthy "$enable_mmal" && config_options+=" --enable-mmal"                           # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
-    truthy "$enable_omx" && config_options+=" --enable-omx"                             # enable OpenMAX IL code [no]
-    truthy "$enable_omx_rpi" && config_options+=" --enable-omx-rpi"                     # enable OpenMAX IL code for Raspberry Pi [no]
     fi
 	fi
 

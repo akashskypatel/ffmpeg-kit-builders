@@ -814,23 +814,6 @@ build_libcdio() {
   echo "INFO: Not available on tvOS build" >>"$LOG_FILE"
   echo "INFO: No libcdio library to compile." >>"$LOG_FILE"
 }
-# build_libcelt           # config_options+= --enable-libcelt             # enable CELT decoding via libcelt [no]
-build_libcelt() {
-  # run_valid_function "build_libopus" 1
-  local lib="libcelt"
-  echo -e "The celt codec design and implementation have been merged into
-the IETF Codec Working Group's \"Opus\" codec. As such, this
-repository is no longer under active development.
-
-Please see https://git.xiph.org/?p=opus
-and https://git.xiph.org/?p=users/jm/opus-tools.git for more
-current work. Visit http://opus-codec.org/ for more
-information.
-
-We apologize for any inconvenience this has caused.
-" >>"$LOG_FILE"
-    # https://github.com/xiph/opus
-}
 # build_libcodec2         # config_options+= --enable-libcodec2           # enable codec2 en/decoding using libcodec2 [no]
 build_libcodec2() {
   local lib="libcodec2"
@@ -4190,27 +4173,12 @@ build_cuda_nvcc() {
   echo "INFO: Only available on Windows and Linux build" >>"$LOG_FILE"
   echo "INFO: No cuda-nvcc library to compile. Library built into OS." >>"$LOG_FILE"
 }
-# build_libnpp            # config_options+= --enable-libnpp              # enable Nvidia Performance Primitives-based code [no]
-build_libnpp() {
-  echo "WARNING: This is FFmpeg does not support modern npp based filters. Older api has been deprecated by Nvidia. Use scale_cuda instead. Disabling libnpp." >>"$LOG_FILE"
-    disable_library "libnpp"
-}
 #endregion
 #region---------- non-gpl linux/unix (Raspberry Pi) features ------------------
 # build_mmal              # config_options+= --disable-mmal               # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
 build_mmal() {
   echo "INFO: Only available on Linux build" >>"$LOG_FILE"
   echo "INFO: No mmal library to compile. Library built into OS." >>"$LOG_FILE"
-}
-# build_omx               # config_options+= --enable-omx                 # enable OpenMAX IL code [no]
-build_omx() {
-  echo "INFO: Only available on Linux build" >>"$LOG_FILE"
-  echo "INFO: No omx library to compile. Library built into OS." >>"$LOG_FILE"
-}
-# build_omx_rpi           # config_options+= --disable-omx-rpi            # enable OpenMAX IL code for Raspberry Pi [no]
-build_omx_rpi() {
-  echo "INFO: Only available on Linux build" >>"$LOG_FILE"
-  echo "INFO: No omx-rpi library to compile. Library built into OS." >>"$LOG_FILE"
 }
 #endregion
 #region-------------------- non-gpl windows features --------------------------
