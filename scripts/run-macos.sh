@@ -2890,7 +2890,10 @@ build_libonnxruntime() {
 
   if [ ! -f "$src_dir/$lib/$touch_name" ]; then
       download_and_unpack_file "$repo" "$lib"
-      
+      unversion_library -t="$src_dir/$lib/lib"
+      find "$src_dir/$lib/lib" -type l -delete
+      find "$src_dir/$lib/lib" -type f -name "*.dylib" \
+          -exec sh -c 'for f;do d=${f%/*};b=${f##*/};n=$(printf %s "$b"|gsed -E "s/(\.[0-9]+)+\.dylib$/.dylib/");[ "$b" != "$n" ]&&mv -n "$f" "$d/$n";done' _ {} +
       install_prebuilt_binary \
           -n="$base_lib" -v="$repo_ver" \
           -s="$src_dir/$lib" \
