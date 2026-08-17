@@ -514,7 +514,7 @@ build_amf() {
   # was https://github.com/GPUOpen-LibrariesAndSDKs/AMF
   local lib="amf_headers"
   local repo="https://github.com/GPUOpen-LibrariesAndSDKs/AMF"
-  local repo_ver="v1.5.0"
+  local repo_ver="v1.5.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
