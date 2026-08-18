@@ -486,7 +486,7 @@ while [ $# -gt 0 ]; do
     pick_gpu_type "rocm"
     shift
     ;;
-  --enable-hardware|--enable-hw|--enable-video_hw)
+  --enable-hardware|--enable-hw)
     export enable_hardware=y
     shift
     ;;
@@ -551,7 +551,7 @@ while [ $# -gt 0 ]; do
     pick_gpu_type "rocm"
     shift
     ;;
-  --video-hw-bundle)
+  --video-hw-bundle|--enable-video_hw)
     export video_hw_bundle=y
     shift
     ;;
