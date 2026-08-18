@@ -2890,7 +2890,6 @@ build_libonnxruntime() {
 
   if [ ! -f "$src_dir/$lib/$touch_name" ]; then
       download_and_unpack_file "$repo" "$lib"
-      ls -laR "$src_dir"
       unversion_library -t="$src_dir/$lib/lib"
       find "$src_dir/$lib/lib" -type l -delete
       find "$src_dir/$lib/lib" -type f -name "*.dylib" \
