@@ -2886,7 +2886,7 @@ build_libonnxruntime() {
     uninstall_manifest "$manifest" >>"$LOG_FILE" 2>&1
   fi
 
-  change_dir "$src_dir/$lib" 1
+  change_dir "$src_dir"
 
   if [ ! -f "$src_dir/$lib/$touch_name" ]; then
       download_and_unpack_file "$repo" "$lib"
