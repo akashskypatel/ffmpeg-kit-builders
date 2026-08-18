@@ -443,10 +443,12 @@ while [ $# -gt 0 ]; do
     ;;
   --enable-audio)
     export enable_audio=y
+    export audio_bundle=y
     shift
     ;;
   --enable-video)
     export enable_video=y
+    export video_bundle=y
     shift
     ;;
   --enable-streaming)
