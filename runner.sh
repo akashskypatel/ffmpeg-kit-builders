@@ -457,11 +457,17 @@ while [ $# -gt 0 ]; do
     ;;
   --enable-audio-ai)
     export enable_audio_ai=y
+    export enable_audio=y
+    export audio_bundle=y
     shift
     ;;
   --enable-video-ai-cpu)
     export enable_video_ai=y
     export enable_audio_ai=y
+    export enable_video=y
+    export enable_audio=y
+    export video_bundle=y
+    export audio_bundle=y
     export gpu_support=n
     shift
     ;;
@@ -469,6 +475,10 @@ while [ $# -gt 0 ]; do
   --enable-video-ai-gpu)
     export enable_video_ai=y
     export enable_audio_ai=y
+    export enable_video=y
+    export enable_audio=y
+    export video_bundle=y
+    export audio_bundle=y
     export gpu_support=n
     shift
     ;;
@@ -476,6 +486,10 @@ while [ $# -gt 0 ]; do
   --enable-video-ai-gpu-cuda)
     export enable_video_ai=y
     export enable_audio_ai=y
+    export enable_video=y
+    export enable_audio=y
+    export video_bundle=y
+    export audio_bundle=y
     export gpu_support=y
     pick_gpu_type "cuda"
     shift
@@ -484,12 +498,20 @@ while [ $# -gt 0 ]; do
   --enable-video-ai-gpu-rocm)
     export enable_video_ai=y
     export enable_audio_ai=y
+    export enable_video=y
+    export enable_audio=y
+    export video_bundle=y
+    export audio_bundle=y
     export gpu_support=y
     pick_gpu_type "rocm"
     shift
     ;;
   --enable-hardware|--enable-hw)
     export enable_hardware=y
+    export enable_video=y
+    export video_bundle=y
+    export enable_audio=y
+    export audio_bundle=y
     shift
     ;;
   --enable-ssh)
