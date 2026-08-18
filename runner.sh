@@ -886,38 +886,38 @@ if truthy "$build_nonfree"; then
   are responsible for making sure you have the appropriate licensing 
   to distribute the binaries!" | tee -a "$LOG_FILE"
 
-  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_NON_FREE"
-  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_NON_FREE"
-  { truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING_NON_FREE"
-  { truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE_NON_FREE"
-  { truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI_NON_FREE"
-  { truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI_NON_FREE"
-  { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH_NON_FREE"
+  if truthy "$enable_audio" || truthy "$enable_full"; then apply_preset "$CONFIG_AUDIO_NON_FREE"; fi
+  if truthy "$enable_video" || truthy "$enable_full"; then apply_preset "$CONFIG_VIDEO_NON_FREE"; fi
+  if truthy "$enable_streaming" || truthy "$enable_full"; then apply_preset "$CONFIG_STREAMING_NON_FREE"; fi
+  if truthy "$enable_hardware" || truthy "$enable_full"; then apply_preset "$CONFIG_HARDWARE_NON_FREE"; fi
+  if truthy "$enable_audio_ai" || truthy "$enable_full"; then apply_preset "$CONFIG_AUDIO_AI_NON_FREE"; fi
+  if truthy "$enable_video_ai" || truthy "$enable_full"; then apply_preset "$CONFIG_VIDEO_AI_NON_FREE"; fi
+  if truthy "$enable_ssh" || truthy "$enable_full"; then apply_preset "$CONFIG_SSH_NON_FREE"; fi
 
   if ! iswindows; then
-    { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB_NON_FREE"
+    if truthy "$enable_smb" || truthy "$enable_full"; then apply_preset "$CONFIG_SMB_NON_FREE"; fi
   fi
 fi
 
-{ truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO"
-{ truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO"
-{ truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING"
-{ truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE"
-{ truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI"
-{ truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI"
-{ truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
+if truthy "$enable_audio" || truthy "$enable_full"; then apply_preset "$CONFIG_AUDIO"; fi
+if truthy "$enable_video" || truthy "$enable_full"; then apply_preset "$CONFIG_VIDEO"; fi
+if truthy "$enable_streaming" || truthy "$enable_full"; then apply_preset "$CONFIG_STREAMING"; fi
+if truthy "$enable_hardware" || truthy "$enable_full"; then apply_preset "$CONFIG_HARDWARE"; fi
+if truthy "$enable_audio_ai" || truthy "$enable_full"; then apply_preset "$CONFIG_AUDIO_AI"; fi
+if truthy "$enable_video_ai" || truthy "$enable_full"; then apply_preset "$CONFIG_VIDEO_AI"; fi
+if truthy "$enable_ssh" || truthy "$enable_full"; then apply_preset "$CONFIG_SSH"; fi
 
 if ! iswindows; then
-  { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
+  if truthy "$enable_smb" || truthy "$enable_full"; then apply_preset "$CONFIG_SMB"; fi
 fi
 
 if ! truthy "$build_small"; then
-  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_EXTRA"
-  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_EXTRA"
+  if truthy "$enable_audio" || truthy "$enable_full"; then apply_preset "$CONFIG_AUDIO_EXTRA"; fi
+  if truthy "$enable_video" || truthy "$enable_full"; then apply_preset "$CONFIG_VIDEO_EXTRA"; fi
 fi
 
-{ truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
-{ truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
+if truthy "$enable_ssh" || truthy "$enable_full"; then apply_preset "$CONFIG_SSH"; fi
+if truthy "$enable_smb" || truthy "$enable_full"; then apply_preset "$CONFIG_SMB"; fi
 
 resolve_collisions
 
