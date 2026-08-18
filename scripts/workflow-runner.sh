@@ -616,7 +616,9 @@ for combo in "${workflow_target_combos[@]}"; do
     if [[ "$workflow_mode" == "build_only" ]]; then
       WORKFLOW_BUILD_STEPS="${build_only_steps[*]}"
     else
-      WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh "${runner_args[@]}" --hide-banner --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+      steps_cmd="./runner.sh ${runner_args[*]} --hide-banner --print-all-steps"
+      echo "Running: $steps_cmd"
+      WORKFLOW_BUILD_STEPS="$(run_with_runner_shell "$steps_cmd" | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
     fi
     echo "WORKFLOW_BUILD_STEPS for $combo: $WORKFLOW_BUILD_STEPS"
     read -ra workflow_build_steps <<< "$WORKFLOW_BUILD_STEPS"
