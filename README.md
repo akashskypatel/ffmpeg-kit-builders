@@ -30,7 +30,7 @@ Cross-platform build system for FFmpeg and FFmpegKit supporting Windows, Linux, 
 
 ## Features
 
-- **Latest FFmpeg API** - [Uses the latest FFmpeg API v8.1.2](https://www.ffmpeg.org/download.html#release_8.1).
+- **Latest FFmpeg API** - [Uses the latest FFmpeg API v9.0.1](https://www.ffmpeg.org/download.html#release_9.0.1).
 - **Both C++ and Pure C API** - Provides both C++ and pure C api to make it easy to use in any language.
 - **FFmpeg, FFprobe, and FFplay** - Full FFmpeg, FFprobe, and FFplay support.
 - **Asynchronous Execution** - Run long-running tasks without blocking the main thread.

@@ -1780,7 +1780,7 @@ build_libmysofa() {
 build_liboapv() {
   local lib="liboapv"
   local repo="https://github.com/AcademySoftwareFoundation/openapv"
-  local repo_ver="v0.2.0.4"
+  local repo_ver="v0.2.1.3-fix"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
