@@ -33,7 +33,7 @@ arch="$2"
 workflow_name="$3"
 mode="${4:-}"
 workspace="${GITHUB_WORKSPACE:-$repo_root}"
-token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
+token="${GH_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}}}"
 build_force="${WORKFLOW_FORCE_SELF:-false}"
 requested_step="${WORKFLOW_REQUESTED_STEP:-}"
 seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${GITHUB_WORKSPACE:-${repo_root}}/workflow-seen-steps.log}"
@@ -97,13 +97,32 @@ mark_workflow_step_seen() {
 	fi
 }
 
+check_github_auth() {
+	if [[ -z "$token" ]]; then
+		echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
+		exit 1
+	fi
+    if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+        token="${GITHUB_TOKEN:-${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}}"
+        if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+            token="${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}"
+            if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+                token="$(get_github_token_classic)"
+                if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+                    echo "Failed to authorize GitHub" >&2
+                    exit 1
+                fi
+            fi
+        fi
+    fi
+}
+
 # repo = owner/repo_name
 # authorize_github token repo_name owner
 repo_name="${repo#*/}"
 repo_owner="${repo%/*}"
-if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-	exit 1
-fi
+
+check_github_auth
 
 case "$platform" in
 	iphonesimulator)
