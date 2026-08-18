@@ -822,45 +822,6 @@ if ! truthy "$enable_base"; then
     enable_streaming=y
   fi
 
-  if truthy "$build_nonfree"; then
-    echo "WARNING: Non-free licensing selected. Ffmpeg and ffmpeg-kit 
-    Binaries will be non-redistributable without proper licensing. You 
-    are responsible for making sure you have the appropriate licensing 
-    to distribute the binaries!" | tee -a "$LOG_FILE"
-
-    { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_NON_FREE"
-    { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_NON_FREE"
-    { truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING_NON_FREE"
-    { truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE_NON_FREE"
-    { truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI_NON_FREE"
-    { truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI_NON_FREE"
-    { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH_NON_FREE"
-
-    if ! iswindows; then
-      { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB_NON_FREE"
-    fi
-  fi
-
-  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO"
-  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO"
-  { truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING"
-  { truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE"
-  { truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI"
-  { truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI"
-  { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
-
-  if ! iswindows; then
-    { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
-  fi
-
-  if ! truthy "$build_small"; then
-    { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_EXTRA"
-    { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_EXTRA"
-  fi
-
-  { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
-  { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
-
   if truthy "$enable_mq" || truthy "$enable_full"; then
     pick_mq_lib
   fi
@@ -918,6 +879,45 @@ if ! truthy "$enable_base"; then
 else
   echo -e "\n  [CONFIG] No bundles selected. No external libraries enabled except platform built-in libraries." >>"$LOG_FILE"
 fi
+
+if truthy "$build_nonfree"; then
+  echo "WARNING: Non-free licensing selected. Ffmpeg and ffmpeg-kit 
+  Binaries will be non-redistributable without proper licensing. You 
+  are responsible for making sure you have the appropriate licensing 
+  to distribute the binaries!" | tee -a "$LOG_FILE"
+
+  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_NON_FREE"
+  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_NON_FREE"
+  { truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING_NON_FREE"
+  { truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE_NON_FREE"
+  { truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI_NON_FREE"
+  { truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI_NON_FREE"
+  { truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH_NON_FREE"
+
+  if ! iswindows; then
+    { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB_NON_FREE"
+  fi
+fi
+
+{ truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO"
+{ truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO"
+{ truthy "$enable_streaming" || truthy "$enable_full"; } && apply_preset "$CONFIG_STREAMING"
+{ truthy "$enable_hardware" || truthy "$enable_full"; } && apply_preset "$CONFIG_HARDWARE"
+{ truthy "$enable_audio_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_AI"
+{ truthy "$enable_video_ai" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_AI"
+{ truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
+
+if ! iswindows; then
+  { truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
+fi
+
+if ! truthy "$build_small"; then
+  { truthy "$enable_audio" || truthy "$enable_full"; } && apply_preset "$CONFIG_AUDIO_EXTRA"
+  { truthy "$enable_video" || truthy "$enable_full"; } && apply_preset "$CONFIG_VIDEO_EXTRA"
+fi
+
+{ truthy "$enable_ssh" || truthy "$enable_full"; } && apply_preset "$CONFIG_SSH"
+{ truthy "$enable_smb" || truthy "$enable_full"; } && apply_preset "$CONFIG_SMB"
 
 resolve_collisions
 
