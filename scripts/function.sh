@@ -4806,9 +4806,17 @@ configure_ffmpeg() {
       init_options+=" --ld=$CXX"
     fi
   elif isios || istvos; then
+    local host_macos_cc
+    local host_macos_sdk
+    host_macos_cc="$(xcrun --sdk macosx --find clang)"
+    host_macos_sdk="$(xcrun --sdk macosx --show-sdk-path)"
+
     init_options+=" --target-os=darwin"
     init_options+=" --disable-programs"
-    init_options+=" --host-cc=$(xcrun --sdk macosx --find clang)"
+    init_options+=" --host-cc=$host_macos_cc"
+    init_options+=" --host-ld=$host_macos_cc"
+    init_options+=" --host-cflags='-isysroot $host_macos_sdk'"
+    init_options+=" --host-ldflags='-isysroot $host_macos_sdk'"
     init_options+=" --objcc=$(xcrun --sdk "$toolchain_sys" --find clang)"
     init_options+=" --cc=$(xcrun --sdk "$toolchain_sys" --find clang)"
     init_options+=" --cxx=$(xcrun --sdk "$toolchain_sys" --find clang++)"
