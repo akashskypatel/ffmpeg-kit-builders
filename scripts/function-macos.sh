@@ -69,6 +69,7 @@ configure_ffmpeg_kit() {
   truthy "$enable_libtensorflow" && cmake_params+=" -DENABLE_LIBTENSORFLOW=ON"
   truthy "$enable_libopenvino" && cmake_params+=" -DENABLE_OPENVINO=ON"
   truthy "$enable_libtorch" && cmake_params+=" -DENABLE_LIBTORCH=ON"
+  truthy "$enable_libonnxruntime" && cmake_params+=" -DENABLE_LIBONNXRUNTIME=ON"
 
 	if truthy "$do_debug_build"; then
 		cmake_params+=" -DCMAKE_BUILD_TYPE=Debug"

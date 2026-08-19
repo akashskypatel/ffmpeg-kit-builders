@@ -156,6 +156,7 @@ configure_ffmpeg_kit() {
 	truthy "$enable_libplacebo" && cmake_params+=" -DENABLE_LIBPLACEBO=ON"
 	truthy "$enable_libtensorflow" && cmake_params+=" -DENABLE_LIBTENSORFLOW=ON"
 	truthy "$enable_libopenvino" && cmake_params+=" -DENABLE_OPENVINO=ON"
+	truthy "$enable_libonnxruntime" && cmake_params+=" -DENABLE_LIBONNXRUNTIME=ON"
 
 	if truthy "$do_debug_build"; then
 		export STRIP=true

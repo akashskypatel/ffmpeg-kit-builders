@@ -20,6 +20,8 @@ RANLIB_CMD="$3"
 FFMPEG_BUILD_DIR="$4"
 FFMPEG_KIT_LIBRARIES="$5"
 
+echo "FFMPEG_KIT_LIBRARIES: $FFMPEG_KIT_LIBRARIES"
+
 verbose=false
 
 truthy() {
@@ -147,6 +149,19 @@ process_library_path() {
 				break
 			fi
 		done
+
+		if [ -z "$found_dll" ]; then
+			bin_dir="$(dirname "$dirname")/lib"
+			for d in "$bin_dir" "$dirname"; do
+				if [ -f "$d/${base_name}.dll" ]; then
+					found_dll="$d/${base_name}.dll"
+					break
+				elif [ -f "$d/lib${base_name}.dll" ]; then
+					found_dll="$d/lib${base_name}.dll"
+					break
+				fi
+			done
+		fi
 
 		if [ -n "$found_dll" ]; then
 			if is_excluded "$name"; then
