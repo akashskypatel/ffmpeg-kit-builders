@@ -175,6 +175,24 @@ static SDL_Window *ffplay_kit_SDL_CreateWindow(
 #endif
 // At the top of ffplay_lib.c, before ffplay.c is included, declare the real symbol:
 extern DECLSPEC void SDLCALL SDL_RenderPresent_real(SDL_Renderer *renderer);
+
+static SDL_Renderer *ffplay_kit_SDL_CreateRenderer(
+    SDL_Window *window,
+    int index,
+    Uint32 flags)
+{
+    const char *video_driver = SDL_GetCurrentVideoDriver();
+
+    if (video_driver && SDL_strcmp(video_driver, "dummy") == 0) {
+        index = -1;
+        flags = SDL_RENDERER_SOFTWARE;
+    }
+
+    return SDL_CreateRenderer(window, index, flags);
+}
+
+#define SDL_CreateRenderer ffplay_kit_SDL_CreateRenderer
+
 // Include the patched ffplay.c to access internal structures and static functions.
 #include "ffplay.c"
 
@@ -379,6 +397,7 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
 #if defined(_WIN32)
     // Windows: 'dummy' driver provides an in-memory surface without a visible window.
     SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
+    SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
     if (!SDL_getenv("SDL_AUDIODRIVER"))
         SDL_setenv("SDL_AUDIODRIVER", "wasapi", 0);
 #elif defined(__APPLE__)
@@ -387,13 +406,7 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
     SDL_SetMainReady();
     // via the FFplayFrameCallback registered with ffplay_set_frame_callback().
     SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
-#elif defined(__LINUX__)
-    SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
-    SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "dummy", SDL_HINT_OVERRIDE);
-#else
     SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
-#endif
-#if defined(__APPLE__)
     // iOS/macOS: CoreAudio provides real audio output via the system audio stack.
     if (!SDL_getenv("SDL_AUDIODRIVER"))
         SDL_setenv("SDL_AUDIODRIVER", "coreaudio", 0);
@@ -405,11 +418,10 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
         SDL_getenv("SDL_AUDIODRIVER") ? SDL_getenv("SDL_AUDIODRIVER") : "(null)",
         args_string ? args_string : "(null)");
 #else
-#if defined(__LINUX__)
-    // Linux: use dummy audio for headless playback unless the caller overrides.
+    SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
+    SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
     if (!SDL_getenv("SDL_AUDIODRIVER"))
         SDL_setenv("SDL_AUDIODRIVER", "dummy", 0);
-#endif
 #endif
 #endif /* !__ANDROID__ */
         
