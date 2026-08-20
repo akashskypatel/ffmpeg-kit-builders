@@ -1,5 +1,11 @@
 # FFmpegKit Changelog
 
+## Version 0.11.0
+
+- Updated FFmpeg to v9.0.1
+  - Removes support for libglslang, libshaderc, omx-rpi, omx
+  - Adds support for libonnxruntime
+
 ## Version 0.10.5
 
 - Fix Apple Non-public API usage issue with iOS publishing static analysis.

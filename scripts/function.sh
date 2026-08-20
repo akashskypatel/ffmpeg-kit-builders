@@ -4022,6 +4022,7 @@ download_and_unpack_file() {
     local download_url="$url"
     local filename
     filename=$(basename "$download_url")
+    local archive_path="$(pwd)/$filename"
     if [[ -n "$dest_folder" ]]; then
         if [ ! -d "$dest_folder" ]; then
             create_dir "$dest_folder" || exit_message 1 "download_and_unpack_file: could not create dir $dest_folder"
@@ -4039,19 +4040,20 @@ download_and_unpack_file() {
         if [[ "$filename" == *.zst ]] && ! command -v zstd &> /dev/null; then
              exit_message 1 "download_and_unpack_file: zstd is not installed. Run: sudo $INSTALL_COMMAND install zstd"
         fi
-        if [[ -f "$filename" ]]; then
-            rm -f "$filename"
+        if [[ -f "$archive_path" ]]; then
+            rm -f "$archive_path"
         fi
-        if ! curl -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1; then
+        if ! curl -4 "$download_url" --retry 2 -o "$archive_path" -L --fail > >(redirect_output) 2>&1; then
             if [[ -n "$alt_url" ]]; then
                 echo "WARNING: download_and_unpack_file: unable to download $url, trying alternate $alt_url" >>"$LOG_FILE"
-                remove_path -f "$filename"
+                remove_path -f "$archive_path"
                 download_url="$alt_url"
                 filename=$(basename "$download_url")
-                if [[ -f "$filename" ]]; then
-                    rm -f "$filename"
+                archive_path="$(pwd)/$filename"
+                if [[ -f "$archive_path" ]]; then
+                    rm -f "$archive_path"
                 fi
-                curl -4 "$download_url" --retry 2 -o "$filename" -L --fail > >(redirect_output) 2>&1 || {
+                curl -4 "$download_url" --retry 2 -o "$archive_path" -L --fail > >(redirect_output) 2>&1 || {
                     exit_message 1 "download_and_unpack_file: unable to download $url or alternate $alt_url"
                 }
             else
@@ -4060,13 +4062,13 @@ download_and_unpack_file() {
         fi
         echo "INFO: Unzipping $filename inside $dest_folder ..." >>"$LOG_FILE"
         if [[ "${filename,,}" =~ \.(zip|whl|nupkg)$ ]]; then
-            extract_zip "$filename" "$dest_folder" > >(redirect_output) 2>&1
+            extract_zip "$archive_path" "$dest_folder" > >(redirect_output) 2>&1
             #unzip -o "$filename" > >(redirect_output) 2>&1 || exit_message 1 "unzip failed"
         else
-            extract_tar "$filename" "$dest_folder" > >(redirect_output) 2>&1
+            extract_tar "$archive_path" "$dest_folder" > >(redirect_output) 2>&1
             #tar -xf "$filename" > >(redirect_output) 2>&1 || exit_message 1 "tar failed"
         fi
-        remove_path -f "$filename"
+        remove_path -f "$archive_path"
         chmod -R a+rwx "$dest_folder"
         create_touch_file 0 "$touch_name"
         add_src_dir "$(validate_path "$dest_folder")"
@@ -4078,18 +4080,45 @@ download_and_unpack_file() {
 extract_tar() {
     local archive="$1"
     local dest_dir=${2:-"$(basename "$archive" | gsed -e  s/\.tar\.*//)"}
-    
-    # Get unique top-level items using mapfile
-    local top_items
-    mapfile -t top_items < <(tar -tf "$archive" --strip-components=0 | cut -d/ -f1 | sort -u  || exit_message 1 "extract_tar: could not extract archive")
-    
-    if [[ ${#top_items[@]} -eq 1 ]]; then
-        # Single top-level directory
-        tar -xf "$archive" -C "$dest_dir" --strip-components=1 || exit_message 1 "extract_tar: could not extract archive"
-    else
-        # Multiple items at root
-        tar -xf "$archive" -C "$dest_dir" || exit_message 1 "extract_tar: could not extract archive"
+
+    mkdir -p "$dest_dir" || exit_message 1 "extract_tar: could not create destination $dest_dir"
+
+    # Extract first so leading ./ components are normalized by the filesystem.
+    # GNU tar and BSD tar otherwise count them differently when stripping paths.
+    local staging_dir
+    staging_dir=$(mktemp -d "$dest_dir/.extract_tar.XXXXXX") || \
+        exit_message 1 "extract_tar: could not create temporary directory"
+
+    if ! tar -xf "$archive" -C "$staging_dir"; then
+        remove_path -rf "$staging_dir"
+        exit_message 1 "extract_tar: could not extract archive"
     fi
+
+    local restore_dotglob=false restore_nullglob=false
+    shopt -q dotglob || restore_dotglob=true
+    shopt -q nullglob || restore_nullglob=true
+    shopt -s dotglob nullglob
+
+    local top_items=("$staging_dir"/*)
+
+    local content_dir="$staging_dir"
+    if [[ ${#top_items[@]} -eq 1 && -d "${top_items[0]}" && ! -L "${top_items[0]}" ]]; then
+        content_dir="${top_items[0]}"
+    fi
+
+    local content_items=("$content_dir"/*)
+    $restore_dotglob && shopt -u dotglob
+    $restore_nullglob && shopt -u nullglob
+    local item
+    for item in "${content_items[@]}"; do
+        if ! mv "$item" "$dest_dir/"; then
+            remove_path -rf "$staging_dir"
+            exit_message 1 "extract_tar: could not move extracted files into $dest_dir"
+        fi
+    done
+
+    [[ "$content_dir" != "$staging_dir" ]] && rmdir "$content_dir"
+    rmdir "$staging_dir" || exit_message 1 "extract_tar: could not remove temporary directory"
 }
 extract_zip() {
     local archive="$1"
@@ -4777,9 +4806,17 @@ configure_ffmpeg() {
       init_options+=" --ld=$CXX"
     fi
   elif isios || istvos; then
+    local host_macos_cc
+    local host_macos_sdk
+    host_macos_cc="$(xcrun --sdk macosx --find clang)"
+    host_macos_sdk="$(xcrun --sdk macosx --show-sdk-path)"
+
     init_options+=" --target-os=darwin"
     init_options+=" --disable-programs"
-    init_options+=" --host-cc=$(xcrun --sdk macosx --find clang)"
+    init_options+=" --host-cc=$host_macos_cc"
+    init_options+=" --host-ld=$host_macos_cc"
+    init_options+=" --host-cflags='-isysroot $host_macos_sdk'"
+    init_options+=" --host-ldflags='-isysroot $host_macos_sdk'"
     init_options+=" --objcc=$(xcrun --sdk "$toolchain_sys" --find clang)"
     init_options+=" --cc=$(xcrun --sdk "$toolchain_sys" --find clang)"
     init_options+=" --cxx=$(xcrun --sdk "$toolchain_sys" --find clang++)"
@@ -4917,6 +4954,10 @@ configure_ffmpeg() {
   if iswindows || islinux || ismacos; then
   truthy "$enable_libopenvino" && config_options+=" --enable-libopenvino"             # enable OpenVINO as a DNN module backend for DNN based filters like dnn_processing [no]
   truthy "$enable_libtensorflow" && config_options+=" --enable-libtensorflow"         # enable TensorFlow as a DNN module backend for DNN based filters like sr [no]
+  if ismacos && [[ "$host_arch" == "x86_64" ]]; then
+    disable_library libonnxruntime
+  fi
+  truthy "$enable_libonnxruntime" && config_options+=" --enable-libonnxruntime"       # enable ONNX Runtime as a DNN module backend for DNN based filters like sr [no]
   fi
   if islinux; then
   truthy "$enable_cuda_nvcc" && config_options+=" --enable-cuda-nvcc"
@@ -4925,7 +4966,6 @@ configure_ffmpeg() {
   elif iswindows; then
   truthy "$enable_cuda_llvm" && config_options+=" --enable-cuda-llvm"                 # enable CUDA compilation using clang [autodetect]
   fi
-  truthy "$enable_libnpp" && config_options+=" --enable-libnpp"                       # enable Nvidia Performance Primitives-based code [no]
   #------------------------------------------------------------------------------
   # ----------------------------- windows features ------------------------------ 
   #------------------------------------------------------------------------------
@@ -4973,8 +5013,6 @@ configure_ffmpeg() {
   truthy "$enable_libcaca" && config_options+=" --enable-libcaca"                     # enable textual display using libcaca [no]
   islinux && truthy "$enable_libcaca" && add_extra_libs "-lX11" \
   && config_options+=" --extra-ldflags=-lX11"
-  # libcelt depercated - use libopus instead
-  truthy "$enable_libcelt" && config_options+=" --enable-libopus"                     # enable CELT decoding via libcelt [no]
   truthy "$enable_libcodec2" && config_options+=" --enable-libcodec2"                 # enable codec2 en/decoding using libcodec2 [no]
   truthy "$enable_libdav1d" && config_options+=" --enable-libdav1d"                   # enable AV1 decoding via libdav1d [no]
   truthy "$enable_libdavs2" && config_options+=" --enable-libdavs2"                   # enable AVS2 decoding via libdavs2 [no]
@@ -5148,8 +5186,6 @@ configure_ffmpeg() {
     # --------------------------- linux/unix features -----------------------------    
     if [[ $host_platform == "rpi" ]]; then
     truthy "$enable_mmal" && config_options+=" --enable-mmal"                           # enable Broadcom Multi-Media Abstraction Layer (Raspberry Pi) via MMAL [no]
-    truthy "$enable_omx" && config_options+=" --enable-omx"                             # enable OpenMAX IL code [no]
-    truthy "$enable_omx_rpi" && config_options+=" --enable-omx-rpi"                     # enable OpenMAX IL code for Raspberry Pi [no]
     fi
 	fi
 

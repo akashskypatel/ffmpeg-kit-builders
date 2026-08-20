@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292
+# shellcheck disable=SC2317,SC2129,SC1091,SC2120,SC2035,SC2016,SC2310,SC2155,SC2154,SC2034,2250,2249,2312,2292,SC2086
 
 if (( BASH_VERSINFO[0] < 4 )); then
     for bash in /opt/homebrew/bin/bash /usr/local/bin/bash; do
@@ -616,7 +616,9 @@ for combo in "${workflow_target_combos[@]}"; do
     if [[ "$workflow_mode" == "build_only" ]]; then
       WORKFLOW_BUILD_STEPS="${build_only_steps[*]}"
     else
-      WORKFLOW_BUILD_STEPS="$(run_with_runner_shell ./runner.sh "${runner_args[@]}" --hide-banner --print-all-steps | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
+      steps_cmd="./runner.sh ${runner_args[*]} --hide-banner --print-all-steps"
+      echo "Running: $steps_cmd"
+      WORKFLOW_BUILD_STEPS="$(run_with_runner_shell $steps_cmd | awk -F= '/^WORKFLOW_BUILD_STEPS=/{print $2}')"
     fi
     echo "WORKFLOW_BUILD_STEPS for $combo: $WORKFLOW_BUILD_STEPS"
     read -ra workflow_build_steps <<< "$WORKFLOW_BUILD_STEPS"
