@@ -892,14 +892,6 @@ if ! truthy "$enable_base"; then
       fi
     fi
   fi
-
-  # disable deprecated libraries
-  echo -e "\n  [CONFIG] Disabling deprecated libraries..." >>"$LOG_FILE"
-  disable_library "libnpp"
-  if ! truthy "$disable_libcelt" && truthy "$enable_libcelt"; then
-  enable_library "libopus"
-  disable_library "libcelt"
-  fi
 else
   echo -e "\n  [CONFIG] No bundles selected. No external libraries enabled except platform built-in libraries." >>"$LOG_FILE"
 fi
