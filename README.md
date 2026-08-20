@@ -334,7 +334,9 @@ Shows which bundle first includes each library on iOS, macOS, Android, Linux, an
 
 ### AI
 
-> **`libopenvino`**, and **`libtensorflow`** only available on Desktop builds (`MacOS`, `Linux`, and `Windows`). **`libtorch`** only available on `Linux` and `MacOs` builds (`Windows` not supported due ABI mismatch).
+> - **`libopenvino`** and **`libtensorflow`** are only available on Desktop builds (`MacOS`, `Linux`, and `Windows`).
+> - **`libtorch`** is only available on `Linux` and `MacOs` builds (`Windows` not supported due ABI mismatch).
+> - **`libonnxruntime`** is not available on `x86_64` `MacOS`.
 
 | Bundle Key | Description                          |
 | ---------- | ------------------------------------ |
@@ -398,6 +400,7 @@ Shows which bundle first includes each library on iOS, macOS, Android, Linux, an
 | pocketsphinx, whisper                                                 | f       | f     | f       | f   | f     |
 | libopencv, libquirc, libtesseract<sup>[11](#compute-info)</sup>       | f       | f     | f       | f   | f     |
 | libopenvino, libtensorflow<sup>[11](#compute-info)</sup>              |         | f     | f       |     | f     |
+| libonnxruntime<sup>[11](#compute-info)</sup>                          |         | f     | f       |     | f     |
 | libtorch<sup>[11](#compute-info)</sup>                                |         | f     |         |     | f     |
 | **Nonfree additions** *(Full + --enable-nonfree)*                     |         |       |         |     |       |
 | libfdk-aac<sup>[9](#nonfree-info)</sup>                               | f       | f     | f       | f   | f     |
@@ -511,6 +514,7 @@ You can also get the full list of supported external libraries by running `--lis
 | libopenvino<sup>[8](#install-info)</sup>     | Runs DNN-based filters using Intel OpenVINO backend     |                                        |                                  |      |                    |                    |                    | [11](#compute-info) |
 | libtensorflow<sup>[8](#install-info)</sup>   | Runs DNN-based filters using TensorFlow backend         |                                        |                                  |      |                    |                    |                    | [11](#compute-info) |
 | libtorch<sup>[8](#install-info)</sup>        | Runs DNN-based filters using PyTorch backend            |                                        |                                  |      |                    |                    |                    | [11](#compute-info) |
+| libonnxruntime<sup>[8](#install-info)</sup>  | Runs DNN-based filters using ONNX Runtime backend       |                                        |                                  |      |                    |                    |                    | [11](#compute-info) |
 | libquirc                                     | Decodes QR codes from video streams                     |                                        |                                  |      |                    |                    |                    | x                   |
 | libtesseract                                 | Performs Optical Character Recognition (OCR)            |                                        |                                  |      |                    |                    |                    | x                   |
 | sdl2                                         | Outputs audio/video to window using SDL2                |                                        |                                  |      | x                  | x                  | x                  | x                   |
