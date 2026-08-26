@@ -69,6 +69,9 @@ configure_ffmpeg_kit() {
   truthy "$enable_libtensorflow" && cmake_params+=" -DENABLE_LIBTENSORFLOW=ON"
   truthy "$enable_libopenvino" && cmake_params+=" -DENABLE_OPENVINO=ON"
   truthy "$enable_libtorch" && cmake_params+=" -DENABLE_LIBTORCH=ON"
+  if [[ "$host_arch" != "x86_64" ]]; then
+    truthy "$enable_libonnxruntime" && cmake_params+=" -DENABLE_LIBONNXRUNTIME=ON"
+  fi
 
 	if truthy "$do_debug_build"; then
 		cmake_params+=" -DCMAKE_BUILD_TYPE=Debug"
@@ -92,7 +95,9 @@ configure_ffmpeg_kit() {
         ;;
     esac
 	else
-		cmake_params+=" -DCMAKE_BUILD_TYPE=Release"
+		# Preserve optimized DWARF data so build_xcframework.sh can create the
+		# release dSYM before stripping the packaged framework binary.
+		cmake_params+=" -DCMAKE_BUILD_TYPE=RelWithDebInfo"
 	fi
 
 	change_dir "${ffmpeg_kit_src_dir}/build" 1

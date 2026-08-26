@@ -19,6 +19,8 @@ FFMPEG_BUILD_DIR="$1"
 FFMPEG_KIT_LIBRARIES="$2"
 FFMPEG_KIT_SRC_DIR=$(pwd) # Typically the directory containing CMakeCache.txt
 
+echo "FFMPEG_KIT_LIBRARIES: $FFMPEG_KIT_LIBRARIES"
+
 truthy() {
     case "$1" in
         true|1|T|t|True|TRUE|y|Y|yes|Yes|YES|on|On|ON)
@@ -175,6 +177,18 @@ process_library_path() {
 					break
 				fi
 			done
+			if [ -z "$found_dll" ]; then
+				bin_dir="$(dirname "$dirname")/lib"
+				for d in "$bin_dir" "$dirname"; do
+					if [ -f "$d/${clean_name}.dll" ]; then
+						found_dll="$d/${clean_name}.dll"
+						break
+					elif [ -f "$d/lib${clean_name}.dll" ]; then
+						found_dll="$d/lib${clean_name}.dll"
+						break
+					fi
+				done
+			fi
 			if [ -n "$found_dll" ]; then
 				if is_excluded "$name"; then
 					echo_log "  [EXCLUDED] $filename"

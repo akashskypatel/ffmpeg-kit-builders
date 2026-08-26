@@ -481,6 +481,45 @@ EOF
     codesign --sign - --force "${framework_dir}" 2>/dev/null || true
   }
 
+  create_framework_dsym() {
+    local framework_dir="$1"
+    local framework_binary="${framework_dir}/ffmpegkit"
+    local dsym_path="${framework_dir}.dSYM"
+    local binary_uuids=""
+    local dsym_uuids=""
+
+    rm -rf "${dsym_path}"
+    echo "Generating dSYM: $(basename "${dsym_path}")"
+    xcrun dsymutil "${framework_binary}" -o "${dsym_path}"
+
+    if ! xcrun dwarfdump --debug-info "${dsym_path}" 2>/dev/null |
+      grep -q 'DW_TAG_compile_unit'; then
+      echo "ERROR: Generated dSYM contains no compile units: ${dsym_path}"
+      echo "Rebuild the Apple libraries with debug information before packaging."
+      return 1
+    fi
+
+    binary_uuids="$(xcrun dwarfdump --uuid "${framework_binary}" | awk '{print $2}' | sort)"
+    dsym_uuids="$(xcrun dwarfdump --uuid "${dsym_path}" | awk '{print $2}' | sort)"
+    if [[ -z "${binary_uuids}" || "${binary_uuids}" != "${dsym_uuids}" ]]; then
+      echo "ERROR: Framework and dSYM UUIDs do not match: ${framework_dir}"
+      echo "Framework UUIDs: ${binary_uuids:-<none>}"
+      echo "dSYM UUIDs: ${dsym_uuids:-<none>}"
+      return 1
+    fi
+
+    # Keep the distributed release binary small. The dSYM must be generated
+    # before this step because dsymutil needs the linker debug map and objects.
+    xcrun strip -S "${framework_binary}"
+    codesign --sign - --force "${framework_dir}" 2>/dev/null || true
+
+    binary_uuids="$(xcrun dwarfdump --uuid "${framework_binary}" | awk '{print $2}' | sort)"
+    if [[ "${binary_uuids}" != "${dsym_uuids}" ]]; then
+      echo "ERROR: Stripping changed the framework UUID unexpectedly: ${framework_dir}"
+      return 1
+    fi
+  }
+
   IFS=',' read -ra arch_array <<< "$archs_for_platform"
   for arch in "${arch_array[@]}"; do
     # Strip 'sim:' prefix and determine actual platform
@@ -539,7 +578,11 @@ EOF
     fi
 
     create_dynamic_framework "${temp_framework_dir}"
-    framework_inputs+=("-framework" "${temp_framework_dir}/ffmpegkit.framework")
+    create_framework_dsym "${temp_framework_dir}/ffmpegkit.framework"
+    framework_inputs+=(
+      "-framework" "${temp_framework_dir}/ffmpegkit.framework"
+      "-debug-symbols" "${temp_framework_dir}/ffmpegkit.framework.dSYM"
+    )
   done
 
   # Handle macOS: create universal binaries if both archs are present
@@ -639,7 +682,11 @@ EOF
       fi
 
       create_dynamic_framework "${temp_framework_dir}"
-      framework_inputs+=("-framework" "${temp_framework_dir}/ffmpegkit.framework")
+      create_framework_dsym "${temp_framework_dir}/ffmpegkit.framework"
+      framework_inputs+=(
+        "-framework" "${temp_framework_dir}/ffmpegkit.framework"
+        "-debug-symbols" "${temp_framework_dir}/ffmpegkit.framework.dSYM"
+      )
     fi
   fi
 

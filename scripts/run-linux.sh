@@ -514,7 +514,7 @@ build_amf() {
   # was https://github.com/GPUOpen-LibrariesAndSDKs/AMF
   local lib="amf_headers"
   local repo="https://github.com/GPUOpen-LibrariesAndSDKs/AMF"
-  local repo_ver="v1.5.0"
+  local repo_ver="v1.5.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
@@ -1124,23 +1124,6 @@ build_libcdio() {
   do_make_and_make_install
   change_dir "$src_dir"
   }
-# build_libcelt           # config_options+= --enable-libcelt             # enable CELT decoding via libcelt [no]
-build_libcelt() {
-  # run_valid_function "build_libopus" 1
-  local lib="libcelt"
-  echo -e "The celt codec design and implementation have been merged into
-the IETF Codec Working Group's \"Opus\" codec. As such, this
-repository is no longer under active development.
-
-Please see https://git.xiph.org/?p=opus
-and https://git.xiph.org/?p=users/jm/opus-tools.git for more
-current work. Visit http://opus-codec.org/ for more
-information.
-
-We apologize for any inconvenience this has caused.
-" >>"$LOG_FILE"
-    # https://github.com/xiph/opus
-}
 # build_libcodec2         # config_options+= --enable-libcodec2           # enable codec2 en/decoding using libcodec2 [no]
 build_libcodec2() {
   local lib="libcodec2"
@@ -2041,7 +2024,7 @@ build_libmysofa() {
 build_liboapv() {
   local lib="liboapv"
   local repo="https://github.com/AcademySoftwareFoundation/openapv"
-  local repo_ver="v0.2.0.4"
+  local repo_ver="v0.2.1.3-fix"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
@@ -3070,6 +3053,59 @@ build_libtorch() {
     ln -sf "$gomp_lib" "$dependency_install_prefix/lib/$gomp_name.so"
   fi
   gsed -i -E 's/-lunbox_ /-lunbox_lib /g' "$install_pkgconfig_dir/$base_lib.pc" # unbox_lib becomes unbox_ for some reason
+}
+build_libonnxruntime() {
+  local base_lib="libonnxruntime"
+    local lib="$base_lib-$host_name"
+    local repo_ver="1.29.0"
+    local repo="https://github.com/microsoft/onnxruntime/releases/download/v1.29.0/onnxruntime-linux-x64-1.29.0.tgz"
+    local subdir="cpu"
+    pick_gpu_support
+    if truthy "$gpu_support"; then
+      pick_gpu_type
+      subdir=$gpu_type
+      if [[ $subdir == "rocm" ]]; then
+        echo -e "WARNING: [disabled] $lib ROCm support is not availbale on Windows" >>"$LOG_FILE"
+        disable_library "libonnxruntime"
+        return
+      else
+        local repo="https://github.com/microsoft/onnxruntime/releases/download/v1.29.0/onnxruntime-linux-x64-gpu_cuda12-1.29.0.tgz"
+        repo_ver="1.29.0"
+        echo "WARNING: uninstalling cpu $base_lib if installed." >> "$LOG_FILE"
+        uninstall_manifest "$install_pkgconfig_dir/${lib}_cpu_manifest" > >(redirect_output) 2>&1
+      fi
+    fi
+
+    local manifest="$work_dir/pkgconfig/${lib}_${subdir}_manifest"
+    [[ ! -f "$manifest" ]] && touch "$manifest"
+    
+    change_dir "$src_dir"
+    local touch_name=$(get_small_touchfile_name "${host_name}_installed" "$repo")
+    
+    truthy "$build_force" && remove_path -rf "$src_dir/$lib/$subdir"
+    if [[ -f "$manifest" && ! -f "$src_dir/$lib/$subdir/$touch_name" ]]; then
+      [[ -d "$src_dir/$lib" ]] && reset_touch "$src_dir/$lib" "${host_name}_installed*.touch"
+      uninstall_manifest "$manifest" >>"$LOG_FILE" 2>&1
+    fi
+
+    change_dir "$src_dir/$lib" 1
+
+    if [ ! -f "$src_dir/$lib/$subdir/$touch_name" ]; then
+        download_and_unpack_file "$repo" "$subdir"
+        
+        install_prebuilt_binary \
+            -n="$base_lib" -v="$repo_ver" \
+            -s="$src_dir/$lib/$subdir" \
+            -I="include" \
+            -L="lib" \
+            -B="lib" \
+            -m="$manifest" \
+            -d="ONNX Runtime C Library ($subdir)" || exit_message 1 "could not install $base_lib"
+
+        change_dir "$src_dir/$lib/$subdir"
+        create_touch_file 0 "$touch_name"
+        echo "$src_dir/$lib/$subdir/$touch_name" >>"$manifest"
+    fi
 }
 # build_libtensorflow     # config_options+= --enable-libtensorflow       # enable TensorFlow as a DNN module backend for DNN based filters like sr [no]
 build_libtensorflow() {
@@ -4775,11 +4811,6 @@ build_cuda_nvcc() {
       fi
   change_dir "$src_dir"
 }
-# build_libnpp            # config_options+= --enable-libnpp              # enable Nvidia Performance Primitives-based code [no]
-build_libnpp() {
-  echo "WARNING: This is FFmpeg does not support modern npp based filters. Older api has been deprecated by Nvidia. Use scale_cuda instead. Disabling libnpp." >>"$LOG_FILE"
-    disable_library "libnpp"
-}
 build_libsvtjpegxs() {
   if [[ "$host_arch" != "x86_64" ]]; then
     echo -e "\nWARNING: libsvtjpegxs is only supported on x86_64, skipping..."
@@ -4896,51 +4927,6 @@ build_mmal() {
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 -DBUILD_MMAL=TRUE \
 -DBUILD_MMAL_APPS=FALSE" "$src_dir/$lib"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
-  export PATH=$orig_path
-  export build_force=$old_force
-}
-# build_omx               # config_options+= --enable-omx                 # enable OpenMAX IL code [no]
-build_omx() {
-  local repo="https://git.code.sf.net/p/omxil/omxil"
-  local lib="libomxil-bellagio"
-  local repo_ver="0.9.1"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  local orig_path=$PATH
-  export PATH="/usr/local/arm-gnu-toolchain/sys-bin:/usr/local/arm-gnu-toolchain/bin:$PATH"
-  export CFLAGS="$CFLAGS -Wno-error"
-  # disable omxregister utility. not needed for ffmpeg
-  gsed -i 's/bin_PROGRAMS = omxregister-bellagio/#bin_PROGRAMS = omxregister-bellagio/' src/Makefile.am
-  find . -name "configure.ac" -exec gsed -i 's/-Werror//g' {} +
-  find . -exec touch {} +
-  generic_configure "--disable-doc"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  reset_cflags
-  change_dir "$src_dir"
-  export PATH=$orig_path
-}
-# build_omx_rpi           # config_options+= --disable-omx-rpi            # enable OpenMAX IL code for Raspberry Pi [no]
-build_omx_rpi() {
-  echo "WARNING: This is a non-gpl library. Binaries including this library are non-redistributable!" >>"$LOG_FILE"
-  local old_force=$build_force
-  export build_force=y
-  local lib="mmal"
-  local repo="https://github.com/raspberrypi/userland"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib"
-  change_dir "$src_dir/$lib"
-  local orig_path=$PATH
-  export PATH="/usr/local/arm-gnu-toolchain/sys-bin:/usr/local/arm-gnu-toolchain/bin:$PATH"
-  local toolchain_file="$src_dir/$lib/makefiles/cmake/toolchains/aarch64-linux-gnu.cmake"
-  generic_cmake "-DCMAKE_TOOLCHAIN_FILE=$toolchain_file \
--DCMAKE_BUILD_TYPE=Release \
--DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
--DARM64=ON" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
