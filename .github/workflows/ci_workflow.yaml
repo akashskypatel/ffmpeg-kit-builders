@@ -1,0 +1,73 @@
+name: CI Workflow
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "FFmpegKit/**"
+      - ".github/workflows/ci_workflow.yaml"
+      - "**.yaml"
+      - "**.yml"
+      - "**.gradle"
+      - "**.h"
+      - "**.hpp"
+      - "**.c"
+      - "**.cpp"
+      - "**.cc"
+      - "!scripts/**"
+      - "!tools/**"
+      - "!gradle/**"
+      - "!docs/**"
+      - "!docker/**"
+      - "!assets/**"
+      - "!.devcontainer/**"
+      - "!**.md"
+      - "!**.txt"
+      - "!**.log"
+      - "!.gitignore"
+      - "!.gitattributes"
+  pull_request:
+    paths:
+      - "FFmpegKit/**"
+      - ".github/workflows/ci_workflow.yaml"
+      - "**.yaml"
+      - "**.yml"
+      - "**.gradle"
+      - "**.h"
+      - "**.hpp"
+      - "**.c"
+      - "**.cpp"
+      - "**.cc"
+      - "!scripts/**"
+      - "!tools/**"
+      - "!gradle/**"
+      - "!docs/**"
+      - "!docker/**"
+      - "!assets/**"
+      - "!.devcontainer/**"
+      - "!**.md"
+      - "!**.txt"
+      - "!**.log"
+      - "!.gitignore"
+      - "!.gitattributes"
+
+concurrency:
+  group: ci-workflow-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_on_linux:
+    uses: ./.github/workflows/build_on_linux.yaml
+    with:
+      bundles: debug
+      build_bundle: true
+      is_ci: true
+  build_on_macos:
+    uses: ./.github/workflows/build_on_macos.yaml
+    with:
+      bundles: debug
+      build_bundle: true
+      is_ci: true
