@@ -1,0 +1,12 @@
+diff --git a/Makefile b/Makefile
+index 3316d68..6d7603b 100755
+--- a/Makefile
++++ b/Makefile
+@@ -20,6 +20,6 @@ SRCCLI = xavs.c matroska.c muxers.c
+ 
+ # MMX/SSE optims
+-ifneq ($(AS),)
++ifneq ($(filter X86 X86_64,$(ARCH)),)
+ X86SRC = common/i386/cpu-a.asm \
+          common/i386/dct-sse2.asm \
+          common/i386/deblock.asm \

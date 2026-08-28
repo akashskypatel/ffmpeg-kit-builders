@@ -1,0 +1,14 @@
+diff --git a/src/fccompat.c b/src/fccompat.c
+index f0e4e3d..0000000 100644
+--- a/src/fccompat.c
++++ b/src/fccompat.c
+@@ -175,5 +175,7 @@ FcRandom (void)
+ {
+     int32_t result;
+ 
+-#if HAVE_RANDOM_R
++#if defined(__wasi__)
++    result = rand();
++#elif HAVE_RANDOM_R
+     static struct random_data fcrandbuf;
+     static char               statebuf[256];

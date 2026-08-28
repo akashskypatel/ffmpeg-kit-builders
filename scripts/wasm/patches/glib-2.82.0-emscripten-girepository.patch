@@ -1,0 +1,31 @@
+diff --git a/girepository/compiler/meson.build b/girepository/compiler/meson.build
+index f724f32c5..c9eac87ce 100755
+--- a/girepository/compiler/meson.build
++++ b/girepository/compiler/meson.build
+@@ -14,15 +14,17 @@ if cc.get_id() != 'msvc'
+   ])
+ endif
+ 
+-gicompilerepository = executable('gi-compile-repository', 'compiler.c',
+-  dependencies: [
+-    libgirepository_dep,
+-    libgirepository_internals_dep,
+-    libgio_dep,
+-  ],
+-  install: true,
+-  c_args: custom_c_args,
+-)
++if host_system != 'emscripten'
++  gicompilerepository = executable('gi-compile-repository', 'compiler.c',
++    dependencies: [
++      libgirepository_dep,
++      libgirepository_internals_dep,
++      libgio_dep,
++    ],
++    install: true,
++    c_args: custom_c_args,
++  )
++endif
+ 
+ # Only override the user-installed compiler if we need to generate the GIRs
+ # GLib, Gio, and GObject...

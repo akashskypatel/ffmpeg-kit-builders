@@ -1,0 +1,13 @@
+diff --git a/glib/meson.build b/glib/meson.build
+index 9f1515b82..6c77a831d 100755
+--- a/glib/meson.build
++++ b/glib/meson.build
+@@ -491,7 +491,7 @@ if host_system == 'windows'
+       include_directories : configinc,
+       dependencies : [libglib_dep])
+   endif
+-else
++elif host_system != 'emscripten'
+   gtester = executable('gtester', 'gtester.c',
+     install : true,
+     install_tag : 'bin-devel',

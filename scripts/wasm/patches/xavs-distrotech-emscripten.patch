@@ -1,0 +1,27 @@
+diff --git a/configure b/configure
+index 5da1fe4..111b17d 100755
+--- a/configure
++++ b/configure
+@@ -148,7 +148,10 @@ if [ "x$host" = x ]; then
+     host=`./config.guess`
+ fi
+ # normalize a triplet into a quadruplet
+-host=`./config.sub $host`
++case "$host" in
++  wasm32-*-emscripten) ;;
++  *) host=`./config.sub $host` ;;
++esac
+ 
+ # split $host
+ host_cpu="${host%%-*}"
+@@ -158,5 +162,10 @@ host_ver="${host_os#*-}"
+ 
+ case $host_os in
++  emscripten*)
++    SYS="EMSCRIPTEN"
++    CFLAGS="$CFLAGS -D_WASI_EMULATED_SIGNAL"
++    LDFLAGS="$LDFLAGS -lm"
++    ;;
+   beos*)
+     SYS="BEOS"
+     CFLAGS="$CFLAGS -DHAVE_MALLOC_H"

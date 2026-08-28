@@ -1,0 +1,13 @@
+diff --git a/test/dvd_region.c b/test/dvd_region.c
+index 40b15c8bd..14f05ec46 100755
+--- a/test/dvd_region.c
++++ b/test/dvd_region.c
+@@ -135,7 +135,7 @@ static int ioctl_SendRPC( int i_fd, int i_pdrc )
+                          p_buffer, sizeof(p_buffer), &ulDataLen );
+ 
+ #else
+-#   error "DVD ioctls are unavailable on this system"
++  i_ret = -1;
+ 
+ #endif
+     return i_ret;

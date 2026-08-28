@@ -764,6 +764,9 @@ if truthy "$build_nonfree"; then
     oh|openharmony|open-harmony|open_harmony|harmony)
     apply_preset "$CONFIG_OH_NON_FREE"
     ;;
+    wasm|wasm32)
+    apply_preset "$CONFIG_WASM_NON_FREE"
+    ;;
     *)
     ;;
   esac
@@ -795,6 +798,9 @@ else
     ;;
     oh|openharmony|open-harmony|open_harmony|harmony)
     apply_preset "$CONFIG_OH"
+    ;;
+    wasm|wasm32)
+    apply_preset "$CONFIG_WASM"
     ;;
     *)
     ;;

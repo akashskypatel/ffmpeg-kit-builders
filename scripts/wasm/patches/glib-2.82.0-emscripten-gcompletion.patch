@@ -1,0 +1,11 @@
+diff --git a/glib/deprecated/gcompletion.c b/glib/deprecated/gcompletion.c
+--- a/glib/deprecated/gcompletion.c
++++ b/glib/deprecated/gcompletion.c
+@@ -132,6 +132,6 @@ g_completion_new (GCompletionFunc func)
+   gcomp->prefix = NULL;
+   gcomp->func = func;
+-  gcomp->strncmp_func = strncmp;
++  gcomp->strncmp_func = (GCompletionStrncmpFunc) strncmp;
+ 
+   return gcomp;
+ }

@@ -400,6 +400,7 @@ setup_build_environment() {
     case "$host_platform" in
         "windows") setup_windows_environment ;;
         "linux") setup_linux_environment ;;
+        "wasm") setup_wasm_environment ;;
         "android") setup_android_environment ;;
         "macos") setup_macos_environment ;;
         "ios") setup_ios_environment ;;
@@ -442,7 +443,7 @@ setup_build_environment() {
 
 calculate_bits_target() {
     case "$host_arch" in
-        "armv7a"|"armeabi-v7a"|"arm"|"i686") export bits_target=32 ;;
+        "armv7a"|"armeabi-v7a"|"arm"|"i686"|"wasm32") export bits_target=32 ;;
         "x86_64"|"aarch64"|"arm64-v8a"|"arm64") export bits_target=64 ;;
         *) exit_message 1 "calculate_bits_target: Unknown host arch '$host_arch'" ;;
     esac
@@ -865,6 +866,92 @@ setup_linux_environment() {
     create_dir "$dependency_install_prefix/{bin,lib/pkgconfig,include,usr/include}"
 }
 
+setup_wasm_environment() {
+    local emsdk_root emsdk_cmake_toolchain bootstrap_python
+
+    export EMSDK_ROOT="${EMSDK_ROOT:-${EMSDK:-/usr/local/emsdk}}"
+    export EMSDK="$EMSDK_ROOT"
+    export EMSDK_CMAKE_TOOLCHAIN_FILE="${EMSDK_CMAKE_TOOLCHAIN_FILE:-${EMSDK_ROOT}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake}"
+    emsdk_root="$EMSDK_ROOT"
+    emsdk_cmake_toolchain="$EMSDK_CMAKE_TOOLCHAIN_FILE"
+
+    if [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emcc" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/em++" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emar" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emranlib" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emnm" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emstrip" ]] || \
+        [[ ! -f "$EMSDK_CMAKE_TOOLCHAIN_FILE" ]] || \
+        ! rust_target_installed wasm32-unknown-emscripten; then
+        run_toolchain_setup "setup-wasm.sh"
+    fi
+
+    if [[ -x "${EMSDK_BOOTSTRAP_PYTHON:-}" ]]; then
+        export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
+    elif [[ -x /opt/python/cp312-cp312/bin/python3 ]]; then
+        export EMSDK_BOOTSTRAP_PYTHON=/opt/python/cp312-cp312/bin/python3
+        export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
+    elif [[ -x /usr/local/bin/python3.12 ]]; then
+        export EMSDK_BOOTSTRAP_PYTHON=/usr/local/bin/python3.12
+        export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
+    else
+        exit_message 1 "setup_wasm_environment: Emscripten requires Python 3.10 or newer."
+    fi
+    bootstrap_python="$EMSDK_BOOTSTRAP_PYTHON"
+
+    # shellcheck source=/dev/null
+    export EMSDK_QUIET=1
+    source "${EMSDK_ROOT}/emsdk_env.sh" >/dev/null
+    export EMSDK_ROOT="$emsdk_root"
+    export EMSDK="$emsdk_root"
+    export EMSDK_CMAKE_TOOLCHAIN_FILE="$emsdk_cmake_toolchain"
+    export EMSDK_BOOTSTRAP_PYTHON="$bootstrap_python"
+
+    case "$host_arch" in
+        "wasm32"|"wasm")
+            export host_arch="wasm32"
+            export cmake_host_arch="wasm32"
+            export meson_cpu_family="wasm32"
+            export platform_arch="wasm32"
+            ;;
+        *)
+            exit_message 1 "setup_wasm_environment: Unsupported host arch '$host_arch' for $host_platform"
+            ;;
+    esac
+
+    export PATCHDIR="$SCRIPTDIR/wasm/patches"
+    export toolchain_sys="emscripten"
+    export host_target="wasm32-unknown-emscripten"
+    export rust_target="wasm32-unknown-emscripten"
+    export toolchain_root="$EMSDK_ROOT"
+    export toolchain_root_dir="$EMSDK_ROOT"
+    export toolchain_bin_path="$(dirname "$bootstrap_python"):${EMSDK_ROOT}/upstream/emscripten"
+    export CMAKE_TOOLCHAIN_FILE="$EMSDK_CMAKE_TOOLCHAIN_FILE"
+    export dependency_install_prefix="$work_dir/libraries"
+    export install_pkgconfig_dir="${dependency_install_prefix}/lib/pkgconfig"
+    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$dependency_install_prefix/share/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+    export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
+    unset PKG_CONFIG_SYSROOT_DIR
+    export PATH="$toolchain_bin_path:$ffmpeg_install_prefix/bin:$original_path"
+
+    export cross_prefix=
+    export CROSS_COMPILE=
+    export PREFIX="$dependency_install_prefix"
+    export build_cross_compile=y
+
+    export wasm_cflags="$original_cflags -I${dependency_install_prefix}/include"
+    export wasm_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include"
+    export wasm_cppflags="$original_cppflags -DWASM -D__EMSCRIPTEN__ -I${dependency_install_prefix}/include"
+    export wasm_ldflags="$original_ldflags -L${dependency_install_prefix}/lib"
+
+    reset_cross_vars
+    reset_allflags
+
+    create_dir "$install_pkgconfig_dir"
+    create_dir "$work_dir/pkgconfig"
+    create_dir "$dependency_install_prefix/{bin,lib/pkgconfig,include,usr/include}"
+}
+
 setup_android_environment() {
     export PATCHDIR="$SCRIPTDIR/android/patches"
 
@@ -1276,6 +1363,13 @@ isandroid() {
   return 1
 }
 
+iswasm() {
+  if [[ "$host_platform" == "wasm" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 ismacos() {
   if [[ "$host_platform" == "macos" ]]; then
     return 0
@@ -1398,7 +1492,19 @@ native_cross_vars() {
 }
 
 reset_cross_vars() {
-  if islinux; then
+  if iswasm; then
+    export CROSS_COMPILE=
+    export CC="${EMSDK_ROOT}/upstream/emscripten/emcc"
+    export CXX="${EMSDK_ROOT}/upstream/emscripten/em++"
+    export AR="${EMSDK_ROOT}/upstream/emscripten/emar"
+    export AS="$CC"
+    export RANLIB="${EMSDK_ROOT}/upstream/emscripten/emranlib"
+    export LD="$CC"
+    export STRIP="${EMSDK_ROOT}/upstream/emscripten/emstrip"
+    export NM="${EMSDK_ROOT}/upstream/emscripten/emnm"
+    export WINDRES=
+    export RC=
+  elif islinux; then
     if [[ "$host_arch" == "aarch64" ]]; then
       export SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
       export CROSS_COMPILE="$host_target-"
@@ -1468,7 +1574,9 @@ reset_cross_vars() {
 }
 
 reset_cflags() {
-	if iswindows; then
+  if iswasm; then
+    export CFLAGS="$wasm_cflags"
+	elif iswindows; then
     export CFLAGS="$windows_cflags"
   elif islinux; then
     export CFLAGS="$linux_cflags"
@@ -1488,7 +1596,9 @@ reset_cflags() {
 }
 
 reset_cxxflags() {
-	if iswindows; then
+  if iswasm; then
+    export CXXFLAGS="$wasm_cxxflags"
+	elif iswindows; then
     export CXXFLAGS="$windows_cxxflags"
   elif islinux; then
     export CXXFLAGS="$linux_cxxflags"
@@ -1508,7 +1618,9 @@ reset_cxxflags() {
 }
 
 reset_cppflags() {
-	if iswindows; then
+  if iswasm; then
+    export CPPFLAGS="$wasm_cppflags"
+	elif iswindows; then
     export CPPFLAGS="$windows_cppflags"
   elif islinux; then
     export CPPFLAGS="$linux_cppflags"
@@ -1528,7 +1640,9 @@ reset_cppflags() {
 }
 
 reset_ldflags() {
-	if iswindows; then
+  if iswasm; then
+    export LDFLAGS="$wasm_ldflags"
+	elif iswindows; then
     export LDFLAGS="$windows_ldflags"
   elif islinux; then
     export LDFLAGS="$linux_ldflags"
@@ -3743,7 +3857,10 @@ generic_cmake() {
   fi
   [[ "$extra_args" != *"-DCMAKE_SYSTEM_PROCESSOR"* ]] && extra_args+=" -DCMAKE_SYSTEM_PROCESSOR=\"$cmake_host_arch\""
   [[ "$extra_args" != *"-DCMAKE_BUILD_TYPE"* ]] && extra_args+=" -DCMAKE_BUILD_TYPE=Release"
-  if ismacos; then
+  if iswasm; then
+  [[ "$extra_args" != *"-DCMAKE_TOOLCHAIN_FILE"* ]] && extra_args+=" -DCMAKE_TOOLCHAIN_FILE=$EMSDK_CMAKE_TOOLCHAIN_FILE"
+  [[ "$extra_args" != *"-DEMSCRIPTEN"* ]] && extra_args+=" -DEMSCRIPTEN=ON"
+  elif ismacos; then
   [[ "$extra_args" != *"-DCMAKE_SYSTEM_NAME"* ]] && extra_args+=" -DCMAKE_SYSTEM_NAME=Darwin"
   [[ "$extra_args" != *"-DCMAKE_OSX_ARCHITECTURES"* ]] && extra_args+=" -DCMAKE_OSX_ARCHITECTURES=$host_arch"
   [[ "$extra_args" != *"-DCMAKE_OSX_DEPLOYMENT_TARGET"* ]] && extra_args+=" -DCMAKE_OSX_DEPLOYMENT_TARGET=$MIN_MACOS_VERSION"
@@ -3981,11 +4098,15 @@ do_ninja() {
 # 3. extra_args
 apply_patch() {
   local patch="$1"
-  if git apply --reverse --check --ignore-space-change --ignore-whitespace --verbose "$patch" >/dev/null 2>&1; then
+  local git_prefix
+  git_prefix=$(git rev-parse --show-prefix 2>/dev/null) || git_prefix=""
+  local -a git_apply_args=()
+  [[ -n "$git_prefix" ]] && git_apply_args+=(--directory="$git_prefix")
+  if git apply "${git_apply_args[@]}" --reverse --check --ignore-space-change --ignore-whitespace --verbose "$patch" >/dev/null 2>&1; then
     echo "INFO: Patch already applied. Skipping." >>"$LOG_FILE"
   else
     echo "INFO: Applying $patch..." >>"$LOG_FILE"
-    git apply --whitespace=fix --verbose "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
+    git apply "${git_apply_args[@]}" --whitespace=fix --verbose "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
   fi
 }
 validate_path() {
@@ -5846,6 +5967,10 @@ pick_host_platform() {
     export toolchain_sys="android"
     apply_preset "$CONFIG_ANDROID"
   }
+  set_wasm() {
+    export host_platform="wasm"
+    export toolchain_sys="emscripten"
+  }
   set_macos() {
     export host_platform="macos"
     export toolchain_sys="macosx"
@@ -5876,11 +6001,11 @@ pick_host_platform() {
     return 0
   fi
   unknown_opts=()
-  if [[ ! "$1" =~ ^([1-9]|linux|windows|android|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; then
+  if [[ ! "$1" =~ ^([1-9]|10|linux|windows|android|wasm|wasi|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; then
      unknown_opts+=("$1")
    fi
   export host_platform=${1:-host_platform}
-	while [[ ! "${host_platform,,}" =~ ^([1-9]|linux|windows|android|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; do
+	while [[ ! "${host_platform,,}" =~ ^([1-9]|10|linux|windows|android|wasm|wasi|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; do
 		# shellcheck disable=SC2199
 		if [[ -n "${unknown_opts[@]}" ]]; then
 			echo -e -n 'Unknown option(s)'
@@ -5900,9 +6025,10 @@ Which host platform are you trying to build, update, or clean for?
   6. iOS-Simulator
   7. Apple TV
   8. Apple TV-Simulator
-  9. Exit
+  9. WebAssembly
+  10. Exit
 EOF
-		echo -e -n 'Input your choice [1-9]: '
+		echo -e -n 'Input your choice [1-10]: '
 		read -r host_platform
 	done
   if [[ -z "$host_platform" ]] && truthy "$accept_defaults"; then
@@ -5935,7 +6061,10 @@ EOF
   8|tvos-sim*|appletvsim*|appletv-sim*) set_tvos_simulator
   return 0
   ;;
-	9)
+  9|wasm|wasi) set_wasm
+  return 0
+  ;;
+	10)
   exit_message 0 "pick_host_platform: exiting"
   ;;
 	*)
@@ -5968,16 +6097,25 @@ pick_host_arch() {
     export cmake_host_arch="armv7-a"
     export bits_target=32
   }
+  function set_wasm32() {
+    export host_arch="wasm32"
+    export cmake_host_arch="wasm32"
+    export bits_target=32
+  }
 	if truthy "$accept_defaults" && [[ -z "$1" ]]; then
-    set_x86_64
+    if [[ "$host_platform" == "wasm" ]]; then
+      set_wasm32
+    else
+      set_x86_64
+    fi
     return 0
   fi
   unknown_opts=()
-  if [[ ! "$1" =~ ^([1-5]|x86_64|x64|i386|i686|x86|x32|aarch64|arm64|arm64-v8a|armv7a|arm|armeabi-v7a)$ ]]; then
+  if [[ ! "$1" =~ ^([1-6]|x86_64|x64|i386|i686|x86|x32|aarch64|arm64|arm64-v8a|armv7a|arm|armeabi-v7a|wasm32|wasm)$ ]]; then
      unknown_opts+=("$1")
    fi
   export host_arch=${1:-host_arch}
-	while [[ ! "${host_arch,,}" =~ ^([1-5]|"x86_64"|"x64"|"i386"|"i686"|"x86"|"x32"|"aarch64"|"arm64"|"arm64-v8a"|"armv7a"|"arm"|"armeabi-v7a")$ ]]; do
+	while [[ ! "${host_arch,,}" =~ ^([1-6]|"x86_64"|"x64"|"i386"|"i686"|"x86"|"x32"|"aarch64"|"arm64"|"arm64-v8a"|"armv7a"|"arm"|"armeabi-v7a"|"wasm32"|"wasm")$ ]]; do
 		# shellcheck disable=SC2199
 		if [[ -n "${unknown_opts[@]}" ]]; then
 			echo -e -n 'Unknown option(s)'
@@ -5993,14 +6131,20 @@ Which host platform are you trying to build, update, or clean for?
   2. i686 (32-bit AMD/Intel)
   3. aarch64 (64-bit ARM)
   4. armv7a (32-bit ARM)
-  5. Exit
+  5. wasm32 (WebAssembly)
+  6. Exit
 EOF
-		echo -e -n 'Input your choice [1-5]: '
+		echo -e -n 'Input your choice [1-6]: '
 		read -r host_arch
 	done
   if [[ -z "$host_arch" ]] && truthy "$accept_defaults"; then
-      echo "Defaulting to 'x86_64'."
-      set_x86_64
+      if [[ "$host_platform" == "wasm" ]]; then
+        echo "Defaulting to 'wasm32'."
+        set_wasm32
+      else
+        echo "Defaulting to 'x86_64'."
+        set_x86_64
+      fi
       return 0
   fi
 	case "${host_arch,,}" in
@@ -6017,7 +6161,10 @@ EOF
 	4|"armv7a"|"arm"|"armeabi-v7a") set_armv7a
   return 0
   ;;
-	5|"exit")
+	5|"wasm32"|"wasm") set_wasm32
+  return 0
+  ;;
+	6|"exit")
 		exit_message 0 "user picked exit"
 		;;
 	*)
@@ -6497,6 +6644,9 @@ case "${host_platform,,}" in
   ;;
   oh|openharmony|open-harmony|open_harmony|harmony)
   apply_preset "$CONFIG_OH_UNSUPPORTED"
+  ;;
+  wasm|wasm32)
+  apply_preset "$CONFIG_WASM_UNSUPPORTED"
   ;;
   *)
   ;;
