@@ -1,6 +1,22 @@
 name: build_on_linux
 
 on:
+  workflow_call:
+    inputs:
+      bundles:
+        required: false
+        type: string
+        default: debug
+
+      build_bundle:
+        required: false
+        type: boolean
+        default: true
+
+      is_ci:
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       target_platforms:
