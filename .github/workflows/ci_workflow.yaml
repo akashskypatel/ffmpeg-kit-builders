@@ -29,6 +29,7 @@ on:
       - "!**.log"
       - "!.gitignore"
       - "!.gitattributes"
+      - "!version"
   pull_request:
     paths:
       - "FFmpegKit/**"
@@ -53,6 +54,7 @@ on:
       - "!**.log"
       - "!.gitignore"
       - "!.gitattributes"
+      - "!version"
 
 permissions:
   contents: write
