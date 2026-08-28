@@ -3,8 +3,18 @@ name: build_on_macos
 on:
   workflow_call:
     inputs:
+      target_platforms:
+        required: true
+        type: string
+        default: ios,iphonesimulator,appletvos,appletvsimulator,macos
+
+      target_archs:
+        required: true
+        type: string
+        default: aarch64,x86_64
+
       bundles:
-        required: false
+        required: true
         type: string
         default: debug
 
@@ -14,7 +24,7 @@ on:
         default: true
 
       is_ci:
-        required: false
+        required: true
         type: boolean
         default: false
   workflow_dispatch:
@@ -46,7 +56,7 @@ on:
         type: string
       bundles:
         description: "Comma-separated target ffmpeg-kit bundles to build"
-        required: false
+        required: true
         default: "full,video_hw,video,audio,base,debug"
         type: string
       build_ffmpeg:
@@ -61,7 +71,7 @@ on:
         type: boolean
       is_ci:
         description: "Is CI"
-        required: false
+        required: true
         default: false
         type: boolean
 
