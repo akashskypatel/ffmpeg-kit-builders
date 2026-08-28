@@ -58,6 +58,19 @@ typedef struct FFplayCallbacks {
 FFMPEG_API FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb);
 
 /**
+ * Initializes ffplay from an existing argument vector.
+ * Arguments are copied verbatim and never serialized into command text.
+ *
+ * @param argc Argument count, including argv[0].
+ * @param argv Argument vector.
+ * @param cb the callback
+ * @return the ffplay context, or NULL on error
+ */
+FFMPEG_API FFplayContext* ffplay_init_argv(int argc,
+                                           const char *const *argv,
+                                           const FFplayCallbacks *cb);
+
+/**
  * Starts playback.
  *
  * @param ctx the ffplay context

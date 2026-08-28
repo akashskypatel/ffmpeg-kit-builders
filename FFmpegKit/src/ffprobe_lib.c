@@ -92,6 +92,7 @@ static int split_args(const char *args, char ***argv_out)
         p++;
       if (*p)
         p++;
+      in_quotes = 0;
     }
     else
     {
@@ -154,6 +155,52 @@ static int write_packet(void *opaque, const uint8_t *buf, int buf_size)
   AVBPrint *bp = (AVBPrint *)opaque;
   av_bprint_append_data(bp, (const char *)buf, buf_size);
   return buf_size;
+}
+
+FFprobeContext *ffprobe_init_argv(int argc, const char *const *argv)
+{
+  if (argc <= 0 || !argv)
+    return NULL;
+
+  FFprobeContext *ctx = av_mallocz(sizeof(FFprobeContext));
+  if (!ctx)
+    return NULL;
+
+  av_bprint_init(&ctx->output, 0, AV_BPRINT_SIZE_UNLIMITED);
+
+  ctx->argv = av_mallocz(sizeof(char *) * (argc + 1));
+  if (!ctx->argv)
+  {
+    ffprobe_free(ctx);
+    return NULL;
+  }
+
+  ctx->argc = argc;
+  for (int i = 0; i < argc; i++)
+  {
+    if (!argv[i])
+    {
+      ffprobe_free(ctx);
+      return NULL;
+    }
+    ctx->argv[i] = av_strdup(argv[i]);
+    if (!ctx->argv[i])
+    {
+      ffprobe_free(ctx);
+      return NULL;
+    }
+  }
+
+  avformat_network_init();
+
+  ctx->output_filename = av_strdup("buffer:");
+  if (!ctx->output_filename)
+  {
+    ffprobe_free(ctx);
+    return NULL;
+  }
+
+  return ctx;
 }
 
 FFprobeContext *ffprobe_init(const char *args_string)

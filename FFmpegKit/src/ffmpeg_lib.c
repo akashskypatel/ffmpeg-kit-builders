@@ -163,6 +163,42 @@ FFmpegContext *ffmpeg_init(const char *args_string) {
   return ctx;
 }
 
+FFmpegContext *ffmpeg_init_argv(int argc, const char *const *argv) {
+  if (argc <= 0 || !argv)
+    return NULL;
+
+  FFmpegContext *ctx = av_mallocz(sizeof(FFmpegContext));
+  if (!ctx)
+    return NULL;
+
+  ctx->argv = av_mallocz(sizeof(char *) * (argc + 1));
+  if (!ctx->argv) {
+    av_free(ctx);
+    return NULL;
+  }
+
+  ctx->argc = argc;
+  for (int i = 0; i < argc; i++) {
+    if (!argv[i]) {
+      for (int j = 0; j < i; j++)
+        av_free(ctx->argv[j]);
+      av_free(ctx->argv);
+      av_free(ctx);
+      return NULL;
+    }
+    ctx->argv[i] = av_strdup(argv[i]);
+    if (!ctx->argv[i]) {
+      for (int j = 0; j < i; j++)
+        av_free(ctx->argv[j]);
+      av_free(ctx->argv);
+      av_free(ctx);
+      return NULL;
+    }
+  }
+
+  return ctx;
+}
+
 void ffmpeg_set_session_id(FFmpegContext *ctx, long session_id) {
   if (!ctx)
     return;

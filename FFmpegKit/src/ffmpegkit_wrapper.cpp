@@ -2280,6 +2280,31 @@ media_information_create_session(const char *command) {
   }
 }
 
+MediaInformationSessionHandle DLL_ALIGN
+media_information_create_session_from_argv(int argc, const char **argv) {
+  try {
+    if (!argv || argc <= 0)
+      return nullptr;
+
+    std::list<std::string> arguments;
+    for (int i = 0; i < argc; i++) {
+      if (!argv[i])
+        return nullptr;
+      arguments.emplace_back(argv[i]);
+    }
+
+    auto session = MediaInformationSession::create(arguments);
+    return create_handle(session);
+  } catch (const std::exception &e) {
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
+                 "media_information_create_session_from_argv: "
+              << e.what() << std::endl;
+    PRINT_STACK_TRACE();
+    return nullptr;
+  }
+}
+
 MediaInformationSessionHandle DLL_ALIGN media_information_create_session_with_callbacks(
     const char *command, ::MediaInformationSessionCompleteCallback complete_cb,
     FFmpegKitLogCallback log_cb, void *user_data) {

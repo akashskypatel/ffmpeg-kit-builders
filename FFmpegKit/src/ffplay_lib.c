@@ -349,7 +349,7 @@ static int split_args(const char *args, char ***argv_out) {
     return argc;
 }
 
-FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
+static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc, const char *const *argv_args, const FFplayCallbacks *cb) {
     // Ensure only one session is active at a time
     if (active_ffplay_ctx) {
         ffplay_stop(NULL);
@@ -433,10 +433,38 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
     ffplay_tls_init_options();
     show_help_default_func = ffplay_show_help_default;
 
-    ctx->argc = split_args(args_string, &ctx->argv);
-    if (ctx->argc < 0) {
-        av_free(ctx);
-        return NULL;
+    if (argv_args) {
+        if (argv_argc <= 0) {
+            av_free(ctx);
+            return NULL;
+        }
+        ctx->argc = argv_argc;
+        ctx->argv = av_mallocz(sizeof(char *) * (ctx->argc + 1));
+        if (!ctx->argv) {
+            av_free(ctx);
+            return NULL;
+        }
+        for (int i = 0; i < ctx->argc; i++) {
+            if (!argv_args[i]) {
+                for (int j = 0; j < i; j++) av_free(ctx->argv[j]);
+                av_free(ctx->argv);
+                av_free(ctx);
+                return NULL;
+            }
+            ctx->argv[i] = av_strdup(argv_args[i]);
+            if (!ctx->argv[i]) {
+                for (int j = 0; j < i; j++) av_free(ctx->argv[j]);
+                av_free(ctx->argv);
+                av_free(ctx);
+                return NULL;
+            }
+        }
+    } else {
+        ctx->argc = split_args(args_string, &ctx->argv);
+        if (ctx->argc < 0) {
+            av_free(ctx);
+            return NULL;
+        }
     }
 
     VideoState *is = ffplay_init_internal(ctx->argc, ctx->argv);
@@ -473,6 +501,17 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
     FFPLAY_LOGI("ffplay_init SUCCESS: ctx=%p is=%p", ctx, is);
 #endif
     return ctx;
+}
+
+FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
+    if (!args_string) return NULL;
+    return ffplay_init_common(args_string, 0, NULL, cb);
+}
+
+FFplayContext* ffplay_init_argv(int argc, const char *const *argv,
+                                const FFplayCallbacks *cb) {
+    if (argc <= 0 || !argv) return NULL;
+    return ffplay_init_common(NULL, argc, argv, cb);
 }
 
 // Custom events for thread-safe control
