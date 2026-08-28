@@ -43,6 +43,11 @@ on:
         required: false
         default: false
         type: boolean
+      is_ci:
+        description: "Is CI"
+        required: false
+        default: false
+        type: boolean
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -56,6 +61,7 @@ env:
   WORKFLOW_CURRENT_STEP: ""
   WORKFLOW_SEEN_STEPS: ""
   WORKFLOW_BUNDLES: ${{ inputs.bundles }}
+  WORKFLOW_IS_CI: ${{ inputs.is_ci }}
   OSSRH_BASE64: ${{ secrets.OSSRH_BASE64 }}
   OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
   OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
