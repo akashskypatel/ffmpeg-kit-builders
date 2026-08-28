@@ -64,6 +64,13 @@ concurrency:
 
 jobs:
   build_on_linux:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+      credentials:
+        username: akashskypatel
+        password: ${{ secrets.GHCR_PAT || github.token }}
+      options: --user root
     uses: ./.github/workflows/build_on_linux.yaml
     with:
       bundles: debug
