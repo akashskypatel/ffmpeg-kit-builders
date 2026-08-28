@@ -54,6 +54,10 @@ on:
       - "!.gitignore"
       - "!.gitattributes"
 
+permissions:
+  contents: write
+  packages: read
+
 concurrency:
   group: ci-workflow-${{ github.ref }}
   cancel-in-progress: true
