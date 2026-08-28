@@ -512,7 +512,11 @@ workflow_step_build_bundle_batches() {
     [[ -z "$combo_csv" ]] && continue
 
     set_workflow_current_step "build_bundle"
-    build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build="kit,bundle" --remote)
+    if [[ "${WORKFLOW_IS_CI}" == "true" ]]; then
+      build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --bundle="debug" --build="kit" --license="lgpl" --small --local)
+    else
+      build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build="kit,bundle" --remote)
+    fi
     if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
       build_all_args+=(--bundle="${WORKFLOW_BUNDLES}")
     fi
