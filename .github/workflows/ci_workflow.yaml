@@ -70,6 +70,9 @@ jobs:
       bundles: debug
       build_bundle: true
       is_ci: true
+      target_platforms: linux,windows,android
+      target_archs: x86_64,aarch64,armv7a
+      
   build_on_macos:
     uses: ./.github/workflows/build_on_macos.yaml
     secrets: inherit
@@ -77,3 +80,6 @@ jobs:
       bundles: debug
       build_bundle: true
       is_ci: true
+      target_platforms: ios,iphonesimulator,appletvos,appletvsimulator,macos
+      target_archs: aarch64,x86_64
+      
