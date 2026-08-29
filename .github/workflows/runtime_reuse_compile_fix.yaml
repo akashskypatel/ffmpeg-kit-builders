@@ -1,0 +1,62 @@
+name: Runtime reuse compile fix
+
+on:
+  push:
+    branches:
+      - fix/issue-38-ffprobe-argv-timeout
+    paths:
+      - .github/workflows/runtime_reuse_compile_fix.yaml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/issue-38-ffprobe-argv-timeout
+          fetch-depth: 0
+      - name: Apply compile and regression fixes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          ffmpeg = Path('FFmpegKit/src/ffmpeg.c')
+          text = ffmpeg.read_text()
+          old = '#include "cmdutils.h"\n#include "ffmpeg_lib.h"\n'
+          new = '#include "cmdutils.h"\n#include "ffmpeg_lib.h"\n#include "opt_common.h"\n'
+          if text.count(old) != 1:
+              raise RuntimeError('ffmpeg.c include insertion point not unique')
+          ffmpeg.write_text(text.replace(old, new, 1))
+
+          test = Path('FFmpegKit/tests/runtime_reuse_test.cpp')
+          text = test.read_text()
+          old = '''    const std::string command =
+        "ffmpeg -v error -i definitely-missing-runtime-reuse.mp4 -f null -";
+'''
+          new = '''    const std::string command =
+        "ffmpeg -v error -i " + quoteCompatibilityArgument(normalPath) +
+        " -i definitely-missing-runtime-reuse.mp4 -f null -";
+'''
+          if text.count(old) != 1:
+              raise RuntimeError('runtime reuse partial-input test insertion point not unique')
+          test.write_text(text.replace(old, new, 1))
+          PY
+
+          rm .github/workflows/runtime_reuse_compile_fix.yaml
+          git diff --check
+          grep -q '#include "opt_common.h"' FFmpegKit/src/ffmpeg.c
+          grep -q 'quoteCompatibilityArgument(normalPath)' FFmpegKit/tests/runtime_reuse_test.cpp
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: complete embedded runtime reset cleanup"
+          git push origin HEAD:fix/issue-38-ffprobe-argv-timeout
