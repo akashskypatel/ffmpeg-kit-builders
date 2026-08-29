@@ -706,5 +706,5 @@ if(BUILD_TESTS)
 
     add_subdirectory(tests)
 
-    install(TARGETS ffmpegkit_tests ffmpegkit_fate_tests DESTINATION bin)
+    install(TARGETS ffmpegkit_tests DESTINATION bin)
 endif()
