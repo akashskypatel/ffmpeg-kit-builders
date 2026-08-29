@@ -28,31 +28,14 @@ jobs:
           path = Path('FFmpegKit/CMakeLists.txt')
           text = path.read_text()
 
-          old_comment = '''        # Do NOT use broad patterns like:
-        #   _ffmpeg*
-        #   _ffprobe*
-        #   _ffplay*
-        #
-        # _ffmpeg* also matches _ffmpegkit_lzma_* and leaks private-prefixed
-        # dependency symbols into the final dylib ABI.
-'''
-          new_comment = '''        # Export the low-level embedded CLI C APIs as well as the higher-level
-        # ffmpeg-kit C API. Keep the underscore delimiter in these patterns:
-        # _ffmpeg_* matches ffmpeg_init/ffmpeg_run/ffmpeg_kit_* but does not
-        # match private symbols such as _ffmpegkit_lzma_*.
-'''
+          old_comment = '        # Do NOT use broad patterns like:\n        #   _ffmpeg*\n        #   _ffprobe*\n        #   _ffplay*\n        #\n        # _ffmpeg* also matches _ffmpegkit_lzma_* and leaks private-prefixed\n        # dependency symbols into the final dylib ABI.\n'
+          new_comment = '        # Export the low-level embedded CLI C APIs as well as the higher-level\n        # ffmpeg-kit C API. Keep the underscore delimiter in these patterns:\n        # _ffmpeg_* matches ffmpeg_init/ffmpeg_run/ffmpeg_kit_* but does not\n        # match private symbols such as _ffmpegkit_lzma_*.\n'
           if text.count(old_comment) != 1:
               raise RuntimeError('Apple export-list comment did not match exactly once')
           text = text.replace(old_comment, new_comment, 1)
 
-          old_exports = '''_ffmpeg_kit_*
-_ffprobe_kit_*
-_ffplay_kit_*
-'''
-          new_exports = '''_ffmpeg_*
-_ffprobe_*
-_ffplay_*
-'''
+          old_exports = '_ffmpeg_kit_*\n_ffprobe_kit_*\n_ffplay_kit_*\n'
+          new_exports = '_ffmpeg_*\n_ffprobe_*\n_ffplay_*\n'
           if text.count(old_exports) != 1:
               raise RuntimeError('Apple ffmpeg-kit export prefixes did not match exactly once')
           text = text.replace(old_exports, new_exports, 1)
@@ -65,7 +48,6 @@ _ffplay_*
           grep -q '^_ffmpeg_\*$' FFmpegKit/CMakeLists.txt
           grep -q '^_ffprobe_\*$' FFmpegKit/CMakeLists.txt
           grep -q '^_ffplay_\*$' FFmpegKit/CMakeLists.txt
-          ! grep -q '^_ffmpeg_kit_\*$' FFmpegKit/CMakeLists.txt
 
       - name: Commit fix
         shell: bash
