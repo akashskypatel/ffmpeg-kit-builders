@@ -1,0 +1,62 @@
+name: Runtime reuse validation
+
+on:
+  push:
+    branches:
+      - fix/issue-38-ffprobe-argv-timeout
+    paths:
+      - .github/workflows/runtime_reuse_validation.yaml
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/akashskypatel/ffmpeg-kit-builders-dev:latest
+      credentials:
+        username: akashskypatel
+        password: ${{ secrets.GHCR_PAT || github.token }}
+      options: --user root
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      WORKFLOW_FORCE_SELF: ""
+      WORKFLOW_BUILD_FROM: ""
+      WORKFLOW_BUILD_ONLY: ""
+      WORKFLOW_TARGET_PLATFORMS: linux
+      WORKFLOW_TARGET_ARCHS: x86_64
+      WORKFLOW_BUILD_FFMPEG: ""
+      WORKFLOW_BUILD_BUNDLE: "true"
+      WORKFLOW_CURRENT_STEP: ""
+      WORKFLOW_SEEN_STEPS: ""
+      WORKFLOW_BUNDLES: debug
+      WORKFLOW_IS_CI: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare scripts
+        shell: bash
+        run: find scripts FFmpegKit -type f -name "*.sh" -exec chmod +x {} +
+      - name: Build Linux x86_64 debug bundle
+        shell: bash
+        run: sudo -E "${GITHUB_WORKSPACE}/scripts/workflow-runner.sh" --runner-platform=linux
+
+  cleanup:
+    if: ${{ always() }}
+    needs: build_linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/issue-38-ffprobe-argv-timeout
+          fetch-depth: 0
+      - name: Remove temporary validation workflow
+        shell: bash
+        run: |
+          rm .github/workflows/runtime_reuse_validation.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: remove runtime reuse validation workflow"
+          git push origin HEAD:fix/issue-38-ffprobe-argv-timeout
