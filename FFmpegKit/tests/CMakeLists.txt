@@ -4,6 +4,7 @@ add_executable(ffmpegkit_tests
     callback_test.cpp
     stress_test.cpp
     config_test.cpp
+    runtime_reuse_test.cpp
     packages_test.cpp
 )
 
