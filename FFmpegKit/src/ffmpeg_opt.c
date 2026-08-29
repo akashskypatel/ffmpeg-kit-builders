@@ -2159,6 +2159,49 @@ static OptionDef options_template[] = {
 
 FFMPEG_THREAD_LOCAL OptionDef options[FF_ARRAY_ELEMS(options_template)];
 
+void ffmpeg_reset_options_state(void)
+{
+    uninit_opts();
+    uninit_report();
+
+    av_freep(&vstats_filename);
+    av_freep(&filter_nbthreads);
+    av_freep(&print_graphs_file);
+    av_freep(&print_graphs_format);
+
+    filter_hw_device = NULL;
+
+    dts_delta_threshold = 10.0f;
+    dts_error_threshold = 3600.0f * 30.0f;
+    frame_drop_threshold = 0.0f;
+    do_benchmark = 0;
+    do_benchmark_all = 0;
+    do_hex_dump = 0;
+    do_pkt_dump = 0;
+    copy_ts = 0;
+    start_at_zero = 0;
+    copy_tb = -1;
+    debug_ts = 0;
+    exit_on_error = 0;
+    abort_on_flags = 0;
+    print_stats = -1;
+    stdin_interaction = 1;
+    max_error_rate = 2.0f / 3.0f;
+    filter_complex_nbthreads = 0;
+    filter_buffered_frames = 0;
+    vstats_version = 2;
+    print_graphs = 0;
+    auto_conversion_filters = 1;
+    stats_period = 500000;
+
+    file_overwrite = 0;
+    no_file_overwrite = 0;
+    ignore_unknown_streams = 0;
+    copy_unknown_streams = 0;
+    recast_media = 0;
+    hide_banner = 0;
+}
+
 void ffmpeg_tls_init_options(void) {
     memcpy(options, options_template, sizeof(options_template));
 

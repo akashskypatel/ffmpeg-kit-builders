@@ -70,6 +70,7 @@ static void ffprobe_reset_cli_state(void)
 {
   ffprobe_reset_internal_state();
   uninit_opts();
+  uninit_report();
 
   av_freep(&input_filename);
   av_freep(&print_input_filename);
@@ -356,6 +357,7 @@ void ffprobe_free(FFprobeContext *ctx)
   av_freep(&ctx->output_filename);
 
   // Clean up FFmpeg
+  uninit_report();
   avformat_network_deinit();
 
   av_free(ctx);

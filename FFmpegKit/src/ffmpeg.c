@@ -386,6 +386,7 @@ static void ffmpeg_cleanup(int ret)
             av_log(NULL, AV_LOG_ERROR,
                    "Error closing vstats file, loss of information possible: %s\n",
                    av_err2str(AVERROR(errno)));
+        vstats_file = NULL;
     }
     av_freep(&vstats_filename);
     of_enc_stats_close();
@@ -400,7 +401,16 @@ static void ffmpeg_cleanup(int ret)
     av_freep(&input_files);
     av_freep(&output_files);
 
+    if (progress_avio) {
+        const int close_ret = avio_closep(&progress_avio);
+        if (close_ret < 0)
+            av_log(NULL, AV_LOG_ERROR,
+                   "Error closing progress output: %s\n",
+                   av_err2str(close_ret));
+    }
+
     uninit_opts();
+    uninit_report();
 
     avformat_network_deinit();
 
@@ -1117,6 +1127,7 @@ int ffmpeg_run_internal(FFmpegContext *wrapper_ctx, int argc, char **argv)
     }
 
     ffmpeg_reset_internal_state();
+    ffmpeg_reset_options_state();
     ffmpeg_tls_init_options();
 
     init_dynload();

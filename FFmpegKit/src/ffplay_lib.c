@@ -237,6 +237,7 @@ static char *allocated_afilters = NULL;
  */
 static void ffplay_reset_cli_state(void) {
     uninit_opts();
+    uninit_report();
 
     if (allocated_afilters) {
         if (afilters == allocated_afilters)

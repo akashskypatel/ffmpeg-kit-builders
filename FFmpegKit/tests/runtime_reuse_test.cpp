@@ -101,6 +101,39 @@ TEST(EmbeddedCliReuseTest, QuotedFilenameDoesNotPoisonSubsequentRuns) {
   std::filesystem::remove(quoted, ec);
 }
 
+TEST(EmbeddedCliReuseTest, FFmpegOverwriteFlagsResetAfterFailure) {
+  const std::filesystem::path source(TEST_VIDEO_FILE);
+  const std::filesystem::path output =
+      source.parent_path() / "runtime-reuse-overwrite-output.mp4";
+  std::error_code ec;
+
+  std::filesystem::copy_file(
+      source, output, std::filesystem::copy_options::overwrite_existing, ec);
+  ASSERT_FALSE(ec) << ec.message();
+
+  {
+    const std::string command =
+        "ffmpeg -v error -n -i definitely-missing-runtime-reuse.mp4 -f null -";
+    FFmpegContext *ctx = ffmpeg_init(command.c_str());
+    ASSERT_NE(ctx, nullptr);
+    EXPECT_NE(ffmpeg_run(ctx), 0);
+    ffmpeg_free(ctx);
+  }
+
+  {
+    const std::string command =
+        "ffmpeg -v error -y -i " +
+        quoteCompatibilityArgument(source.string()) +
+        " -map 0 -c copy " + quoteCompatibilityArgument(output.string());
+    FFmpegContext *ctx = ffmpeg_init(command.c_str());
+    ASSERT_NE(ctx, nullptr);
+    EXPECT_EQ(ffmpeg_run(ctx), 0);
+    ffmpeg_free(ctx);
+  }
+
+  std::filesystem::remove(output, ec);
+}
+
 TEST(EmbeddedCliReuseTest, FailedInvocationDoesNotPoisonFollowingRuns) {
   const std::string normalPath = std::filesystem::path(TEST_VIDEO_FILE).string();
 
