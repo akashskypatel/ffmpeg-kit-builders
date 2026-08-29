@@ -34,13 +34,8 @@ jobs:
 
           test = Path('FFmpegKit/tests/runtime_reuse_test.cpp')
           text = test.read_text()
-          old = '''    const std::string command =
-        "ffmpeg -v error -i definitely-missing-runtime-reuse.mp4 -f null -";
-'''
-          new = '''    const std::string command =
-        "ffmpeg -v error -i " + quoteCompatibilityArgument(normalPath) +
-        " -i definitely-missing-runtime-reuse.mp4 -f null -";
-'''
+          old = '    const std::string command =\n        "ffmpeg -v error -i definitely-missing-runtime-reuse.mp4 -f null -";\n'
+          new = '    const std::string command =\n        "ffmpeg -v error -i " + quoteCompatibilityArgument(normalPath) +\n        " -i definitely-missing-runtime-reuse.mp4 -f null -";\n'
           if text.count(old) != 1:
               raise RuntimeError('runtime reuse partial-input test insertion point not unique')
           test.write_text(text.replace(old, new, 1))
