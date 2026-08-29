@@ -536,7 +536,7 @@ workflow_step_build_bundle_batches() {
 
 workflow_step_test() {
   local build_args
-  build_args=(./runner.sh --host="$runner_platform" --arch="$runner_arch" --enable-base --gpl --kit --build-deps --no-bundle --test="${TEST_TYPE:-undefined}" --build-debug --skip -y)
+  build_args=(./runner.sh --host="$runner_platform" --arch="$runner_arch" --enable-base --gpl --kit --build-deps --no-bundle --test="${TEST_TYPE:-undefined}" --build-debug --skip -y --hide-banner)
   
   echo "::notice::Building tests"
   if ! run_with_runner_shell "${build_args[@]}"; then
@@ -578,6 +578,14 @@ fi
 if [[ ( "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ) && ( -n "${WORKFLOW_BUILD_FROM:-}" || "$build_only_enabled" == "true" ) ]]; then
   echo "::error::WORKFLOW_BUILD_FFMPEG/WORKFLOW_BUILD_BUNDLE cannot be combined with WORKFLOW_BUILD_FROM or WORKFLOW_BUILD_ONLY" >&2
   exit 1
+fi
+
+if [[ "${RUN_TESTS}" == "true" ]]; then
+  rm -f "workflow-seen-steps.log"
+  if ! workflow_step_test; then
+    echo "::error::Failed to run tests"
+    exit 1
+  fi
 fi
 
 workflow_mode="default"
@@ -708,14 +716,6 @@ done
 
 if ! workflow_step_build_bundle_batches; then
   exit 1
-fi
-
-if [[ "${RUN_TESTS}" == "true" ]]; then
-  rm -f "workflow-seen-steps.log"
-  if ! workflow_step_test; then
-    echo "::error::Failed to run tests"
-    exit 1
-  fi
 fi
 
 if [[ "$ran_any" != "true" ]]; then
