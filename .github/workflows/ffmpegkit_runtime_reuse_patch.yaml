@@ -1,0 +1,369 @@
+name: Apply runtime reuse fix
+
+on:
+  push:
+    branches:
+      - fix/issue-38-ffprobe-argv-timeout
+    paths:
+      - .github/workflows/ffmpegkit_runtime_reuse_patch.yaml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/issue-38-ffprobe-argv-timeout
+          fetch-depth: 0
+
+      - name: Apply FFplay lifecycle and regression changes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('FFmpegKit/src/ffplay_lib.c')
+          text = path.read_text()
+
+          old = '#include "ffmpeg_kit_assert_override.h"\n'
+          new = '#include "ffmpeg_kit_assert_override.h"\n#include "ffmpegkit_arg_parser.h"\n'
+          assert old in text and 'ffmpegkit_arg_parser.h' not in text
+          text = text.replace(old, new, 1)
+
+          marker = 'static FFplayContext *active_ffplay_ctx = NULL;\n'
+          assert marker in text
+          helper = r'''
+
+/* Speed-filter storage is owned by the wrapper and can alias ffplay.c's
+ * afilters option. Keep it visible to the reset helper so stale aliases are
+ * cleared before option-owned storage is released. */
+static char *base_afilters = NULL;
+static char *allocated_afilters = NULL;
+
+/*
+ * Restore ffplay's executable-style globals to process-start defaults.
+ * ffplay is normally a one-shot CLI, but FFmpegKit embeds it in a long-lived
+ * host process. A failed parse/init must therefore release option-owned
+ * strings and reset both TLS state and the process-global wanted_stream_spec
+ * array before another session starts.
+ */
+static void ffplay_reset_cli_state(void) {
+    uninit_opts();
+
+    if (allocated_afilters) {
+        if (afilters == allocated_afilters)
+            afilters = NULL;
+        av_freep(&allocated_afilters);
+    }
+    av_freep(&base_afilters);
+
+    av_freep(&input_filename);
+    av_freep(&window_title);
+    av_freep(&audio_codec_name);
+    av_freep(&subtitle_codec_name);
+    av_freep(&video_codec_name);
+    av_freep(&afilters);
+    av_freep(&vulkan_params);
+    av_freep(&video_background);
+    av_freep(&hwaccel);
+
+    if (vfilters_list) {
+        for (int i = 0; i < nb_vfilters; i++)
+            av_free((void *)vfilters_list[i]);
+        av_freep(&vfilters_list);
+    }
+    nb_vfilters = 0;
+
+    for (int i = 0; i < AVMEDIA_TYPE_NB; i++)
+        av_freep(&wanted_stream_spec[i]);
+
+    file_iformat = NULL;
+    ffplay_reset_internal_state();
+
+    /* ffplay_reset_internal_state() predates several mutable globals and does
+     * not reset these values itself. */
+    screen_left = SDL_WINDOWPOS_CENTERED;
+    screen_top = SDL_WINDOWPOS_CENTERED;
+    cursor_last_shown = 0;
+    video_background = NULL;
+    memset(&renderer_info, 0, sizeof(renderer_info));
+    hide_banner = 0;
+}
+'''
+          text = text.replace(marker, marker + helper, 1)
+
+          split_pattern = re.compile(
+              r'/\* Splits a command-line string into argc/argv\. Caller frees with av_free\(\)\. \*/\n'
+              r'static int split_args\(const char \*args, char \*\*\*argv_out\) \{.*?\n\}\n\n'
+              r'(?=static FFplayContext\* ffplay_init_common)',
+              re.S,
+          )
+          replacement = '''/* Compatibility string entry point. Prefer ffplay_init_argv() when
+ * arguments are already tokenized. */
+static int split_args(const char *args, char ***argv_out) {
+    return ffmpegkit_split_command(args, argv_out);
+}
+
+'''
+          text, count = split_pattern.subn(replacement, text, count=1)
+          assert count == 1
+
+          start_marker = '''static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc, const char *const *argv_args, const FFplayCallbacks *cb) {
+    // Ensure only one session is active at a time
+'''
+          assert start_marker in text
+          text = text.replace(
+              start_marker,
+              '''static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc, const char *const *argv_args, const FFplayCallbacks *cb) {
+    // Ensure only one session is active at a time
+''',
+              1,
+          )
+
+          old_timeout = '''        if (active_ffplay_ctx) {
+            av_log(NULL, AV_LOG_WARNING, "[ffplay_lib] Previous session did not close in time, forcing cleanup.\\n");
+        } else {
+            av_log(NULL, AV_LOG_INFO,"[ffplay_lib] ffplay_init: previous session cleared\\n");
+        }
+    }
+
+    FFplayContext *ctx = av_mallocz(sizeof(FFplayContext));
+'''
+          new_timeout = '''        if (active_ffplay_ctx) {
+            av_log(NULL, AV_LOG_ERROR, "[ffplay_lib] Previous session did not close in time; refusing to reset live ffplay state.\\n");
+            return NULL;
+        } else {
+            av_log(NULL, AV_LOG_INFO,"[ffplay_lib] ffplay_init: previous session cleared\\n");
+        }
+    }
+
+    ffplay_reset_cli_state();
+
+    FFplayContext *ctx = av_mallocz(sizeof(FFplayContext));
+'''
+          assert old_timeout in text
+          text = text.replace(old_timeout, new_timeout, 1)
+
+          # The full reset above supersedes this partial pre-init reset; the
+          # included ffplay_init_internal() still performs its own local reset.
+          text = text.replace(
+              '''        
+    // Reset global state in ffplay.c
+    ffplay_reset_internal_state();
+
+    avformat_network_init();
+''',
+              '''        
+    avformat_network_init();
+''',
+              1,
+          )
+
+          old_failed_init = '''        for (int i=0; i<ctx->argc; i++) av_free(ctx->argv[i]);
+        av_free(ctx->argv);
+        av_free(ctx);
+        return NULL;
+'''
+          new_failed_init = '''        for (int i=0; i<ctx->argc; i++) av_free(ctx->argv[i]);
+        av_free(ctx->argv);
+        av_free(ctx);
+        while (SDL_WasInit(0))
+            SDL_Quit();
+        ffplay_reset_cli_state();
+        return NULL;
+'''
+          assert old_failed_init in text
+          text = text.replace(old_failed_init, new_failed_init, 1)
+
+          duplicate_filters = '''static char *base_afilters = NULL;
+static char *allocated_afilters = NULL;
+
+int ffplay_start'''
+          assert duplicate_filters in text
+          text = text.replace(duplicate_filters, 'int ffplay_start', 1)
+
+          old_free_tail = '''    if (allocated_afilters) {
+        av_free(allocated_afilters);
+        allocated_afilters = NULL;
+    }
+    if (base_afilters) {
+        av_free(base_afilters);
+        base_afilters = NULL;
+    }
+'''
+          new_free_tail = '''    if (allocated_afilters) {
+        if (afilters == allocated_afilters)
+            afilters = NULL;
+        av_freep(&allocated_afilters);
+    }
+    av_freep(&base_afilters);
+'''
+          assert old_free_tail in text
+          text = text.replace(old_free_tail, new_free_tail, 1)
+
+          old_deinit = '''    avformat_network_deinit();
+
+    av_free(ctx);
+}
+'''
+          new_deinit = '''    ffplay_reset_cli_state();
+    avformat_network_deinit();
+
+    av_free(ctx);
+}
+'''
+          assert old_deinit in text
+          text = text.replace(old_deinit, new_deinit, 1)
+
+          path.write_text(text)
+
+          test = r'''#include "ffmpeg_lib.h"
+#include "ffplay_lib.h"
+#include "ffprobe_lib.h"
+
+#include <chrono>
+#include <filesystem>
+#include <gtest/gtest.h>
+#include <string>
+#include <thread>
+
+#ifndef FFMPEG_KIT_TEST_DIR
+#define FFMPEG_KIT_TEST_DIR "."
+#endif
+#define TEST_VIDEO_FILE FFMPEG_KIT_TEST_DIR "/dummy_video.mp4"
+
+namespace {
+
+std::string quoteCompatibilityArgument(const std::string &value) {
+  std::string result = "\"";
+  for (const char ch : value) {
+    if (ch == '\"')
+      result += "\\\"";
+    else
+      result += ch;
+  }
+  result += "\"";
+  return result;
+}
+
+int runFFmpegCompatibility(const std::string &input) {
+  const std::string command =
+      "ffmpeg -v error -i " + quoteCompatibilityArgument(input) +
+      " -f null -";
+  FFmpegContext *ctx = ffmpeg_init(command.c_str());
+  if (!ctx)
+    return -1000;
+  const int result = ffmpeg_run(ctx);
+  ffmpeg_free(ctx);
+  return result;
+}
+
+int runFFprobeCompatibility(const std::string &input) {
+  const std::string command =
+      "ffprobe -v error -show_format -show_streams -i " +
+      quoteCompatibilityArgument(input);
+  FFprobeContext *ctx = ffprobe_init(command.c_str());
+  if (!ctx)
+    return -1000;
+  const int result = ffprobe_run(ctx);
+  ffprobe_free(ctx);
+  return result;
+}
+
+bool initializeAndDrainFFplayCompatibility(const std::string &input) {
+  const std::string command =
+      "ffplay -v error -autoexit -an " + quoteCompatibilityArgument(input);
+  FFplayContext *ctx = ffplay_init(command.c_str(), nullptr);
+  if (!ctx)
+    return false;
+
+  bool ok = ffplay_start(ctx) == 0;
+  if (ok) {
+    for (int i = 0; i < 1000 && ffplay_step(ctx) == 0; i++)
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ffplay_free(ctx);
+  return ok;
+}
+
+} // namespace
+
+#ifndef _WIN32
+TEST(EmbeddedCliReuseTest, QuotedFilenameDoesNotPoisonSubsequentRuns) {
+  const std::filesystem::path source(TEST_VIDEO_FILE);
+  const std::filesystem::path quoted =
+      source.parent_path() / "runtime reuse - \"quoted\".mp4";
+  std::error_code ec;
+  std::filesystem::copy_file(source, quoted,
+                             std::filesystem::copy_options::overwrite_existing,
+                             ec);
+  ASSERT_FALSE(ec) << ec.message();
+
+  const std::string quotedPath = quoted.string();
+  const std::string normalPath = source.string();
+
+  EXPECT_EQ(runFFmpegCompatibility(quotedPath), 0);
+  EXPECT_EQ(runFFmpegCompatibility(normalPath), 0);
+
+  EXPECT_EQ(runFFprobeCompatibility(quotedPath), 0);
+  EXPECT_EQ(runFFprobeCompatibility(normalPath), 0);
+
+  EXPECT_TRUE(initializeAndDrainFFplayCompatibility(quotedPath));
+  EXPECT_TRUE(initializeAndDrainFFplayCompatibility(normalPath));
+
+  std::filesystem::remove(quoted, ec);
+}
+
+TEST(EmbeddedCliReuseTest, FailedParseDoesNotPoisonNextToolInvocation) {
+  const std::string normalPath = std::filesystem::path(TEST_VIDEO_FILE).string();
+
+  {
+    const std::string command =
+        "ffprobe -v error -show_format -i " +
+        quoteCompatibilityArgument(normalPath) + " second-input.mp4";
+    FFprobeContext *ctx = ffprobe_init(command.c_str());
+    ASSERT_NE(ctx, nullptr);
+    EXPECT_NE(ffprobe_run(ctx), 0);
+    ffprobe_free(ctx);
+  }
+  EXPECT_EQ(runFFmpegCompatibility(normalPath), 0);
+  EXPECT_EQ(runFFprobeCompatibility(normalPath), 0);
+
+  {
+    const std::string command =
+        "ffplay -v error -autoexit -an " +
+        quoteCompatibilityArgument(normalPath) + " second-input.mp4";
+    FFplayContext *ctx = ffplay_init(command.c_str(), nullptr);
+    EXPECT_EQ(ctx, nullptr);
+    if (ctx)
+      ffplay_free(ctx);
+  }
+  EXPECT_EQ(runFFmpegCompatibility(normalPath), 0);
+  EXPECT_EQ(runFFprobeCompatibility(normalPath), 0);
+  EXPECT_TRUE(initializeAndDrainFFplayCompatibility(normalPath));
+}
+#endif
+'''
+          Path('FFmpegKit/tests/runtime_reuse_test.cpp').write_text(test)
+
+          cmake = Path('FFmpegKit/tests/CMakeLists.txt')
+          cmake_text = cmake.read_text()
+          assert 'runtime_reuse_test.cpp' not in cmake_text
+          cmake_text = cmake_text.replace(
+              '    config_test.cpp\n',
+              '    config_test.cpp\n    runtime_reuse_test.cpp\n',
+              1,
+          )
+          cmake.write_text(cmake_text)
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add FFmpegKit/src/ffplay_lib.c FFmpegKit/tests/runtime_reuse_test.cpp FFmpegKit/tests/CMakeLists.txt
+          git diff --cached --check
+          git commit -m "fix: isolate embedded CLI state between sessions"
+          git push origin HEAD:fix/issue-38-ffprobe-argv-timeout
