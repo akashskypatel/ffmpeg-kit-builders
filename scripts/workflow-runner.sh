@@ -706,16 +706,16 @@ for combo in "${workflow_target_combos[@]}"; do
     fi
 done
 
+if ! workflow_step_build_bundle_batches; then
+  exit 1
+fi
+
 if [[ "${RUN_TESTS}" == "true" ]]; then
   rm -f "workflow-seen-steps.log"
   if ! workflow_step_test; then
     echo "::error::Failed to run tests"
     exit 1
   fi
-fi
-
-if ! workflow_step_build_bundle_batches; then
-  exit 1
 fi
 
 if [[ "$ran_any" != "true" ]]; then
