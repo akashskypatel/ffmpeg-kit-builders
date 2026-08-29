@@ -19,14 +19,333 @@ jobs:
           ref: fix/issue-38-ffprobe-argv-timeout
           fetch-depth: 0
 
-      - name: Apply follow-up
-        run: echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKCnBhdGggPSBQYXRoKCJGRm1wZWdLaXQvc3JjL2ZmbXBlZ19vcHQuYyIpCnRleHQgPSBwYXRoLnJlYWRfdGV4dCgpCm5lZWRsZSA9ICcnJ0ZGTVBFR19USFJFQURfTE9DQUwgT3B0aW9uRGVmIG9wdGlvbnNbRkZfQVJSQVlfRUxFTVMob3B0aW9uc190ZW1wbGF0ZSldOwoKdm9pZCBmZm1wZWdfdGxzX2luaXRfb3B0aW9ucyh2b2lkKSB7CicnJwphc3NlcnQgbmVlZGxlIGluIHRleHQKcmVzZXRfZm4gPSAnJydGRk1QRUdfVEhSRUFEX0xPQ0FMIE9wdGlvbkRlZiBvcHRpb25zW0ZGX0FSUkFZX0VMRU1TKG9wdGlvbnNfdGVtcGxhdGUpXTsKCi8qCiAqIFJlc2V0IGV4ZWN1dGFibGUtc3R5bGUgZ2xvYmFsIG9wdGlvbiBzdGF0ZSBiZXR3ZWVuIGVtYmVkZGVkIEZGbXBlZyBydW5zLgogKiBVcHN0cmVhbSByZWxpZXMgb24gcHJvY2VzcyBleGl0IHRvIHJlc3RvcmUgdGhlc2UgZGVmYXVsdHM7IEZGbXBlZ0tpdCByZXVzZXMKICogdGhlIHNhbWUgcHJvY2VzcyBhbmQgb2Z0ZW4gdGhlIHNhbWUgd29ya2VyIHRocmVhZCBmb3IgbWFueSBzZXNzaW9ucy4KICovCnZvaWQgZmZtcGVnX3Jlc2V0X29wdGlvbnNfc3RhdGUodm9pZCkgewogICAgdW5pbml0X29wdHMoKTsKCiAgICBhdl9mcmVlcCgmdnN0YXRzX2ZpbGVuYW1lKTsKICAgIGF2X2ZyZWVwKCZmaWx0ZXJfbmJ0aHJlYWRzKTsKICAgIGF2X2ZyZWVwKCZwcmludF9ncmFwaHNfZmlsZSk7CiAgICBhdl9mcmVlcCgmcHJpbnRfZ3JhcGhzX2Zvcm1hdCk7CgogICAgZmlsdGVyX2h3X2RldmljZSA9IE5VTEw7CgogICAgZHRzX2RlbHRhX3RocmVzaG9sZCA9IDEwLjBmOwogICAgZHRzX2Vycm9yX3RocmVzaG9sZCA9IDM2MDAuMGYgKiAzMC4wZjsKICAgIGZyYW1lX2Ryb3BfdGhyZXNob2xkID0gMC4wZjsKICAgIGRvX2JlbmNobWFyayA9IDA7CiAgICBkb19iZW5jaG1hcmtfYWxsID0gMDsKICAgIGRvX2hleF9kdW1wID0gMDsKICAgIGRvX3BrdF9kdW1wID0gMDsKICAgIGNvcHlfdHMgPSAwOwogICAgc3RhcnRfYXRfemVybyA9IDA7CiAgICBjb3B5X3RiID0gLTE7CiAgICBkZWJ1Z190cyA9IDA7CiAgICBleGl0X29uX2Vycm9yID0gMDsKICAgIGFib3J0X29uX2ZsYWdzID0gMDsKICAgIHByaW50X3N0YXRzID0gLTE7CiAgICBzdGRpbl9pbnRlcmFjdGlvbiA9IDE7CiAgICBtYXhfZXJyb3JfcmF0ZSA9IDIuMGYgLyAzLjBmOwogICAgZmlsdGVyX2NvbXBsZXhfbmJ0aHJlYWRzID0gMDsKICAgIGZpbHRlcl9idWZmZXJlZF9mcmFtZXMgPSAwOwogICAgdnN0YXRzX3ZlcnNpb24gPSAyOwogICAgcHJpbnRfZ3JhcGhzID0gMDsKICAgIGF1dG9fY29udmVyc2lvbl9maWx0ZXJzID0gMTsKICAgIHN0YXRzX3BlcmlvZCA9IDUwMDAwMDsKCiAgICBmaWxlX292ZXJ3cml0ZSA9IDA7CiAgICBub19maWxlX292ZXJ3cml0ZSA9IDA7CiAgICBpZ25vcmVfdW5rbm93bl9zdHJlYW1zID0gMDsKICAgIGNvcHlfdW5rbm93bl9zdHJlYW1zID0gMDsKICAgIHJlY2FzdF9tZWRpYSA9IDA7CiAgICBoaWRlX2Jhbm5lciA9IDA7Cn0KCnZvaWQgZmZtcGVnX3Rsc19pbml0X29wdGlvbnModm9pZCkgewonJycKdGV4dCA9IHRleHQucmVwbGFjZShuZWVkbGUsIHJlc2V0X2ZuLCAxKQpwYXRoLndyaXRlX3RleHQodGV4dCkKCnBhdGggPSBQYXRoKCJGRm1wZWdLaXQvc3JjL2ZmbXBlZy5jIikKdGV4dCA9IHBhdGgucmVhZF90ZXh0KCkKb2xkID0gJycnICAgIGlmICh2c3RhdHNfZmlsZSkgewogICAgICAgIGlmIChmY2xvc2UodnN0YXRzX2ZpbGUpKQogICAgICAgICAgICBhdl9sb2coTlVMTCwgQVZfTE9HX0VSUk9SLAogICAgICAgICAgICAgICAgICAgIkVycm9yIGNsb3NpbmcgdnN0YXRzIGZpbGUsIGxvc3Mgb2YgaW5mb3JtYXRpb24gcG9zc2libGU6ICVzXFxuIiwKICAgICAgICAgICAgICAgICAgIGF2X2VycjJzdHIoQVZFUlJPUihlcnJubykpKTsKICAgIH0KICAgIGF2X2ZyZWVwKCZ2c3RhdHNfZmlsZW5hbWUpOwonJycKbmV3ID0gJycnICAgIGlmICh2c3RhdHNfZmlsZSkgewogICAgICAgIGlmIChmY2xvc2UodnN0YXRzX2ZpbGUpKQogICAgICAgICAgICBhdl9sb2coTlVMTCwgQVZfTE9HX0VSUk9SLAogICAgICAgICAgICAgICAgICAgIkVycm9yIGNsb3NpbmcgdnN0YXRzIGZpbGUsIGxvc3Mgb2YgaW5mb3JtYXRpb24gcG9zc2libGU6ICVzXFxuIiwKICAgICAgICAgICAgICAgICAgIGF2X2VycjJzdHIoQVZFUlJPUihlcnJubykpKTsKICAgICAgICB2c3RhdHNfZmlsZSA9IE5VTEw7CiAgICB9CiAgICBhdl9mcmVlcCgmdnN0YXRzX2ZpbGVuYW1lKTsKJycnCmFzc2VydCBvbGQgaW4gdGV4dAp0ZXh0ID0gdGV4dC5yZXBsYWNlKG9sZCwgbmV3LCAxKQoKb2xkID0gJycnICAgIGF2X2ZyZWVwKCZpbnB1dF9maWxlcyk7CiAgICBhdl9mcmVlcCgmb3V0cHV0X2ZpbGVzKTsKCiAgICB1bmluaXRfb3B0cygpOwonJwpuZXcgPSAnJycgICAgYXZfZnJlZXAoJmlucHV0X2ZpbGVzKTsKICAgIGF2X2ZyZWVwKCZvdXRwdXRfZmlsZXMpOwoKICAgIGlmIChwcm9ncmVzc19hdmlvKSB7CiAgICAgICAgY29uc3QgaW50IGNsb3NlX3JldCA9IGF2aW9fY2xvc2VwKCZwcm9ncmVzc19hdmlvKTsKICAgICAgICBpZiAoY2xvc2VfcmV0IDwgMCkKICAgICAgICAgICAgYXZfbG9nKE5VTEwsIEFWX0xPR19FUlJPUiwKICAgICAgICAgICAgICAgICAgICJFcnJvciBjbG9zaW5nIHByb2dyZXNzIG91dHB1dDogJXNcXG4iLAogICAgICAgICAgICAgICAgICAgYXZfZXJyMnN0cihjbG9zZV9yZXQpKTsKICAgIH0KCiAgICB1bmluaXRfb3B0cygpOwonJwphc3NlcnQgb2xkIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKCm9sZCA9ICcnJ3ZvaWQgZmZtcGVnX3Jlc2V0X2ludGVybmFsX3N0YXRlKHZvaWQpCnsKICAgIG5iX2lucHV0X2ZpbGVzID0gMDsKJycnCm5ldyA9ICcnJ3ZvaWQgZmZtcGVnX3Jlc2V0X2ludGVybmFsX3N0YXRlKHZvaWQpCnsKICAgIGlmIChwcm9ncmVzc19hdmlvKQogICAgICAgIGF2aW9fY2xvc2VwKCZwcm9ncmVzc19hdmlvKTsKCiAgICBuYl9pbnB1dF9maWxlcyA9IDA7CicnJwphc3NlcnQgb2xkIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKcGF0aC53cml0ZV90ZXh0KHRleHQpCgpwYXRoID0gUGF0aCgiRkZtcGVnS2l0L3NyYy9mZm1wZWdfbGliLmMiKQp0ZXh0ID0gcGF0aC5yZWFkX3RleHQoKQpuZWVkbGUgPSAnJydleHRlcm4gaW50IGZmbXBlZ19ydW5faW50ZXJuYWwoRkZtcGVnQ29udGV4dCAqY3R4LCBpbnQgYXJnYywgY2hhciAqKmFyZ3YpOwpleHRlcm4gdm9pZCBmZm1wZWdfcmVzZXRfaW50ZXJuYWxfc3RhdGUodm9pZCk7CmV4dGVybiBpbnQgY2FuY2VsUmVxdWVzdGVkKGxvbmcgc2Vzc2lvbklkKTsKJycnCnJlcGxhY2VtZW50ID0gJycnZXh0ZXJuIGludCBmZm1wZWdfcnVuX2ludGVybmFsKEZGbXBlZ0NvbnRleHQgKmN0eCwgaW50IGFyZ2MsIGNoYXIgKiphcmd2KTsKZXh0ZXJuIHZvaWQgZmZtcGVnX3Jlc2V0X2ludGVybmFsX3N0YXRlKHZvaWQpOwpleHRlcm4gdm9pZCBmZm1wZWdfcmVzZXRfb3B0aW9uc19zdGF0ZSh2b2lkKTsKZXh0ZXJuIGludCBjYW5jZWxSZXF1ZXN0ZWQobG9uZyBzZXNzaW9uSWQpOwonJwphc3NlcnQgbmVlZGxlIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShuZWVkbGUsIHJlcGxhY2VtZW50LCAxKQoKcGF0dGVybiA9IHJlLmNvbXBpbGUoCiAgICByJy9cKlxuIFwqIFJlc3RvcmUgdGhlIGZmbXBlZyBDTEkgZ2xvYmFscy4qP1xuLiogc3RhdGljIHZvaWQgZmZtcGVnX3Jlc2V0X2NsaV9zdGF0ZVwodm9pZFwpIFx7Lip/XG5cfVxuJywKICAgIHJlLlMsCikKcmVwbGFjZW1lbnQgPSAnJycvKgogKiBSZXNldCBhbGwgZXhlY3V0YWJsZS1zdHlsZSBGRm1wZWcgb3B0aW9uIGdsb2JhbHMgYmVmb3JlIGFuIGVtYmVkZGVkIHJ1bi4KICogVGhlIGF1dGhvcml0YXRpdmUgZGVmYXVsdHMgbGl2ZSBpbiBmZm1wZWdfb3B0LmMsIHdoZXJlIGZpbGUtbG9jYWwKICogc3RhdGUgc3VjaCBhcyAteS8tbiBpcyBhbHNvIHZpc2libGUuCiAqLwpzdGF0aWMgdm9pZCBmZm1wZWdfcmVzZXRfY2xpX3N0YXRlKHZvaWQpIHsKICBmZm1wZWdfcmVzZXRfb3B0aW9uc19zdGF0ZSgpOwp9CicnJwp0ZXh0LCBuID0gcGF0dGVybi5zdWJuKHJlcGxhY2VtZW50LCB0ZXh0LCBjb3VudD0xKQphc3NlcnQgbiA9PSAxCgpvbGQgPSAnJycgIGlmIChzZXRqbXAoYXNzZXJ0X2ptcCkpIHsKICAgIGZmbXBlZ19raXRfYXNzZXJ0X2ptcF9wdHIgPSBOVUxMOwogICAgZmZtcGVnX3VuYmluZF90aHJlYWRfY29udGV4dCgpOwogICAgdW5pbml0X29wdHMoKTsKICAgIGF2X2xvZyhOVUxMLCBBVl9MT0dfRVJST1IsCiAgICAgICAgICAgIltmZm1wZWcta2l0XSBmZm1wZWdfcnVuOiByZWNvdmVyZWQgZnJvbSBpbnRlcm5hbCBhc3NlcnRpb24gZmFpbHVyZS4gIgogICAgICAgICAgICJTZXNzaW9uIHdpbGwgYmUgbWFya2VkIGFzIGZhaWxlZC5cXG4iKTsKICAgIHJldHVybiBBVkVSUk9SX0VYSVQ7CiAgfQoKICBhdmZvcm1hdF9uZXR3b3JrX2luaXQoKTsKJycnCm5ldyA9ICcnJyAgaWYgKHNldGptcChhc3NlcnRfam1wKSkgewogICAgZmZtcGVnX2tpdF9hc3NlcnRfam1wX3B0ciA9IE5VTEw7CiAgICBmZm1wZWdfdW5iaW5kX3RocmVhZF9jb250ZXh0KCk7CiAgICBhdl9sb2coTlVMTCwgQVZfTE9HX0VSUk9SLAogICAgICAgICAgICJbZmZtcGVnLWtpdF0gZmZtcGVnX3J1bjogcmVjb3ZlcmVkIGZyb20gaW50ZXJuYWwgYXNzZXJ0aW9uIGZhaWx1cmUuICIKICAgICAgICAgICAiU2Vzc2lvbiB3aWxsIGJlIG1hcmtlZCBhcyBmYWlsZWQuXFxuIik7CiAgICByZXR1cm4gQVZFUlJPUl9FWElUOwogIH0KICBmZm1wZWdfa2l0X2Fzc2VydF9qbXBfcHRyID0gTlVMTDsKCiAgYXZmb3JtYXRfbmV0d29ya19pbml0KCk7CicnJwphc3NlcnQgb2xkIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKb2xkID0gJycnICBmZm1wZWdfdW5iaW5kX3RocmVhZF9jb250ZXh0KCk7CiAgZmZtcGVnX2tpdF9hc3NlcnRfam1wX3B0ciA9IE5VTEw7CiAgY3R4LT5maWxlc19wYXJzZWQgPSAoY3R4LT5yZXQgPj0gMCk7CicnJwpuZXcgPSAnJycgIGZmbXBlZ191bmJpbmRfdGhyZWFkX2NvbnRleHQoKTsKICBjdHgtPmZpbGVzX3BhcnNlZCA9IChjdHgtPnJldCA+PSAwKTsKJycnCmFzc2VydCBvbGQgaW4gdGV4dAp0ZXh0ID0gdGV4dC5yZXBsYWNlKG9sZCwgbmV3LCAxKQpwYXRoLndyaXRlX3RleHQodGV4dCkKCnBhdGggPSBQYXRoKCJGRm1wZWdLaXQvc3JjL2ZmcHJvYmVfbGliLmMiKQp0ZXh0ID0gcGF0aC5yZWFkX3RleHQoKQpvbGQgPSAnJycgIGlmIChzZXRqbXAoYXNzZXJ0X2ptcCkpIHsKICAgIGZmbXBlZ19raXRfYXNzZXJ0X2ptcF9wdHIgPSBOVUxMOwogICAgZmZwcm9iZV91bmJpbmRfdGhyZWFkX2NvbnRleHQoKTsKICAgIGZmcHJvYmVfcmVzZXRfY2xpX3N0YXRlKCk7CiAgICBhdl9sb2coTlVMTCwgQVZfTE9HX0VSUk9SLAogICAgICAgICAgICJbZmZtcGVnLWtpdF0gZmZwcm9iZV9ydW46IHJlY292ZXJlZCBmcm9tIGludGVybmFsIGFzc2VydGlvbiBmYWlsdXJlLiAiCiAgICAgICAgICAgIlNlc3Npb24gd2lsbCBiZSBtYXJrZWQgYXMgZmFpbGVkLlxcbiIpOwogICAgcmV0dXJuIEFWRVJST1JfRVhJVDsKICB9CgogIGZmcHJvYmVfdGxzX2luaXRfb3B0aW9ucygpOwonJwpuZXcgPSAnJycgIGlmIChzZXRqbXAoYXNzZXJ0X2ptcCkpIHsKICAgIGZmbXBlZ19raXRfYXNzZXJ0X2ptcF9wdHIgPSBOVUxMOwogICAgZmZwcm9iZV91bmJpbmRfdGhyZWFkX2NvbnRleHQoKTsKICAgIGF2X2xvZyhOVUxMLCBBVl9MT0dfRVJST1IsCiAgICAgICAgICAgIltmZm1wZWcta2l0XSBmZnByb2JlX3J1bjogcmVjb3ZlcmVkIGZyb20gaW50ZXJuYWwgYXNzZXJ0aW9uIGZhaWx1cmUuICIKICAgICAgICAgICAiU2Vzc2lvbiB3aWxsIGJlIG1hcmtlZCBhcyBmYWlsZWQuXFxuIik7CiAgICByZXR1cm4gQVZFUlJPUl9FWElUOwogIH0KICBmZm1wZWdfa2l0X2Fzc2VydF9qbXBfcHRyID0gTlVMTDsKCiAgZmZwcm9iZV90bHNfaW5pdF9vcHRpb25zKCk7CicnJwphc3NlcnQgb2xkIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKb2xkID0gJycnICBjdHgtPnJldCA9IGZmcHJvYmVfcnVuX2ludGVybmFsKGN0eC0+YXJnYywgY3R4LT5hcmd2LCAmY3R4LT5vdXRwdXQpOwogIGZmcHJvYmVfdW5iaW5kX3RocmVhZF9jb250ZXh0KCk7CiAgZmZtcGVnX2tpdF9hc3NlcnRfam1wX3B0ciA9IE5VTEw7CgogIHJldHVybiBjdHgtPnJldDsKJycnCm5ldyA9ICcnJyAgY3R4LT5yZXQgPSBmZnByb2JlX3J1bl9pbnRlcm5hbChjdHgtPmFyZ2MsIGN0eC0+YXJndiwgJmN0eC0+b3V0cHV0KTsKICBmZnByb2JlX3VuYmluZF90aHJlYWRfY29udGV4dCgpOwoKICByZXR1cm4gY3R4LT5yZXQ7CicnJwphc3NlcnQgb2xkIGluIHRleHQKdGV4dCA9IHRleHQucmVwbGFjZShvbGQsIG5ldywgMSkKcGF0aC53cml0ZV90ZXh0KHRleHQpCg==' | base64 -d > /tmp/followup.py && python3 /tmp/followup.py
+      - name: Apply runtime lifecycle follow-up
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected exactly one match, got {count}")
+              p.write_text(text.replace(old, new, 1))
+
+          def sub_once(path, pattern, replacement, flags=0):
+              p = Path(path)
+              text = p.read_text()
+              new_text, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected exactly one regex match, got {count}")
+              p.write_text(new_text)
+
+          replace_once(
+              "FFmpegKit/src/opt_common.c",
+              """    if (report_file_level >= level) {
+                  fputs(line, report_file);
+                  fflush(report_file);
+              }
+          """,
+              """    if (report_file && report_file_level >= level) {
+                  fputs(line, report_file);
+                  fflush(report_file);
+              }
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/opt_common.c",
+              """int opt_report(void *optctx, const char *opt, const char *arg)
+          """,
+              """void uninit_report(void)
+          {
+              if (report_file) {
+                  fclose(report_file);
+                  report_file = NULL;
+              }
+              report_file_level = AV_LOG_DEBUG;
+          }
+
+          int opt_report(void *optctx, const char *opt, const char *arg)
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/opt_common.h",
+              """int opt_report(void *optctx, const char *opt, const char *arg);
+          int init_report(const char *env, FILE **file);
+          """,
+              """int opt_report(void *optctx, const char *opt, const char *arg);
+          int init_report(const char *env, FILE **file);
+          void uninit_report(void);
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffmpeg_opt.c",
+              """FFMPEG_THREAD_LOCAL OptionDef options[FF_ARRAY_ELEMS(options_template)];
+
+          void ffmpeg_tls_init_options(void) {
+          """,
+              """FFMPEG_THREAD_LOCAL OptionDef options[FF_ARRAY_ELEMS(options_template)];
+
+          void ffmpeg_reset_options_state(void)
+          {
+              uninit_opts();
+              uninit_report();
+
+              av_freep(&vstats_filename);
+              av_freep(&filter_nbthreads);
+              av_freep(&print_graphs_file);
+              av_freep(&print_graphs_format);
+
+              filter_hw_device = NULL;
+
+              dts_delta_threshold = 10.0f;
+              dts_error_threshold = 3600.0f * 30.0f;
+              frame_drop_threshold = 0.0f;
+              do_benchmark = 0;
+              do_benchmark_all = 0;
+              do_hex_dump = 0;
+              do_pkt_dump = 0;
+              copy_ts = 0;
+              start_at_zero = 0;
+              copy_tb = -1;
+              debug_ts = 0;
+              exit_on_error = 0;
+              abort_on_flags = 0;
+              print_stats = -1;
+              stdin_interaction = 1;
+              max_error_rate = 2.0f / 3.0f;
+              filter_complex_nbthreads = 0;
+              filter_buffered_frames = 0;
+              vstats_version = 2;
+              print_graphs = 0;
+              auto_conversion_filters = 1;
+              stats_period = 500000;
+
+              file_overwrite = 0;
+              no_file_overwrite = 0;
+              ignore_unknown_streams = 0;
+              copy_unknown_streams = 0;
+              recast_media = 0;
+              hide_banner = 0;
+          }
+
+          void ffmpeg_tls_init_options(void) {
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffmpeg.h",
+              """void show_usage(void);
+
+          int check_avoptions_used""",
+              """void show_usage(void);
+          void ffmpeg_reset_options_state(void);
+
+          int check_avoptions_used""",
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffmpeg.c",
+              """    if (vstats_file) {
+                  if (fclose(vstats_file))
+                      av_log(NULL, AV_LOG_ERROR,
+                             "Error closing vstats file, loss of information possible: %s\\n",
+                             av_err2str(AVERROR(errno)));
+              }
+              av_freep(&vstats_filename);
+          """,
+              """    if (vstats_file) {
+                  if (fclose(vstats_file))
+                      av_log(NULL, AV_LOG_ERROR,
+                             "Error closing vstats file, loss of information possible: %s\\n",
+                             av_err2str(AVERROR(errno)));
+                  vstats_file = NULL;
+              }
+              av_freep(&vstats_filename);
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffmpeg.c",
+              """    av_freep(&input_files);
+              av_freep(&output_files);
+
+              uninit_opts();
+
+              avformat_network_deinit();
+          """,
+              """    av_freep(&input_files);
+              av_freep(&output_files);
+
+              if (progress_avio) {
+                  const int close_ret = avio_closep(&progress_avio);
+                  if (close_ret < 0)
+                      av_log(NULL, AV_LOG_ERROR,
+                             "Error closing progress output: %s\\n",
+                             av_err2str(close_ret));
+              }
+
+              uninit_opts();
+              uninit_report();
+
+              avformat_network_deinit();
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffmpeg.c",
+              """    ffmpeg_reset_internal_state();
+              ffmpeg_tls_init_options();
+          """,
+              """    ffmpeg_reset_internal_state();
+              ffmpeg_reset_options_state();
+              ffmpeg_tls_init_options();
+          """,
+          )
+
+          sub_once(
+              "FFmpegKit/src/ffmpeg_lib.c",
+              r'/\*\n \* Restore the ffmpeg CLI globals.*?\nstatic int split_args',
+              'static int split_args',
+              flags=re.S,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffmpeg_lib.c",
+              """  /* Start every embedded invocation from process-start CLI defaults. */
+            ffmpeg_reset_cli_state();
+            ffmpeg_kit_assert_triggered = 0;
+          """,
+              """  ffmpeg_kit_assert_triggered = 0;
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffmpeg_lib.c",
+              """  if (setjmp(assert_jmp)) {
+              ffmpeg_kit_assert_jmp_ptr = NULL;
+              ffmpeg_unbind_thread_context();
+              uninit_opts();
+              av_log(NULL, AV_LOG_ERROR,
+          """,
+              """  if (setjmp(assert_jmp)) {
+              ffmpeg_kit_assert_jmp_ptr = NULL;
+              ffmpeg_unbind_thread_context();
+              ffmpeg_mark_shutdown_incomplete(ctx);
+              ffmpeg_mark_runtime_unrecoverable();
+              av_log(NULL, AV_LOG_ERROR,
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffprobe_lib.c",
+              """  ffprobe_reset_internal_state();
+            uninit_opts();
+
+            av_freep(&input_filename);
+          """,
+              """  ffprobe_reset_internal_state();
+            uninit_opts();
+            uninit_report();
+
+            av_freep(&input_filename);
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffprobe_lib.c",
+              """  // Clean up FFmpeg
+            avformat_network_deinit();
+
+            av_free(ctx);
+          """,
+              """  // Clean up FFmpeg
+            uninit_report();
+            avformat_network_deinit();
+
+            av_free(ctx);
+          """,
+          )
+
+          replace_once(
+              "FFmpegKit/src/ffplay_lib.c",
+              """static void ffplay_reset_cli_state(void) {
+              uninit_opts();
+
+              if (allocated_afilters) {
+          """,
+              """static void ffplay_reset_cli_state(void) {
+              uninit_opts();
+              uninit_report();
+
+              if (allocated_afilters) {
+          """,
+          )
+
+          marker = """TEST(EmbeddedCliReuseTest, FailedInvocationDoesNotPoisonFollowingRuns) {
+          """
+          p = Path("FFmpegKit/tests/runtime_reuse_test.cpp")
+          text = p.read_text()
+          if text.count(marker) != 1:
+              raise RuntimeError("runtime_reuse_test.cpp: failed to locate insertion point")
+          new_test = r"""TEST(EmbeddedCliReuseTest, FFmpegOverwriteFlagsResetAfterFailure) {
+            const std::filesystem::path source(TEST_VIDEO_FILE);
+            const std::filesystem::path output =
+                source.parent_path() / "runtime-reuse-overwrite-output.mp4";
+            std::error_code ec;
+
+            std::filesystem::copy_file(
+                source, output, std::filesystem::copy_options::overwrite_existing, ec);
+            ASSERT_FALSE(ec) << ec.message();
+
+            {
+              const std::string command =
+                  "ffmpeg -v error -n -i definitely-missing-runtime-reuse.mp4 -f null -";
+              FFmpegContext *ctx = ffmpeg_init(command.c_str());
+              ASSERT_NE(ctx, nullptr);
+              EXPECT_NE(ffmpeg_run(ctx), 0);
+              ffmpeg_free(ctx);
+            }
+
+            {
+              const std::string command =
+                  "ffmpeg -v error -y -i " +
+                  quoteCompatibilityArgument(source.string()) +
+                  " -map 0 -c copy " + quoteCompatibilityArgument(output.string());
+              FFmpegContext *ctx = ffmpeg_init(command.c_str());
+              ASSERT_NE(ctx, nullptr);
+              EXPECT_EQ(ffmpeg_run(ctx), 0);
+              ffmpeg_free(ctx);
+            }
+
+            std::filesystem::remove(output, ec);
+          }
+
+          """
+          p.write_text(text.replace(marker, new_test + marker, 1))
+          PY
+
+          rm .github/workflows/runtime_state_followup_patch.yaml
+
+          git diff --check
+          grep -q "void ffmpeg_reset_options_state" FFmpegKit/src/ffmpeg_opt.c
+          grep -q "no_file_overwrite = 0" FFmpegKit/src/ffmpeg_opt.c
+          grep -q "uninit_report();" FFmpegKit/src/ffprobe_lib.c
+          grep -q "uninit_report();" FFmpegKit/src/ffplay_lib.c
+          grep -q "FFmpegOverwriteFlagsResetAfterFailure" FFmpegKit/tests/runtime_reuse_test.cpp
 
       - name: Commit follow-up
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add FFmpegKit/src/ffmpeg_opt.c FFmpegKit/src/ffmpeg.c FFmpegKit/src/ffmpeg_lib.c FFmpegKit/src/ffprobe_lib.c
+          git add -A
           git diff --cached --check
-          git commit -m "fix: centralize embedded FFmpeg option reset"
+          git commit -m "fix: centralize embedded CLI state reset"
           git push origin HEAD:fix/issue-38-ffprobe-argv-timeout
