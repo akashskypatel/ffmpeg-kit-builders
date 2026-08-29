@@ -550,7 +550,12 @@ workflow_step_test() {
   if [[ -n "${TEST_FILTER:-}" ]]; then
     test_args+=("--gtest_filter=${TEST_FILTER}")
   fi
-  if ! run_with_runner_shell "${test_args[@]}"; then
+
+  echo "Runner arch: $(uname -m)"
+  ls -l ./FFmpegKit/build/tests/ffmpegkit_tests
+  file ./FFmpegKit/build/tests/ffmpegkit_tests
+  
+  if ! sudo -E "${test_args[@]}"; then
     echo "::error::Failed to run tests"
     return 1
   fi
