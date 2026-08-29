@@ -21,6 +21,7 @@
 #include "ffmpeg.h"
 #include "ffmpeg_sched.h"
 #include "ffmpeg_kit_assert_override.h"
+#include "ffmpegkit_arg_parser.h"
 #include "ffmpegkit_session_context.h"
 #include "cmdutils.h"
 #include "libavformat/avio.h"
@@ -64,85 +65,59 @@ struct FFmpegContext {
   long session_id;
 };
 
+/*
+ * Restore the ffmpeg CLI globals that are intentionally TLS in library mode.
+ * Upstream ffmpeg expects process exit after one invocation, so many scalar
+ * options are initialized only once. In an embedded runtime the same host
+ * thread can execute many sessions; without restoring these defaults, an
+ * earlier failed/partial parse can change the behavior of every later command.
+ *
+ * Pointer-valued global options are released here as well. Normal ffmpeg
+ * cleanup already NULLs these with av_freep(), so the calls are idempotent.
+ */
+static void ffmpeg_reset_cli_state(void) {
+  uninit_opts();
+
+  av_freep(&filter_nbthreads);
+  av_freep(&print_graphs_file);
+  av_freep(&print_graphs_format);
+  av_freep(&vstats_filename);
+
+  /* ffmpeg_cleanup() closes vstats_file but historically leaves the pointer
+   * non-NULL. ffmpeg_reset_internal_state() runs at the beginning of the next
+   * command and would otherwise fclose() that stale pointer a second time. */
+  vstats_file = NULL;
+
+  dts_delta_threshold = 10.0f;
+  dts_error_threshold = 3600.0f * 30.0f;
+  frame_drop_threshold = 0.0f;
+  do_benchmark = 0;
+  do_benchmark_all = 0;
+  do_hex_dump = 0;
+  do_pkt_dump = 0;
+  copy_ts = 0;
+  start_at_zero = 0;
+  copy_tb = -1;
+  debug_ts = 0;
+  exit_on_error = 0;
+  abort_on_flags = 0;
+  print_stats = -1;
+  stdin_interaction = 1;
+  max_error_rate = 2.0f / 3.0f;
+  filter_complex_nbthreads = 0;
+  filter_buffered_frames = 0;
+  vstats_version = 2;
+  print_graphs = 0;
+  auto_conversion_filters = 1;
+  stats_period = 500000;
+  ignore_unknown_streams = 0;
+  copy_unknown_streams = 0;
+  recast_media = 0;
+  hide_banner = 0;
+}
+
 static int split_args(const char *args, char ***argv_out) {
-  if (!args || !argv_out)
-    return -1;
-
-  char *args_copy = av_strdup(args);
-  if (!args_copy)
-    return -1;
-
-  int argc = 0;
-  char *p = args_copy;
-  int in_quotes = 0;
-
-  // First pass: count arguments
-  while (*p) {
-    while (*p && !in_quotes && (*p == ' ' || *p == '\t' || *p == '\n'))
-      p++;
-    if (!*p)
-      break;
-    argc++;
-    if (*p == '"') {
-      in_quotes = 1;
-      p++;
-      while (*p && *p != '"')
-        p++;
-      if (*p)
-        p++;
-      in_quotes = 0;
-    } else {
-      while (*p && *p != ' ' && *p != '\t' && *p != '\n')
-        p++;
-    }
-  }
-
-  char **argv = av_mallocz(sizeof(char *) * (argc + 1));
-  if (!argv) {
-    av_free(args_copy);
-    return -1;
-  }
-
-  // Second pass: extract arguments
-  strcpy(args_copy, args);
-  p = args_copy;
-  int idx = 0;
-
-  while (*p && idx < argc) {
-    while (*p && (*p == ' ' || *p == '\t' || *p == '\n'))
-      p++;
-    if (!*p)
-      break;
-
-    char *start = p;
-    if (*p == '"') {
-      p++;
-      start = p;
-      while (*p && *p != '"')
-        p++;
-      if (*p)
-        *p++ = '\0';
-    } else {
-      while (*p && *p != ' ' && *p != '\t' && *p != '\n')
-        p++;
-      if (*p)
-        *p++ = '\0';
-    }
-    argv[idx] = av_strdup(start);
-    if (!argv[idx]) {
-      // Memory allocation failure; clean up
-      for (int i = 0; i < idx; i++)
-        av_free(argv[i]);
-      av_free(argv);
-      av_free(args_copy);
-      return -1;
-    }
-    idx++;
-  }
-
-  av_free(args_copy);
-  *argv_out = argv;
-  return argc;
+  return ffmpegkit_split_command(args, argv_out);
 }
 
 FFmpegContext *ffmpeg_init(const char *args_string) {
@@ -299,23 +274,24 @@ int ffmpeg_run(FFmpegContext *ctx) {
     return AVERROR(ECANCELED);
   }
 
+  /* Start every embedded invocation from process-start CLI defaults. */
+  ffmpeg_reset_cli_state();
   ffmpeg_kit_assert_triggered = 0;
 
   // Establish recovery point for av_assert0 failures inside ffmpeg internals.
   // Without this, av_assert0 calls abort() which kills the Flutter host process.
-  // On assertion failure, longjmp lands here and we return AVERROR_EXIT so
-  // FFmpegKitConfig marks the session as failed rather than crashing.
+  // Keep the jump target live until ffmpeg_run_internal() has returned.
   jmp_buf assert_jmp;
   ffmpeg_kit_assert_jmp_ptr = &assert_jmp;
-  ffmpeg_kit_assert_triggered = 0;
   if (setjmp(assert_jmp)) {
+    ffmpeg_kit_assert_jmp_ptr = NULL;
     ffmpeg_unbind_thread_context();
+    uninit_opts();
     av_log(NULL, AV_LOG_ERROR,
            "[ffmpeg-kit] ffmpeg_run: recovered from internal assertion failure. "
            "Session will be marked as failed.\n");
     return AVERROR_EXIT;
   }
-  ffmpeg_kit_assert_jmp_ptr = NULL;
 
   avformat_network_init();
 
@@ -325,6 +301,7 @@ int ffmpeg_run(FFmpegContext *ctx) {
   ffmpeg_bind_thread_context(ctx);
   ctx->ret = ffmpeg_run_internal(ctx, ctx->argc, ctx->argv);
   ffmpeg_unbind_thread_context();
+  ffmpeg_kit_assert_jmp_ptr = NULL;
   ctx->files_parsed = (ctx->ret >= 0);
 
   return ctx->ret;
