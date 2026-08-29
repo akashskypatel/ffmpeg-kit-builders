@@ -18,8 +18,9 @@
  */
 
 #include "ffprobe_lib.h"
-#include "ffprobe.c"
 #include "ffmpeg_kit_assert_override.h"
+#include "ffmpegkit_arg_parser.h"
+#include "ffprobe.c"
 #include "libavutil/mem.h"
 #include "libavutil/bprint.h"
 #include <stdatomic.h>
@@ -59,94 +60,85 @@ struct FFprobeContext
   long session_id;
 };
 
-// Convert string to argc/argv format with proper quoting
+/*
+ * ffprobe is an executable embedded in a long-lived process. Upstream relies
+ * on process exit to discard most option globals, so a parse failure can leave
+ * values behind for the next invocation. Reset every mutable CLI field to the
+ * same values it has at process start and release any option-owned storage.
+ */
+static void ffprobe_reset_cli_state(void)
+{
+  ffprobe_reset_internal_state();
+  uninit_opts();
+
+  av_freep(&input_filename);
+  av_freep(&print_input_filename);
+  av_freep(&output_filename);
+  av_freep(&output_format);
+  av_freep(&stream_specifier);
+  av_freep(&show_data_hash);
+  av_freep(&data_dump_format);
+  av_freep(&read_intervals);
+  av_freep(&audio_codec_name);
+  av_freep(&data_codec_name);
+  av_freep(&subtitle_codec_name);
+  av_freep(&video_codec_name);
+
+  read_intervals_nb = 0;
+  iformat = NULL;
+
+  for (size_t i = 0; i < FF_ARRAY_ELEMS(selected_entries); i++) {
+    av_dict_free(&selected_entries[i].entries_to_show);
+    selected_entries[i].show_all_entries = 0;
+  }
+
+  do_analyze_frames = 0;
+  do_bitexact = 0;
+  do_count_frames = 0;
+  do_count_packets = 0;
+  do_read_frames = 0;
+  do_read_packets = 0;
+  do_show_chapters = 0;
+  do_show_error = 0;
+  do_show_format = 0;
+  do_show_frames = 0;
+  do_show_packets = 0;
+  do_show_programs = 0;
+  do_show_stream_groups = 0;
+  do_show_stream_group_components = 0;
+  do_show_streams = 0;
+  do_show_stream_disposition = 0;
+  do_show_stream_group_disposition = 0;
+  do_show_data = 0;
+  do_show_program_version = 0;
+  do_show_library_versions = 0;
+  do_show_pixel_formats = 0;
+  do_show_pixel_format_flags = 0;
+  do_show_pixel_format_components = 0;
+  do_show_log = 0;
+
+  do_show_chapter_tags = 0;
+  do_show_format_tags = 0;
+  do_show_frame_tags = 0;
+  do_show_program_tags = 0;
+  do_show_stream_group_tags = 0;
+  do_show_stream_tags = 0;
+  do_show_packet_tags = 0;
+
+  show_value_unit = 0;
+  use_value_prefix = 0;
+  use_byte_value_binary_prefix = 0;
+  use_value_sexagesimal_format = 0;
+  show_private_data = 1;
+  show_optional_fields = SHOW_OPTIONAL_FIELDS_AUTO;
+  find_stream_info = 1;
+  hide_banner = 0;
+}
+
+// Convert a compatibility command string to argc/argv.
 static int split_args(const char *args, char ***argv_out)
 {
-  if (!args || !argv_out)
-    return -1;
-
-  char *args_copy = av_strdup(args);
-  if (!args_copy)
-    return -1;
-
-  // Count arguments first
-  int argc = 0;
-  char *p = args_copy;
-  int in_quotes = 0;
-
-  while (*p)
-  {
-    // Skip whitespace
-    while (*p && !in_quotes && (*p == ' ' || *p == '\t' || *p == '\n'))
-      p++;
-    if (!*p)
-      break;
-
-    argc++;
-    // Find end of argument
-    if (*p == '"')
-    {
-      in_quotes = 1;
-      p++;
-      while (*p && *p != '"')
-        p++;
-      if (*p)
-        p++;
-      in_quotes = 0;
-    }
-    else
-    {
-      while (*p && *p != ' ' && *p != '\t' && *p != '\n')
-        p++;
-    }
-  }
-
-  // Allocate argv array
-  char **argv = av_mallocz(sizeof(char *) * (argc + 1));
-  if (!argv)
-  {
-    av_free(args_copy);
-    return -1;
-  }
-
-  // Extract arguments
-  strcpy(args_copy, args);
-  p = args_copy;
-  int idx = 0;
-
-  while (*p && idx < argc)
-  {
-    // Skip whitespace
-    while (*p && (*p == ' ' || *p == '\t' || *p == '\n'))
-      p++;
-    if (!*p)
-      break;
-
-    char *start = p;
-
-    if (*p == '"')
-    {
-      p++; // Skip opening quote
-      start = p;
-      while (*p && *p != '"')
-        p++;
-      if (*p)
-        *p++ = '\0'; // Replace closing quote
-    }
-    else
-    {
-      while (*p && *p != ' ' && *p != '\t' && *p != '\n')
-        p++;
-      if (*p)
-        *p++ = '\0';
-    }
-
-    argv[idx++] = av_strdup(start);
-  }
-
-  av_free(args_copy);
-  *argv_out = argv;
-  return argc;
+  return ffmpegkit_split_command(args, argv_out);
 }
 
 // Custom writer that captures output to AVBPrint
@@ -290,20 +282,23 @@ int ffprobe_run(FFprobeContext *ctx)
   if (!ctx)
     return AVERROR(EINVAL);
 
+  /* A failed previous invocation must never influence this one. */
+  ffprobe_reset_cli_state();
   ffmpeg_kit_assert_triggered = 0;
 
   // Establish recovery point for av_assert0 failures inside ffprobe internals.
+  // Keep the target live until ffprobe_run_internal() returns.
   jmp_buf assert_jmp;
   ffmpeg_kit_assert_jmp_ptr = &assert_jmp;
-  ffmpeg_kit_assert_triggered = 0;
   if (setjmp(assert_jmp)) {
+    ffmpeg_kit_assert_jmp_ptr = NULL;
     ffprobe_unbind_thread_context();
+    ffprobe_reset_cli_state();
     av_log(NULL, AV_LOG_ERROR,
            "[ffmpeg-kit] ffprobe_run: recovered from internal assertion failure. "
            "Session will be marked as failed.\n");
     return AVERROR_EXIT;
   }
-  ffmpeg_kit_assert_jmp_ptr = NULL;
 
   ffprobe_tls_init_options();
   show_help_default_func = ffprobe_show_help_default;
@@ -311,6 +306,7 @@ int ffprobe_run(FFprobeContext *ctx)
   ffprobe_bind_thread_context(ctx);
   ctx->ret = ffprobe_run_internal(ctx->argc, ctx->argv, &ctx->output);
   ffprobe_unbind_thread_context();
+  ffmpeg_kit_assert_jmp_ptr = NULL;
 
   return ctx->ret;
 }
