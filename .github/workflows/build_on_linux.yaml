@@ -3,26 +3,37 @@ name: build_on_linux
 on:
   workflow_call:
     inputs:
+      run_tests:
+        description: "Run tests - Only runs Linux tests when CI is true"
+        required: false
+        default: false
+        type: boolean
+      test_filter:
+        description: "Filter for tests to run"
+        required: false
+        default: ""
+        type: string
+      test_type:
+        description: "Type of tests to run"
+        required: false
+        default: "undefined"
+        type: string
       target_platforms:
         required: true
         type: string
         default: linux,windows,android
-
       target_archs:
         required: true
         type: string
         default: x86_64,aarch64,armv7a
-
       bundles:
         required: true
         type: string
         default: debug
-
       build_bundle:
         required: false
         type: boolean
         default: true
-
       is_ci:
         required: true
         type: boolean
@@ -74,6 +85,21 @@ on:
         required: true
         default: false
         type: boolean
+      run_tests:
+        description: "Run tests - Only runs Linux tests when CI is true"
+        required: false
+        default: false
+        type: boolean
+      test_filter:
+        description: "Filter for tests to run"
+        required: false
+        default: ""
+        type: string
+      test_type:
+        description: "Type of tests to run"
+        required: false
+        default: "undefined"
+        type: string
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -91,6 +117,9 @@ env:
   OSSRH_BASE64: ${{ secrets.OSSRH_BASE64 }}
   OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
   OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+  RUN_TESTS: ${{ inputs.run_tests }}
+  TEST_FILTER: ${{ inputs.test_filter }}
+  TEST_TYPE: ${{ inputs.test_type }}
 
 permissions:
   contents: write

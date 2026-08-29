@@ -2,6 +2,32 @@ name: CI Workflow
 
 on:
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Run tests"
+        required: false
+        default: false
+        type: boolean
+      test_filter:
+        description: "Filter for tests to run"
+        required: false
+        default: ""
+        type: string
+      test_type:
+        description: "Type of tests to run"
+        required: false
+        default: "undefined"
+        type: string
+      build_on_linux:
+        description: "Build on Linux"
+        required: false
+        default: true
+        type: boolean
+      build_on_macos:
+        description: "Build on macOS"
+        required: false
+        default: true
+        type: boolean
   push:
     branches:
       - main
@@ -71,7 +97,7 @@ concurrency:
 
 jobs:
   build_on_linux:
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && inputs.build_on_linux == true
     uses: ./.github/workflows/build_on_linux.yaml
     secrets: inherit
     with:
@@ -80,9 +106,12 @@ jobs:
       is_ci: true
       target_platforms: linux,windows,android
       target_archs: x86_64,aarch64,armv7a
+      run_tests: ${{ inputs.run_tests }}
+      test_filter: ${{ inputs.test_filter }}
+      test_type: ${{ inputs.test_type }}
       
   build_on_macos:
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && inputs.build_on_macos == true
     uses: ./.github/workflows/build_on_macos.yaml
     secrets: inherit
     with:
@@ -91,4 +120,6 @@ jobs:
       is_ci: true
       target_platforms: ios,iphonesimulator,appletvos,appletvsimulator,macos
       target_archs: aarch64,x86_64
-      
+      run_tests: ${{ inputs.run_tests }}
+      test_filter: ${{ inputs.test_filter }}
+      test_type: ${{ inputs.test_type }}
