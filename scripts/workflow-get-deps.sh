@@ -366,13 +366,13 @@ PY
                 gsed -e 's/[\/&|]/\\&/g'
         )"
 
-        find "$staging_dir" -type f -exec grep -IlZ . {} + |
-            xargs -0 -r gsed -i \
+        find "$staging_dir" -type f -exec grep -Il --null . {} + |
+            xargs -0 gsed -i \
                 -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
                 -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
                 -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
         
-        find "${workspace}/prebuilt/${platform}-${arch}" -xtype l -print0 | while IFS= read -r -d '' link; do
+        find "${workspace}/prebuilt/${platform}-${arch}" -type l -print0 | while IFS= read -r -d '' link; do
             old_target=$(readlink "$link")
             
             new_target=$(echo "$old_target" | gsed \

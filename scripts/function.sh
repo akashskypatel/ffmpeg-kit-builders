@@ -4694,7 +4694,7 @@ build_ffmpeg() {
     fi
     local pattern
     pattern="$(get_ffmpeg_directory)"
-    sudo -E env "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$host_arch" "$pattern" --artifact-pattern 2>&1 | tee -a "$LOG_FILE"
+    sudo -E env "$SCRIPTDIR/workflow-get-deps.sh" "$host_platform" "$platform_arch" "$pattern" --artifact-pattern 2>&1 | tee -a "$LOG_FILE"
     result=${PIPESTATUS[0]}
     if [[ $result -eq 0 ]]; then
       echo "INFO: Downloaded existing release artifact for $step. Skipping build." >>"${LOG_FILE}"
@@ -4800,7 +4800,7 @@ configure_ffmpeg() {
     init_options+=" --enable-pthreads"
     add_extra_libs "-lpthread -lrt -lm -ldl -lstdc++"
   elif ismacos; then
-    if [[ "$host_arch" != "arm64" ]]; then
+    if [[ "$host_arch" != "arm64" && "$host_arch" != "aarch64" ]]; then
       init_options+=" --target-os=darwin"
       export LD="$CXX"
       init_options+=" --ld=$CXX"
