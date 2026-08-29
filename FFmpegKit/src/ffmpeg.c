@@ -80,6 +80,7 @@
 
 #include "cmdutils.h"
 #include "ffmpeg_lib.h"
+#include "opt_common.h"
 #if CONFIG_MEDIACODEC
 #include "compat/android/binder.h"
 #endif

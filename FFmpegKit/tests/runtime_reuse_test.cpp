@@ -139,7 +139,8 @@ TEST(EmbeddedCliReuseTest, FailedInvocationDoesNotPoisonFollowingRuns) {
 
   {
     const std::string command =
-        "ffmpeg -v error -i definitely-missing-runtime-reuse.mp4 -f null -";
+        "ffmpeg -v error -i " + quoteCompatibilityArgument(normalPath) +
+        " -i definitely-missing-runtime-reuse.mp4 -f null -";
     FFmpegContext *ctx = ffmpeg_init(command.c_str());
     ASSERT_NE(ctx, nullptr);
     EXPECT_NE(ffmpeg_run(ctx), 0);
