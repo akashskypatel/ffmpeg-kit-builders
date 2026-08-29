@@ -28,6 +28,11 @@ on:
         required: false
         default: true
         type: boolean
+      force_run:
+        description: "Force run"
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -97,7 +102,7 @@ concurrency:
 
 jobs:
   build_on_linux:
-    if: github.event.pull_request.draft == false && inputs.build_on_linux == true
+    if: (inputs.force_run == true || github.event.pull_request.draft == false) && inputs.build_on_linux == true
     uses: ./.github/workflows/build_on_linux.yaml
     secrets: inherit
     with:
@@ -111,7 +116,7 @@ jobs:
       test_type: ${{ inputs.test_type }}
       
   build_on_macos:
-    if: github.event.pull_request.draft == false && inputs.build_on_macos == true
+    if: (inputs.force_run == true || github.event.pull_request.draft == false) && inputs.build_on_macos == true
     uses: ./.github/workflows/build_on_macos.yaml
     secrets: inherit
     with:
