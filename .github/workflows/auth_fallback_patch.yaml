@@ -63,15 +63,13 @@ jobs:
             exit 1
           fi
 
-      - name: Commit fixes
+      - name: Commit script fixes
         shell: bash
         run: |
-          rm -f .github/workflows/auth_fallback_patch.yaml .github/auth_fallback_patch.py
+          git restore .github/workflows/build_on_linux.yaml .github/workflows/build_on_macos.yaml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/function.sh scripts/workflow-get-deps.sh scripts/upload-deps-release.sh \
-            .github/workflows/build_on_linux.yaml .github/workflows/build_on_macos.yaml \
-            .github/workflows/auth_fallback_patch.yaml .github/auth_fallback_patch.py
+          git add scripts/function.sh scripts/workflow-get-deps.sh scripts/upload-deps-release.sh
           git diff --cached --check
           git commit -m "fix: harden GitHub credential fallback"
           git push origin HEAD:fix/issue-38-ffprobe-argv-timeout
