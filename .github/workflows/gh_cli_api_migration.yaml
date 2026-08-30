@@ -1,0 +1,395 @@
+name: Migrate GitHub API calls to gh CLI
+
+on:
+  push:
+    branches:
+      - fix/issue-38-ffprobe-argv-timeout
+    paths:
+      - .github/workflows/gh_cli_api_migration.yaml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/issue-38-ffprobe-argv-timeout
+          fetch-depth: 0
+
+      - name: Rewrite GitHub API usage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_between(path, start_marker, end_marker, replacement, keep_end=True):
+              p = Path(path)
+              text = p.read_text()
+              start = text.find(start_marker)
+              if start < 0:
+                  raise RuntimeError(f"{path}: missing start marker: {start_marker!r}")
+              end = text.find(end_marker, start + len(start_marker))
+              if end < 0:
+                  raise RuntimeError(f"{path}: missing end marker: {end_marker!r}")
+              suffix = text[end:] if keep_end else text[end + len(end_marker):]
+              p.write_text(text[:start] + replacement + suffix)
+
+          # workflow-get-deps.sh: release asset discovery via gh api.
+          path = Path('scripts/workflow-get-deps.sh')
+          text = path.read_text()
+          start = text.index('if [[ "$mode" == "--artifact-pattern" ]]; then')
+          end = text.index('elif [[ "$mode" == "--artifact" ]]; then', start)
+          artifact_pattern = '''if [[ "$mode" == "--artifact-pattern" ]]; then
+              if truthy "$build_force"; then
+                  echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
+                  exit 4
+              fi
+              release_tag="${platform}-${arch}-deps"
+              release_name="${platform}-${arch}-dependencies"
+              asset_prefix="${platform}-${arch}-"
+
+              if ! release_id="$(GH_TOKEN="$token" gh api "repos/${repo}/releases/tags/${release_tag}" --jq '.id' 2>>"$LOG_FILE")"; then
+                  echo "Missing release for dependency artifact pattern: tag='${release_tag}' name='${release_name}' pattern='${workflow_name}'" >&2
+                  exit 3
+              fi
+
+              dependencies="$(
+                  GH_TOKEN="$token" gh api --paginate \
+                      "repos/${repo}/releases/${release_id}/assets?per_page=100" \
+                      --jq '.[].name' 2>>"$LOG_FILE" |
+                  while IFS= read -r asset_name; do
+                      [[ "$asset_name" == "${asset_prefix}"*.zip ]] || continue
+                      dep="${asset_name#"$asset_prefix"}"
+                      dep="${dep%.zip}"
+                      [[ "$dep" == ffmpeg-kit-* ]] && continue
+                      if [[ "$dep" == $workflow_name ]]; then
+                          printf '%s\\n' "$dep"
+                      fi
+                  done |
+                  sort -u |
+                  xargs
+              )"
+
+              if [[ -z "$dependencies" ]]; then
+                  echo "Missing dependency artifacts: tag='${release_tag}' name='${release_name}' pattern='${workflow_name}'" >&2
+                  exit 3
+              fi
+          '''
+          path.write_text(text[:start] + artifact_pattern + text[end:])
+
+          text = path.read_text()
+          start = text.index('\tif ! python3 - "$repo" "$release_tag" "$release_name" "$asset_name" "$archive_path" "$token" <<\'PY\'')
+          end = text.index('    if [[ "$archive_path" == "${platform}-${arch}-ffmpeg-*" ]]; then', start)
+          download_block = '''\trm -f "$archive_path"
+          \tif ! GH_TOKEN="$token" gh release download "$release_tag" \\
+          \t\t--repo "$repo" \\
+          \t\t--pattern "$asset_name" \\
+          \t\t--output "$archive_path" \\
+          \t\t--clobber >>"$LOG_FILE" 2>&1; then
+          \t\techo "Missing dependency artifact: ${asset_name}" >&2
+          \t\texit 3
+          \tfi
+          '''
+          path.write_text(text[:start] + download_block + text[end:])
+
+          # upload-deps-release.sh: release creation/upload entirely through gh release.
+          path = Path('scripts/upload-deps-release.sh')
+          text = path.read_text()
+          start = text.index('python3 - "$repo" "$release_tag" "$release_name" "${workspace}/${archive_name}" "$token" <<\'PY\'')
+          replacement = '''if ! GH_TOKEN="$token" gh release view "$release_tag" --repo "$repo" >/dev/null 2>>"$LOG_FILE"; then
+            echo "Creating release ${release_tag}..." | tee -a "$LOG_FILE"
+            if ! GH_TOKEN="$token" gh release create "$release_tag" \\
+                --repo "$repo" \\
+                --title "$release_name" \\
+                --prerelease \\
+                --notes "" >>"$LOG_FILE" 2>&1; then
+              echo "Failed to create release ${release_tag}." >&2
+              exit 1
+            fi
+          fi
+
+          if ! GH_TOKEN="$token" gh release upload "$release_tag" \\
+              "${workspace}/${archive_name}" \\
+              --repo "$repo" \\
+              --clobber >>"$LOG_FILE" 2>&1; then
+            echo "Failed to upload release asset: ${archive_name}" >&2
+            exit 1
+          fi
+          '''
+          path.write_text(text[:start] + replacement)
+
+          # function.sh: replace all direct GitHub REST calls with gh CLI commands.
+          path = Path('scripts/function.sh')
+          text = path.read_text()
+
+          auth_start = text.index('  if curl -f --request GET \\\n    --url "https://api.github.com/octocat"')
+          auth_end = text.index('\n}\n\ncreate_github_release() {', auth_start)
+          auth_replacement = '''  if GH_TOKEN="$github_token" gh api user --silent >/dev/null 2>&1; then
+            echo "GitHub token is valid." | tee -a "$LOG_FILE"
+            return 0
+          else
+            exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+            return 1
+          fi
+          '''
+          text = text[:auth_start] + auth_replacement + text[auth_end:]
+
+          start = text.index('create_github_release() {')
+          end = text.index('\nupload_release_asset() {', start)
+          create_release = '''create_github_release() {
+            local attachment="$1"
+            local version=$(get_version)
+            local tag="v$version-$host_platform"
+            local repo="${GITHUB_REPO:-}"
+            local owner="${GITHUB_USERNAME:-}"
+            local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+            if [[ -z "$attachment" || ! -f "$attachment" ]]; then
+              echo "Invalid attachment. File doesn't exist or attachment is blank: $attachment" | tee -a "$LOG_FILE"
+              return 1
+            fi
+
+            if [[ -z "$repo" ]]; then
+              repo="$(get_github_repo)" || return 1
+            fi
+            if [[ -z "$owner" ]]; then
+              owner="$(get_github_owner)" || return 1
+            fi
+            if [[ -z "$github_token" ]]; then
+              github_token="$(get_github_token)" || return 1
+            fi
+
+            if ! authorize_github "$github_token" "$repo" "$owner"; then
+              exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+              return 1
+            fi
+
+            if git show-ref --verify --tags "refs/tags/$tag"; then
+              echo "Tag $tag already exists." | tee -a "$LOG_FILE"
+            else
+              git tag "$tag"
+              git push origin "$tag"
+            fi
+
+            if GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
+              echo "Release $tag already exists." | tee -a "$LOG_FILE"
+              upload_release_asset "$attachment"
+              return $?
+            fi
+
+            echo "Creating release $tag..." | tee -a "$LOG_FILE"
+            local release_notes
+            release_notes="$(get_changes_from_changelog)"
+            if GH_TOKEN="$github_token" gh release create "$tag" \\
+                --repo "$owner/$repo" \\
+                --title "$tag" \\
+                --notes "$release_notes" \\
+                --prerelease \\
+                --discussion-category "Releases" \\
+                --generate-notes \\
+                --latest >>"$LOG_FILE" 2>&1; then
+              echo "Release $tag created successfully." | tee -a "$LOG_FILE"
+              upload_release_asset "$attachment"
+            else
+              if GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
+                echo "Release $tag became available after create attempt. Continuing..." | tee -a "$LOG_FILE"
+                upload_release_asset "$attachment"
+              else
+                echo "Failed to create release $tag." | tee -a "$LOG_FILE"
+                return 1
+              fi
+            fi
+          }
+          '''
+          text = text[:start] + create_release + text[end:]
+
+          start = text.index('upload_release_asset() {')
+          end = text.index('\ncheck_existing_package() {', start)
+          upload_release = '''upload_release_asset() {
+            local attachment="$1"
+            local version=$(get_version)
+            local tag="v$version-$host_platform"
+            local repo="${GITHUB_REPO:-}"
+            local owner="${GITHUB_USERNAME:-}"
+            local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+            if [[ -z "$repo" ]]; then
+              repo="$(get_github_repo)" || return 1
+            fi
+            if [[ -z "$owner" ]]; then
+              owner="$(get_github_owner)" || return 1
+            fi
+            if [[ -z "$github_token" ]]; then
+              github_token="$(get_github_token)" || return 1
+            fi
+
+            if ! authorize_github "$github_token" "$repo" "$owner"; then
+              exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+              return 1
+            fi
+
+            if ! GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
+              echo "Error: Could not find release for tag $tag" | tee -a "$LOG_FILE"
+              return 1
+            fi
+
+            echo "Uploading $attachment as release asset for $tag..." | tee -a "$LOG_FILE"
+            if GH_TOKEN="$github_token" gh release upload "$tag" "$attachment" \\
+                --repo "$owner/$repo" \\
+                --clobber >>"$LOG_FILE" 2>&1; then
+              echo "Uploaded $attachment successfully." | tee -a "$LOG_FILE"
+            else
+              exit_message 1 "Failed to upload $attachment. Please check the logs."
+            fi
+          }
+          '''
+          text = text[:start] + upload_release + text[end:]
+
+          start = text.index('check_existing_package() {')
+          end = text.index('\ndelete_existing_package() {', start)
+          check_package = '''check_existing_package() {
+            local package_name="$1"
+            local package_version="$2"
+            local package_type="maven"
+            local repo="${GITHUB_REPO:-}"
+            local owner="${GITHUB_USERNAME:-}"
+            local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+            if [[ -z "$repo" ]]; then
+              repo="$(get_github_repo)" || return 1
+            fi
+            if [[ -z "$owner" ]]; then
+              owner="$(get_github_owner)" || return 1
+            fi
+            if [[ -z "$github_token" ]]; then
+              github_token="$(get_github_token)" || return 1
+            fi
+
+            if ! authorize_github "$github_token" "$repo" "$owner"; then
+              exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+              return 1
+            fi
+
+            echo "Checking for existing package $package_name version $package_version..." >>"${LOG_FILE}"
+
+            local versions_json
+            if ! versions_json="$(GH_TOKEN="$github_token" gh api --paginate --slurp \\
+                "users/$owner/packages/$package_type/$package_name/versions?per_page=100" 2>>"$LOG_FILE")"; then
+              echo "Error: package $package_name could not be queried" >>"${LOG_FILE}"
+              return 1
+            fi
+            versions_json="$(printf '%s' "$versions_json" | jq -c '[.[][]]')"
+
+            local version_id
+            version_id="$(printf '%s' "$versions_json" | jq -r --arg version "$package_version" '.[]? | select(.name == $version) | .id')"
+            if [[ -n "$version_id" && "$version_id" != "null" ]]; then
+              echo "Found existing package version: $version_id" >>"${LOG_FILE}"
+              echo "$version_id"
+              return 0
+            fi
+
+            return 1
+          }
+          '''
+          text = text[:start] + check_package + text[end:]
+
+          start = text.index('delete_existing_package() {')
+          end = text.index('\ncheck_maven_package_status() {', start)
+          delete_package = '''delete_existing_package() {
+            local package_name="$1"
+            local package_version="$2"
+            local package_type="maven"
+            local repo="${GITHUB_REPO:-}"
+            local owner="${GITHUB_USERNAME:-}"
+            local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+            if [[ -z "$repo" ]]; then
+              repo="$(get_github_repo)" || return 1
+            fi
+            if [[ -z "$owner" ]]; then
+              owner="$(get_github_owner)" || return 1
+            fi
+            if [[ -z "$github_token" ]]; then
+              github_token="$(get_github_token)" || return 1
+            fi
+
+            if ! authorize_github "$github_token" "$repo" "$owner"; then
+              exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+              return 1
+            fi
+
+            local versions_json
+            if ! versions_json="$(GH_TOKEN="$github_token" gh api --paginate --slurp \\
+                "users/$owner/packages/$package_type/$package_name/versions?per_page=100" 2>>"$LOG_FILE")"; then
+              echo "Package $package_name does not exist in registry yet. Proceeding..." | tee -a "$LOG_FILE"
+              return 0
+            fi
+            versions_json="$(printf '%s' "$versions_json" | jq -c '[.[][]]')"
+
+            local version_count
+            version_count="$(printf '%s' "$versions_json" | jq 'length')"
+            local version_id
+            version_id="$(printf '%s' "$versions_json" | jq -r --arg version "$package_version" '.[]? | select(.name == $version) | .id')"
+
+            if [[ -z "$version_id" || "$version_id" == "null" ]]; then
+              echo "Version $package_version not found. Proceeding..." | tee -a "$LOG_FILE"
+              return 0
+            fi
+
+            local delete_endpoint
+            if [[ "$version_count" -eq 1 ]]; then
+              echo "Last version detected. Deleting entire package: $package_name..." | tee -a "$LOG_FILE"
+              delete_endpoint="users/$owner/packages/$package_type/$package_name"
+            else
+              echo "Multiple versions exist. Deleting specific version ID: $version_id..." | tee -a "$LOG_FILE"
+              delete_endpoint="users/$owner/packages/$package_type/$package_name/versions/$version_id"
+            fi
+
+            if GH_TOKEN="$github_token" gh api --method DELETE "$delete_endpoint" --silent >>"$LOG_FILE" 2>&1; then
+              echo "Successfully deleted." | tee -a "$LOG_FILE"
+            else
+              echo "Warning: Delete failed. Conflict may occur." | tee -a "$LOG_FILE"
+            fi
+          }
+          '''
+          text = text[:start] + delete_package + text[end:]
+          path.write_text(text)
+          PY
+
+          rm .github/workflows/gh_cli_api_migration.yaml
+
+          bash -n scripts/workflow-get-deps.sh
+          bash -n scripts/upload-deps-release.sh
+          bash -n scripts/function.sh
+          git diff --check
+
+          if grep -nE 'api\.github\.com|uploads\.github\.com' \
+              scripts/workflow-get-deps.sh scripts/upload-deps-release.sh scripts/function.sh; then
+            echo 'Direct GitHub API URL remains in migrated scripts' >&2
+            exit 1
+          fi
+
+          if grep -nE 'urllib\.(request|error|parse)' \
+              scripts/workflow-get-deps.sh scripts/upload-deps-release.sh; then
+            echo 'Legacy Python GitHub HTTP client remains in migrated scripts' >&2
+            exit 1
+          fi
+
+          grep -q 'gh release download' scripts/workflow-get-deps.sh
+          grep -q 'gh release upload' scripts/upload-deps-release.sh
+          grep -q 'gh api user' scripts/function.sh
+          grep -q 'gh release create' scripts/function.sh
+          grep -q 'gh api --paginate --slurp' scripts/function.sh
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "refactor: use gh CLI for GitHub API operations"
+          git push origin HEAD:fix/issue-38-ffprobe-argv-timeout
