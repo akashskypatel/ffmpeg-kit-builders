@@ -120,9 +120,27 @@ fi
 rm -f "${workspace}/${archive_name}"
 (cd "$artifact_dir" && zip -qry "${workspace}/${archive_name}" .)
 
-if ! authorize_github "$token" "${repo#*/}" "${repo%/*}"; then
-  exit 1
-fi
+check_github_auth() {
+	if [[ -z "$token" ]]; then
+		echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
+		exit 1
+	fi
+    if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+        token="${GITHUB_TOKEN:-${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}}"
+        if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+            token="${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}"
+            if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+                token="$(get_github_token_classic)"
+                if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
+                    echo "Failed to authorize GitHub" >&2
+                    exit 1
+                fi
+            fi
+        fi
+    fi
+}
+
+check_github_auth
 
 python3 - "$repo" "$release_tag" "$release_name" "${workspace}/${archive_name}" "$token" <<'PY'
 import json
