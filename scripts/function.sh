@@ -7921,16 +7921,14 @@ authorize_github() {
     github_owner="$(get_github_owner)" || return 1
   fi
 
-  if curl -f --request GET \
-    --url "https://api.github.com/octocat" \
-    --header "Authorization: Bearer $github_token" \
-    --header "X-GitHub-Api-Version: 2022-11-28" > /dev/null 2>&1; then
-    echo "GitHub token is valid." | tee -a "$LOG_FILE"
-    return 0
-  else
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
-  fi
+  if GH_TOKEN="$github_token" gh api user --silent >/dev/null 2>&1; then
+  echo "GitHub token is valid." | tee -a "$LOG_FILE"
+  return 0
+else
+  exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
+  return 1
+fi
+
 }
 
 create_github_release() {
@@ -7960,66 +7958,46 @@ create_github_release() {
     exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
     return 1
   fi
-  # check if tag exists
+
   if git show-ref --verify --tags "refs/tags/$tag"; then
     echo "Tag $tag already exists." | tee -a "$LOG_FILE"
   else
-    # create tag
     git tag "$tag"
     git push origin "$tag"
   fi
-  # check if release exists
-  if curl -f -s -H "Authorization: Bearer $github_token" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" \
-    >> "$LOG_FILE" 2>&1; then
+
+  if GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
     echo "Release $tag already exists." | tee -a "$LOG_FILE"
-    # upload release asset
+    upload_release_asset "$attachment"
+    return $?
+  fi
+
+  echo "Creating release $tag..." | tee -a "$LOG_FILE"
+  local release_notes
+  release_notes="$(get_changes_from_changelog)"
+  if GH_TOKEN="$github_token" gh release create "$tag" \
+      --repo "$owner/$repo" \
+      --title "$tag" \
+      --notes "$release_notes" \
+      --prerelease \
+      --discussion-category "Releases" \
+      --generate-notes \
+      --latest >>"$LOG_FILE" 2>&1; then
+    echo "Release $tag created successfully." | tee -a "$LOG_FILE"
     upload_release_asset "$attachment"
   else
-    # create release
-    echo "Creating release $tag..." | tee -a "$LOG_FILE"
-    local json_payload=$(jq -n \
-        --arg tag "$tag" \
-        --arg body "$(get_changes_from_changelog)" \
-        '{
-            tag_name: $tag,
-            name: $tag,
-            body: $body,
-            draft: false,
-            prerelease: true,
-            discussion_category_name: "Releases",
-            generate_release_notes: true,
-            make_latest: "true"
-        }')
-    echo "$json_payload" >> "$LOG_FILE"
-    if curl -f -s -H "Authorization: Bearer $github_token" \
-        -H "Accept: application/vnd.github+json" \
-        -d "$json_payload" \
-        "https://api.github.com/repos/$owner/$repo/releases" \
-        >> "$LOG_FILE" 2>&1; then
-      echo "Release $tag created successfully." | tee -a "$LOG_FILE"
+    if GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
+      echo "Release $tag became available after create attempt. Continuing..." | tee -a "$LOG_FILE"
       upload_release_asset "$attachment"
     else
-      # GitHub can return an error here even if another concurrent or retried run
-      # has already created the release. Re-check by tag before failing.
-      if curl -f -s -H "Authorization: Bearer $github_token" \
-        -H "Accept: application/vnd.github+json" \
-        "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" \
-        >> "$LOG_FILE" 2>&1; then
-        echo "Release $tag became available after create attempt. Continuing..." | tee -a "$LOG_FILE"
-        upload_release_asset "$attachment"
-      else
-        echo "Failed to create release $tag." | tee -a "$LOG_FILE"
-        return 1
-      fi
+      echo "Failed to create release $tag." | tee -a "$LOG_FILE"
+      return 1
     fi
   fi
 }
 
 upload_release_asset() {
   local attachment="$1"
-  local asset_name=$(basename "$attachment")
   local version=$(get_version)
   local tag="v$version-$host_platform"
   local repo="${GITHUB_REPO:-}"
@@ -8041,40 +8019,15 @@ upload_release_asset() {
     return 1
   fi
 
-  # Retrieve release metadata
-  local release_json=$(curl -f -s -H "Authorization: Bearer $github_token" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/$owner/$repo/releases/tags/$tag")
-
-  if [[ $? -ne 0 ]] || [[ -z "$release_json" ]]; then
+  if ! GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
     echo "Error: Could not find release for tag $tag" | tee -a "$LOG_FILE"
     return 1
   fi
 
-  local release_id=$(echo "$release_json" | jq -r '.id')
-
-  # Check for existing asset with the same name
-  local existing_asset_id=$(echo "$release_json" | jq -r ".assets[] | select(.name == \"$asset_name\") | .id")
-
-  if [[ -n "$existing_asset_id" && "$existing_asset_id" != "null" ]]; then
-    echo "Asset $asset_name already exists (ID: $existing_asset_id). Deleting..." | tee -a "$LOG_FILE"
-    curl -f -s -X DELETE \
-      -H "Authorization: Bearer $github_token" \
-      -H "Accept: application/vnd.github+json" \
-      "https://api.github.com/repos/$owner/$repo/releases/assets/$existing_asset_id"
-    
-    if [[ $? -ne 0 ]]; then
-      echo "Warning: Failed to delete existing asset. Upload might fail." | tee -a "$LOG_FILE"
-    fi
-  fi
-
-  # Upload the asset
   echo "Uploading $attachment as release asset for $tag..." | tee -a "$LOG_FILE"
-  if curl -f -s -H "Authorization: Bearer $github_token" \
-    -H "Accept: application/vnd.github+json" \
-    -H "Content-Type: application/octet-stream" \
-    --data-binary @"$attachment" \
-    "https://uploads.github.com/repos/$owner/$repo/releases/$release_id/assets?name=$asset_name" >> "$LOG_FILE" 2>&1; then
+  if GH_TOKEN="$github_token" gh release upload "$tag" "$attachment" \
+      --repo "$owner/$repo" \
+      --clobber >>"$LOG_FILE" 2>&1; then
     echo "Uploaded $attachment successfully." | tee -a "$LOG_FILE"
   else
     exit_message 1 "Failed to upload $attachment. Please check the logs."
@@ -8106,26 +8059,16 @@ check_existing_package() {
 
   echo "Checking for existing package $package_name version $package_version..." >>"${LOG_FILE}"
 
-  # Retrieve package versions metadata
-  local versions_json=$(curl -s \
-    -H "Authorization: Bearer $github_token" \
-    -H "Accept: application/vnd.github+json" \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    "https://api.github.com/users/$owner/packages/$package_type/$package_name/versions")
-
-  # 1. Safely check for error message ONLY if it's an object
-  # If it's an array, error_msg will be empty
-  local error_msg=$(echo "$versions_json" | jq -r 'if type == "object" then .message else empty end')
-  
-  if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
-    # Return nothing and exit 1 so the caller knows it doesn't exist/error
-    echo "Error: $error_msg" >>"${LOG_FILE}"
+  local versions_json
+  if ! versions_json="$(GH_TOKEN="$github_token" gh api --paginate --slurp \
+      "users/$owner/packages/$package_type/$package_name/versions?per_page=100" 2>>"$LOG_FILE")"; then
+    echo "Error: package $package_name could not be queried" >>"${LOG_FILE}"
     return 1
   fi
+  versions_json="$(printf '%s' "$versions_json" | jq -c '[.[][]]')"
 
-  # 2. Extract version ID safely from the array
-  local version_id=$(echo "$versions_json" | jq -r ".[]? | select(.name == \"$package_version\") | .id")
-
+  local version_id
+  version_id="$(printf '%s' "$versions_json" | jq -r --arg version "$package_version" '.[]? | select(.name == $version) | .id')"
   if [[ -n "$version_id" && "$version_id" != "null" ]]; then
     echo "Found existing package version: $version_id" >>"${LOG_FILE}"
     echo "$version_id"
@@ -8158,49 +8101,37 @@ delete_existing_package() {
     return 1
   fi
 
-  # 1. Get all versions for the package
-  local versions_json=$(curl -s \
-    -H "Authorization: Bearer $github_token" \
-    -H "Accept: application/vnd.github+json" \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    "https://api.github.com/users/$owner/packages/$package_type/$package_name/versions")
-
-  # Check if package exists at all (404/error check)
-  local error_msg=$(echo "$versions_json" | jq -r 'if type == "object" then .message else empty end')
-  if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
+  local versions_json
+  if ! versions_json="$(GH_TOKEN="$github_token" gh api --paginate --slurp \
+      "users/$owner/packages/$package_type/$package_name/versions?per_page=100" 2>>"$LOG_FILE")"; then
     echo "Package $package_name does not exist in registry yet. Proceeding..." | tee -a "$LOG_FILE"
     return 0
   fi
+  versions_json="$(printf '%s' "$versions_json" | jq -c '[.[][]]')"
 
-  # 2. Count total versions and find target version ID
-  local version_count=$(echo "$versions_json" | jq '. | length')
-  local version_id=$(echo "$versions_json" | jq -r ".[] | select(.name == \"$package_version\") | .id")
+  local version_count
+  version_count="$(printf '%s' "$versions_json" | jq 'length')"
+  local version_id
+  version_id="$(printf '%s' "$versions_json" | jq -r --arg version "$package_version" '.[]? | select(.name == $version) | .id')"
 
   if [[ -z "$version_id" || "$version_id" == "null" ]]; then
     echo "Version $package_version not found. Proceeding..." | tee -a "$LOG_FILE"
     return 0
   fi
 
-  # 3. Handle Deletion logic
-  local delete_url
+  local delete_endpoint
   if [[ "$version_count" -eq 1 ]]; then
     echo "Last version detected. Deleting entire package: $package_name..." | tee -a "$LOG_FILE"
-    delete_url="https://api.github.com/users/$owner/packages/$package_type/$package_name"
+    delete_endpoint="users/$owner/packages/$package_type/$package_name"
   else
     echo "Multiple versions exist. Deleting specific version ID: $version_id..." | tee -a "$LOG_FILE"
-    delete_url="https://api.github.com/users/$owner/packages/$package_type/$package_name/versions/$version_id"
+    delete_endpoint="users/$owner/packages/$package_type/$package_name/versions/$version_id"
   fi
 
-  local http_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-    -H "Authorization: Bearer $github_token" \
-    -H "Accept: application/vnd.github+json" \
-    -H "X-GitHub-Api-Version: 2022-11-28" \
-    "$delete_url")
-
-  if [[ "$http_code" == "204" ]]; then
+  if GH_TOKEN="$github_token" gh api --method DELETE "$delete_endpoint" --silent >>"$LOG_FILE" 2>&1; then
     echo "Successfully deleted." | tee -a "$LOG_FILE"
   else
-    echo "Warning: Delete failed with HTTP $http_code. Conflict may occur." | tee -a "$LOG_FILE"
+    echo "Warning: Delete failed. Conflict may occur." | tee -a "$LOG_FILE"
   fi
 }
 
