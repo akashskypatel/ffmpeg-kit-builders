@@ -7907,37 +7907,69 @@ get_github_owner() {
 }
 
 authorize_github() {
-  local github_token="${1:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
+  local github_token="${1:-}"
   local github_repo="${2:-${GITHUB_REPO:-}}"
   local github_owner="${3:-${GITHUB_USERNAME:-}}"
 
-  if [[ -z "$github_token" ]]; then
-    github_token="$(get_github_token)" || return 1
-  fi
-  if [[ -z "$github_repo" ]]; then
-    github_repo="$(get_github_repo)" || return 1
-  fi
-  if [[ -z "$github_owner" ]]; then
-    github_owner="$(get_github_owner)" || return 1
+  [[ -n "$github_token" ]] || return 1
+  [[ -n "$github_repo" ]] || return 1
+  [[ -n "$github_owner" ]] || return 1
+
+  GH_TOKEN="$github_token" gh api "repos/${github_owner}/${github_repo}" --silent >/dev/null 2>&1
+}
+
+# Run a gh command with credentials in priority order:
+#   1. Actions-generated GITHUB_TOKEN
+#   2. long-lived fine-grained PAT in GH_TOKEN
+#   3. long-lived classic PAT in GH_TOKEN_CLASSIC
+# Local keystore credentials are appended only when all environment credentials fail.
+github_gh() {
+  local -a credential_names=("GITHUB_TOKEN" "GH_TOKEN" "GH_TOKEN_CLASSIC")
+  local -a credential_values=("${GITHUB_TOKEN:-}" "${GH_TOKEN:-}" "${GH_TOKEN_CLASSIC:-}")
+  local i credential keystore stored_token stored_classic
+
+  for i in "${!credential_values[@]}"; do
+    credential="${credential_values[$i]}"
+    [[ -n "$credential" ]] || continue
+
+    if GH_TOKEN="$credential" gh "$@"; then
+      if (( i > 0 )); then
+        echo "INFO: GitHub operation succeeded with fallback credential ${credential_names[$i]}." >>"$LOG_FILE"
+      fi
+      return 0
+    fi
+
+    echo "WARNING: GitHub operation failed while using ${credential_names[$i]}; trying the next credential." >>"$LOG_FILE"
+  done
+
+  # Preserve local/non-CI keystore behavior. get_keystore_file executes in a
+  # command substitution so its historical exit_message behavior cannot exit
+  # this shell when no local keystore exists.
+  keystore="$(get_keystore_file 2>/dev/null)" || keystore=""
+  if [[ -n "$keystore" && -f "$keystore" ]]; then
+    stored_token="$(grep '^GH_TOKEN=' "$keystore" | cut -d '=' -f2- | tr -d '\r')"
+    stored_classic="$(grep '^GH_TOKEN_CLASSIC=' "$keystore" | cut -d '=' -f2- | tr -d '\r')"
+
+    for credential in "$stored_token" "$stored_classic"; do
+      [[ -n "$credential" ]] || continue
+      if GH_TOKEN="$credential" gh "$@"; then
+        echo "INFO: GitHub operation succeeded with a local keystore fallback credential." >>"$LOG_FILE"
+        return 0
+      fi
+    done
   fi
 
-  if GH_TOKEN="$github_token" gh api user --silent >/dev/null 2>&1; then
-  echo "GitHub token is valid." | tee -a "$LOG_FILE"
-  return 0
-else
-  exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
   return 1
-fi
-
 }
 
 create_github_release() {
   local attachment="$1"
-  local version=$(get_version)
-  local tag="v$version-$host_platform"
+  local version tag target_commit
   local repo="${GITHUB_REPO:-}"
   local owner="${GITHUB_USERNAME:-}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  version="$(get_version)"
+  tag="v$version-$host_platform"
 
   if [[ -z "$attachment" || ! -f "$attachment" ]]; then
     echo "Invalid attachment. File doesn't exist or attachment is blank: $attachment" | tee -a "$LOG_FILE"
@@ -7950,23 +7982,8 @@ create_github_release() {
   if [[ -z "$owner" ]]; then
     owner="$(get_github_owner)" || return 1
   fi
-  if [[ -z "$github_token" ]]; then
-    github_token="$(get_github_token)" || return 1
-  fi
 
-  if ! authorize_github "$github_token" "$repo" "$owner"; then
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
-  fi
-
-  if git show-ref --verify --tags "refs/tags/$tag"; then
-    echo "Tag $tag already exists." | tee -a "$LOG_FILE"
-  else
-    git tag "$tag"
-    git push origin "$tag"
-  fi
-
-  if GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
+  if github_gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
     echo "Release $tag already exists." | tee -a "$LOG_FILE"
     upload_release_asset "$attachment"
     return $?
@@ -7975,8 +7992,13 @@ create_github_release() {
   echo "Creating release $tag..." | tee -a "$LOG_FILE"
   local release_notes
   release_notes="$(get_changes_from_changelog)"
-  if GH_TOKEN="$github_token" gh release create "$tag" \
+  target_commit="$(git rev-parse HEAD)"
+
+  # Let GitHub create the tag at the current commit. This avoids relying on the
+  # checkout action's persisted Git credential after a long-running build.
+  if github_gh release create "$tag" \
       --repo "$owner/$repo" \
+      --target "$target_commit" \
       --title "$tag" \
       --notes "$release_notes" \
       --prerelease \
@@ -7986,7 +8008,8 @@ create_github_release() {
     echo "Release $tag created successfully." | tee -a "$LOG_FILE"
     upload_release_asset "$attachment"
   else
-    if GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
+    # A concurrent run may have created the release after the initial lookup.
+    if github_gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
       echo "Release $tag became available after create attempt. Continuing..." | tee -a "$LOG_FILE"
       upload_release_asset "$attachment"
     else
@@ -7998,11 +8021,12 @@ create_github_release() {
 
 upload_release_asset() {
   local attachment="$1"
-  local version=$(get_version)
-  local tag="v$version-$host_platform"
+  local version tag
   local repo="${GITHUB_REPO:-}"
   local owner="${GITHUB_USERNAME:-}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+  version="$(get_version)"
+  tag="v$version-$host_platform"
 
   if [[ -z "$repo" ]]; then
     repo="$(get_github_repo)" || return 1
@@ -8010,22 +8034,14 @@ upload_release_asset() {
   if [[ -z "$owner" ]]; then
     owner="$(get_github_owner)" || return 1
   fi
-  if [[ -z "$github_token" ]]; then
-    github_token="$(get_github_token)" || return 1
-  fi
 
-  if ! authorize_github "$github_token" "$repo" "$owner"; then
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
-  fi
-
-  if ! GH_TOKEN="$github_token" gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
+  if ! github_gh release view "$tag" --repo "$owner/$repo" >/dev/null 2>>"$LOG_FILE"; then
     echo "Error: Could not find release for tag $tag" | tee -a "$LOG_FILE"
     return 1
   fi
 
   echo "Uploading $attachment as release asset for $tag..." | tee -a "$LOG_FILE"
-  if GH_TOKEN="$github_token" gh release upload "$tag" "$attachment" \
+  if github_gh release upload "$tag" "$attachment" \
       --repo "$owner/$repo" \
       --clobber >>"$LOG_FILE" 2>&1; then
     echo "Uploaded $attachment successfully." | tee -a "$LOG_FILE"
@@ -8038,36 +8054,22 @@ check_existing_package() {
   local package_name="$1"
   local package_version="$2"
   local package_type="maven"
-  local repo="${GITHUB_REPO:-}"
   local owner="${GITHUB_USERNAME:-}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  local versions_json version_id
 
-  if [[ -z "$repo" ]]; then
-    repo="$(get_github_repo)" || return 1
-  fi
   if [[ -z "$owner" ]]; then
     owner="$(get_github_owner)" || return 1
-  fi
-  if [[ -z "$github_token" ]]; then
-    github_token="$(get_github_token)" || return 1
-  fi
-
-  if ! authorize_github "$github_token" "$repo" "$owner"; then
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
   fi
 
   echo "Checking for existing package $package_name version $package_version..." >>"${LOG_FILE}"
 
-  local versions_json
-  if ! versions_json="$(GH_TOKEN="$github_token" gh api --paginate --slurp \
+  if ! versions_json="$(github_gh api --paginate --slurp \
       "users/$owner/packages/$package_type/$package_name/versions?per_page=100" 2>>"$LOG_FILE")"; then
     echo "Error: package $package_name could not be queried" >>"${LOG_FILE}"
     return 1
   fi
   versions_json="$(printf '%s' "$versions_json" | jq -c '[.[][]]')"
 
-  local version_id
   version_id="$(printf '%s' "$versions_json" | jq -r --arg version "$package_version" '.[]? | select(.name == $version) | .id')"
   if [[ -n "$version_id" && "$version_id" != "null" ]]; then
     echo "Found existing package version: $version_id" >>"${LOG_FILE}"
@@ -8082,36 +8084,21 @@ delete_existing_package() {
   local package_name="$1"
   local package_version="$2"
   local package_type="maven"
-  local repo="${GITHUB_REPO:-}"
   local owner="${GITHUB_USERNAME:-}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  local versions_json version_count version_id delete_endpoint
 
-  if [[ -z "$repo" ]]; then
-    repo="$(get_github_repo)" || return 1
-  fi
   if [[ -z "$owner" ]]; then
     owner="$(get_github_owner)" || return 1
   fi
-  if [[ -z "$github_token" ]]; then
-    github_token="$(get_github_token)" || return 1
-  fi
 
-  if ! authorize_github "$github_token" "$repo" "$owner"; then
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
-  fi
-
-  local versions_json
-  if ! versions_json="$(GH_TOKEN="$github_token" gh api --paginate --slurp \
+  if ! versions_json="$(github_gh api --paginate --slurp \
       "users/$owner/packages/$package_type/$package_name/versions?per_page=100" 2>>"$LOG_FILE")"; then
     echo "Package $package_name does not exist in registry yet. Proceeding..." | tee -a "$LOG_FILE"
     return 0
   fi
   versions_json="$(printf '%s' "$versions_json" | jq -c '[.[][]]')"
 
-  local version_count
   version_count="$(printf '%s' "$versions_json" | jq 'length')"
-  local version_id
   version_id="$(printf '%s' "$versions_json" | jq -r --arg version "$package_version" '.[]? | select(.name == $version) | .id')"
 
   if [[ -z "$version_id" || "$version_id" == "null" ]]; then
@@ -8119,7 +8106,6 @@ delete_existing_package() {
     return 0
   fi
 
-  local delete_endpoint
   if [[ "$version_count" -eq 1 ]]; then
     echo "Last version detected. Deleting entire package: $package_name..." | tee -a "$LOG_FILE"
     delete_endpoint="users/$owner/packages/$package_type/$package_name"
@@ -8128,7 +8114,7 @@ delete_existing_package() {
     delete_endpoint="users/$owner/packages/$package_type/$package_name/versions/$version_id"
   fi
 
-  if GH_TOKEN="$github_token" gh api --method DELETE "$delete_endpoint" --silent >>"$LOG_FILE" 2>&1; then
+  if github_gh api --method DELETE "$delete_endpoint" --silent >>"$LOG_FILE" 2>&1; then
     echo "Successfully deleted." | tee -a "$LOG_FILE"
   else
     echo "Warning: Delete failed. Conflict may occur." | tee -a "$LOG_FILE"
@@ -8141,54 +8127,32 @@ check_maven_package_status() {
   local username="${OSSRH_USERNAME:-$(get_maven_username)}"
   local password="${OSSRH_PASSWORD:-$(get_maven_password)}"
   local endpoint="https://central.sonatype.com/api/v1/publisher/published"
-  local namespace="io.github.$owner.ffmpegkit"
-  local repo="${GITHUB_REPO:-}"
   local owner="${GITHUB_USERNAME:-}"
-  local github_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  local namespace auth_token status_json error_msg status
 
-  if [[ -z "$repo" ]]; then
-    repo="$(get_github_repo)" || return 1
-  fi
   if [[ -z "$owner" ]]; then
     owner="$(get_github_owner)" || return 1
   fi
-  if [[ -z "$github_token" ]]; then
-    github_token="$(get_github_token)" || return 1
-  fi
-
-  if ! authorize_github "$github_token" "$repo" "$owner"; then
-    exit_message 1 "GitHub token is invalid." | tee -a "$LOG_FILE"
-    return 1
-  fi
+  namespace="io.github.$owner.ffmpegkit"
 
   echo "Checking for existing package $package_name version $package_version on Maven Central..." >>"${LOG_FILE}"
   auth_token="$(echo -n "$username:$password" | base64)"
-  # Retrieve package versions metadata
-  local status_json=$(curl -X 'GET' \
+  status_json="$(curl -fsS -X GET \
     "$endpoint?namespace=$namespace&name=$package_name&version=$package_version" \
     -H 'accept: application/json' \
-    -H "Authorization: Basic $auth_token") > >(redirect_output)
+    -H "Authorization: Basic $auth_token")" || return 1
 
-  # 1. Safely check for error message ONLY if it's an object
-  # If it's an array, error_msg will be empty
-  local error_msg=$(echo "$status_json" | jq -r 'if type == "object" then .message else empty end')
-  
+  error_msg="$(echo "$status_json" | jq -r 'if type == "object" then .message else empty end')"
   if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
-    # Return nothing and exit 1 so the caller knows it doesn't exist/error
     echo "Error checking package status: $error_msg body: $status_json" >>"${LOG_FILE}"
     return 1
   fi
 
-  # extract satus from json
-  local status=$(echo "$status_json" | jq -r '.published')
-
+  status="$(echo "$status_json" | jq -r '.published')"
   if [[ -n "$status" && "$status" != "null" ]]; then
     echo "Package status: $status" >>"${LOG_FILE}"
-    if [[ "$status" == "true" ]]; then
-      return 0
-    else
-      return 1
-    fi
+    [[ "$status" == "true" ]]
+    return $?
   fi
 
   return 1

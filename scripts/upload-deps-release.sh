@@ -80,7 +80,6 @@ release_tag="${platform}-${arch}-deps"
 release_name="${platform}-${arch}-dependencies"
 libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
 artifact_dir="${artifact_dir:-$libraries_dir}"
-token="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
 repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
 
 if [[ -z "$token" ]]; then
@@ -120,41 +119,25 @@ fi
 rm -f "${workspace}/${archive_name}"
 (cd "$artifact_dir" && zip -qry "${workspace}/${archive_name}" .)
 
-check_github_auth() {
-	if [[ -z "$token" ]]; then
-		echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
-		exit 1
-	fi
-    if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-        token="${GITHUB_TOKEN:-${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}}"
-        if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-            token="${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}"
-            if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-                token="$(get_github_token_classic)"
-                if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-                    echo "Failed to authorize GitHub" >&2
-                    exit 1
-                fi
-            fi
-        fi
-    fi
-}
+repo_name="${repo#*/}"
+repo_owner="${repo%/*}"
 
-check_github_auth
-
-if ! GH_TOKEN="$token" gh release view "$release_tag" --repo "$repo" >/dev/null 2>>"$LOG_FILE"; then
+if ! github_gh release view "$release_tag" --repo "$repo" >/dev/null 2>>"$LOG_FILE"; then
   echo "Creating release ${release_tag}..." | tee -a "$LOG_FILE"
-  if ! GH_TOKEN="$token" gh release create "$release_tag" \
+  if ! github_gh release create "$release_tag" \
       --repo "$repo" \
       --title "$release_name" \
       --prerelease \
       --notes "" >>"$LOG_FILE" 2>&1; then
-    echo "Failed to create release ${release_tag}." >&2
-    exit 1
+    if ! github_gh release view "$release_tag" --repo "$repo" >/dev/null 2>>"$LOG_FILE"; then
+      echo "Failed to create release ${release_tag}." >&2
+      exit 1
+    fi
+    echo "Release ${release_tag} became available after create attempt. Continuing..." | tee -a "$LOG_FILE"
   fi
 fi
 
-if ! GH_TOKEN="$token" gh release upload "$release_tag" \
+if ! github_gh release upload "$release_tag" \
     "${workspace}/${archive_name}" \
     --repo "$repo" \
     --clobber >>"$LOG_FILE" 2>&1; then

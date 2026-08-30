@@ -33,16 +33,6 @@ arch="$2"
 workflow_name="$3"
 mode="${4:-}"
 workspace="${GITHUB_WORKSPACE:-$repo_root}"
-token="${GH_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}}}"
-build_force="${WORKFLOW_FORCE_SELF:-false}"
-requested_step="${WORKFLOW_REQUESTED_STEP:-}"
-seen_steps_file="${WORKFLOW_SEEN_STEPS_FILE:-${GITHUB_WORKSPACE:-${repo_root}}/workflow-seen-steps.log}"
-
-if [[ -z "$token" ]]; then
-	echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
-	exit 1
-fi
-
 repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
 if [[ -z "$repo" ]]; then
 	repo="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null | gsed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
@@ -97,32 +87,9 @@ mark_workflow_step_seen() {
 	fi
 }
 
-check_github_auth() {
-	if [[ -z "$token" ]]; then
-		echo "GH_TOKEN or GITHUB_TOKEN must be set to download dependency release assets" >&2
-		exit 1
-	fi
-    if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-        token="${GITHUB_TOKEN:-${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}}"
-        if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-            token="${GH_TOKEN_CLASSIC:-$(get_github_token_classic)}"
-            if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-                token="$(get_github_token_classic)"
-                if ! authorize_github "$token" "${repo_name}" "${repo_owner}"; then
-                    echo "Failed to authorize GitHub" >&2
-                    exit 1
-                fi
-            fi
-        fi
-    fi
-}
-
 # repo = owner/repo_name
-# authorize_github token repo_name owner
 repo_name="${repo#*/}"
 repo_owner="${repo%/*}"
-
-check_github_auth
 
 case "$platform" in
 	iphonesimulator)
@@ -154,13 +121,20 @@ if [[ "$mode" == "--artifact-pattern" ]]; then
     release_name="${platform}-${arch}-dependencies"
     asset_prefix="${platform}-${arch}-"
 
-    if ! release_id="$(GH_TOKEN="$token" gh api "repos/${repo}/releases/tags/${release_tag}" --jq '.id' 2>>"$LOG_FILE")"; then
+    if ! release_id="$(github_gh api "repos/${repo}/releases/tags/${release_tag}" --jq '.id' 2>>"$LOG_FILE")"; then
         echo "Missing release for dependency artifact pattern: tag='${release_tag}' name='${release_name}' pattern='${workflow_name}'" >&2
         exit 3
     fi
 
+    if ! asset_names="$(github_gh api --paginate \
+        "repos/${repo}/releases/${release_id}/assets?per_page=100" \
+        --jq '.[].name' 2>>"$LOG_FILE")"; then
+        echo "Failed to list dependency artifacts: tag='${release_tag}' name='${release_name}'" >&2
+        exit 3
+    fi
+
     dependencies="$(
-        GH_TOKEN="$token" gh api --paginate             "repos/${repo}/releases/${release_id}/assets?per_page=100"             --jq '.[].name' 2>>"$LOG_FILE" |
+        printf '%s\n' "$asset_names" |
         while IFS= read -r asset_name; do
             [[ "$asset_name" == "${asset_prefix}"*.zip ]] || continue
             dep="${asset_name#"$asset_prefix"}"
@@ -221,7 +195,7 @@ for dependency in $dependencies; do
 	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
 
 	rm -f "$archive_path"
-	if ! GH_TOKEN="$token" gh release download "$release_tag" \
+	if ! github_gh release download "$release_tag" \
 		--repo "$repo" \
 		--pattern "$asset_name" \
 		--output "$archive_path" \
@@ -229,9 +203,10 @@ for dependency in $dependencies; do
 		echo "Missing dependency artifact: ${asset_name}" >&2
 		exit 3
 	fi
-    if [[ "$archive_path" == "${platform}-${arch}-ffmpeg-*" ]]; then
+
+    if [[ "$asset_name" == "${platform}-${arch}-ffmpeg-"*.zip ]]; then
         echo "Extracting ffmpeg archive detected: ${archive_path}"
-        dir_name="${archive_path#"${platform}-${arch}-"}"
+        dir_name="${asset_name#"${platform}-${arch}-"}"
         dir_name="${dir_name%.zip}"
         extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dir_name}"
         rm -rf "$extract_dir"
