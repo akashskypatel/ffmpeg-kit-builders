@@ -21,7 +21,9 @@ jobs:
 
       - name: Apply patch
         shell: bash
-        run: python3 .github/auth_fallback_patch.py
+        run: |
+          python3 .github/auth_fallback_patch.py
+          sed -i 's/case "$platform" incase "$platform" in/case "$platform" in/' scripts/workflow-get-deps.sh
 
       - name: Validate scripts
         shell: bash
