@@ -82,11 +82,6 @@ libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
 artifact_dir="${artifact_dir:-$libraries_dir}"
 repo="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
 
-if [[ -z "$token" ]]; then
-  echo "GH_TOKEN or GITHUB_TOKEN must be set for release upload" >&2
-  exit 1
-fi
-
 if [[ -z "$repo" ]]; then
   repo="$(git -C "$repo_root" config --get remote.origin.url 2>/dev/null | gsed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##')"
 fi
