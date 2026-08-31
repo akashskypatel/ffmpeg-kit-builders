@@ -1294,6 +1294,19 @@ FFMPEG_KIT_C_EXPORT MediaInformationSessionHandle
 media_information_create_session(const char *command);
 
 /**
+ * Creates a new MediaInformation session from an argument array.
+ * Each argument is copied verbatim and no command-string parsing is
+ * performed.
+ *
+ * @param argc the number of arguments
+ * @param argv the argument array
+ * @return the MediaInformation session handle
+ */
+FFMPEG_KIT_C_EXPORT MediaInformationSessionHandle
+media_information_create_session_from_argv(int argc,
+                                           const char **argv);
+
+/**
  * Creates a new MediaInformation session with the given command.
  *
  * @param command the MediaInformation command to execute

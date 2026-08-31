@@ -46,6 +46,21 @@ TEST(FFmpegKitConfigTest, ArgumentsToString) {
     const char* args[] = { "ffmpeg", "-i", "test.mp4", "-vcodec", "copy" };
     char* str = ffmpeg_kit_config_arguments_to_string((char**)args, 5);
     ASSERT_NE(str, nullptr);
-    EXPECT_STRNE(str, "");
+    EXPECT_STREQ(str, "ffmpeg -i test.mp4 -vcodec copy");
+    free(str);
+}
+
+TEST(FFmpegKitConfigTest, ArgumentsToStringPreservesSpecialValues) {
+    const char* args[] = {
+        "-i",
+        "C:\\Program Files\\Media\\clip \"quoted\"\\",
+        "",
+        "single'value"
+    };
+    char* str = ffmpeg_kit_config_arguments_to_string((char**)args, 4);
+    ASSERT_NE(str, nullptr);
+    EXPECT_STREQ(
+        str,
+        "-i 'C:\\Program Files\\Media\\clip \"quoted\"\\' '' 'single'\\''value'");
     free(str);
 }

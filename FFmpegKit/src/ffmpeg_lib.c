@@ -21,6 +21,7 @@
 #include "ffmpeg.h"
 #include "ffmpeg_sched.h"
 #include "ffmpeg_kit_assert_override.h"
+#include "ffmpegkit_arg_parser.h"
 #include "ffmpegkit_session_context.h"
 #include "cmdutils.h"
 #include "libavformat/avio.h"
@@ -65,84 +66,7 @@ struct FFmpegContext {
 };
 
 static int split_args(const char *args, char ***argv_out) {
-  if (!args || !argv_out)
-    return -1;
-
-  char *args_copy = av_strdup(args);
-  if (!args_copy)
-    return -1;
-
-  int argc = 0;
-  char *p = args_copy;
-  int in_quotes = 0;
-
-  // First pass: count arguments
-  while (*p) {
-    while (*p && !in_quotes && (*p == ' ' || *p == '\t' || *p == '\n'))
-      p++;
-    if (!*p)
-      break;
-    argc++;
-    if (*p == '"') {
-      in_quotes = 1;
-      p++;
-      while (*p && *p != '"')
-        p++;
-      if (*p)
-        p++;
-      in_quotes = 0;
-    } else {
-      while (*p && *p != ' ' && *p != '\t' && *p != '\n')
-        p++;
-    }
-  }
-
-  char **argv = av_mallocz(sizeof(char *) * (argc + 1));
-  if (!argv) {
-    av_free(args_copy);
-    return -1;
-  }
-
-  // Second pass: extract arguments
-  strcpy(args_copy, args);
-  p = args_copy;
-  int idx = 0;
-
-  while (*p && idx < argc) {
-    while (*p && (*p == ' ' || *p == '\t' || *p == '\n'))
-      p++;
-    if (!*p)
-      break;
-
-    char *start = p;
-    if (*p == '"') {
-      p++;
-      start = p;
-      while (*p && *p != '"')
-        p++;
-      if (*p)
-        *p++ = '\0';
-    } else {
-      while (*p && *p != ' ' && *p != '\t' && *p != '\n')
-        p++;
-      if (*p)
-        *p++ = '\0';
-    }
-    argv[idx] = av_strdup(start);
-    if (!argv[idx]) {
-      // Memory allocation failure; clean up
-      for (int i = 0; i < idx; i++)
-        av_free(argv[i]);
-      av_free(argv);
-      av_free(args_copy);
-      return -1;
-    }
-    idx++;
-  }
-
-  av_free(args_copy);
-  *argv_out = argv;
-  return argc;
+  return ffmpegkit_split_command(args, argv_out);
 }
 
 FFmpegContext *ffmpeg_init(const char *args_string) {
@@ -158,6 +82,42 @@ FFmpegContext *ffmpeg_init(const char *args_string) {
   if (ctx->argc < 0) {
     av_free(ctx);
     return NULL;
+  }
+
+  return ctx;
+}
+
+FFmpegContext *ffmpeg_init_argv(int argc, const char *const *argv) {
+  if (argc <= 0 || !argv)
+    return NULL;
+
+  FFmpegContext *ctx = av_mallocz(sizeof(FFmpegContext));
+  if (!ctx)
+    return NULL;
+
+  ctx->argv = av_mallocz(sizeof(char *) * (argc + 1));
+  if (!ctx->argv) {
+    av_free(ctx);
+    return NULL;
+  }
+
+  ctx->argc = argc;
+  for (int i = 0; i < argc; i++) {
+    if (!argv[i]) {
+      for (int j = 0; j < i; j++)
+        av_free(ctx->argv[j]);
+      av_free(ctx->argv);
+      av_free(ctx);
+      return NULL;
+    }
+    ctx->argv[i] = av_strdup(argv[i]);
+    if (!ctx->argv[i]) {
+      for (int j = 0; j < i; j++)
+        av_free(ctx->argv[j]);
+      av_free(ctx->argv);
+      av_free(ctx);
+      return NULL;
+    }
   }
 
   return ctx;
@@ -267,19 +227,19 @@ int ffmpeg_run(FFmpegContext *ctx) {
 
   // Establish recovery point for av_assert0 failures inside ffmpeg internals.
   // Without this, av_assert0 calls abort() which kills the Flutter host process.
-  // On assertion failure, longjmp lands here and we return AVERROR_EXIT so
-  // FFmpegKitConfig marks the session as failed rather than crashing.
+  // Keep the jump target live until ffmpeg_run_internal() has returned.
   jmp_buf assert_jmp;
   ffmpeg_kit_assert_jmp_ptr = &assert_jmp;
-  ffmpeg_kit_assert_triggered = 0;
   if (setjmp(assert_jmp)) {
+    ffmpeg_kit_assert_jmp_ptr = NULL;
     ffmpeg_unbind_thread_context();
+    ffmpeg_mark_shutdown_incomplete(ctx);
+    ffmpeg_mark_runtime_unrecoverable();
     av_log(NULL, AV_LOG_ERROR,
            "[ffmpeg-kit] ffmpeg_run: recovered from internal assertion failure. "
            "Session will be marked as failed.\n");
     return AVERROR_EXIT;
   }
-  ffmpeg_kit_assert_jmp_ptr = NULL;
 
   avformat_network_init();
 
@@ -289,6 +249,7 @@ int ffmpeg_run(FFmpegContext *ctx) {
   ffmpeg_bind_thread_context(ctx);
   ctx->ret = ffmpeg_run_internal(ctx, ctx->argc, ctx->argv);
   ffmpeg_unbind_thread_context();
+  ffmpeg_kit_assert_jmp_ptr = NULL;
   ctx->files_parsed = (ctx->ret >= 0);
 
   return ctx->ret;

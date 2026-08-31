@@ -3,26 +3,37 @@ name: build_on_macos
 on:
   workflow_call:
     inputs:
+      run_tests:
+        description: "Run tests - Only runs macOS tests when CI is true"
+        required: false
+        default: false
+        type: boolean
+      test_filter:
+        description: "Filter for tests to run"
+        required: false
+        default: ""
+        type: string
+      test_type:
+        description: "Type of tests to run"
+        required: false
+        default: "undefined"
+        type: string
       target_platforms:
         required: true
         type: string
         default: ios,iphonesimulator,appletvos,appletvsimulator,macos
-
       target_archs:
         required: true
         type: string
         default: aarch64,x86_64
-
       bundles:
         required: true
         type: string
         default: debug
-
       build_bundle:
         required: false
         type: boolean
         default: true
-
       is_ci:
         required: true
         type: boolean
@@ -74,9 +85,26 @@ on:
         required: true
         default: false
         type: boolean
+      run_tests:
+        description: "Run tests - Only runs macOS tests when CI is true"
+        required: false
+        default: false
+        type: boolean
+      test_filter:
+        description: "Filter for tests to run"
+        required: false
+        default: ""
+        type: string
+      test_type:
+        description: "Type of tests to run"
+        required: false
+        default: "undefined"
+        type: string
 
 env:
+  GITHUB_TOKEN: ${{ github.token }}
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN_CLASSIC: ${{ secrets.GH_TOKEN_CLASSIC }}
   WORKFLOW_FORCE_SELF: ${{ inputs.force }}
   WORKFLOW_BUILD_FROM: ${{ inputs.build_from }}
   WORKFLOW_BUILD_ONLY: ${{ inputs.build_only }}
@@ -88,6 +116,9 @@ env:
   WORKFLOW_SEEN_STEPS: ""
   WORKFLOW_BUNDLES: ${{ inputs.bundles }}
   WORKFLOW_IS_CI: ${{ inputs.is_ci }}
+  RUN_TESTS: ${{ inputs.run_tests }}
+  TEST_FILTER: ${{ inputs.test_filter }}
+  TEST_TYPE: ${{ inputs.test_type }}
 
 permissions:
   contents: write

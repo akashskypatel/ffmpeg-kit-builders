@@ -17,8 +17,8 @@
 #endif
 #define TEST_VIDEO_FILE FFMPEG_KIT_TEST_DIR "/dummy_video.mp4"
 
-void test_log_callback(FFmpegSessionHandle session, const char *message,
-                       void *data) {
+static void test_log_callback(FFmpegSessionHandle session, const char *message,
+                              void *data) {
   // Optional: verify log output if needed
   printf("Log: %s\n", message);
 }
