@@ -22,7 +22,7 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 SCRIPTDIR="${SCRIPTDIR:-$script_dir}"
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
-	echo "Usage: $0 <platform> <arch> <workflow_name> [--self|--artifact|--artifact-pattern]" >&2
+	echo "Usage: $0 <platform> <arch> <workflow_name|artifact_pattern> [--self|--artifact|--artifact-pattern]" >&2
 	exit 2
 fi
 
@@ -92,46 +92,6 @@ mark_workflow_step_seen() {
 
 # repo = owner/repo_name
 repo_name="${repo#*/}"
-repo_owner="${repo%/*}"
-
-declare -A release_assets_loaded=()
-declare -A release_asset_ids=()
-resolved_asset_id=""
-
-# Resolve an exact asset name from all release-asset pages. Releases in this
-# repository can exceed GitHub's 100-item page size, so gh release download's
-# pattern lookup is not sufficient for assets on later pages.
-resolve_release_asset_id() {
-    local tag="$1"
-    local wanted_asset="$2"
-    local release_id asset_rows candidate_name candidate_id cache_key
-
-    if [[ -z "${release_assets_loaded[$tag]:-}" ]]; then
-        if ! release_id="$(github_gh_capture api \
-            "repos/${repo}/releases/tags/${tag}" \
-            --jq '.id' 2>>"$LOG_FILE")"; then
-            echo "Failed to resolve dependency release: ${tag}" >&2
-            return 1
-        fi
-
-        if ! asset_rows="$(github_gh_capture api --paginate \
-            "repos/${repo}/releases/${release_id}/assets?per_page=100" \
-            --jq '.[] | [.name, (.id | tostring)] | @tsv' 2>>"$LOG_FILE")"; then
-            echo "Failed to enumerate dependency release assets: ${tag}" >&2
-            return 1
-        fi
-
-        while IFS=$'\t' read -r candidate_name candidate_id; do
-            [[ -n "$candidate_name" && -n "$candidate_id" ]] || continue
-            release_asset_ids["${tag}|${candidate_name}"]="$candidate_id"
-        done <<< "$asset_rows"
-        release_assets_loaded["$tag"]=1
-    fi
-
-    cache_key="${tag}|${wanted_asset}"
-    resolved_asset_id="${release_asset_ids[$cache_key]:-}"
-    [[ -n "$resolved_asset_id" ]] || return 2
-}
 
 case "$platform" in
 	iphonesimulator)
@@ -154,47 +114,12 @@ fi
 # shellcheck source=/dev/null
 source "$deps_file"
 
-if [[ "$mode" == "--artifact-pattern" ]]; then
-    if truthy "$build_force"; then
-        echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
-        exit 4
-    fi
-    release_tag="${platform}-${arch}-deps"
-    release_name="${platform}-${arch}-dependencies"
-    asset_prefix="${platform}-${arch}-"
+if [[ "$mode" == "--artifact-pattern" ]] && truthy "$build_force"; then
+	echo "Force rebuild requested; skipping self dependency release lookup for ${workflow_name} on ${platform}-${arch}"
+	exit 4
+fi
 
-    if ! release_id="$(github_gh_capture api "repos/${repo}/releases/tags/${release_tag}" --jq '.id' 2>>"$LOG_FILE")"; then
-        echo "Missing release for dependency artifact pattern: tag='${release_tag}' name='${release_name}' pattern='${workflow_name}'" >&2
-        exit 3
-    fi
-
-    if ! asset_names="$(github_gh_capture api --paginate \
-        "repos/${repo}/releases/${release_id}/assets?per_page=100" \
-        --jq '.[].name' 2>>"$LOG_FILE")"; then
-        echo "Failed to list dependency artifacts: tag='${release_tag}' name='${release_name}'" >&2
-        exit 3
-    fi
-
-    dependencies="$(
-        printf '%s\n' "$asset_names" |
-        while IFS= read -r asset_name; do
-            [[ "$asset_name" == "${asset_prefix}"*.zip ]] || continue
-            dep="${asset_name#"$asset_prefix"}"
-            dep="${dep%.zip}"
-            [[ "$dep" == ffmpeg-kit-* ]] && continue
-            if [[ "$dep" == $workflow_name ]]; then
-                printf '%s\n' "$dep"
-            fi
-        done |
-        sort -u |
-        xargs
-    )"
-
-    if [[ -z "$dependencies" ]]; then
-        echo "Missing dependency artifacts: tag='${release_tag}' name='${release_name}' pattern='${workflow_name}'" >&2
-        exit 3
-    fi
-elif [[ "$mode" == "--artifact" ]]; then
+if [[ "$mode" == "--artifact" || "$mode" == "--artifact-pattern" ]]; then
 	dependencies="$workflow_name"
 elif [[ "$mode" == "--self" ]]; then
 	if truthy "$build_force" && [[ -n "$requested_step" && "$workflow_name" == "$requested_step" ]]; then
@@ -211,104 +136,132 @@ if [[ -z "$dependencies" ]]; then
 	exit 0
 fi
 
+if [[ "$mode" == "--artifact-pattern" ]]; then
+	dependency_items=("$workflow_name")
+else
+	read -r -a dependency_items <<< "$dependencies"
+fi
+
 libraries_dir="${workspace}/prebuilt/${platform}-${arch}/libraries"
+release_tag="${platform}-${arch}-deps"
+release_name="${platform}-${arch}-dependencies"
 mkdir -p "$libraries_dir"
 
-for dependency in $dependencies; do
-	dep="${dependency#build_}"
-	seen_key="${platform}-${arch}:${dependency}"
-	asset_name="${platform}-${arch}-${dep}.zip"
-	release_tag="${platform}-${arch}-deps"
-	release_name="${platform}-${arch}-dependencies"
-	archive_path="${RUNNER_TEMP:-/tmp}/${asset_name}"
-	extract_dir="$libraries_dir"
+for dependency in "${dependency_items[@]}"; do
+	if [[ "$mode" == "--artifact-pattern" ]]; then
+		asset_pattern="${platform}-${arch}-${dependency}.zip"
+	else
+		dep="${dependency#build_}"
+		asset_pattern="${platform}-${arch}-${dep}.zip"
+		seen_key="${platform}-${arch}:${dependency}"
 
-	if workflow_step_seen "$seen_key" "$dependency"; then
-		echo "Skipping dependency ${dependency} for ${platform}-${arch}; already present in WORKFLOW_SEEN_STEPS"
-		continue
+		if workflow_step_seen "$seen_key" "$dependency"; then
+			echo "Skipping dependency ${dependency} for ${platform}-${arch}; already present in WORKFLOW_SEEN_STEPS"
+			continue
+		fi
 	fi
 
-	if [[ "$mode" == "--artifact" || "$mode" == "--artifact-pattern" ]]; then
-		extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dep}"
-		rm -rf "$extract_dir"
-		mkdir -p "$extract_dir"
+	echo "Fetching from release '${release_name}' (${release_tag}) using asset pattern '${asset_pattern}'"
+
+	download_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/workflow-get-deps.XXXXXX")"
+	if ! github_gh release download "$release_tag" \
+		--repo "$repo" \
+		--pattern "$asset_pattern" \
+		--dir "$download_dir" >>"$LOG_FILE" 2>&1; then
+		echo "Failed to download dependency artifact pattern: ${asset_pattern}" >&2
+		rm -rf "$download_dir"
+		exit 3
 	fi
 
-	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
+	archive_found=false
+	for archive_path in "$download_dir"/*.zip; do
+		[[ -f "$archive_path" ]] || continue
+		archive_found=true
+		asset_name="$(basename "$archive_path")"
+		dep="${asset_name#"${platform}-${arch}-"}"
+		dep="${dep%.zip}"
 
-	rm -f "$archive_path"
-    if resolve_release_asset_id "$release_tag" "$asset_name"; then
-        if ! github_gh_to_file "$archive_path" api \
-            -H "Accept: application/octet-stream" \
-            "repos/${repo}/releases/assets/${resolved_asset_id}"; then
-            echo "Failed to download dependency artifact: ${asset_name} (asset id ${resolved_asset_id})" >&2
-            exit 3
-        fi
-        if [[ ! -s "$archive_path" ]]; then
-            echo "Downloaded dependency artifact is empty: ${asset_name}" >&2
-            rm -f "$archive_path"
-            exit 3
-        fi
-    else
-        resolve_status=$?
-        if [[ "$resolve_status" -eq 2 ]]; then
-            echo "Missing dependency artifact: ${asset_name}" >&2
-        else
-            echo "Failed to resolve dependency artifact: ${asset_name}" >&2
-        fi
-        exit 3
-    fi
+		if [[ "$mode" == "--artifact-pattern" ]]; then
+			dependency_name="$dep"
+			seen_key="${platform}-${arch}:${dependency_name}"
+			if workflow_step_seen "$seen_key" "$dependency_name"; then
+				echo "Skipping dependency ${dependency_name} for ${platform}-${arch}; already present in WORKFLOW_SEEN_STEPS"
+				continue
+			fi
+		else
+			dependency_name="$dependency"
+		fi
 
-    if [[ "$asset_name" == "${platform}-${arch}-ffmpeg-"*.zip ]]; then
-        echo "Extracting ffmpeg archive detected: ${archive_path}"
-        dir_name="${asset_name#"${platform}-${arch}-"}"
-        dir_name="${dir_name%.zip}"
-        extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dir_name}"
-        rm -rf "$extract_dir"
-        mkdir -p "$extract_dir"
-    fi
-    staging_dir="$(mktemp -d)"
+		if [[ ! -s "$archive_path" ]]; then
+			echo "Downloaded dependency artifact is empty: ${asset_name}" >&2
+			rm -rf "$download_dir"
+			exit 3
+		fi
 
-    echo "Unzipping archive: $archive_path to $staging_dir"
-    unzip -oq "$archive_path" -d "$staging_dir"
-    echo "Archive extracted successfully"
+		extract_dir="$libraries_dir"
+		if [[ "$mode" == "--artifact" || "$mode" == "--artifact-pattern" ]]; then
+			extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dep}"
+			rm -rf "$extract_dir"
+			mkdir -p "$extract_dir"
+		fi
 
-    rm -fv "$archive_path"
+		if [[ "$asset_name" == "${platform}-${arch}-ffmpeg-"*.zip ]]; then
+			echo "Extracting ffmpeg archive detected: ${archive_path}"
+			dir_name="${asset_name#"${platform}-${arch}-"}"
+			dir_name="${dir_name%.zip}"
+			extract_dir="${workspace}/prebuilt/${platform}-${arch}/${dir_name}"
+			rm -rf "$extract_dir"
+			mkdir -p "$extract_dir"
+		fi
 
-    if [[ "$repo_root" != "/__w/${repo_name}/${repo_name}" &&
-        "$repo_root" != "/Users/runner/work/${repo_name}/${repo_name}" &&
-        "$repo_root" != "/Users/runner/${repo_name}/${repo_name}" ]]; then
+		staging_dir="$(mktemp -d)"
+		echo "Unzipping archive: $archive_path to $staging_dir"
+		unzip -oq "$archive_path" -d "$staging_dir"
+		echo "Archive extracted successfully"
 
-        repo_root_sed="$(
-            printf '%s\n' "$repo_root" |
-                gsed -e 's/[\/&|]/\\&/g'
-        )"
+		if [[ "$repo_root" != "/__w/${repo_name}/${repo_name}" &&
+			"$repo_root" != "/Users/runner/work/${repo_name}/${repo_name}" &&
+			"$repo_root" != "/Users/runner/${repo_name}/${repo_name}" ]]; then
 
-        find "$staging_dir" -type f -exec grep -Il --null . {} + |
-            xargs -0 gsed -i \
-                -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-                -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-                -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
-        
-        find "${workspace}/prebuilt/${platform}-${arch}" -type l -print0 | while IFS= read -r -d '' link; do
-            old_target=$(readlink "$link")
-            
-            new_target=$(echo "$old_target" | gsed \
-                -e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-                -e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
-                -e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g")
-            
-            if [ "$old_target" != "$new_target" ]; then
-                ln -sf "$new_target" "$link"
-            fi
-        done
-    fi
+			repo_root_sed="$(
+				printf '%s\n' "$repo_root" |
+					gsed -e 's/[\/&|]/\\&/g'
+			)"
 
-    cp -a "$staging_dir"/. "$extract_dir"/
-    rm -rf "$staging_dir"
-    chmod -R a+rwx "$extract_dir"
+			find "$staging_dir" -type f -exec grep -Il --null . {} + |
+				xargs -0 gsed -i \
+					-e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+					-e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+					-e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g"
+			
+			find "${workspace}/prebuilt/${platform}-${arch}" -type l -print0 | while IFS= read -r -d '' link; do
+				old_target=$(readlink "$link")
+				
+				new_target=$(echo "$old_target" | gsed \
+					-e "s|/__w/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+					-e "s|/Users/runner/work/${repo_name}/${repo_name}|${repo_root_sed}|g" \
+					-e "s|/Users/runner/${repo_name}/${repo_name}|${repo_root_sed}|g")
+				
+				if [ "$old_target" != "$new_target" ]; then
+					ln -sf "$new_target" "$link"
+				fi
+			done
+		fi
 
-    mark_workflow_step_seen "$seen_key"
+		cp -a "$staging_dir"/. "$extract_dir"/
+		rm -rf "$staging_dir"
+		chmod -R a+rwx "$extract_dir"
+
+		mark_workflow_step_seen "$seen_key"
+	done
+
+	if [[ "$archive_found" != "true" ]]; then
+		echo "No dependency artifacts downloaded for pattern: ${asset_pattern}" >&2
+		rm -rf "$download_dir"
+		exit 3
+	fi
+
+	rm -rf "$download_dir"
 done
 
 exit 0
