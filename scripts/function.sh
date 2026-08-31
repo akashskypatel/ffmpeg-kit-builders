@@ -7924,9 +7924,13 @@ authorize_github() {
 #   3. long-lived classic PAT in GH_TOKEN_CLASSIC
 # Local keystore credentials are appended only when all environment credentials fail.
 github_gh() {
-  install_missing_packages gh
   if ! command -v gh &> /dev/null; then
-    exit_message 1 "gh command not found" | tee -a "$LOG_FILE"
+    echo "INFO: gh CLI not installed, installing gh CLI" | tee -a "$LOG_FILE"
+    install_missing_packages gh
+    if ! command -v gh &> /dev/null; then
+      exit_message 1 "ERROR: Failed to install gh CLI" | tee -a "$LOG_FILE"
+    fi
+    gh --version
   fi
   local -a credential_names=("GITHUB_TOKEN" "GH_TOKEN" "GH_TOKEN_CLASSIC")
   local -a credential_values=("${GITHUB_TOKEN:-}" "${GH_TOKEN:-}" "${GH_TOKEN_CLASSIC:-}")
