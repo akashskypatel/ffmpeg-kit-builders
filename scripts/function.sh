@@ -7907,6 +7907,10 @@ get_github_owner() {
 }
 
 authorize_github() {
+  if ! command -v gh &> /dev/null; then
+    exit_message 1 "ERROR: Failed to install gh CLI" | tee -a "$LOG_FILE"
+  fi
+  gh --version
   local github_token="${1:-}"
   local github_repo="${2:-${GITHUB_REPO:-}}"
   local github_owner="${3:-${GITHUB_USERNAME:-}}"
@@ -7925,14 +7929,7 @@ authorize_github() {
 # Local keystore credentials are appended only when all environment credentials fail.
 github_gh() {
   if ! command -v gh &> /dev/null; then
-    echo "INFO: gh CLI not installed, installing gh CLI" | tee -a "$LOG_FILE"
-    dnf install 'dnf-command(config-manager)'
-    dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
-    dnf install -y gh
-    if ! command -v gh &> /dev/null; then
-      exit_message 1 "ERROR: Failed to install gh CLI" | tee -a "$LOG_FILE"
-    fi
-    gh --version
+    exit_message 1 "ERROR: Failed to install gh CLI" | tee -a "$LOG_FILE"
   fi
   local -a credential_names=("GITHUB_TOKEN" "GH_TOKEN" "GH_TOKEN_CLASSIC")
   local -a credential_values=("${GITHUB_TOKEN:-}" "${GH_TOKEN:-}" "${GH_TOKEN_CLASSIC:-}")

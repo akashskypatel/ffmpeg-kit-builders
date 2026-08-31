@@ -153,7 +153,10 @@ jobs:
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
         run: |
           USER_HOME="${GITHUB_WORKSPACE}"
-
+          dnf install 'dnf-command(config-manager)'
+          dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+          dnf install -y gh
+          gh --version
           if [[ -z "${USER_HOME}" || ! -d "${USER_HOME}" ]]; then
             echo "Unable to determine user home" >&2
             exit 1
