@@ -776,6 +776,7 @@ void term_init(void);
 void term_exit(void);
 
 void show_usage(void);
+void ffmpeg_reset_options_state(void);
 
 int check_avoptions_used(const AVDictionary *opts, const AVDictionary *opts_used,
                          void *logctx, int decode);

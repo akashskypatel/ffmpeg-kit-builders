@@ -551,18 +551,15 @@ if(BUILD_SHARED_LIBS)
     else()
         # Darwin exported symbols allow-list.
         #
-        # Do NOT use broad patterns like:
-        #   _ffmpeg*
-        #   _ffprobe*
-        #   _ffplay*
-        #
-        # _ffmpeg* also matches _ffmpegkit_lzma_* and leaks private-prefixed
-        # dependency symbols into the final dylib ABI.
+        # Export the low-level embedded CLI C APIs as well as the higher-level
+        # ffmpeg-kit C API. Keep the underscore delimiter in these patterns:
+        # _ffmpeg_* matches ffmpeg_init/ffmpeg_run/ffmpeg_kit_* but does not
+        # match private symbols such as _ffmpegkit_lzma_*.
         set(APPLE_EXPORTED_SYMBOLS "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit-exported-symbols.txt")
         file(WRITE "${APPLE_EXPORTED_SYMBOLS}" "
-_ffmpeg_kit_*
-_ffprobe_kit_*
-_ffplay_kit_*
+_ffmpeg_*
+_ffprobe_*
+_ffplay_*
 _ffplay_kit_session_get_video_width
 _ffplay_kit_session_get_video_height
 _media_information*
@@ -706,5 +703,5 @@ if(BUILD_TESTS)
 
     add_subdirectory(tests)
 
-    install(TARGETS ffmpegkit_tests ffmpegkit_fate_tests DESTINATION bin)
+    install(TARGETS ffmpegkit_tests DESTINATION bin)
 endif()

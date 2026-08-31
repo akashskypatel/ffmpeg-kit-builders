@@ -1152,7 +1152,7 @@ static void log_callback_report(void *ptr, int level, const char *fmt, va_list v
     ffmpegkit_dispatch_log_callback(ptr, level, fmt, vl);
     av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &print_prefix);
     va_end(vl2);
-    if (report_file_level >= level) {
+    if (report_file && report_file_level >= level) {
         fputs(line, report_file);
         fflush(report_file);
     }
@@ -1241,6 +1241,15 @@ int init_report(const char *env, FILE **file)
         *file = report_file;
 
     return 0;
+}
+
+void uninit_report(void)
+{
+    if (report_file) {
+        fclose(report_file);
+        report_file = NULL;
+    }
+    report_file_level = AV_LOG_DEBUG;
 }
 
 int opt_report(void *optctx, const char *opt, const char *arg)

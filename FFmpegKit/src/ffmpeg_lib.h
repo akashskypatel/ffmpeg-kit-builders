@@ -52,6 +52,17 @@ typedef struct AVIOInterruptCB AVIOInterruptCB;
 FFMPEG_API FFmpegContext *ffmpeg_init(const char *args_string);
 
 /**
+ * Initialize ffmpeg context from an existing argument vector.
+ * Arguments are copied verbatim and never serialized into command text.
+ *
+ * @param argc Argument count, including argv[0].
+ * @param argv Argument vector.
+ * @return Allocated context or NULL on failure.
+ */
+FFMPEG_API FFmpegContext *
+ffmpeg_init_argv(int argc, const char *const *argv);
+
+/**
  * Binds a logical session id to the wrapper context.
  */
 FFMPEG_API void ffmpeg_set_session_id(FFmpegContext *ctx, long session_id);

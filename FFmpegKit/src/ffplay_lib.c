@@ -19,6 +19,7 @@
 
 #include "ffplay_lib.h"
 #include "ffmpeg_kit_assert_override.h"
+#include "ffmpegkit_arg_parser.h"
 #include <SDL.h>
 #include <SDL_stdinc.h>
 
@@ -221,6 +222,63 @@ static SDL_mutex *ffplay_api_mutex = NULL;
 static SDL_SpinLock ffplay_init_lock = 0;
 static FFplayContext *active_ffplay_ctx = NULL;
 
+/* Speed-filter storage is owned by the wrapper and can alias ffplay.c's
+ * afilters option. Keep it visible to the reset helper so stale aliases are
+ * cleared before option-owned storage is released. */
+static char *base_afilters = NULL;
+static char *allocated_afilters = NULL;
+
+/*
+ * Restore ffplay's executable-style globals to process-start defaults.
+ * ffplay is normally a one-shot CLI, but FFmpegKit embeds it in a long-lived
+ * host process. A failed parse/init must therefore release option-owned
+ * strings and reset both TLS state and the process-global wanted_stream_spec
+ * array before another session starts.
+ */
+static void ffplay_reset_cli_state(void) {
+    uninit_opts();
+    uninit_report();
+
+    if (allocated_afilters) {
+        if (afilters == allocated_afilters)
+            afilters = NULL;
+        av_freep(&allocated_afilters);
+    }
+    av_freep(&base_afilters);
+
+    av_freep(&input_filename);
+    av_freep(&window_title);
+    av_freep(&audio_codec_name);
+    av_freep(&subtitle_codec_name);
+    av_freep(&video_codec_name);
+    av_freep(&afilters);
+    av_freep(&vulkan_params);
+    av_freep(&video_background);
+    av_freep(&hwaccel);
+
+    if (vfilters_list) {
+        for (int i = 0; i < nb_vfilters; i++)
+            av_free((void *)vfilters_list[i]);
+        av_freep(&vfilters_list);
+    }
+    nb_vfilters = 0;
+
+    for (int i = 0; i < AVMEDIA_TYPE_NB; i++)
+        av_freep(&wanted_stream_spec[i]);
+
+    file_iformat = NULL;
+    ffplay_reset_internal_state();
+
+    /* ffplay_reset_internal_state() predates several mutable globals and does
+     * not reset these values itself. */
+    screen_left = SDL_WINDOWPOS_CENTERED;
+    screen_top = SDL_WINDOWPOS_CENTERED;
+    cursor_last_shown = 0;
+    video_background = NULL;
+    memset(&renderer_info, 0, sizeof(renderer_info));
+    hide_banner = 0;
+}
+
 static void lock_ffplay_api(void) {
     // Double-checked locking for initialization
     if (!ffplay_api_mutex) {
@@ -293,63 +351,13 @@ void ffplay_set_frame_callback(FFplayFrameCallback callback, void *userdata) {
     unlock_ffplay_api();
 }
 
-/* Splits a command-line string into argc/argv. Caller frees with av_free(). */
+/* Compatibility string entry point. Prefer ffplay_init_argv() when
+ * arguments are already tokenized. */
 static int split_args(const char *args, char ***argv_out) {
-    if (!args || !argv_out) return -1;
-    char *args_copy = av_strdup(args);
-    if (!args_copy) return -1;
-
-    int argc = 0;
-    char *p = args_copy;
-    int in_quotes = 0;
-
-    // Count
-    while (*p) {
-        while (*p && !in_quotes && (*p == ' ' || *p == '\t' || *p == '\n')) p++;
-        if (!*p) break;
-        argc++;
-        if (*p == '"') {
-            in_quotes = 1;
-            p++;
-            while (*p && *p != '"') p++;
-            if (*p) p++;
-            in_quotes = 0;
-        } else {
-            while (*p && *p != ' ' && *p != '\t' && *p != '\n') p++;
-        }
-    }
-
-    char **argv = av_mallocz(sizeof(char *) * (argc + 1));
-    if (!argv) {
-        av_free(args_copy);
-        return -1;
-    }
-
-    strcpy(args_copy, args);
-    p = args_copy;
-    int idx = 0;
-    while (*p && idx < argc) {
-        while (*p && (*p == ' ' || *p == '\t' || *p == '\n')) p++;
-        if (!*p) break;
-        char *start = p;
-        if (*p == '"') {
-            p++;
-            start = p;
-            while (*p && *p != '"') p++;
-            if (*p) *p++ = '\0';
-        } else {
-            while (*p && *p != ' ' && *p != '\t' && *p != '\n') p++;
-            if (*p) *p++ = '\0';
-        }
-        argv[idx++] = av_strdup(start);
-    }
-    
-    av_free(args_copy);
-    *argv_out = argv;
-    return argc;
+    return ffmpegkit_split_command(args, argv_out);
 }
 
-FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
+static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc, const char *const *argv_args, const FFplayCallbacks *cb) {
     // Ensure only one session is active at a time
     if (active_ffplay_ctx) {
         ffplay_stop(NULL);
@@ -361,11 +369,14 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
             timeout -= 50;
         }
         if (active_ffplay_ctx) {
-            av_log(NULL, AV_LOG_WARNING, "[ffplay_lib] Previous session did not close in time, forcing cleanup.\n");
+            av_log(NULL, AV_LOG_ERROR, "[ffplay_lib] Previous session did not close in time; refusing to reset live ffplay state.\n");
+            return NULL;
         } else {
             av_log(NULL, AV_LOG_INFO,"[ffplay_lib] ffplay_init: previous session cleared\n");
         }
     }
+
+    ffplay_reset_cli_state();
 
     FFplayContext *ctx = av_mallocz(sizeof(FFplayContext));
     if (!ctx) return NULL;
@@ -425,18 +436,43 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
 #endif
 #endif /* !__ANDROID__ */
         
-    // Reset global state in ffplay.c
-    ffplay_reset_internal_state();
-
     avformat_network_init();
 
     ffplay_tls_init_options();
     show_help_default_func = ffplay_show_help_default;
 
-    ctx->argc = split_args(args_string, &ctx->argv);
-    if (ctx->argc < 0) {
-        av_free(ctx);
-        return NULL;
+    if (argv_args) {
+        if (argv_argc <= 0) {
+            av_free(ctx);
+            return NULL;
+        }
+        ctx->argc = argv_argc;
+        ctx->argv = av_mallocz(sizeof(char *) * (ctx->argc + 1));
+        if (!ctx->argv) {
+            av_free(ctx);
+            return NULL;
+        }
+        for (int i = 0; i < ctx->argc; i++) {
+            if (!argv_args[i]) {
+                for (int j = 0; j < i; j++) av_free(ctx->argv[j]);
+                av_free(ctx->argv);
+                av_free(ctx);
+                return NULL;
+            }
+            ctx->argv[i] = av_strdup(argv_args[i]);
+            if (!ctx->argv[i]) {
+                for (int j = 0; j < i; j++) av_free(ctx->argv[j]);
+                av_free(ctx->argv);
+                av_free(ctx);
+                return NULL;
+            }
+        }
+    } else {
+        ctx->argc = split_args(args_string, &ctx->argv);
+        if (ctx->argc < 0) {
+            av_free(ctx);
+            return NULL;
+        }
     }
 
     VideoState *is = ffplay_init_internal(ctx->argc, ctx->argv);
@@ -459,6 +495,9 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
         for (int i=0; i<ctx->argc; i++) av_free(ctx->argv[i]);
         av_free(ctx->argv);
         av_free(ctx);
+        while (SDL_WasInit(0))
+            SDL_Quit();
+        ffplay_reset_cli_state();
         return NULL;
     }
 
@@ -473,6 +512,17 @@ FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
     FFPLAY_LOGI("ffplay_init SUCCESS: ctx=%p is=%p", ctx, is);
 #endif
     return ctx;
+}
+
+FFplayContext* ffplay_init(const char* args_string, const FFplayCallbacks *cb) {
+    if (!args_string) return NULL;
+    return ffplay_init_common(args_string, 0, NULL, cb);
+}
+
+FFplayContext* ffplay_init_argv(int argc, const char *const *argv,
+                                const FFplayCallbacks *cb) {
+    if (argc <= 0 || !argv) return NULL;
+    return ffplay_init_common(NULL, argc, argv, cb);
 }
 
 // Custom events for thread-safe control
@@ -495,9 +545,6 @@ typedef struct SpeedEventData {
 typedef struct VolumeEventData {
     float volume;
 } VolumeEventData;
-
-static char *base_afilters = NULL;
-static char *allocated_afilters = NULL;
 
 int ffplay_start(FFplayContext* ctx) {
     int ret = -1;
@@ -1029,13 +1076,11 @@ void ffplay_free(FFplayContext* ctx) {
 
     // Cleanup globals
     if (allocated_afilters) {
-        av_free(allocated_afilters);
-        allocated_afilters = NULL;
+        if (afilters == allocated_afilters)
+            afilters = NULL;
+        av_freep(&allocated_afilters);
     }
-    if (base_afilters) {
-        av_free(base_afilters);
-        base_afilters = NULL;
-    }
+    av_freep(&base_afilters);
 
     if (requested_audio_device) {
         av_free(requested_audio_device);
@@ -1052,6 +1097,7 @@ void ffplay_free(FFplayContext* ctx) {
         av_free(ctx->argv);
     }
 
+    ffplay_reset_cli_state();
     avformat_network_deinit();
 
     av_free(ctx);

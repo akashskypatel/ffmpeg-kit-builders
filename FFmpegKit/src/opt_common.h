@@ -183,6 +183,7 @@ int opt_loglevel(void *optctx, const char *opt, const char *arg);
 
 int opt_report(void *optctx, const char *opt, const char *arg);
 int init_report(const char *env, FILE **file);
+void uninit_report(void);
 
 int opt_max_alloc(void *optctx, const char *opt, const char *arg);
 

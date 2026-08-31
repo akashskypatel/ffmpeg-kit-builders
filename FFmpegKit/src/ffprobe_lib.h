@@ -49,6 +49,18 @@ extern "C"
   FFMPEG_API FFprobeContext *ffprobe_init(const char *args_string);
 
   /**
+   * Initialize ffprobe context from an existing argument vector.
+   * Arguments are copied verbatim so filenames do not pass through
+   * command-string quoting and reparsing.
+   *
+   * @param argc Argument count, including argv[0].
+   * @param argv Argument vector.
+   * @return Context or NULL.
+   */
+  FFMPEG_API FFprobeContext *
+  ffprobe_init_argv(int argc, const char *const *argv);
+
+  /**
    * Binds a logical session id to the wrapper context.
    */
   FFMPEG_API void ffprobe_set_session_id(FFprobeContext *ctx, long session_id);

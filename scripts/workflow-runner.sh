@@ -46,9 +46,11 @@ fi
 case "$runner_platform" in
   linux)
     RUNNER_WORKFLOW_TARGET_PLATFORMS=$(printf "%s," "${VALID_BUILD_ON_LINUX[@]}")
+    runner_arch="x86_64"
     ;;
   macos)
     RUNNER_WORKFLOW_TARGET_PLATFORMS=$(printf "%s," "${VALID_BUILD_ON_MACOS[@]}")
+    runner_arch="aarch64"
     ;;
 esac
 RUNNER_WORKFLOW_TARGET_PLATFORMS=${RUNNER_WORKFLOW_TARGET_PLATFORMS%,}
@@ -516,9 +518,9 @@ workflow_step_build_bundle_batches() {
       build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --bundle="debug" --build="kit" --license="lgpl" --small --local)
     else
       build_all_args=(./scripts/build_all.sh --platform="${combo_csv}" --build="kit,bundle" --remote)
-    fi
-    if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
-      build_all_args+=(--bundle="${WORKFLOW_BUNDLES}")
+      if [[ -n "${WORKFLOW_BUNDLES:-}" ]]; then
+        build_all_args+=(--bundle="${WORKFLOW_BUNDLES}")
+      fi
     fi
 
     echo "::notice::Building bundle batch for $platform platforms: $combo_csv"
@@ -532,6 +534,34 @@ workflow_step_build_bundle_batches() {
   done
 }
 
+workflow_step_test() {
+  local build_args
+  build_args=(./runner.sh --host="$runner_platform" --arch="$runner_arch" --enable-base --gpl --kit --build-deps --no-bundle --test="${TEST_TYPE:-undefined}" --build-debug --skip -y --hide-banner)
+  
+  echo "::notice::Building tests"
+  if ! run_with_runner_shell "${build_args[@]}"; then
+    echo "::error::Failed to build tests"
+    return 1
+  fi
+
+  echo "::notice::Running tests"
+  local test_args
+  test_args=("./FFmpegKit/build/tests/ffmpegkit_tests")
+  if [[ -n "${TEST_FILTER:-}" ]]; then
+    test_args+=("--gtest_filter=${TEST_FILTER}")
+  fi
+
+  echo "Runner arch: $(uname -m)"
+  ls -l ./FFmpegKit/build/tests/ffmpegkit_tests
+  file ./FFmpegKit/build/tests/ffmpegkit_tests
+  
+  if ! sudo -E "${test_args[@]}"; then
+    echo "::error::Failed to run tests"
+    return 1
+  fi
+  
+  echo "::notice::Tests passed successfully"
+}
 
 declare -a build_only_steps=()
 declare -A build_only_seen_steps=()
@@ -553,6 +583,14 @@ fi
 if [[ ( "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ) && ( -n "${WORKFLOW_BUILD_FROM:-}" || "$build_only_enabled" == "true" ) ]]; then
   echo "::error::WORKFLOW_BUILD_FFMPEG/WORKFLOW_BUILD_BUNDLE cannot be combined with WORKFLOW_BUILD_FROM or WORKFLOW_BUILD_ONLY" >&2
   exit 1
+fi
+
+if [[ "${RUN_TESTS}" == "true" ]]; then
+  rm -f "workflow-seen-steps.log"
+  if ! workflow_step_test; then
+    echo "::error::Failed to run tests"
+    exit 1
+  fi
 fi
 
 workflow_mode="default"

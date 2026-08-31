@@ -3,26 +3,37 @@ name: build_on_linux
 on:
   workflow_call:
     inputs:
+      run_tests:
+        description: "Run tests - Only runs Linux tests when CI is true"
+        required: false
+        default: false
+        type: boolean
+      test_filter:
+        description: "Filter for tests to run"
+        required: false
+        default: ""
+        type: string
+      test_type:
+        description: "Type of tests to run"
+        required: false
+        default: "undefined"
+        type: string
       target_platforms:
         required: true
         type: string
         default: linux,windows,android
-
       target_archs:
         required: true
         type: string
         default: x86_64,aarch64,armv7a
-
       bundles:
         required: true
         type: string
         default: debug
-
       build_bundle:
         required: false
         type: boolean
         default: true
-
       is_ci:
         required: true
         type: boolean
@@ -74,9 +85,26 @@ on:
         required: true
         default: false
         type: boolean
+      run_tests:
+        description: "Run tests - Only runs Linux tests when CI is true"
+        required: false
+        default: false
+        type: boolean
+      test_filter:
+        description: "Filter for tests to run"
+        required: false
+        default: ""
+        type: string
+      test_type:
+        description: "Type of tests to run"
+        required: false
+        default: "undefined"
+        type: string
 
 env:
+  GITHUB_TOKEN: ${{ github.token }}
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN_CLASSIC: ${{ secrets.GH_TOKEN_CLASSIC }}
   WORKFLOW_FORCE_SELF: ${{ inputs.force }}
   WORKFLOW_BUILD_FROM: ${{ inputs.build_from }}
   WORKFLOW_BUILD_ONLY: ${{ inputs.build_only }}
@@ -91,6 +119,9 @@ env:
   OSSRH_BASE64: ${{ secrets.OSSRH_BASE64 }}
   OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
   OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+  RUN_TESTS: ${{ inputs.run_tests }}
+  TEST_FILTER: ${{ inputs.test_filter }}
+  TEST_TYPE: ${{ inputs.test_type }}
 
 permissions:
   contents: write
@@ -122,7 +153,10 @@ jobs:
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
         run: |
           USER_HOME="${GITHUB_WORKSPACE}"
-
+          dnf install 'dnf-command(config-manager)'
+          dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+          dnf install -y gh
+          gh --version
           if [[ -z "${USER_HOME}" || ! -d "${USER_HOME}" ]]; then
             echo "Unable to determine user home" >&2
             exit 1

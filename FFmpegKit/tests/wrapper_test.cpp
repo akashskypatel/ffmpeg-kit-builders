@@ -1074,6 +1074,69 @@ TEST(FFmpegKitTest, MediaInformation) {
   ffmpeg_kit_handle_release(media_session);
 }
 
+#ifndef _WIN32
+TEST(FFmpegKitTest, MediaInformationQuotedFilename) {
+  const std::filesystem::path source(TEST_VIDEO_FILE);
+  const std::filesystem::path quoted_path =
+      source.parent_path() / "dummy copy - \"extra chars\".mp4";
+  std::error_code ec;
+  std::filesystem::copy_file(source, quoted_path,
+                             std::filesystem::copy_options::overwrite_existing,
+                             ec);
+  ASSERT_FALSE(ec) << ec.message();
+
+  const std::string input = quoted_path.string();
+  const std::string command =
+      "-v error -hide_banner -print_format json -show_format "
+      "-show_streams -show_chapters -i '" +
+      input + "'";
+
+  MediaInformationSessionHandle command_session =
+      media_information_create_session(command.c_str());
+  ASSERT_NE(command_session, nullptr);
+  media_information_session_execute(command_session, 5000);
+  EXPECT_EQ(ffmpeg_kit_session_get_state(command_session),
+            FFMPEG_KIT_SESSION_STATE_COMPLETED);
+  MediaInformationHandle command_info =
+      media_information_session_get_media_information(command_session);
+  EXPECT_NE(command_info, nullptr);
+  if (command_info)
+    ffmpeg_kit_handle_release(command_info);
+  ffmpeg_kit_handle_release(command_session);
+
+  const char *ffmpeg_argv[] = {"-v", "error", "-i", input.c_str(),
+                               "-f", "null", "-"};
+  FFmpegSessionHandle ffmpeg_session = ffmpeg_kit_create_session_from_argv(
+      static_cast<int>(sizeof(ffmpeg_argv) / sizeof(ffmpeg_argv[0])),
+      ffmpeg_argv);
+  ASSERT_NE(ffmpeg_session, nullptr);
+  ffmpeg_kit_session_execute(ffmpeg_session);
+  EXPECT_EQ(ffmpeg_kit_session_get_state(ffmpeg_session),
+            FFMPEG_KIT_SESSION_STATE_COMPLETED);
+  ffmpeg_kit_handle_release(ffmpeg_session);
+
+  const char *argv[] = {"-v",            "error",          "-hide_banner",
+                        "-print_format", "json",           "-show_format",
+                        "-show_streams", "-show_chapters", "-i",
+                        input.c_str()};
+  MediaInformationSessionHandle argv_session =
+      media_information_create_session_from_argv(
+          static_cast<int>(sizeof(argv) / sizeof(argv[0])), argv);
+  ASSERT_NE(argv_session, nullptr);
+  media_information_session_execute(argv_session, 5000);
+  EXPECT_EQ(ffmpeg_kit_session_get_state(argv_session),
+            FFMPEG_KIT_SESSION_STATE_COMPLETED);
+  MediaInformationHandle argv_info =
+      media_information_session_get_media_information(argv_session);
+  EXPECT_NE(argv_info, nullptr);
+  if (argv_info)
+    ffmpeg_kit_handle_release(argv_info);
+  ffmpeg_kit_handle_release(argv_session);
+
+  std::filesystem::remove(quoted_path, ec);
+}
+#endif
+
 TEST(FFmpegKitTest, MediaInformationSessionAPIs) {
   char command[512];
   snprintf(command, sizeof(command),

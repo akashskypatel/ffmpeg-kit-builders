@@ -1,5 +1,9 @@
 # FFmpegKit Changelog
 
+## Version 0.11.1
+
+- Preserve FFmpeg, FFprobe, and FFplay session arguments as argv all the way into their embedded CLI runtimes to fix argument parsing bug exposed by quotes in commands.
+
 ## Version 0.11.0
 
 - Updated FFmpeg to v9.0.1

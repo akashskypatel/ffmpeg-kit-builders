@@ -66,6 +66,7 @@ extern "C" {
 #include <sstream>
 #include <thread> // 2. Standard library headers at the end
 #include <unordered_map>
+#include <vector>
 
 #if (defined(__ANDROID__) && __ANDROID_API__ < 28) || defined(__APPLE__)
 #include <cstdlib>
@@ -1319,26 +1320,6 @@ void *callbackThreadFunction(void *pointer) {
   return NULL;
 }
 
-/**
- * Helper to reconstruct command string from argument list for the new _lib
- * APIs.
- */
-static std::string
-buildCommandString(const char *toolName,
-                   const std::shared_ptr<std::list<std::string>> &arguments) {
-  std::string cmd = toolName;
-  for (const auto &arg : *arguments) {
-    cmd += " ";
-    // Basic quote handling: if arg has space, wrap in quotes
-    if (arg.find(' ') != std::string::npos) {
-      cmd += "\"" + arg + "\"";
-    } else {
-      cmd += arg;
-    }
-  }
-  return cmd;
-}
-
 static int
 executeFFmpeg(const std::shared_ptr<ffmpegkit::FFmpegSession> &session,
               const std::shared_ptr<std::list<std::string>> arguments) {
@@ -1354,11 +1335,15 @@ executeFFmpeg(const std::shared_ptr<ffmpegkit::FFmpegSession> &session,
   registerSessionId(sessionId);
   resetMessagesInTransmit(sessionId);
 
-  // 1. Construct command string for the library init
-  std::string fullCommand = buildCommandString("ffmpeg", arguments);
+  std::vector<const char *> argv;
+  argv.reserve(arguments->size() + 1);
+  argv.push_back("ffmpeg");
+  for (const auto &argument : *arguments) {
+    argv.push_back(argument.c_str());
+  }
 
-  // 2. Initialize Wrapper Context
-  FFmpegContext *ctx = ffmpeg_init(fullCommand.c_str());
+  FFmpegContext *ctx = ffmpeg_init_argv(
+      static_cast<int>(argv.size()), argv.data());
 
   if (!ctx) {
     removeSession(sessionId);
@@ -1414,11 +1399,17 @@ int executeFFprobe(const std::shared_ptr<ffmpegkit::AbstractSession> &session,
   registerSessionId(sessionId);
   resetMessagesInTransmit(sessionId);
 
-  // 1. Construct command string
-  std::string fullCommand = buildCommandString("ffprobe", arguments);
+  // Preserve the session argument vector end-to-end. Rebuilding a
+  // command string here loses literal quote characters in filenames.
+  std::vector<const char *> argv;
+  argv.reserve(arguments->size() + 1);
+  argv.push_back("ffprobe");
+  for (const auto &argument : *arguments) {
+    argv.push_back(argument.c_str());
+  }
 
-  // 2. Initialize Wrapper Context
-  FFprobeContext *ctx = ffprobe_init(fullCommand.c_str());
+  FFprobeContext *ctx = ffprobe_init_argv(
+      static_cast<int>(argv.size()), argv.data());
 
   if (!ctx) {
     removeSession(sessionId);
@@ -1498,8 +1489,12 @@ int executeFFplay(const long sessionId,
   registerSessionId(sessionId);
   resetMessagesInTransmit(sessionId);
 
-  // 1. Construct command string
-  std::string fullCommand = buildCommandString("ffplay", arguments);
+  std::vector<const char *> argv;
+  argv.reserve(arguments->size() + 1);
+  argv.push_back("ffplay");
+  for (const auto &argument : *arguments) {
+    argv.push_back(argument.c_str());
+  }
 
   // 2. Configure log level and callbacks
   installSharedLogState();
@@ -1516,7 +1511,8 @@ int executeFFplay(const long sessionId,
   }
 
   // 3. Initialize Wrapper Context
-  FFplayContext *ctx = ffplay_init(fullCommand.c_str(), nullptr);
+  FFplayContext *ctx = ffplay_init_argv(
+      static_cast<int>(argv.size()), argv.data(), nullptr);
   if (!ctx) {
     if (helpRequested) {
       // Help was displayed successfully - wait for logs and return success
@@ -2126,7 +2122,7 @@ void ffmpegkit::FFmpegKitConfig::getMediaInformationExecute(
                                          &ffprobeJsonOutput);
     // Wait for all logs/stats to be processed by the callback thread
     mediaInformationSession->waitForAsynchronousMessagesInTransmit(
-        AbstractSession::DefaultTimeoutForAsynchronousMessagesInTransmit);
+        waitTimeout);
 
     auto returnCode = std::make_shared<ffmpegkit::ReturnCode>(returnCodeValue);
     mediaInformationSession->complete(returnCode);
@@ -2838,50 +2834,67 @@ std::list<std::string>
 ffmpegkit::FFmpegKitConfig::parseArguments(const std::string &command) {
   std::list<std::string> argumentList;
   std::string currentArgument;
+  char quote = 0;
+  bool tokenStarted = false;
 
-  bool singleQuoteStarted = false;
-  bool doubleQuoteStarted = false;
+  for (size_t i = 0; i < command.size(); i++) {
+    const char currentChar = command[i];
 
-  for (int i = 0; i < command.size(); i++) {
-    char previousChar;
-    if (i > 0) {
-      previousChar = command[i - 1];
-    } else {
-      previousChar = 0;
-    }
-    char currentChar = command[i];
-
-    if (currentChar == ' ') {
-      if (singleQuoteStarted || doubleQuoteStarted) {
+    if (quote == '\'') {
+      if (currentChar == '\'') {
+        quote = 0;
+      } else {
         currentArgument += currentChar;
-      } else if (currentArgument.size() > 0) {
+      }
+      tokenStarted = true;
+      continue;
+    }
+
+    if (currentChar == '\\' && i + 1 < command.size()) {
+      const char nextChar = command[i + 1];
+      const bool escapedQuote =
+          nextChar == '"' || (quote == 0 && nextChar == '\'');
+      const bool escapedWhitespace =
+          quote == 0 &&
+          std::isspace(static_cast<unsigned char>(nextChar)) != 0;
+      if (escapedQuote || escapedWhitespace) {
+        currentArgument += nextChar;
+        tokenStarted = true;
+        i++;
+        continue;
+      }
+    }
+
+    if (quote != 0) {
+      if (currentChar == quote) {
+        quote = 0;
+      } else {
+        currentArgument += currentChar;
+      }
+      tokenStarted = true;
+      continue;
+    }
+
+    if (currentChar == '"' || currentChar == '\'') {
+      quote = currentChar;
+      tokenStarted = true;
+      continue;
+    }
+
+    if (std::isspace(static_cast<unsigned char>(currentChar)) != 0) {
+      if (tokenStarted) {
         argumentList.push_back(currentArgument);
-        currentArgument = "";
+        currentArgument.clear();
+        tokenStarted = false;
       }
-    } else if (currentChar == '\'' &&
-               (previousChar == 0 || previousChar != '\\')) {
-      if (singleQuoteStarted) {
-        singleQuoteStarted = false;
-      } else if (doubleQuoteStarted) {
-        currentArgument += currentChar;
-      } else {
-        singleQuoteStarted = true;
-      }
-    } else if (currentChar == '\"' &&
-               (previousChar == 0 || previousChar != '\\')) {
-      if (doubleQuoteStarted) {
-        doubleQuoteStarted = false;
-      } else if (singleQuoteStarted) {
-        currentArgument += currentChar;
-      } else {
-        doubleQuoteStarted = true;
-      }
-    } else {
-      currentArgument += currentChar;
+      continue;
     }
+
+    currentArgument += currentChar;
+    tokenStarted = true;
   }
 
-  if (currentArgument.size() > 0) {
+  if (tokenStarted) {
     argumentList.push_back(currentArgument);
   }
 
@@ -2894,16 +2907,36 @@ std::string ffmpegkit::FFmpegKitConfig::argumentsToString(
     return "null";
   }
 
-  std::string string;
+  std::string command;
   for (auto it = arguments->begin(); it != arguments->end(); ++it) {
-    auto argument = *it;
+    const std::string &argument = *it;
     if (it != arguments->begin()) {
-      string += " ";
+      command += " ";
     }
-    string += argument;
+
+    const bool needsQuotes =
+        argument.empty() ||
+        argument.find_first_of(" \t\r\n\"'") != std::string::npos;
+    if (!needsQuotes) {
+      command += argument;
+      continue;
+    }
+
+    // Single-quoted sections preserve backslashes and double quotes verbatim.
+    // For a literal single quote, close the section, emit an escaped quote in
+    // unquoted mode, then reopen the section: 'foo'\''bar'.
+    command += "'";
+    for (char ch : argument) {
+      if (ch == '\'') {
+        command += "'\\''";
+      } else {
+        command += ch;
+      }
+    }
+    command += "'";
   }
 
-  return string;
+  return command;
 }
 
 void ffmpegkit::FFmpegKitConfig::setAudioOutputDevice(

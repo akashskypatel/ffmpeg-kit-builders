@@ -103,6 +103,10 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     zip \
     zlib-devel
 
+RUN dnf install 'dnf-command(config-manager)' && \
+    dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && \
+    dnf install -y gh
+
 # override installed older tools with bundled existing newer tools
 RUN for tool in autoconf automake aclocal autoheader autoreconf autom4te; do \
     ln -sf /usr/local/bin/$tool /usr/bin/$tool; \
