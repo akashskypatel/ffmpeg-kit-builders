@@ -30,6 +30,7 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     ed \
     flex \
     git \
+    gh \
     gcc \
     gcc-c++ \
     gcc-gfortran \
