@@ -30,7 +30,6 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     ed \
     flex \
     git \
-    gh \
     gcc \
     gcc-c++ \
     gcc-gfortran \
@@ -103,6 +102,10 @@ RUN dnf install -y --allowerasing --setopt=install_weak_deps=False \
     yasm \
     zip \
     zlib-devel
+
+RUN dnf install 'dnf-command(config-manager)' && \
+    dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && \
+    dnf install -y gh
 
 # override installed older tools with bundled existing newer tools
 RUN for tool in autoconf automake aclocal autoheader autoreconf autom4te; do \

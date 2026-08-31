@@ -7926,7 +7926,9 @@ authorize_github() {
 github_gh() {
   if ! command -v gh &> /dev/null; then
     echo "INFO: gh CLI not installed, installing gh CLI" | tee -a "$LOG_FILE"
-    install_missing_packages gh
+    dnf install 'dnf-command(config-manager)'
+    dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+    dnf install -y gh
     if ! command -v gh &> /dev/null; then
       exit_message 1 "ERROR: Failed to install gh CLI" | tee -a "$LOG_FILE"
     fi
