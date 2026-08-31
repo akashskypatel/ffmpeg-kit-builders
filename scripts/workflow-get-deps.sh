@@ -94,6 +94,45 @@ mark_workflow_step_seen() {
 repo_name="${repo#*/}"
 repo_owner="${repo%/*}"
 
+declare -A release_assets_loaded=()
+declare -A release_asset_ids=()
+resolved_asset_id=""
+
+# Resolve an exact asset name from all release-asset pages. Releases in this
+# repository can exceed GitHub's 100-item page size, so gh release download's
+# pattern lookup is not sufficient for assets on later pages.
+resolve_release_asset_id() {
+    local tag="$1"
+    local wanted_asset="$2"
+    local release_id asset_rows candidate_name candidate_id cache_key
+
+    if [[ -z "${release_assets_loaded[$tag]:-}" ]]; then
+        if ! release_id="$(github_gh_capture api \
+            "repos/${repo}/releases/tags/${tag}" \
+            --jq '.id' 2>>"$LOG_FILE")"; then
+            echo "Failed to resolve dependency release: ${tag}" >&2
+            return 1
+        fi
+
+        if ! asset_rows="$(github_gh_capture api --paginate \
+            "repos/${repo}/releases/${release_id}/assets?per_page=100" \
+            --jq '.[] | [.name, (.id | tostring)] | @tsv' 2>>"$LOG_FILE")"; then
+            echo "Failed to enumerate dependency release assets: ${tag}" >&2
+            return 1
+        fi
+
+        while IFS=$'\t' read -r candidate_name candidate_id; do
+            [[ -n "$candidate_name" && -n "$candidate_id" ]] || continue
+            release_asset_ids["${tag}|${candidate_name}"]="$candidate_id"
+        done <<< "$asset_rows"
+        release_assets_loaded["$tag"]=1
+    fi
+
+    cache_key="${tag}|${wanted_asset}"
+    resolved_asset_id="${release_asset_ids[$cache_key]:-}"
+    [[ -n "$resolved_asset_id" ]] || return 2
+}
+
 case "$platform" in
 	iphonesimulator)
 		deps_platform="ios"
@@ -124,12 +163,12 @@ if [[ "$mode" == "--artifact-pattern" ]]; then
     release_name="${platform}-${arch}-dependencies"
     asset_prefix="${platform}-${arch}-"
 
-    if ! release_id="$(github_gh api "repos/${repo}/releases/tags/${release_tag}" --jq '.id' 2>>"$LOG_FILE")"; then
+    if ! release_id="$(github_gh_capture api "repos/${repo}/releases/tags/${release_tag}" --jq '.id' 2>>"$LOG_FILE")"; then
         echo "Missing release for dependency artifact pattern: tag='${release_tag}' name='${release_name}' pattern='${workflow_name}'" >&2
         exit 3
     fi
 
-    if ! asset_names="$(github_gh api --paginate \
+    if ! asset_names="$(github_gh_capture api --paginate \
         "repos/${repo}/releases/${release_id}/assets?per_page=100" \
         --jq '.[].name' 2>>"$LOG_FILE")"; then
         echo "Failed to list dependency artifacts: tag='${release_tag}' name='${release_name}'" >&2
@@ -198,14 +237,27 @@ for dependency in $dependencies; do
 	echo "Fetching dependency ${dependency} from release '${release_name}' (${release_tag}) asset '${asset_name}'"
 
 	rm -f "$archive_path"
-	if ! github_gh release download "$release_tag" \
-		--repo "$repo" \
-		--pattern "$asset_name" \
-		--output "$archive_path" \
-		--clobber >>"$LOG_FILE" 2>&1; then
-		echo "Missing dependency artifact: ${asset_name}" >&2
-		exit 3
-	fi
+    if resolve_release_asset_id "$release_tag" "$asset_name"; then
+        if ! github_gh_to_file "$archive_path" api \
+            -H "Accept: application/octet-stream" \
+            "repos/${repo}/releases/assets/${resolved_asset_id}"; then
+            echo "Failed to download dependency artifact: ${asset_name} (asset id ${resolved_asset_id})" >&2
+            exit 3
+        fi
+        if [[ ! -s "$archive_path" ]]; then
+            echo "Downloaded dependency artifact is empty: ${asset_name}" >&2
+            rm -f "$archive_path"
+            exit 3
+        fi
+    else
+        resolve_status=$?
+        if [[ "$resolve_status" -eq 2 ]]; then
+            echo "Missing dependency artifact: ${asset_name}" >&2
+        else
+            echo "Failed to resolve dependency artifact: ${asset_name}" >&2
+        fi
+        exit 3
+    fi
 
     if [[ "$asset_name" == "${platform}-${arch}-ffmpeg-"*.zip ]]; then
         echo "Extracting ffmpeg archive detected: ${archive_path}"

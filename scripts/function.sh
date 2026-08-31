@@ -7962,6 +7962,73 @@ github_gh() {
   return 1
 }
 
+
+# Run a gh command with the same credential fallback as github_gh(), but isolate
+# stdout for each attempt and atomically publish only the successful result.
+github_gh_to_file() {
+  local output_path="$1"
+  shift
+  local -a credential_names=("GITHUB_TOKEN" "GH_TOKEN" "GH_TOKEN_CLASSIC")
+  local -a credential_values=("${GITHUB_TOKEN:-}" "${GH_TOKEN:-}" "${GH_TOKEN_CLASSIC:-}")
+  local i credential tmp_path keystore stored_token stored_classic
+
+  tmp_path="${output_path}.tmp.$$"
+  rm -f "$tmp_path" "$output_path"
+
+  for i in "${!credential_values[@]}"; do
+    credential="${credential_values[$i]}"
+    [[ -n "$credential" ]] || continue
+    rm -f "$tmp_path"
+
+    if GH_TOKEN="$credential" gh "$@" >"$tmp_path" 2>>"$LOG_FILE"; then
+      mv -f "$tmp_path" "$output_path"
+      if (( i > 0 )); then
+        echo "INFO: GitHub operation succeeded with fallback credential ${credential_names[$i]}." >>"$LOG_FILE"
+      fi
+      return 0
+    fi
+
+    rm -f "$tmp_path"
+    echo "WARNING: GitHub operation failed while using ${credential_names[$i]}; trying the next credential." >>"$LOG_FILE"
+  done
+
+  keystore="$(get_keystore_file 2>/dev/null)" || keystore=""
+  if [[ -n "$keystore" && -f "$keystore" ]]; then
+    stored_token="$(grep '^GH_TOKEN=' "$keystore" | cut -d '=' -f2- | tr -d '\r')"
+    stored_classic="$(grep '^GH_TOKEN_CLASSIC=' "$keystore" | cut -d '=' -f2- | tr -d '\r')"
+
+    for credential in "$stored_token" "$stored_classic"; do
+      [[ -n "$credential" ]] || continue
+      rm -f "$tmp_path"
+      if GH_TOKEN="$credential" gh "$@" >"$tmp_path" 2>>"$LOG_FILE"; then
+        mv -f "$tmp_path" "$output_path"
+        echo "INFO: GitHub operation succeeded with a local keystore fallback credential." >>"$LOG_FILE"
+        return 0
+      fi
+      rm -f "$tmp_path"
+    done
+  fi
+
+  rm -f "$tmp_path" "$output_path"
+  return 1
+}
+
+# Capture stdout from github_gh_to_file() without allowing failed credential
+# attempts to leak partial/error response bodies into the captured value.
+github_gh_capture() {
+  local capture_file
+  capture_file="$(mktemp)"
+
+  if github_gh_to_file "$capture_file" "$@"; then
+    cat "$capture_file"
+    rm -f "$capture_file"
+    return 0
+  fi
+
+  rm -f "$capture_file"
+  return 1
+}
+
 create_github_release() {
   local attachment="$1"
   local version tag target_commit
