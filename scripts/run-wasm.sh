@@ -68,13 +68,7 @@ build_alsa() {
   local lib="alsa"
   local repo="https://github.com/alsa-project/alsa-lib"
   local repo_ver="v1.2.15.1"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
+  echo "INFO: Not available on wasm build" >>"$LOG_FILE"
 }
 build_libusb() {
   local repo="https://github.com/libusb/libusb"
@@ -133,25 +127,10 @@ build_libdc1394() {
 }
 # build_libdrm            # config_options+= --disable-libdrm             # disable DRM code (Linux) [autodetect]
 build_libdrm() {
-  install_missing_packages "valgrind-devel"
   activate_meson
   local repo="https://gitlab.freedesktop.org/mesa/libdrm"
   local lib="libdrm"
   local repo_ver="libdrm-2.4.129"
-  # if [[ -d "/usr/include/valgrind" ]]; then
-  #   create_dir "$dependency_install_prefix/usr/include"
-  #   ln -sf /usr/include/valgrind "$dependency_install_prefix/usr/include"
-  # fi
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export LIBS="-ldl"
-  local meson_options="-Dcairo-tests=disabled -Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
-  generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$lib"
-  do_ninja_and_ninja_install
-  unset LIBS
-  change_dir "$src_dir"
 }
 # contains both libavc1394 and librom1394
 build_libavc1394() {
@@ -261,48 +240,8 @@ build_v4l2_m2m() {
 }
 # build_vaapi             # config_options+= --disable-vaapi              # disable Video Acceleration API (mainly Unix/Intel) code [autodetect]
 build_vaapi() {
-  # run_valid_function "build_libdrm" 1
-  # run_valid_function "build_xlib" 1
-  # local original_pkg_path=$PKG_CONFIG_PATH
-  # https://github.com/intel/libva
-  build_xlib
-  local lib="vaapi"
-  local repo="https://github.com/intel/libva"
-  local repo_ver="2.22.0"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include "
-  export CXXFLAGS="$CXXFLAGS -I${dependency_install_prefix}/include "
-  export CPPFLAGS="$CPPFLAGS -I${dependency_install_prefix}/include "
-  export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -lxcb -lXau -lXdmcp -lX11"
-  # export PKG_CONFIG_PATH="$install_pkgconfig_dir"
-  export gl_cv_have_ld_version_script=no
-  gsed -i 's/-Wl,-version-script[^ ]*//g' "$src_dir/$lib/va/Makefile.am"
-  autoreconf_library # a handful of them require this to create ./configure :|
-  automake --force-missing --add-missing > >(redirect_output) 2>&1
-  # remove function versioning. causes issues with PIC
-  gsed -i 's/$wl-version-script //g' "$src_dir/$lib/configure"
-  gsed -i 's/-version-script //g' "$src_dir/$lib/configure"
-  gsed -i 's/-Wl,--version-script//g' "$src_dir/$lib/va/meson.build"
-  gsed -i "s/libva_sym_arg = .*/libva_sym_arg = ''/g" "$src_dir/$lib/va/meson.build"
-  generic_configure "--enable-static \
---disable-shared \
---enable-pic \
---with-pic \
---disable-docs \
-gl_cv_have_ld_version_script=no"
-  # remove function versioning. causes issues with PIC
-  gsed -i '/#define VA_CPP_HELPER_ALIAS_(/s/\\$//' "$src_dir/$lib/va/va_compat.h"
-  gsed -i '/asm(".symver/d' "$src_dir/$lib/va/va_compat.h"
-  gsed -i '/#func binding/d' "$src_dir/$lib/va/va_compat.h"
-  find . -name "Makefile" -exec gsed -i 's/-Wl,-*version-script=[^ ]*//g' {} +
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  unset gl_cv_have_ld_version_script
-  reset_allflags
-  # export PKG_CONFIG_PATH=$original_pkg_path
-  change_dir "$src_dir"
+  echo "INFO: Only available on Linux Desktop build" >>"$LOG_FILE"
+  disable_library "vaapi"
 }
 build_xtrans() {
   install_missing_packages "xorg-x11-xtrans-devel"
@@ -554,13 +493,6 @@ build_libvpl() {
   local lib="libvpl"
   local repo="https://github.com/intel/libvpl"
   local repo_ver="v2.15.0"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib/build" 1
-  do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DINSTALL_EXAMPLES=OFF -DINSTALL_DEV=ON -DBUILD_EXPERIMENTAL=OFF"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
 }
 # build_vulkan_static     # config_options+= --enable-vulkan-static       # enable statically link to libvulkan [no]
 build_vulkan_static() {
@@ -790,7 +722,11 @@ build_frei0r() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWITHOUT_OPENCV=1"
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DWITHOUT_OPENCV=ON \
+-DWITHOUT_GAVL=ON \
+-DNO_SSE2=ON"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -999,7 +935,18 @@ build_libaribcaption() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  generic_cmake "-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF" "$src_dir/$lib"
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DARIBCC_BUILD_TESTS=OFF \
+-DARIBCC_SHARED_LIBRARY=OFF \
+-DARIBCC_USE_FREETYPE=ON \
+-DARIBCC_USE_EMBEDDED_FREETYPE=OFF \
+-DARIBCC_USE_FONTCONFIG=ON \
+-DEMSCRIPTEN_SYSTEM_PROCESSOR=wasm32 \
+-DFontconfig_LIBRARY=${dependency_install_prefix}/lib/libfontconfig.a \
+-DFontconfig_INCLUDE_DIR=${dependency_install_prefix}/include \
+-DFREETYPE_LIBRARY=${dependency_install_prefix}/lib/libfreetype.a \
+-DFREETYPE_INCLUDE_DIRS=${dependency_install_prefix}/include/freetype2"
+  generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1132,17 +1079,39 @@ build_libcdio() {
   }
 # build_libcodec2         # config_options+= --enable-libcodec2           # enable codec2 en/decoding using libcodec2 [no]
 build_libcodec2() {
-  local lib="libcodec2"
-  local repo_ver="1.2.0"
-  local repo="https://github.com/drowe67/codec2"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib/build" 1
-  do_cmake_from_build_dir "$src_dir/$lib" "-DUNITTEST=OFF -DBUILD_SHARED_LIBS=OFF"
-  disable_nonessential "$src_dir/$lib/build"
-  do_make_and_make_install
-  change_dir "$src_dir"
+    local lib="libcodec2"
+    local repo="https://github.com/drowe67/codec2"
+    local repo_ver="1.2.0"
+    change_dir "$src_dir"
+    do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+    change_dir "$src_dir/$lib"
+    apply_patch "$PATCHDIR/codec2.patch"
+    local host_build="$src_dir/$lib/build_native"
+    local generate_codebook="$host_build/generate_codebook"
+    mkdir -p "$host_build"
+    native_cross_vars
+    "$CC" -O2 \
+        "$src_dir/$lib/src/generate_codebook.c" \
+        -o "$generate_codebook" \
+        -lm > >(redirect_output) 2>&1
+    reset_cross_vars
+    reset_allflags
+    if [ ! -x "$generate_codebook" ]; then
+        echo "ERROR: failed to build native Codec2 generate_codebook"
+        return 1
+    fi
+    change_dir "$src_dir/$lib/build" 1
+    do_cmake_from_build_dir "$src_dir/$lib" \
+        "-DCMAKE_BUILD_TYPE=Release \
+-DUNITTEST=OFF \
+-DBUILD_SHARED_LIBS=OFF \
+-DLPCNET=OFF \
+-DGENERATE_CODEBOOK=\"$generate_codebook\""
+    disable_nonessential "$src_dir/$lib/build"
+    do_make_and_make_install
+    change_dir "$src_dir"
 }
+
 # build_libdav1d          # config_options+= --enable-libdav1d            # enable AV1 decoding via libdav1d [no]
 build_libdav1d() {
   local lib="libdav1d"
@@ -1166,17 +1135,58 @@ build_libdavs2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build/linux"
+  get_config_sub "$src_dir/$lib/build/linux"
+  get_config_guess "$src_dir/$lib/build/linux"
   touch "no.autoreconf"
-  export AS=nasm
-  do_configure "--enable-pic --disable-cli --enable-static --disable-shared --prefix=$dependency_install_prefix"
+  local configure_file="$src_dir/$lib/build/linux/configure"
+  local makefile="$src_dir/$lib/build/linux/Makefile"
+  if ! grep -q 'emscripten\*)' "$configure_file"; then
+    gsed -i '/^[[:space:]]*\*linux\*)/i\
+    emscripten*)\
+        SYS="EMSCRIPTEN"\
+        libm="-lm"\
+        ;;' "$configure_file"
+  fi
+  gsed -i \
+    's|AR="$AR rc "|AR="$AR"|' \
+    "$configure_file"
+  gsed -i \
+    's|$(AR)$@ $(OBJS) $(OBJAVX) $(OBJASM)|$(AR) rc $@ $(OBJS) $(OBJAVX) $(OBJASM)|' \
+    "$makefile"
+  gsed -i \
+    's/git rev-list --count origin\/master/git rev-list --count HEAD/' \
+    "$src_dir/$lib/version.sh"
+  local original_cc="$CC"
+  local original_cflags="$CFLAGS"
+  local original_cxxflags="$CXXFLAGS"
+  local original_ldflags="$LDFLAGS"
+  export CC="$(command -v em++)"
+  export CFLAGS="$CFLAGS -pthread"
+  export CXXFLAGS="$CXXFLAGS -pthread"
+  export LDFLAGS="${LDFLAGS//-static-libstdc++/}"
+  export LDFLAGS="$LDFLAGS -pthread"
+  do_configure "--host=wasm32-unknown-emscripten \
+--disable-cli \
+--disable-asm \
+--disable-opencl \
+--prefix=$dependency_install_prefix"
   disable_nonessential "$src_dir/$lib/build/linux"
   do_make_and_make_install ""
-  if [[ ! -f "$install_pkgconfig_dir/davs2.pc" && -f "$src_dir/$lib/build/linux/davs2.pc" ]]; then
-    copy_path "$src_dir/$lib/build/linux/davs2.pc" "$install_pkgconfig_dir/davs2.pc" "-f"
+  export CC="$original_cc"
+  export CFLAGS="$original_cflags"
+  export CXXFLAGS="$original_cxxflags"
+  export LDFLAGS="$original_ldflags"
+  if [[ ! -f "$install_pkgconfig_dir/davs2.pc" && \
+        -f "$src_dir/$lib/build/linux/davs2.pc" ]]; then
+    copy_path \
+      "$src_dir/$lib/build/linux/davs2.pc" \
+      "$install_pkgconfig_dir/davs2.pc" \
+      "-f"
   fi
-  gsed -i "s/Version:.*/Version: ${repo_ver}.0/g" "$install_pkgconfig_dir/davs2.pc"
+  gsed -i \
+    "s/Version:.*/Version: ${repo_ver}.0/g" \
+    "$install_pkgconfig_dir/davs2.pc"
   change_dir "$src_dir"
-  export AS=as
 }
 # build_libdvdnav         # config_options+= --enable-libdvdnav           # enable libdvdnav, needed for DVD demuxing [no]
 build_libdvdnav() {
@@ -1238,29 +1248,25 @@ build_libasound2() {
   local lib="libasound2"
   local repo="https://github.com/pop-os/libasound2"
   local repo_ver="v1.2.7"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
 }
 # build_libflite          # config_options+= --enable-libflite            # enable flite (voice synthesis) support via libflite [no]
 build_libflite() {
-  # run_valid_function "build_libasound2"
   local lib="flite"
   local repo="https://github.com/festvox/flite"
   local repo_ver="v2.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export LDFLAGS="$LDFLAGS -lpthread -ldl"
-  generic_configure "--disable-shared --with-pic"
+  get_config_sub "$src_dir/$lib" > /dev/null 2>&1
+  get_config_guess "$src_dir/$lib" > /dev/null 2>&1
+  generic_configure "--disable-shared \
+--disable-sockets \
+--with-audio=none \
+--with-mmap=none \
+--with-pic"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
-  add_libs_to_pkg -t="$install_pkgconfig_dir/libtiff-4.pc" -l="-llzma -ljpeg -lz -ljbig -lwebp -lLerc"
   reset_ldflags
 }
 # build_libfontconfig     # config_options+= --enable-libfontconfig       # enable libfontconfig, useful for drawtext filter [no]
@@ -1661,6 +1667,12 @@ build_libjxl() {
 -DJPEGXL_ENABLE_BENCHMARK=OFF \
 -DJPEGXL_ENABLE_EXAMPLES=OFF \
 -DCMAKE_PREFIX_PATH=\"$dependency_install_prefix\" \
+-DHWY_LIBRARY=\"$dependency_install_prefix/lib/libhwy.a\" \
+-DHWY_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+-DBROTLICOMMON_LIBRARY=\"$dependency_install_prefix/lib/libbrotlicommon.a\" \
+-DBROTLIDEC_LIBRARY=\"$dependency_install_prefix/lib/libbrotlidec.a\" \
+-DBROTLIENC_LIBRARY=\"$dependency_install_prefix/lib/libbrotlienc.a\" \
+-DBROTLI_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
 -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
 -DJPEGXL_ENABLE_DOXYGEN=OFF \
 -DJPEGXL_ENABLE_MANPAGES=OFF \
@@ -1722,11 +1734,9 @@ build_libkvazaar() {
   change_dir "$src_dir/$lib"
   #change_dir "$src_dir/$lib/build" 1
   export ASFLAGS="$ASFLAGS -DPIC"
-  local cmake_params="-DCMAKE_BUILD_TESTS=OFF \
--DCMAKE_ASM_NASM_FLAGS=\"-DPIC\"
--DBUILD_SHARED_LIBS=OFF"
-  #do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
-  generic_configure "--disable-shared --enable-static --enable-pic --with-pic ASFLAGS=\"$ASFLAGS\""
+  local cmake_params="-DBUILD_SHARED_LIBS=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  #generic_configure "--disable-shared --enable-static --enable-pic --with-pic ASFLAGS=\"$ASFLAGS\""
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -2096,42 +2106,66 @@ build_liboapv() {
 }
 # build_libopencv         # config_options+= --enable-libopencv           # enable video filtering via libopencv [no]
 build_libopencv() {
-  # run_valid_function "build_vaapi" 1
-  # run_valid_function "build_libtiff"
-  # run_valid_function "build_libwebp" 1
   local lib="libopencv"
-  local repo="https://github.com/opencv/opencv/"
+  local repo="https://github.com/opencv/opencv"
   local repo_ver="4.12.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  install_missing_packages libpciaccess-dev
-  #export LDFLAGS="$LDFLAGS -L${ffmpeg_install_prefix}/lib -L${dependency_install_prefix}/lib -lsharpyuv -ljbig -llzma -ldeflate -lzstd -ljpeg"
-  local original_pkg_path=$PKG_CONFIG_PATH
-  export PKG_CONFIG_PATH="$install_pkgconfig_dir"
+  local original_ldflags="$LDFLAGS"
+  # Native GCC option; don't pass it to Emscripten.
+  export LDFLAGS="${LDFLAGS//-static-libstdc++/}"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
--DWITH_FFMPEG=0 \
+-DBUILD_SHARED_LIBS=OFF \
+-DENABLE_PIC=OFF \
+-DCPU_BASELINE= \
+-DCPU_DISPATCH= \
+-DCV_ENABLE_INTRINSICS=OFF \
+-DCV_TRACE=OFF \
+-DWITH_FFMPEG=OFF \
+-DWITH_GSTREAMER=OFF \
+-DWITH_V4L=OFF \
+-DWITH_1394=OFF \
+-DWITH_VTK=OFF \
+-DWITH_GTK=OFF \
+-DWITH_QT=OFF \
+-DWITH_OPENGL=OFF \
+-DWITH_OPENCL=OFF \
+-DWITH_OPENCL_SVM=OFF \
+-DWITH_IPP=OFF \
+-DWITH_TBB=OFF \
+-DWITH_ITT=OFF \
+-DWITH_OPENNI=OFF \
+-DWITH_OPENNI2=OFF \
+-DWITH_GPHOTO2=OFF \
+-DWITH_LAPACK=OFF \
 -DBUILD_DOCS=OFF \
 -DBUILD_EXAMPLES=OFF \
 -DBUILD_TESTS=OFF \
 -DBUILD_PERF_TESTS=OFF \
 -DBUILD_opencv_apps=OFF \
--DOAPV_BUILD_STATIC_LIB=ON \
--DOAPV_BUILD_SHARED_LIB=OFF \
--DOPENCV_GENERATE_PKGCONFIG=ON \
--DOPENCV_FORCE_3RDPARTY_BUILD=ON \
--DOPENCV_INCLUDE_INSTALL_PATH=${dependency_install_prefix}/include \
--DCMAKE_EXE_LINKER_FLAGS=\"-L${dependency_install_prefix}/lib -lsharpyuv -ljbig -llzma -ldeflate -lzstd -ljpeg -lva -lva-drm\" \
--DHAVE_DSHOW=0"
+-DBUILD_opencv_highgui=OFF \
+-DBUILD_opencv_videoio=OFF \
+-DBUILD_opencv_java=OFF \
+-DBUILD_opencv_python2=OFF \
+-DBUILD_opencv_python3=OFF \
+-DBUILD_opencv_js=OFF \
+-DOPENCV_GENERATE_PKGCONFIG=ON"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   if [[ -f "$install_pkgconfig_dir/opencv4.pc" ]]; then
-    copy_path "$install_pkgconfig_dir/opencv4.pc" "$install_pkgconfig_dir/opencv.pc" -f
-  else
-    copy_path "$src_dir/$lib/build/unix-install/opencv4.pc" "$install_pkgconfig_dir/opencv.pc" -f
+    copy_path \
+      "$install_pkgconfig_dir/opencv4.pc" \
+      "$install_pkgconfig_dir/opencv.pc" \
+      -f
+  elif [[ -f "$src_dir/$lib/build/unix-install/opencv4.pc" ]]; then
+    copy_path \
+      "$src_dir/$lib/build/unix-install/opencv4.pc" \
+      "$install_pkgconfig_dir/opencv.pc" \
+      -f
   fi
-  export PKG_CONFIG_PATH=$original_pkg_path
+  export LDFLAGS="$original_ldflags"
   change_dir "$src_dir"
 }
 # build_libopenh264       # config_options+= --enable-libopenh264         # enable H.264 encoding via OpenH264 [no]
@@ -2274,16 +2308,21 @@ build_libopus() {
   change_dir "$src_dir"
 }
 build_libunwind() {
-  local lib="libunwind"
-  local repo="https://github.com/libunwind/libunwind"
-  local repo_ver="v1.8.3"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  generic_configure "--disable-shared --enable-static"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
+  local emscripten_root
+  emscripten_root="$(dirname "$(command -v emcc)")"
+
+  python3 "$emscripten_root/embuilder.py" \
+      build libunwind-wasmexcept > >(redirect_output) 2>&1
+  # local lib="libunwind"
+  # local repo="https://github.com/libunwind/libunwind"
+  # local repo_ver="v1.8.3"
+  # change_dir "$src_dir"
+  # do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  # change_dir "$src_dir/$lib"
+  # generic_configure "--disable-shared --enable-static"
+  # disable_nonessential "$src_dir/$lib"
+  # do_make_and_make_install
+  # change_dir "$src_dir"
 }
 build_libxxhash() {
   local lib="libxxhash"
@@ -2362,7 +2401,16 @@ build_libplacebo() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   local config_options+=" -Dvulkan-registry=$dependency_install_prefix/share/vulkan/registry/vk.xml"
-  local meson_options=" -Ddemos=false -Dbench=false -Dfuzz=false -Dvulkan=enabled -Dvk-proc-addr=disabled -Dshaderc=disabled -Dglslang=disabled -Dc_link_args=-static -Dcpp_link_args=-static $config_options" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined
+  local meson_options=" -Ddemos=false \
+-Dbench=false \
+-Dfuzz=false \
+-Dvulkan=enabled \
+-Dvk-proc-addr=disabled \
+-Dshaderc=disabled \
+-Dglslang=disabled \
+-Dc_args=\"-pthread -s USE_PTHREADS=1\" \
+-Dc_link_args=\"-static -lpthread\" \
+-Dcpp_link_args=\"-static -lpthread\" $config_options" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined
   generic_meson "$meson_options"
   # disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -2530,7 +2578,6 @@ build_librav1e() {
 }
 # build_librist           # config_options+= --enable-librist             # enable RIST via librist [no]
 build_librist() {
-  # https://code.videolan.org/rist/librist
   local lib="librist"
   local repo="https://code.videolan.org/rist/librist"
   local repo_ver="v0.2.11"
@@ -2538,10 +2585,22 @@ build_librist() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Duse_mbedtls=true -Dbuilt_tools=false -Dtest=false"
+  export CFLAGS="$CFLAGS -D_GNU_SOURCE -pthread"
+  export CXXFLAGS="$CXXFLAGS -D_GNU_SOURCE -pthread"
+  export CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE"
+  export LDFLAGS="$LDFLAGS -pthread"
+  apply_patch "$PATCHDIR/librist-0.2.11-emscripten-endian-shim.patch"
+  apply_patch "$PATCHDIR/librist-0.2.11-emscripten-network.patch"
+  local meson_options="-Duse_mbedtls=true \
+-Dc_args=\"-D_GNU_SOURCE -pthread\" \
+-Dbuilt_tools=false \
+-Dtest=false \
+-Duse_tun=false \
+-Dallow_obj_filter=false"
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
+  reset_allflags
   change_dir "$src_dir"
 }
 build_pixman() {
@@ -2761,6 +2820,9 @@ build_libshaderc() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   ./utils/git-sync-deps > >(redirect_output) 2>&1
   change_dir "$src_dir/$lib/build" 1
+  export CFLAGS="$CFLAGS -pthread -s USE_PTHREADS=1"
+  export CXXFLAGS="$CXXFLAGS -pthread -s USE_PTHREADS=1"
+  export CPPFLAGS="$CPPFLAGS -pthread -s USE_PTHREADS=1"
   do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=release \
 -DSHADERC_SKIP_EXAMPLES=ON \
 -DSHADERC_SKIP_TESTS=ON \
@@ -2771,8 +2833,6 @@ build_libshaderc() {
 -DENABLE_GLSLANG_BINARIES=OFF \
 -DSPIRV_SKIP_EXECUTABLES=ON \
 -DSPIRV_TOOLS_BUILD_STATIC=ON \
--DCMAKE_EXE_LINKER_FLAGS=\"-lstdc++fs\" \
--DCMAKE_CXX_STANDARD_LIBRARIES=\"-lstdc++fs\" \
 -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
 -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
 -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
@@ -2825,17 +2885,22 @@ build_libsmbclient() {
 build_libsnappy() {
   local lib="libsnappy"
   local repo="https://github.com/google/snappy"
-  local repo_ver="1.2.2" 
+  local repo_ver="1.2.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  local original_cxxflags="$CXXFLAGS"
+  export CXXFLAGS="$CXXFLAGS -Wno-error=pass-failed"
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
--DBUILD_BINARY=OFF \
 -DSNAPPY_BUILD_TESTS=OFF \
--DSNAPPY_BUILD_BENCHMARKS=OFF" "$src_dir/$lib"
+-DSNAPPY_BUILD_BENCHMARKS=OFF \
+-DSNAPPY_INSTALL=ON \
+-DSNAPPY_REQUIRE_AVX=OFF \
+-DSNAPPY_REQUIRE_AVX2=OFF" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  export CXXFLAGS="$original_cxxflags"
   change_dir "$src_dir"
 }
 # build_libsoxr           # config_options+= --enable-libsoxr             # enable Include libsoxr resampling [no]
@@ -2891,23 +2956,6 @@ build_libsrt() {
   # do_git_checkout https://github.com/Haivision/srt # might be able to use these days...?
   local repo="https://github.com/Haivision/srt"
   local repo_ver="v1.5.4" 
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  local enclib
-  truthy "$enable_openssl" && enclib=openssl
-  truthy "$enable_gnutls" && enclib=gnutls
-  truthy "$enable_mbedtls" && enclib=mbedtls
-  generic_cmake "-DUSE_ENCLIB=$enclib \
--DCMAKE_BUILD_TYPE=Release \
--DENABLE_STATIC=ON \
--DENABLE_SHARED=OFF \
--DENABLE_APPS=OFF \
--DUSE_STATIC_LIBSTDCXX=ON \
--DCMAKE_POLICY_VERSION_MINIMUM=3.5" "$src_dir/$lib"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
 }
 # build_libssh            # config_options+= --enable-libssh              # enable SFTP protocol via libssh [no]
 build_libssh() {
@@ -3033,12 +3081,16 @@ build_libdeflate() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local cmake_params="-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=$dependency_install_prefix -DENABLE_SHARED=0"
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DCMAKE_INSTALL_PREFIX=$dependency_install_prefix \
+-DLIBDEFLATE_BUILD_STATIC_LIB=ON \
+-DLIBDEFLATE_BUILD_SHARED_LIB=OFF \
+-DLIBDEFLATE_BUILD_GZIP=OFF \
+-DLIBDEFLATE_BUILD_TESTS=OFF"
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
-  find "$dependency_install_prefix/lib" -name "libdeflate.so*" -delete
 }
 build_jbig() {
   local lib="jbig"
@@ -3496,19 +3548,17 @@ build_libvpx() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export AS=nasm
-  do_configure "--target=$host_arch-linux-gcc \
+  do_configure "--target=generic-gnu \
 --prefix=$dependency_install_prefix \
---enable-ssse3 \
 --enable-static \
 --disable-shared \
 --disable-examples \
 --disable-tools \
 --disable-docs \
 --disable-unit-tests \
---enable-vp9-highbitdepth \
---extra-cflags=-fno-asynchronous-unwind-tables \
---extra-cflags=-mstackrealign" # fno for Error: invalid register for .seh_savexmm
+--disable-runtime-cpu-detect \
+--disable-multithread \
+--enable-vp9-highbitdepth"
   # disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -4385,8 +4435,7 @@ build_sphinxbase() {
 --without-pulseaudio \
 --without-pulse \
 --disable-pulseaudio \
---disable-pulse \
-LIBS=\"-lasound\""
+--disable-pulse"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -4398,8 +4447,14 @@ build_gstreamer() {
   local repo="https://gitlab.freedesktop.org/gstreamer/gstreamer"
   local repo_ver="1.26.10"
   change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib"
-  change_dir "$src_dir/$lib"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/subprojects/gstreamer"
+  local gst_config="$src_dir/$lib/subprojects/gstreamer/gst/gstconfig.h.in"
+  if ! grep -q 'defined(__wasm__)' "$gst_config"; then
+    gsed -i \
+      's/#elif defined(__i386__)/#elif defined(__wasm__) || defined(__wasm32__) || defined(__i386__)/' \
+      "$gst_config"
+  fi
   local meson_options="-Ddoc=disabled \
 -Dexamples=disabled \
 -Dtests=disabled \

@@ -1,0 +1,39 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index fb10d28..452ec65 100755
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -61,8 +61,13 @@ set(CODEBOOKSNEWAMP2_ENERGY
+     ${D}/newamp2_energy_q.txt
+ )
+ 
+-# when crosscompiling we need a native executable
+-if(CMAKE_CROSSCOMPILING)
++if(CMAKE_CROSSCOMPILING AND GENERATE_CODEBOOK)
++    # Use the pre-built host tool supplied via -DGENERATE_CODEBOOK=.
++    add_executable(generate_codebook IMPORTED)
++    set_target_properties(generate_codebook PROPERTIES
++        IMPORTED_LOCATION ${GENERATE_CODEBOOK})
++elseif(CMAKE_CROSSCOMPILING)
++    # No host tool provided: build one via ExternalProject.
+     set(CMAKE_DISABLE_SOURCE_CHANGES OFF)
+     include(ExternalProject)
+     ExternalProject_Add(codec2_native
+@@ -77,15 +82,13 @@ if(CMAKE_CROSSCOMPILING)
+         IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/generate_codebook)
+     add_dependencies(generate_codebook codec2_native)
+     set(CMAKE_DISABLE_SOURCE_CHANGES ON)
+-else(CMAKE_CROSSCOMPILING)
+-# Build code generator binaries. These do not get installed.
+-    # generate_codebook
++else()
++    # Native build: compile generate_codebook from source.
+     add_executable(generate_codebook generate_codebook.c)
+     target_link_libraries(generate_codebook m)
+-    # Make native builds available for cross-compiling.
+     export(TARGETS generate_codebook
+         FILE ${CMAKE_BINARY_DIR}/ImportExecutables.cmake)
+-endif(CMAKE_CROSSCOMPILING)
++endif()
+ 
+ 
+ # codebook.c

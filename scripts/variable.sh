@@ -665,6 +665,12 @@ CONFIG_WASM_UNSUPPORTED="\
 --disable-opencl \
 --disable-ladspa \
 --disable-opengl \
+--disable-alsa \
+--disable-libsrt \
+--disable-libdrm \
+--disable-vaapi \
+--disable-libasound2 \
+--disable-libvpl \
 --disable-libsvtjpegxs"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
