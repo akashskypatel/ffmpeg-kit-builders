@@ -671,6 +671,8 @@ CONFIG_WASM_UNSUPPORTED="\
 --disable-vaapi \
 --disable-libasound2 \
 --disable-libvpl \
+--disable-libsvtav1 \
+--disable-amf \
 --disable-libsvtjpegxs"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]

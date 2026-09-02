@@ -933,16 +933,19 @@ setup_wasm_environment() {
     export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
     unset PKG_CONFIG_SYSROOT_DIR
     export PATH="$toolchain_bin_path:$ffmpeg_install_prefix/bin:$original_path"
+    export RUSTUP_HOME=/usr/local/rustup
+    export CARGO_HOME=/usr/local/cargo
+    export PATH="$CARGO_HOME/bin:$PATH"
 
     export cross_prefix=
     export CROSS_COMPILE=
     export PREFIX="$dependency_install_prefix"
     export build_cross_compile=y
 
-    export wasm_cflags="$original_cflags -I${dependency_install_prefix}/include"
-    export wasm_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include"
-    export wasm_cppflags="$original_cppflags -DWASM -D__EMSCRIPTEN__ -I${dependency_install_prefix}/include"
-    export wasm_ldflags="$original_ldflags -L${dependency_install_prefix}/lib"
+    export wasm_cflags="$original_cflags -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+    export wasm_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+    export wasm_cppflags="$original_cppflags -DWASM -D__EMSCRIPTEN__ -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+    export wasm_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
 
     reset_cross_vars
     reset_allflags
@@ -3264,10 +3267,17 @@ do_cargo_install() {
     fi
     local cargo_cmd
     cargo_cmd="$(cargo_command_for_target "$rust_target")"
+    if iswasm; then
+      cinstall_cmd="${cargo_cmd} +nightly cinstall -Z build-std=std,panic_abort"
+    else
+      cinstall_cmd="${cargo_cmd} cinstall"
+    fi
     export RUSTFLAGS+=" -C relocation-model=pic"
+    export RUSTUP_HOME=/usr/local/rustup
+    export CARGO_HOME=/usr/local/cargo
 		echo -e "INFO: Running cargo install cargo-c" >>"$LOG_FILE"
-    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cargo_cmd} cinstall --prefix=$dependency_install_prefix --target $rust_target $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-    eval "${cargo_cmd} cinstall --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args" > >(redirect_output) 2>&1 || {
+    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cinstall_cmd} --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+    eval "${cinstall_cmd} --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args" > >(redirect_output) 2>&1 || {
 			exit_message 1 "do_cargo_install: failed cargo cinstall with $extra_install_args\n see $LOG_FILE for more details"
 		}
 		create_touch_file 0 "$touch_name"
@@ -4917,6 +4927,18 @@ configure_ffmpeg() {
       disable_library "libxevd"
       disable_library "libxeve"
     fi
+  elif iswasm; then
+    init_options+=" --disable-programs"
+    init_options+=" --ranlib=$RANLIB"
+    init_options+=" --nm=$NM"
+    init_options+=" --ld=$CXX"
+    init_options+=" --cc=$CC"
+    init_options+=" --cxx=$CXX"
+    init_options+=" --strip=$STRIP"
+    init_options+=" --enable-pthreads"
+    init_options+=" --extra-ldflags='$LDFLAGS -sSUPPORT_LONGJMP=wasm -fwasm-exceptions -sUSE_SDL=0'"
+    init_options+=" --extra-cflags='$CFLAGS -sSUPPORT_LONGJMP=wasm -sUSE_SDL=0'"
+    init_options+=" --extra-cxxflags='$CXXFLAGS -sSUPPORT_LONGJMP=wasm -fwasm-exceptions -sUSE_SDL=0'"
   elif islinux; then
     init_options+=" --enable-pthreads"
     add_extra_libs "-lpthread -lrt -lm -ldl -lstdc++"
@@ -5260,7 +5282,7 @@ configure_ffmpeg() {
   truthy "$enable_vapoursynth" && config_options+=" --enable-vapoursynth"             # enable VapourSynth demuxer [no]
   truthy "$enable_whisper" && { config_options+=" --enable-whisper" \
   && add_extra_libs "-lwhisper -lggml -lggml-cpu -lggml-base"; }                      # enable whisper filter [no]
-  truthy "$enable_whisper" && ! isandroid && ! isapple && add_extra_libs "-lgomp"
+  truthy "$enable_whisper" && ! isandroid && ! isapple && ! iswasm && add_extra_libs "-lgomp"
   truthy "$enable_whisper" && isapple && add_extra_libs "-lomp -lresolv"
 
   # ------------------------------ windows features -------------------------------     

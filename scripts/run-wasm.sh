@@ -449,20 +449,6 @@ build_amf() {
   local lib="amf_headers"
   local repo="https://github.com/GPUOpen-LibrariesAndSDKs/AMF"
   local repo_ver="v1.5.2"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  local touch_name=$(get_small_touchfile_name "${host_name}_already_installed")
-  if [ ! -f "$touch_name" ]; then
-    if [ ! -d "$dependency_install_prefix/include/AMF" ]; then
-      create_dir "$dependency_install_prefix/include/AMF"
-    fi
-    cp -av "amf/public/include/." "$dependency_install_prefix/include/AMF" >>"$LOG_FILE"
-    create_touch_file 0 "$touch_name"
-  else
-    echo -e "INFO: amf headers already installed" >>"$LOG_FILE"
-  fi
-  change_dir "$src_dir"
 }
 # build_vulkan            # config_options+= --disable-vulkan             # disable Vulkan code [autodetect]
 build_vulkan() {
@@ -659,10 +645,18 @@ build_liblcevc_dec() {
   # https://github.com/v-novaltd/LCEVCdec
   local lib="liblcevc"
   local repo="https://github.com/v-novaltd/LCEVCdec"
-  local repo_ver="4.0.4"
+  local repo_ver="4.1.0"
   change_dir "$src_dir"
   disable_git_lfs_and_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
+  gsed -i 's/set(VN_SDK_API_LAYER OFF)/set(VN_SDK_API_LAYER ON)/' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i 's/set(VN_SDK_PIPELINE_CPU OFF)/set(VN_SDK_PIPELINE_CPU ON)/' "$src_dir/$lib/CMakeLists.txt"
+  gsed -i \
+    "s@return true; // Don't set thread name in wasms@const int res = 0; // Thread naming is a no-op on Emscripten@" \
+    "$src_dir/$lib/src/api_utility/src/threading.cpp"
+  export CFLAGS="$CFLAGS -pthread"
+  export CXXFLAGS="$CXXFLAGS -pthread"
+  export CPPFLAGS="$CPPFLAGS -pthread"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
 -DVN_SDK_EXECUTABLES=OFF \
@@ -890,9 +884,9 @@ build_libpng() {
   local repo_ver="v1.6.53"
   local repo="https://github.com/glennrp/libpng"
   change_dir "$src_dir"
-  export CPATH="$CPATH ${dependency_install_prefix}/include"
-  export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include -Wno-incompatible-function-pointer-types -pthread -s USE_PTHREADS=1"
-  export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include -pthread -s USE_PTHREADS=1"
+  export CPATH="$CPATH ${dependency_install_prefix}/include -sSUPPORT_LONGJMP=wasm"
+  export CFLAGS="$CFLAGS -I${dependency_install_prefix}/include -Wno-incompatible-function-pointer-types -pthread -sSUPPORT_LONGJMP=wasm"
+  export CXXFLAGS=" $CXXFLAGS -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm"
   export CPPFLAGS=" $CPPFLAGS -I${dependency_install_prefix}/include"
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -lz"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
@@ -935,6 +929,9 @@ build_libaribcaption() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  export CFLAGS="$CFLAGS -pthread"
+  export CXXFLAGS="$CXXFLAGS -pthread"
+  export LDFLAGS="$LDFLAGS -pthread"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DARIBCC_BUILD_TESTS=OFF \
 -DARIBCC_SHARED_LIBRARY=OFF \
@@ -1288,8 +1285,8 @@ build_libfontconfig() {
 -Dtests=disabled \
 -Dxml-backend=expat \
 -Dtools=disabled \
--Dc_args=\" -Wno-incompatible-function-pointer-types -pthread -s USE_PTHREADS=1 \" \
--Dcpp_args=\" -pthread -s USE_PTHREADS=1 \" \
+-Dc_args=\" -Wno-incompatible-function-pointer-types -pthread -sSUPPORT_LONGJMP=wasm\" \
+-Dcpp_args=\" -pthread -sSUPPORT_LONGJMP=wasm\" \
 -Dc_link_args=\"-L$dependency_install_prefix/lib $LIBS\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
@@ -1314,8 +1311,8 @@ build_libfreetype() {
 -Dpng=enabled \
 -Dbzip2=disabled \
 -Dzlib=enabled \
--Dc_args=\" -Wno-incompatible-function-pointer-types -pthread -s USE_PTHREADS=1 \" \
--Dcpp_args=\" -pthread -s USE_PTHREADS=1 \" \
+-Dc_args=\" -Wno-incompatible-function-pointer-types -pthread -sSUPPORT_LONGJMP=wasm\" \
+-Dcpp_args=\" -pthread -sSUPPORT_LONGJMP=wasm\" \
 -Dbrotli=enabled"
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
@@ -1836,7 +1833,7 @@ build_gettext() {
   touch "no.autoreconf"
   apply_patch "$PATCHDIR/gettext-1.0-wasi.patch"
   change_dir "$src_dir/$lib/gettext-runtime"
-  local clfags="CFLAGS=\"$CFLAGS -Dlibintl_STATIC \""
+  export CFLAGS="$CFLAGS -Dlibintl_STATIC -pthread"
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-included-libintl \
@@ -1942,11 +1939,15 @@ build_glib() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gcompletion.patch"
-  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-girepository.patch"
-  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gio.patch"
-  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gobject.patch"
-  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gtester.patch"
-  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-fuzzing.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-girepository-meson.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gio-meson.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gobject-meson.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gtester-meson.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-fuzzing-meson.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-top-meson.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-gthreadedresolver.patch"
+  apply_patch "$PATCHDIR/glib-2.82.0-emscripten-glib-meson.patch"
+  copy_path "$PATCHDIR/gspawn-emscripten.c" "$src_dir/$lib/glib/gspawn-emscripten.c" "-f"
   local meson_options="-Dforce_posix_threads=true \
 -Dselinux=disabled \
 -Dxattr=false \
@@ -1980,8 +1981,9 @@ build_liblensfun() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export CPPFLAGS="$CFLAGS $CPPFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include "
-  export CXXFLAGS="$CFLAGS $CXXFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include "
+  export CFLAGS="$CFLAGS -pthread"
+  export CPPFLAGS="$CPPFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include -pthread -fwasm-exceptions"
+  export CXXFLAGS="$CXXFLAGS -DGLIB_STATIC_COMPILATION -I$dependency_install_prefix/lib/glib-2.0/include -pthread -fwasm-exceptions"
   generic_cmake "-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_STATIC=ON \
 -DBUILD_FOR_SSE=OFF \
@@ -2364,8 +2366,13 @@ build_libdovi() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/dolby_vision"
-  cargo_build_and_install "--release" "--package dolby_vision --release --library-type=staticlib"
+  export CFLAGS="$CFLAGS -pthread"
+  export CXXFLAGS="$CXXFLAGS -pthread"
+  export CPPFLAGS="$CPPFLAGS -pthread"
+  export RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals"
+  cargo_build_and_install "--release" "--package dolby_vision --release --library-type=staticlib RUSTFLAGS='$RUSTFLAGS'"
   change_dir "$src_dir"
+  unset RUSTFLAGS
 }
 build_vulkan_loader() {
   local parentlib="vulkan-loader"
@@ -2400,13 +2407,16 @@ build_libplacebo() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  export CFLAGS="$CFLAGS -pthread"
+  export CXXFLAGS="$CXXFLAGS -pthread"
+  export CPPFLAGS="$CPPFLAGS -pthread"
   local config_options+=" -Dvulkan-registry=$dependency_install_prefix/share/vulkan/registry/vk.xml"
   local meson_options=" -Ddemos=false \
 -Dbench=false \
 -Dfuzz=false \
 -Dvulkan=enabled \
 -Dvk-proc-addr=disabled \
--Dshaderc=disabled \
+-Dshaderc=enabled \
 -Dglslang=disabled \
 -Dc_args=\"-pthread -s USE_PTHREADS=1\" \
 -Dc_link_args=\"-static -lpthread\" \
@@ -2573,7 +2583,8 @@ build_librav1e() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  cargo_build_and_install "--no-default-features --features=asm,binaries --profile release-no-lto" "--no-default-features --library-type=staticlib --features=asm,binaries"
+  export RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals"
+  cargo_build_and_install "--no-default-features --features=asm,binaries --profile release-no-lto" "--no-default-features --library-type=staticlib --features=asm,binaries RUSTFLAGS='$RUSTFLAGS'"
   change_dir "$src_dir"
 }
 # build_librist           # config_options+= --enable-librist             # enable RIST via librist [no]
@@ -2630,9 +2641,10 @@ build_cairo() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export CFLAGS="$CFLAGS -lpthread"
-  export CXXFLAGS="$CXXFLAGS -lpthread"
-  export LDFLAGS="$LDFLAGS -lpthread"
+  export CFLAGS="$CFLAGS -pthread -sSUPPORT_LONGJMP=wasm"
+  export CXXFLAGS="$CXXFLAGS -pthread -sSUPPORT_LONGJMP=wasm"
+  export CPPFLAGS="$CPPFLAGS -pthread -sSUPPORT_LONGJMP=wasm"
+  export LDFLAGS="$LDFLAGS -lpthread -sSUPPORT_LONGJMP=wasm"
   export LIBS="-lfontconfig -lfreetype -lpng -lpthread -lbrotlidec -lbrotlicommon -ldl -lstdc++"
   local meson_options="-Dtests=disabled \
 -Dgtk_doc=false \
@@ -2647,10 +2659,10 @@ build_cairo() {
 -Dfontconfig=enabled \
 -Dfreetype=enabled \
 -Dtee=enabled \
--Dc_args=\"-Wno-incompatible-function-pointer-types -pthread -s USE_PTHREADS=1\" \
--Dcpp_args=\"-pthread -s USE_PTHREADS=1\" \
--Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\" \
--Dcpp_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
+-Dc_args=\"-Wno-incompatible-function-pointer-types $CFLAGS\" \
+-Dcpp_args=\"-Wno-incompatible-function-pointer-types $CPPFLAGS\" \
+-Dc_link_args=\"-L${dependency_install_prefix}/lib -sSUPPORT_LONGJMP=wasm $LIBS\" \
+-Dcpp_link_args=\"-L${dependency_install_prefix}/lib -sSUPPORT_LONGJMP=wasm $LIBS\""
   apply_patch "$PATCHDIR/cairo-1.18.4-emscripten.patch"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
@@ -2729,10 +2741,10 @@ build_pango() {
 -Dbuild-examples=false \
 -Dintrospection=disabled \
 -Dxft=disabled \
--Dc_args=\" -DGLIB_STATIC_COMPILATION -Wno-incompatible-function-pointer-types -pthread -s USE_PTHREADS=1 \" \
--Dcpp_args=\" -DGLIB_STATIC_COMPILATION -pthread -s USE_PTHREADS=1 \" \
--Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\" \
--Dcpp_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
+-Dc_args=\"-DGLIB_STATIC_COMPILATION -Wno-incompatible-function-pointer-types -pthread -sSUPPORT_LONGJMP=wasm\" \
+-Dcpp_args=\"-DGLIB_STATIC_COMPILATION -pthread -sSUPPORT_LONGJMP=wasm\" \
+-Dc_link_args=\"-L${dependency_install_prefix}/lib -sSUPPORT_LONGJMP=wasm $LIBS\" \
+-Dcpp_link_args=\"-L${dependency_install_prefix}/lib -sSUPPORT_LONGJMP=wasm $LIBS\""
   # disable tools - not needed for ffmpeg
   gsed -i "s/subdir('utils')/# subdir('utils')/g" meson.build
   generic_meson "$meson_options"
@@ -2745,12 +2757,48 @@ build_pango() {
 build_librsvg() {
   # run_valid_function "build_pango"
   activate_meson
+
   local lib="librsvg"
   local repo="https://gitlab.gnome.org/GNOME/librsvg"
   local repo_ver="2.61.3"
+
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+
   change_dir "$src_dir/$lib"
+
+  export RUSTUP_TOOLCHAIN=nightly
+  export RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals"
+
+  # Get a local copy of the locked dependencies so we can extract locale_config.
+  rm -rf "$src_dir/$lib/vendor"
+
+  cargo +nightly vendor \
+    --locked \
+    vendor \
+    > >(redirect_output) 2>&1
+
+  # Patch the vendored locale_config source.
+  apply_patch "$PATCHDIR/librsvg-2.61.3-emscripten-locale-config.patch"
+
+  # Make ONLY locale_config a path dependency.
+  gsed -i \
+    's|^locale_config *=.*$|locale_config = { path = "vendor/locale_config" }|' \
+    Cargo.toml
+
+  # Update the lockfile for registry -> path conversion.
+  cargo +nightly update \
+    -p locale_config@0.3.0 \
+    --offline \
+    > >(redirect_output) 2>&1
+
+  mkdir -p "$src_dir/$lib/.cargo"
+
+  cat > "$src_dir/$lib/.cargo/config.toml" <<'EOF'
+[unstable]
+build-std = ["std", "panic_abort"]
+EOF
+
   local meson_options="-Ddocs=disabled \
 -Dintrospection=disabled \
 -Dvala=disabled \
@@ -2761,9 +2809,24 @@ build_librsvg() {
 -Dtriplet=$rust_target \
 -Dc_args=\"-DGLIB_STATIC_COMPILATION\" \
 -Dcpp_args=\"-DGLIB_STATIC_COMPILATION\""
+
   generic_meson "$meson_options"
+
   do_ninja_and_ninja_install
+
+  if grep -q '^Libs.private:' "$install_pkgconfig_dir/librsvg-2.0.pc"; then
+    gsed -i \
+      's/^Libs.private:/Libs.private: -fwasm-exceptions/' \
+      "$install_pkgconfig_dir/librsvg-2.0.pc"
+  else
+    echo 'Libs.private: -fwasm-exceptions' >> \
+      "$install_pkgconfig_dir/librsvg-2.0.pc"
+  fi
+
   change_dir "$src_dir"
+
+  unset RUSTFLAGS
+  unset RUSTUP_TOOLCHAIN
 }
 # build_librtmp           # config_options+= --enable-librtmp             # enable RTMP[E] support via librtmp [no]
 build_librtmp() {
@@ -3044,14 +3107,6 @@ build_libsvtav1() {
       local lib="libsvtav1"
       local repo="https://gitlab.com/AOMediaCodec/SVT-AV1"
       local repo_ver="v3.1.2"
-    change_dir "$src_dir"
-      do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-      change_dir "$src_dir/$lib/build" 1
-      do_cmake_from_build_dir "$src_dir/$lib" "-DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_CPUINFO=SYSTEM" # -DSVT_AV1_LTO=OFF if fails try adding this
-      disable_nonessential "$src_dir/$lib"
-      do_make_and_make_install
-          change_dir "$src_dir"
-    else
       echo -e "WARNING: 32bit not supported" >>"$LOG_FILE"
     fi
 }
@@ -3144,10 +3199,10 @@ build_libtiff() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  export CFLAGS="$CFLAGS -s -pthread -DUSE_PTHREAD=1"
-  export CPPFLAGS="$CPPFLAGS -s -pthread -DUSE_PTHREAD=1"
-  export CXXFLAGS="$CXXFLAGS -s -pthread -DUSE_PTHREAD=1"
-  export LDFLAGS="$LDFLAGS -s -lpthread"
+  export CFLAGS="$CFLAGS -s -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+  export CPPFLAGS="$CPPFLAGS -s -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+  export CXXFLAGS="$CXXFLAGS -s -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+  export LDFLAGS="$LDFLAGS -s -lpthread -fwasm-exceptions"
   generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3197,9 +3252,9 @@ build_libleptonica() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export CFLAGS="$CFLAGS -pthread -DUSE_PTHREAD=1"
-  export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC -pthread -DUSE_PTHREAD=1"
-  export CXXFLAGS="$CXXFLAGS -DOPJ_STATIC -pthread -DUSE_PTHREAD=1"
+  export CFLAGS="$CFLAGS -pthread -DUSE_PTHREAD=1 -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+  export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC -pthread -DUSE_PTHREAD=1 -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+  export CXXFLAGS="$CXXFLAGS -DOPJ_STATIC -pthread -DUSE_PTHREAD=1 -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -3518,7 +3573,12 @@ build_libvmaf() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/libvmaf"
-  local meson_options="-Denable_float=true -Dbuilt_in_models=true -Denable_tests=false -Denable_docs=false"
+  local meson_options="-Denable_float=true \
+-Dc_args=\"${CFLAGS}\" \
+-Dcpp_args=\"${CPPFLAGS}\" \
+-Dbuilt_in_models=true \
+-Denable_tests=false \
+-Denable_docs=false"
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -3644,8 +3704,8 @@ build_libx265() {
 -DENABLE_SHARED=OFF \
 -DENABLE_ASSEMBLY=OFF \
 -DCMAKE_ASM_NASM_FLAGS=\"-DPIC\" \
--DCMAKE_C_FLAGS:STRING=\"-fPIC -fvisibility=hidden\" \
--DCMAKE_CXX_FLAGS:STRING=\"-fPIC -fvisibility=hidden\" \
+-DCMAKE_C_FLAGS:STRING=\"$CFLAGS -fPIC -fvisibility=hidden\" \
+-DCMAKE_CXX_FLAGS:STRING=\"$CXXFLAGS -fPIC -fvisibility=hidden\" \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
   disable_nonessential "$src_dir/$lib/12bit"
   do_make
@@ -3660,8 +3720,8 @@ build_libx265() {
 -DENABLE_SHARED=OFF \
 -DENABLE_ASSEMBLY=OFF \
 -DCMAKE_ASM_NASM_FLAGS=\"-DPIC\" \
--DCMAKE_C_FLAGS:STRING=\"-fPIC -fvisibility=hidden\" \
--DCMAKE_CXX_FLAGS:STRING=\"-fPIC -fvisibility=hidden\" \
+-DCMAKE_C_FLAGS:STRING=\"$CFLAGS -fPIC -fvisibility=hidden\" \
+-DCMAKE_CXX_FLAGS:STRING=\"$CXXFLAGS -fPIC -fvisibility=hidden\" \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
   disable_nonessential "$src_dir/$lib/10bit"
   do_make
@@ -3679,8 +3739,8 @@ build_libx265() {
 -DENABLE_SHARED=OFF \
 -DENABLE_ASSEMBLY=OFF \
 -DCMAKE_ASM_NASM_FLAGS=\"-DPIC\" \
--DCMAKE_C_FLAGS:STRING=\"-fPIC -fvisibility=hidden\" \
--DCMAKE_CXX_FLAGS:STRING=\"-fPIC -fvisibility=hidden\" \
+-DCMAKE_C_FLAGS:STRING=\"$CFLAGS -fPIC -fvisibility=hidden\" \
+-DCMAKE_CXX_FLAGS:STRING=\"$CXXFLAGS -fPIC -fvisibility=hidden\" \
 -DCMAKE_POLICY_VERSION_MINIMUM=3.5"
   change_dir "$src_dir/$lib/8bit"
   disable_nonessential "$src_dir/$lib/8bit"
@@ -4462,6 +4522,8 @@ build_gstreamer() {
 -Dbenchmarks=disabled \
 -Dgst_debug=false \
 -Dnls=disabled \
+-Dc_args=\"$CFLAGS\" \
+-Dcpp_args=\"$CPPFLAGS\" \
 -Dc_link_args=\"-L$dependency_install_prefix/lib -llzma\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
@@ -4580,16 +4642,22 @@ build_whisper() {
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DWHISPER_BUILD_EXAMPLES=OFF \
 -DWHISPER_BUILD_TESTS=OFF \
+-DWHISPER_BUILD_SERVER=OFF \
 -DBUILD_SHARED_LIBS=OFF \
--DGGML_STATIC=ON \
--DGGML_AVX2=ON \
--DGGML_FMA=ON \
--DGGML_F16C=ON"
+-DGGML_OPENMP=OFF \
+-DGGML_NATIVE=OFF \
+-DGGML_SSE42=OFF \
+-DGGML_AVX=OFF \
+-DGGML_AVX2=OFF \
+-DGGML_BMI2=OFF \
+-DGGML_FMA=OFF \
+-DGGML_F16C=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   while IFS= read -r -d '' file; do
-    add_libs_to_pkg -t="$file" -l="-lwhisper -lggml -lggml-base -lggml-cpu -lgomp -lpthread"
+    add_libs_to_pkg -t="$file" \
+      -l="-lwhisper -lggml -lggml-cpu -lggml-base -pthread"
   done < <(find "$install_pkgconfig_dir" -name "whisper*.pc" -print0)
   change_dir "$src_dir"
 }
