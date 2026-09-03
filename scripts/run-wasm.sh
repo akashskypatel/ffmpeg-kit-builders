@@ -3583,7 +3583,7 @@ build_libvmaf() {
 -Dcpp_args=\"${CPPFLAGS}\" \
 -Dbuilt_in_models=true"
   generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$lib/libvmaf/tools"
+  disable_nonessential "$src_dir/$lib/tools"
   do_ninja_and_ninja_install
   gsed -i "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
   change_dir "$src_dir"
