@@ -1833,7 +1833,7 @@ build_gettext() {
   touch "no.autoreconf"
   apply_patch "$PATCHDIR/gettext-1.0-wasi.patch"
   change_dir "$src_dir/$lib/gettext-runtime"
-  export CFLAGS="$CFLAGS -Dlibintl_STATIC -pthread"
+  export CFLAGS="$CFLAGS -Dlibintl_STATIC -pthread -std=gnu23"
   local config="--prefix=${dependency_install_prefix} \
 --with-sysroot=\"${dependency_install_prefix}\" \
 --with-included-libintl \
