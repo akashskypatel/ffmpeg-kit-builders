@@ -1128,7 +1128,7 @@ build_libdavs2() {
   local original_cxxflags="$CXXFLAGS"
   local original_ldflags="$LDFLAGS"
   export CC="$(command -v em++)"
-  export CFLAGS="$CFLAGS -pthread"
+  export CFLAGS="${CFLAGS/-std=gnu23/} -pthread"
   export CXXFLAGS="$CXXFLAGS -pthread"
   export LDFLAGS="${LDFLAGS//-static-libstdc++/}"
   export LDFLAGS="$LDFLAGS -pthread"
