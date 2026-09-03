@@ -613,6 +613,8 @@ build_liblcevc_dec() {
   local repo_ver="4.1.0"
   change_dir "$src_dir"
   disable_git_lfs_and_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  apply_patch "$PATCHDIR/lcevc-dec-4.1.0-plane-convert-abi.patch"
   change_dir "$src_dir/$lib/build" 1
   gsed -i 's/set(VN_SDK_API_LAYER OFF)/set(VN_SDK_API_LAYER ON)/' "$src_dir/$lib/CMakeLists.txt"
   gsed -i 's/set(VN_SDK_PIPELINE_CPU OFF)/set(VN_SDK_PIPELINE_CPU ON)/' "$src_dir/$lib/CMakeLists.txt"
@@ -822,11 +824,15 @@ build_lcms2() {
 # build_libaom            # config_options+= --enable-libaom              # enable AV1 video encoding/decoding via libaom [no]
 build_libaom() {
   local lib="libaom"
-    local repo_ver="v3.13.1"
-    local repo="https://aomedia.googlesource.com/aom"
+  local repo_ver="v3.13.1"
+  local repo="https://aomedia.googlesource.com/aom"
   change_dir "$src_dir"
-    do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-    change_dir "$src_dir/$lib/build" 1
+  export CFLAGS="$CFLAGS -pthread -sSUPPORT_LONGJMP=wasm"
+  export CXXFLAGS="$CXXFLAGS -pthread -sSUPPORT_LONGJMP=wasm"
+  export CPPFLAGS="$CPPFLAGS -pthread -sSUPPORT_LONGJMP=wasm"
+  export LDFLAGS="$LDFLAGS -pthread -sSUPPORT_LONGJMP=wasm"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DAOM_TARGET_CPU=generic \
 -DCONFIG_RUNTIME_CPU_DETECT=0 \
@@ -838,10 +844,11 @@ build_libaom() {
 -DENABLE_TESTS=0 \
 -DENABLE_DOCS=0 \
 -DBUILD_SHARED_LIBS=0"
-    do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
-    disable_nonessential "$src_dir/$lib"
-    do_make_and_make_install
-      change_dir "$src_dir"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib"
+  do_make_and_make_install
+  reset_allflags
+  change_dir "$src_dir"
 }
 build_libpng() {
   # run_valid_function "build_zlib" 1
@@ -894,8 +901,9 @@ build_libaribcaption() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export CFLAGS="$CFLAGS -pthread"
-  export CXXFLAGS="$CXXFLAGS -pthread"
+  local aribcaption_md5_defines="-DMD5_Init=aribcaption_MD5_Init -DMD5_Update=aribcaption_MD5_Update -DMD5_Final=aribcaption_MD5_Final"
+  export CFLAGS="$CFLAGS -pthread $aribcaption_md5_defines"
+  export CXXFLAGS="$CXXFLAGS -pthread $aribcaption_md5_defines"
   export LDFLAGS="$LDFLAGS -pthread"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DARIBCC_BUILD_TESTS=OFF \
@@ -911,6 +919,7 @@ build_libaribcaption() {
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
+  reset_allflags
   change_dir "$src_dir"
 }
 # build_libass            # config_options+= --enable-libass              # enable libass subtitles rendering, needed for subtitles and ass filter [no]
@@ -938,11 +947,13 @@ build_libbluray() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  local bluray_c_args="-Ddec_init=bluray_dec_init"
   local meson_options="-Denable_examples=false \
 -Dbdj_jar=disabled \
 -Denable_tools=false \
 -Denable_docs=false \
 --wrap-mode=default \
+-Dc_args=\"$bluray_c_args\" \
 -Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
@@ -1063,6 +1074,10 @@ build_libcodec2() {
         -lm > >(redirect_output) 2>&1
     reset_cross_vars
     reset_allflags
+    local codec2_lsp_defines="-Dlpc_to_lsp=codec2_lpc_to_lsp -Dlsp_to_lpc=codec2_lsp_to_lpc"
+    export CFLAGS="$CFLAGS $codec2_lsp_defines"
+    export CXXFLAGS="$CXXFLAGS $codec2_lsp_defines"
+    export CPPFLAGS="$CPPFLAGS $codec2_lsp_defines"
     if [ ! -x "$generate_codebook" ]; then
         echo "ERROR: failed to build native Codec2 generate_codebook"
         return 1
@@ -1076,6 +1091,7 @@ build_libcodec2() {
 -DGENERATE_CODEBOOK=\"$generate_codebook\""
     disable_nonessential "$src_dir/$lib/build"
     do_make_and_make_install
+    reset_allflags
     change_dir "$src_dir"
 }
 
@@ -2094,6 +2110,7 @@ build_libopencv() {
 -DCPU_DISPATCH= \
 -DCV_ENABLE_INTRINSICS=OFF \
 -DCV_TRACE=OFF \
+-DWITH_VA=OFF \
 -DWITH_FFMPEG=OFF \
 -DWITH_GSTREAMER=OFF \
 -DWITH_V4L=OFF \
@@ -2115,6 +2132,29 @@ build_libopencv() {
 -DBUILD_EXAMPLES=OFF \
 -DBUILD_TESTS=OFF \
 -DBUILD_PERF_TESTS=OFF \
+-DBUILD_PNG=OFF \
+-DWITH_PNG=ON \
+-DBUILD_WEBP=OFF \
+-DWITH_WEBP=ON \
+-DBUILD_TIFF=OFF \
+-DWITH_TIFF=ON \
+-DBUILD_ZLIB=OFF \
+-DWITH_ZLIB=ON \
+-DBUILD_OPENJPEG=OFF \
+-DWITH_OPENJPEG=ON \
+-DBUILD_JPEG=OFF \
+-DWITH_JPEG=ON \
+-DWITH_AVIF=OFF \
+-DZLIB_LIBRARY=\"${dependency_install_prefix}/lib/libz.a\" \
+-DZLIB_INCLUDE_DIR=\"${dependency_install_prefix}/include\" \
+-DJPEG_LIBRARY=\"${dependency_install_prefix}/lib/libjpeg.a\" \
+-DJPEG_INCLUDE_DIR=\"${dependency_install_prefix}/include\" \
+-DTIFF_LIBRARY=\"${dependency_install_prefix}/lib/libtiff.a\" \
+-DTIFF_INCLUDE_DIR=\"${dependency_install_prefix}/include\" \
+-DOpenJPEG_DIR=\"${dependency_install_prefix}/lib/cmake/openjpeg-2.5\" \
+-DOpenJPEG_ROOT=\"${dependency_install_prefix}\" \
+-DOPENJPEG_LIBRARY=\"${dependency_install_prefix}/lib/libopenjp2.a\" \
+-DOPENJPEG_INCLUDE_DIR=\"${dependency_install_prefix}/include/openjpeg-2.5\" \
 -DBUILD_opencv_apps=OFF \
 -DBUILD_opencv_highgui=OFF \
 -DBUILD_opencv_videoio=OFF \
@@ -2122,6 +2162,7 @@ build_libopencv() {
 -DBUILD_opencv_python2=OFF \
 -DBUILD_opencv_python3=OFF \
 -DBUILD_opencv_js=OFF \
+-DOPENCV_FORCE_3RDPARTY_BUILD=OFF \
 -DOPENCV_GENERATE_PKGCONFIG=ON"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
@@ -4888,6 +4929,11 @@ build_libopencolorio() {
   local repo_ver="v2.5.2"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  gsed -i \
+    's/string(STRIP "${yaml-cpp_CXX_FLAGS}" yaml-cpp_CXX_FLAGS)/set(yaml-cpp_CXX_FLAGS "${yaml-cpp_CXX_FLAGS} -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions")\
+        string(STRIP "${yaml-cpp_CXX_FLAGS}" yaml-cpp_CXX_FLAGS)/' \
+    share/cmake/modules/install/Installyaml-cpp.cmake
   change_dir "$src_dir/$lib/build" 1
   export LDFLAGS="$LDFLAGS"
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
@@ -4896,7 +4942,13 @@ build_libopencolorio() {
   -DOCIO_BUILD_TESTS=OFF \
   -DOCIO_BUILD_GPU_TESTS=OFF \
   -DOCIO_BUILD_PYTHON=OFF \
-  -DOCIO_INSTALL_EXT_PACKAGES=\"ALL\""
+  -DZLIB_USE_STATIC_LIBS=ON \
+  -DZLIB_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_ROOT=\"$dependency_install_prefix\" \
+  -Dexpat_STATIC_LIBRARY=ON \
+  -Dexpat_LIBRARY=\"$dependency_install_prefix/lib/libexpat.a\" \
+  -Dexpat_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
+  -DOCIO_INSTALL_EXT_PACKAGES=\"MISSING\""
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
