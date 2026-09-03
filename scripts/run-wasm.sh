@@ -3574,11 +3574,16 @@ build_libvmaf() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/libvmaf"
   local meson_options="-Denable_float=true \
+-Ddefault_library=static \
+-Denable_tests=false \
+-Denable_docs=false \
+-Denable_tools=false \
+-Denable_asm=false \
+-Denable_avx512=false \
+-Denable_cuda=false \
 -Dc_args=\"${CFLAGS}\" \
 -Dcpp_args=\"${CPPFLAGS}\" \
--Dbuilt_in_models=true \
--Denable_tests=false \
--Denable_docs=false"
+-Dbuilt_in_models=true"
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
