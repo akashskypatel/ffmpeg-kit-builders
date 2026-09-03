@@ -21,11 +21,11 @@ on:
       target_platforms:
         required: true
         type: string
-        default: linux,windows,android
+        default: linux,windows,android,wasm
       target_archs:
         required: true
         type: string
-        default: x86_64,aarch64,armv7a
+        default: x86_64,aarch64,armv7a,wasm32
       bundles:
         required: true
         type: string
@@ -43,12 +43,12 @@ on:
       target_platforms:
         description: "Comma-separated target platforms this runner can build"
         required: true
-        default: "linux,windows,android"
+        default: "linux,windows,android,wasm"
         type: string
       target_archs:
         description: "Comma-separated target architectures to try for each selected platform"
         required: true
-        default: "x86_64,aarch64,armv7a"
+        default: "x86_64,aarch64,armv7a,wasm32"
         type: string
       force:
         description: "Force rebuild instead of using existing self release artifacts"

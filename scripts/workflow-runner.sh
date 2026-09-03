@@ -399,6 +399,12 @@ ensure_target_toolchain() {
           [[ -f /etc/profile.d/linux-arm64-toolchain.sh ]] && source /etc/profile.d/linux-arm64-toolchain.sh
         fi
         ;;
+      wasm)
+        if [[ "$arch" == "wasm32" ]]; then
+          sudo -E "${GITHUB_WORKSPACE}/scripts/toolchain/setup-wasm.sh"
+          [[ -f /etc/profile.d/emsdk.sh ]] && source /etc/profile.d/emsdk.sh
+        fi
+        ;;
     esac
   fi
 
