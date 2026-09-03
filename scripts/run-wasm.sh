@@ -1032,7 +1032,14 @@ build_libcdio() {
   change_dir "$src_dir/$lib"
   do_autogen "--host=wasm32-unknown-emscripten"
   touch "no.autoreconf"
-  generic_configure "--disable-example-progs MAKEINFO=true"
+  gsed -i 's/^SUBDIRS =.*/SUBDIRS = include lib/' Makefile.am
+  generic_configure "--enable-static \
+--disable-shared \
+--disable-example-progs \
+--disable-cxx \
+--disable-cpp-progs \
+--disable-ld-version-script \
+--without-versioned-libs MAKEINFO=true"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
