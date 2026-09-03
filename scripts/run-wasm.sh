@@ -3576,7 +3576,6 @@ build_libvmaf() {
   local meson_options="-Denable_float=true \
 -Denable_tests=false \
 -Denable_docs=false \
--Denable_tools=false \
 -Denable_asm=false \
 -Denable_avx512=false \
 -Denable_cuda=false \
@@ -3584,7 +3583,7 @@ build_libvmaf() {
 -Dcpp_args=\"${CPPFLAGS}\" \
 -Dbuilt_in_models=true"
   generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$lib"
+  disable_nonessential "$src_dir/$lib/libvmaf/tools"
   do_ninja_and_ninja_install
   gsed -i "s/Libs: .*/& -lstdc++/" "$install_pkgconfig_dir/libvmaf.pc"
   change_dir "$src_dir"
