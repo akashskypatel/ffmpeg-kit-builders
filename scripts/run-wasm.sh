@@ -973,14 +973,12 @@ build_libbluray() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  export LIBS="-lfontconfig -lfreetype -lz -llzma"
-  export LDFLAGS="$LDFLAGS $LIBS"
   local meson_options="-Denable_examples=false \
 -Dbdj_jar=disabled \
 -Denable_tools=false \
 -Denable_docs=false \
 --wrap-mode=default \
--Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
+-Dc_link_args=\"-L${dependency_install_prefix}/lib\""
   generic_meson "$meson_options"
   disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
