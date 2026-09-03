@@ -705,44 +705,51 @@ endif()
 # =============================================================================
 # 7. INSTALLATION: Package Distribution Setup
 # =============================================================================
-# - Install library files (shared/static) to standard locations
-# - Install public headers for client application development
-# - Generate and install pkg-config file for dependency resolution
+# - Install WebAssembly runtime artifacts for Emscripten
+# - Install native library, headers, and pkg-config metadata for other targets
 # ==============================================================================
-install(TARGETS ffmpegkit
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
-)
-
 if(EMSCRIPTEN)
-    install(TARGETS ffmpegkit_wasm RUNTIME DESTINATION lib)
+    install(TARGETS ffmpegkit_wasm
+        RUNTIME DESTINATION lib
+    )
+
     install(FILES
         "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.wasm"
         "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.worker.mjs"
         DESTINATION lib
         OPTIONAL
     )
-endif()
+else()
+    install(TARGETS ffmpegkit
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
 
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/"
-    DESTINATION include
-    FILES_MATCHING PATTERN "*.h*"
-)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/"
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.h*"
+    )
 
-set(prefix "${CMAKE_INSTALL_PREFIX}")
-set(exec_prefix "\${prefix}")
-set(libdir "\${exec_prefix}/lib")
-set(includedir "\${prefix}/include")
-set(VERSION "${FFMPEG_KIT_VERSION}")
-set(FFMPEG_KIT_PLATFORM_CFLAGS "")
-set(FFMPEG_KIT_PLATFORM_LIBS "")
-if(EMSCRIPTEN)
-    set(FFMPEG_KIT_PLATFORM_CFLAGS "-pthread -fwasm-exceptions -sSUPPORT_LONGJMP=wasm")
-    set(FFMPEG_KIT_PLATFORM_LIBS "-pthread -fwasm-exceptions -sSUPPORT_LONGJMP=wasm")
+    set(prefix "${CMAKE_INSTALL_PREFIX}")
+    set(exec_prefix "\${prefix}")
+    set(libdir "\${exec_prefix}/lib")
+    set(includedir "\${prefix}/include")
+    set(VERSION "${FFMPEG_KIT_VERSION}")
+    set(FFMPEG_KIT_PLATFORM_CFLAGS "")
+    set(FFMPEG_KIT_PLATFORM_LIBS "")
+
+    configure_file(
+        "src/ffmpegkit.pc.in"
+        "ffmpegkit.pc"
+        @ONLY
+    )
+
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.pc"
+        DESTINATION lib/pkgconfig
+    )
 endif()
-configure_file("src/ffmpegkit.pc.in" "ffmpegkit.pc" @ONLY)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.pc" DESTINATION lib/pkgconfig)
 
 if(BUILD_SHARED_LIBS AND CMAKE_SYSTEM_NAME MATCHES "Linux")
     install(CODE "
