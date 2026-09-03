@@ -942,7 +942,7 @@ setup_wasm_environment() {
     export PREFIX="$dependency_install_prefix"
     export build_cross_compile=y
 
-    export wasm_cflags="$original_cflags -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+    export wasm_cflags="$original_cflags -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions -std=gnu23"
     export wasm_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
     export wasm_cppflags="$original_cppflags -DWASM -D__EMSCRIPTEN__ -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
     export wasm_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"

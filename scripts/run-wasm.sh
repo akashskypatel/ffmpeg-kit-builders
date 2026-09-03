@@ -3569,18 +3569,17 @@ build_libvmaf() {
   activate_meson
   local lib="libvmaf"
   local repo="https://github.com/Netflix/vmaf"
-  local repo_ver="v3.1.0"
+  local repo_ver="v3.0.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/libvmaf"
   local meson_options="-Denable_float=true \
--Denable_tools=false \
 -Denable_tests=false \
 -Denable_docs=false \
 -Denable_asm=false \
 -Denable_avx512=false \
 -Denable_cuda=false \
--Dc_args=\"${CFLAGS} -std=gnu23\" \
+-Dc_args=\"${CFLAGS}\" \
 -Dcpp_args=\"${CPPFLAGS}\" \
 -Dbuilt_in_models=true"
   disable_nonessential "$src_dir/$lib/libvmaf"
