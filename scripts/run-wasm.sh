@@ -147,13 +147,6 @@ build_libavc1394() {
 build_libraw1394() {
   local repo="https://github.com/Distrotech/libraw1394"
   local lib="libraw1394"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib"
-  change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
 }
 # build_libiec61883       # config_options+= --enable-libiec61883         # enable iec61883 via libiec61883 [no]
 build_libiec61883() {
@@ -161,14 +154,6 @@ build_libiec61883() {
   # run_valid_function "build_libavc1394"
   local repo="https://github.com/Distrotech/libiec61883"
   local lib="libiec61883"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib"
-  change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
-  change_dir "$src_dir"
-  add_libs_to_pkg -t="$install_pkgconfig_dir/libiec61883.pc" -l="-liec61883 -lavc1394 -lrom1394 -lraw1394"
 }
 build_libjsonc() {
   local lib="json-c"
@@ -193,26 +178,6 @@ build_libv4l2() {
   local lib="libv4l2"
   local repo="https://github.com/gjasny/v4l-utils"
   local repo_ver="v4l-utils-1.30.1"
-  change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export LIBS="-liconv"
-  local meson_options="-Ddoxygen-doc=disabled \
--Dv4l-utils=false \
--Dv4l-wrappers=false \
--Dqv4l2=disabled \
--Dqvidcap=disabled \
--Dv4l2-tracer=disabled \
--Dgconv=disabled \
--Ddoxygen-html=false \
--Ddoxygen-man=false \
--Dlibdvbv5=disabled \
--Dc_link_args=\"-L${dependency_install_prefix}/lib $LIBS\""
-  generic_meson "$meson_options"
-  disable_nonessential "$src_dir/$lib"
-  do_ninja_and_ninja_install
-  unset LIBS
-  change_dir "$src_dir"
 }
 # build_rkmpp             # config_options+= --enable-rkmpp               # enable Rockchip Media Process Platform code [no]
 build_rkmpp() {
@@ -3518,6 +3483,8 @@ build_libtwolame() {
     gsed -i "/^SUBDIRS/s/ frontend.*//" Makefile.am || exit_message 1 "build_libtwolame: could not update makefile for twolame"
   fi
   touch "no.autogen"
+  local new_cflags="${CFLAGS/-std=gnu23/-std=gnu17}"
+  export CFLAGS="$new_cflags"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
