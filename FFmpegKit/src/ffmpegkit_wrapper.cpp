@@ -120,6 +120,8 @@ android_unwind_callback(struct _Unwind_Context *context, void *arg) {
   state->count++;
   return (state->count >= 30) ? _URC_END_OF_STACK : _URC_NO_REASON;
 }
+#elif defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
 #else
 #include <execinfo.h>
 #include <unistd.h>
@@ -159,6 +161,9 @@ void internal_print_stack_trace() {
   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "--- Native Stack Trace ---");
   AndroidUnwindState state = {0};
   _Unwind_Backtrace(android_unwind_callback, &state);
+#elif defined(__EMSCRIPTEN__)
+  emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK | EM_LOG_JS_STACK,
+                 "--- FFmpegKit Stack Trace ---");
 #else
   void *array[20];
   size_t size = backtrace(array, 20);

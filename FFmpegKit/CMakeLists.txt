@@ -42,6 +42,10 @@ option(ENABLE_LIBPLACEBO "Enable libplacebo" OFF)
 option(ENABLE_LIBTENSORFLOW "Enable libtensorflow" OFF)
 option(ENABLE_OPENVINO "Enable openvino" OFF)
 option(ENABLE_LIBTORCH "Enable libtorch" OFF)
+set(FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE "4" CACHE STRING
+    "Number of Emscripten pthread workers created when the WASM module starts")
+set(FFMPEG_KIT_WASM_INITIAL_MEMORY "67108864" CACHE STRING
+    "Initial memory size in bytes for the final Emscripten module")
 
 # CMAKE_BUILD_TYPE is a CMake built-in string variable, not a boolean option.
 # Using option() on it silently converts it to OFF. Use set() instead.
@@ -57,6 +61,15 @@ endif()
 # - Set build metadata (date, bundle type, version)
 # ==============================================================================
 option(BUILD_SHARED_LIBS "Build shared library" ON)
+
+# Emscripten's reusable output is a static archive that is linked into the
+# application's final .wasm module. Native shared-library packaging and ELF
+# linker options are not applicable to that output.
+if(EMSCRIPTEN AND BUILD_SHARED_LIBS)
+    message(STATUS "Emscripten requires a static ffmpeg-kit archive; disabling BUILD_SHARED_LIBS")
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared library" FORCE)
+endif()
+
 set(FFMPEG_KIT_BUILD_DATE "" CACHE STRING "Build date override")
 set(FFMPEG_KIT_BUNDLE_TYPE "" CACHE STRING "Bundle type override")
 set(FFMPEG_KIT_VERSION "" CACHE STRING "FFmpegKit version override")
@@ -154,7 +167,20 @@ target_compile_definitions(ffmpegkit PUBLIC
     FFMPEG_KIT_VERSION="${FFMPEG_KIT_VERSION}"
 )
 
-if(WIN32)
+if(EMSCRIPTEN)
+    target_compile_definitions(ffmpegkit PRIVATE
+        TARGET_OS_WASM
+        WASM
+    )
+
+    # These settings are part of the ABI used by the WASM dependency build.
+    # Keep them on the target as well so direct CMake builds remain compatible.
+    target_compile_options(ffmpegkit PRIVATE
+        -pthread
+        -fwasm-exceptions
+        "-sSUPPORT_LONGJMP=wasm"
+    )
+elseif(WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
     target_compile_definitions(ffmpegkit PRIVATE
@@ -380,7 +406,7 @@ target_link_directories(ffmpegkit PRIVATE "${FFMPEG_BUILD_DIR}/lib")
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(ffmpegkit PRIVATE DLL_EXPORT PIC)
 
-    if(NOT APPLE)
+    if(NOT APPLE AND NOT EMSCRIPTEN)
         # Darwin dylibs error on undefined symbols by default; no flag needed.
         # Linux shared libs require this opt-in.
         target_link_options(ffmpegkit PRIVATE -Wl,--no-undefined)
@@ -545,10 +571,10 @@ if(BUILD_SHARED_LIBS)
 };
 ")
 
-    if(NOT APPLE)
+    if(NOT APPLE AND NOT EMSCRIPTEN)
         # --version-script is ELF/GNU ld only; macOS uses -exported_symbols_list instead.
         target_link_options(ffmpegkit PRIVATE "-Wl,--version-script=${LINKER_SCRIPT}")
-    else()
+    elseif(APPLE)
         # Darwin exported symbols allow-list.
         #
         # Export the low-level embedded CLI C APIs as well as the higher-level
@@ -608,6 +634,44 @@ else()
     )
 endif()
 
+if(EMSCRIPTEN)
+    # A static archive is useful to native Emscripten consumers, but browsers
+    # need a final linked module and its JavaScript loader. Explicitly rooting
+    # the initialization API pulls in the wrapper object; its remaining public
+    # C APIs are marked used/default-visible and become WebAssembly exports.
+    set(FFMPEGKIT_WASM_ENTRY "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit_wasm_entry.cpp")
+    file(WRITE "${FFMPEGKIT_WASM_ENTRY}"
+        "extern \"C\" void ffmpegkit_wasm_link_anchor(void) {}\n")
+
+    add_executable(ffmpegkit_wasm "${FFMPEGKIT_WASM_ENTRY}")
+    add_dependencies(ffmpegkit_wasm ffmpegkit)
+    target_link_libraries(ffmpegkit_wasm PRIVATE
+        ffmpegkit
+    )
+    target_link_options(ffmpegkit_wasm PRIVATE
+        --no-entry
+        -pthread
+        -fwasm-exceptions
+        "-Wl,--allow-multiple-definition"
+        "-sSUPPORT_LONGJMP=wasm"
+        "-sMODULARIZE=1"
+        "-sEXPORT_ES6=1"
+        "-sEXPORT_NAME=createFFmpegKit"
+        "-sENVIRONMENT=web,worker"
+        "-sINITIAL_MEMORY=${FFMPEG_KIT_WASM_INITIAL_MEMORY}"
+        "-sALLOW_MEMORY_GROWTH=1"
+        "-sPTHREAD_POOL_SIZE=${FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE}"
+        "-sFORCE_FILESYSTEM=1"
+        "-sEXPORTED_FUNCTIONS=_malloc,_free,_ffmpeg_kit_initialize"
+        "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToNewUTF8"
+    )
+    set_target_properties(ffmpegkit_wasm PROPERTIES
+        OUTPUT_NAME "ffmpegkit"
+        SUFFIX ".mjs"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+endif()
+
 # Install Hook for Bundled Libs
 install(CODE "
     if(EXISTS \"${CMAKE_CURRENT_BINARY_DIR}/bundle_manifest.txt\")
@@ -651,11 +715,32 @@ install(TARGETS ffmpegkit
     RUNTIME DESTINATION bin
 )
 
+if(EMSCRIPTEN)
+    install(TARGETS ffmpegkit_wasm RUNTIME DESTINATION lib)
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.wasm"
+        "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.worker.mjs"
+        DESTINATION lib
+        OPTIONAL
+    )
+endif()
+
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/"
     DESTINATION include
     FILES_MATCHING PATTERN "*.h*"
 )
 
+set(prefix "${CMAKE_INSTALL_PREFIX}")
+set(exec_prefix "\${prefix}")
+set(libdir "\${exec_prefix}/lib")
+set(includedir "\${prefix}/include")
+set(VERSION "${FFMPEG_KIT_VERSION}")
+set(FFMPEG_KIT_PLATFORM_CFLAGS "")
+set(FFMPEG_KIT_PLATFORM_LIBS "")
+if(EMSCRIPTEN)
+    set(FFMPEG_KIT_PLATFORM_CFLAGS "-pthread -fwasm-exceptions -sSUPPORT_LONGJMP=wasm")
+    set(FFMPEG_KIT_PLATFORM_LIBS "-pthread -fwasm-exceptions -sSUPPORT_LONGJMP=wasm")
+endif()
 configure_file("src/ffmpegkit.pc.in" "ffmpegkit.pc" @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.pc" DESTINATION lib/pkgconfig)
 

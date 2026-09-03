@@ -390,6 +390,14 @@ function(find_static_library_in_dir SEARCH_DIR LIB_NAME OUTPUT_VAR)
         return()
     endif()
 
+    # WASM dependencies are installed into flat lib directories. Recursively
+    # scanning them for native/system libraries referenced by upstream .pc
+    # files is both unnecessary and prohibitively slow under Emscripten.
+    if(EMSCRIPTEN)
+        set(${OUTPUT_VAR} "" PARENT_SCOPE)
+        return()
+    endif()
+
     file(GLOB_RECURSE _nested_candidates
         LIST_DIRECTORIES false
         "${SEARCH_DIR}/*/lib${LIB_NAME}.a"
@@ -735,6 +743,14 @@ function(configure_static_linking LIBRARY_NAME STATIC_LINKING)
     set(FIXED_LIBS "")
     set(_cache_namespace "STATIC_${STATIC_LINKING}")
     foreach(LIB_PATH IN LISTS ${LIBRARY_NAME}_LIBS)
+        # Emscripten selects its libc++, libc++abi, and libunwind variants from
+        # the final link settings. Bundling a generic sysroot archive here can
+        # mix non-threaded or incompatible exception ABI objects into the
+        # pthread-enabled module.
+        if(EMSCRIPTEN AND "${LIB_PATH}" MATCHES "/emscripten/cache/sysroot/lib/")
+            message(DEBUG "configure_static_linking(${LIBRARY_NAME}): leaving SDK runtime to em++: ${LIB_PATH}")
+            continue()
+        endif()
         if("${LIB_PATH}" MATCHES "^-framework")
             continue()
         endif()

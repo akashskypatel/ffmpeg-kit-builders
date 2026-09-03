@@ -47,6 +47,7 @@ detect_clang_version() {
 # @. custom CMake KEY=VALUE settings
 get_generic_cmake_toolchain() {
   local variant="$1"
+  local emscripten_root="${EMSDK_ROOT}/upstream/emscripten"
   local toolchain_filename="$host_name-toolchain.cmake"
   local toolchain_path="$src_dir/$toolchain_filename"
   [[ -n "$variant" ]] && toolchain_filename="$host_name-toolchain-$variant.cmake"
@@ -55,7 +56,7 @@ get_generic_cmake_toolchain() {
 
   {
     echo "# Generated via get_generic_cmake_toolchain"
-    echo "set(EMSCRIPTEN_ROOT_PATH \"$EMSDK_ROOT\" CACHE PATH \"Emscripten SDK root\" FORCE)"
+    echo "set(EMSCRIPTEN_ROOT_PATH \"$emscripten_root\" CACHE PATH \"Emscripten compiler root\" FORCE)"
     echo "include(\"$EMSDK_CMAKE_TOOLCHAIN_FILE\")"
     echo "set(CMAKE_C_COMPILER \"$CC\" CACHE FILEPATH \"C compiler\" FORCE)"
     echo "set(CMAKE_CXX_COMPILER \"$CXX\" CACHE FILEPATH \"C++ compiler\" FORCE)"
@@ -168,7 +169,7 @@ configure_ffmpeg_kit() {
   [[ -f Makefile ]] && make distclean > >(redirect_output) 2>&1 || true
 
   local cmake_params="-DCMAKE_TOOLCHAIN_FILE=$(get_generic_cmake_toolchain) \
--DEMSCRIPTEN_ROOT_PATH=\"$EMSDK_ROOT\" \
+-DEMSCRIPTEN_ROOT_PATH=\"${EMSDK_ROOT}/upstream/emscripten\" \
 -DCMAKE_SYSTEM_PROCESSOR=wasm32 \
 -DCMAKE_C_COMPILER=\"$CC\" \
 -DCMAKE_CXX_COMPILER=\"$CXX\" \
