@@ -3574,7 +3574,6 @@ build_libvmaf() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/libvmaf"
   local meson_options="-Denable_float=true \
--Ddefault_library=static \
 -Denable_tests=false \
 -Denable_docs=false \
 -Denable_tools=false \
