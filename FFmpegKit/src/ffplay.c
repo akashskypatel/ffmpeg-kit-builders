@@ -1183,11 +1183,6 @@ static void video_image_display(VideoState *is)
         vp->uploaded = 1;
         vp->flip_v = vp->frame->linesize[0] < 0;
 
-        if (vp->frame->data[0]) {
-          ffplay_lib_on_frame(vp->frame->data[0], vp->frame->width,
-                              vp->frame->height, vp->frame->linesize[0],
-                              av_get_pix_fmt_name(vp->frame->format));
-          }
     }
 
     draw_video_background(is);
@@ -1557,6 +1552,7 @@ static void video_display(VideoState *is)
         video_audio_display(is);
     else if (is->video_st)
         video_image_display(is);
+    ffplay_lib_capture_renderer(is->renderer);
     SDL_RenderPresent(is->renderer);
 }
 

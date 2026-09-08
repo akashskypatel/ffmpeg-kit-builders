@@ -40,6 +40,10 @@ static SDL_AudioDeviceID active_audio_dev_id = 0;
 // ffplay_step is called from a single background thread, so no lock needed.
 static void   *g_pixel_buf      = NULL;
 static size_t  g_pixel_buf_size = 0;
+static int     g_pixel_width    = 0;
+static int     g_pixel_height   = 0;
+static int     g_pixel_linesize = 0;
+static uint64_t g_pixel_generation = 0;
 
 // Interception logic
 static SDL_AudioDeviceID ffplay_kit_SDL_OpenAudioDevice(
@@ -193,6 +197,46 @@ static SDL_Renderer *ffplay_kit_SDL_CreateRenderer(
 }
 
 #define SDL_CreateRenderer ffplay_kit_SDL_CreateRenderer
+
+/* Capture the fully composed software-renderer output. This produces one
+ * browser-friendly RGBA plane regardless of the decoder's native format and
+ * includes scaling, subtitles, and the configured video background. */
+static void ffplay_lib_capture_renderer(SDL_Renderer *renderer) {
+    int width = 0;
+    int height = 0;
+    size_t required;
+
+    if (!renderer || SDL_GetRendererOutputSize(renderer, &width, &height) < 0 ||
+        width <= 0 || height <= 0)
+        return;
+
+    required = (size_t)width * 4u * (size_t)height;
+    if (required / (size_t)height != (size_t)width * 4u)
+        return;
+
+    lock_ffplay_api();
+    if (required > g_pixel_buf_size) {
+        void *new_buffer = av_realloc(g_pixel_buf, required);
+        if (!new_buffer) {
+            unlock_ffplay_api();
+            return;
+        }
+        g_pixel_buf = new_buffer;
+        g_pixel_buf_size = required;
+    }
+
+    if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_RGBA32,
+                             g_pixel_buf, width * 4) == 0) {
+        g_pixel_width = width;
+        g_pixel_height = height;
+        g_pixel_linesize = width * 4;
+        g_pixel_generation++;
+        if (g_frame_callback)
+            g_frame_callback(g_frame_callback_userdata, g_pixel_buf, width,
+                             height, width * 4, "rgba");
+    }
+    unlock_ffplay_api();
+}
 
 // Include the patched ffplay.c to access internal structures and static functions.
 #include "ffplay.c"
@@ -428,6 +472,13 @@ static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc,
         "SDL_AUDIODRIVER='%{public}s' args='%{public}.200s'",
         SDL_getenv("SDL_AUDIODRIVER") ? SDL_getenv("SDL_AUDIODRIVER") : "(null)",
         args_string ? args_string : "(null)");
+#elif defined(__EMSCRIPTEN__)
+    /* The host owns the DOM/canvas. FFplay renders into an in-memory software
+     * target and exposes composed RGBA frames through the frame APIs below. */
+    SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
+    SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
+    if (!SDL_getenv("SDL_AUDIODRIVER"))
+        SDL_setenv("SDL_AUDIODRIVER", "emscripten", 0);
 #else
     SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
     SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
@@ -1090,6 +1141,10 @@ void ffplay_free(FFplayContext* ctx) {
     av_free(g_pixel_buf);
     g_pixel_buf = NULL;
     g_pixel_buf_size = 0;
+    g_pixel_width = 0;
+    g_pixel_height = 0;
+    g_pixel_linesize = 0;
+    g_pixel_generation = 0;
 
     // argv freed
     if (ctx->argv) {
@@ -1101,6 +1156,39 @@ void ffplay_free(FFplayContext* ctx) {
     avformat_network_deinit();
 
     av_free(ctx);
+}
+
+size_t ffplay_get_frame_buffer_size(void) {
+    size_t size;
+    lock_ffplay_api();
+    size = g_pixel_width > 0 && g_pixel_height > 0
+               ? (size_t)g_pixel_linesize * (size_t)g_pixel_height
+               : 0;
+    unlock_ffplay_api();
+    return size;
+}
+
+int ffplay_copy_frame(uint8_t *destination, size_t destination_size,
+                      int *width, int *height, int *linesize,
+                      uint64_t *generation) {
+    size_t required = 0;
+    int result = 0;
+
+    lock_ffplay_api();
+    if (g_pixel_width > 0 && g_pixel_height > 0)
+        required = (size_t)g_pixel_linesize * (size_t)g_pixel_height;
+    if (!destination || destination_size < required || required == 0) {
+        result = required == 0 ? 0 : -1;
+    } else {
+        memcpy(destination, g_pixel_buf, required);
+        result = 1;
+    }
+    if (width) *width = g_pixel_width;
+    if (height) *height = g_pixel_height;
+    if (linesize) *linesize = g_pixel_linesize;
+    if (generation) *generation = g_pixel_generation;
+    unlock_ffplay_api();
+    return result;
 }
 
 void ffplay_close(FFplayContext* ctx) {

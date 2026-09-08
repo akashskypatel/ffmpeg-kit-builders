@@ -22,6 +22,7 @@
 
 #include "ffmpeg_tls.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifndef FFMPEG_KIT_C_EXPORT
@@ -138,7 +139,7 @@ typedef void (*MediaInformationSessionCompleteCallback)(
     MediaInformationSessionHandle session, void *user_data);
 
 /**
- * Frame-ready callback type for desktop (Linux/Windows) video output.
+ * Frame-ready callback type for native desktop and WebAssembly video output.
 *
  * Fired inside ffplay_step() on every rendered video frame.
  * Pixel format: RGBA8888 — bytes [R][G][B][A] on little-endian, compatible
@@ -1004,6 +1005,14 @@ ffplay_kit_register_frame_callback(FFplayKitFrameCallback callback,
  * On Android this is a no-op.
  */
 FFMPEG_KIT_C_EXPORT void ffplay_kit_unregister_frame_callback(void);
+
+/** Returns the byte size required for the latest composed RGBA frame. */
+FFMPEG_KIT_C_EXPORT size_t ffplay_kit_get_frame_buffer_size(void);
+
+/** Copies the latest composed RGBA frame into caller-owned Wasm memory. */
+FFMPEG_KIT_C_EXPORT int ffplay_kit_copy_frame(
+    uint8_t *destination, size_t destination_size, int *width, int *height,
+    int *linesize, uint64_t *generation);
 
 /**
  * Probes [path] for at least one video stream without decoding.

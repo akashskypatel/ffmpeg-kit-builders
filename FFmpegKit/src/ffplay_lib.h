@@ -21,6 +21,7 @@
 #define FFPLAY_LIB_H
 
 #include "ffmpeg_tls.h"
+#include <stddef.h>
 #include <stdint.h>
 
 #if defined(_WIN32)
@@ -234,7 +235,7 @@ FFMPEG_API void ffplay_set_android_window(ANativeWindow *window);
 /**
  * Frame-ready callback for desktop video output. Fired inside ffplay_step().
  * Pixel format: RGBA8888 ([R][G][B][A] on little-endian), linesize == width * 4.
- * The pixel buffer is freed after the callback returns — copy if you need to retain it.
+ * The pixel buffer is reused for later frames; copy if you need to retain it.
  *
  * @param userdata  opaque pointer from ffplay_set_frame_callback()
  * @param pixels    RGBA8888 rows, tightly packed
@@ -254,6 +255,21 @@ typedef void (*FFplayFrameCallback)(void *userdata, const uint8_t *pixels,
  */
 FFMPEG_API void ffplay_set_frame_callback(FFplayFrameCallback callback,
                                            void *userdata) ;
+
+/** Returns the byte size required to copy the latest composed RGBA frame. */
+FFMPEG_API size_t ffplay_get_frame_buffer_size(void);
+
+/**
+ * Copies the latest composed RGBA frame into caller-owned memory.
+ *
+ * This pull API is intended for WebAssembly hosts, where retaining a pointer
+ * into the Wasm heap or invoking a native function-pointer callback is unsafe.
+ * Returns 1 when a frame was copied, 0 before the first frame, and -1 when the
+ * destination is too small. Metadata is returned even when no copy occurs.
+ */
+FFMPEG_API int ffplay_copy_frame(uint8_t *destination, size_t destination_size,
+                                 int *width, int *height, int *linesize,
+                                 uint64_t *generation);
 
 
 /**

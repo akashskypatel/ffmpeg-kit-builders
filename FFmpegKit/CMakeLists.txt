@@ -662,7 +662,7 @@ if(EMSCRIPTEN)
         "-sALLOW_MEMORY_GROWTH=1"
         "-sPTHREAD_POOL_SIZE=${FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE}"
         "-sFORCE_FILESYSTEM=1"
-        "-sEXPORTED_FUNCTIONS=_malloc,_free,_ffmpeg_kit_initialize"
+        "-sEXPORTED_FUNCTIONS=_malloc,_free,_ffmpeg_kit_initialize,_ffplay_kit_execute_async,_ffplay_kit_create_session,_ffplay_kit_close_session,_ffplay_kit_session_execute_async,_ffplay_kit_session_seek,_ffplay_kit_session_start,_ffplay_kit_session_pause,_ffplay_kit_session_resume,_ffplay_kit_session_stop,_ffplay_kit_session_get_position,_ffplay_kit_session_get_duration,_ffplay_kit_session_is_playing,_ffplay_kit_session_is_paused,_ffplay_kit_session_set_volume,_ffplay_kit_session_get_volume,_ffplay_kit_session_get_video_width,_ffplay_kit_session_get_video_height,_ffplay_kit_get_frame_buffer_size,_ffplay_kit_copy_frame"
         "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToNewUTF8"
     )
     set_target_properties(ffmpegkit_wasm PROPERTIES

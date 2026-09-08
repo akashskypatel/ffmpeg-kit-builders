@@ -1794,6 +1794,18 @@ void DLL_ALIGN ffplay_kit_unregister_frame_callback(void) {
   ffplay_set_frame_callback(nullptr, nullptr);
 }
 
+size_t DLL_ALIGN ffplay_kit_get_frame_buffer_size(void) {
+  return ffplay_get_frame_buffer_size();
+}
+
+int DLL_ALIGN ffplay_kit_copy_frame(uint8_t *destination,
+                                    size_t destination_size, int *width,
+                                    int *height, int *linesize,
+                                    uint64_t *generation) {
+  return ffplay_copy_frame(destination, destination_size, width, height,
+                           linesize, generation);
+}
+
 /* Config */
 
 void DLL_ALIGN ffmpeg_kit_config_enable_redirection(void) {
