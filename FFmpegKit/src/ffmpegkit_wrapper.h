@@ -1015,6 +1015,30 @@ FFMPEG_KIT_C_EXPORT int ffplay_kit_copy_frame(
     int *linesize, uint64_t *generation);
 
 /**
+ * Returns the byte size required for the latest composed RGBA frame.
+ *
+ * The returned size is zero when no frame is available. The caller owns the
+ * destination buffer passed to ffplay_kit_copy_frame().
+ */
+FFMPEG_KIT_C_EXPORT size_t ffplay_kit_get_frame_buffer_size(void);
+
+/**
+ * Copies the latest composed RGBA frame into caller-owned memory.
+ *
+ * @param destination caller-owned destination buffer
+ * @param destination_size capacity of destination in bytes
+ * @param width output frame width
+ * @param height output frame height
+ * @param linesize output frame stride in bytes
+ * @param generation output frame generation counter
+ * @return 1 when a frame was copied, 0 when no frame is available or the
+ *         destination is too small
+ */
+FFMPEG_KIT_C_EXPORT int ffplay_kit_copy_frame(
+    uint8_t *destination, size_t destination_size, int *width, int *height,
+    int *linesize, uint64_t *generation);
+
+/**
  * Probes [path] for at least one video stream without decoding.
  * Uses avformat_open_input + avformat_find_stream_info. Thread-safe.
  *
