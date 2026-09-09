@@ -523,6 +523,9 @@ build_sdl2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
+  export CFLAGS="$CFLAGS -sUSE_PTHREADS=1"
+  export CXXFLAGS="$CXXFLAGS -sUSE_PTHREADS=1"
+  export CPPFLAGS="$CPPFLAGS -sUSE_PTHREADS=1"
   local cmake_options="-DCMAKE_BUILD_TYPE=Release \
 -DSDL_SHARED=OFF \
 -DSDL_STATIC=ON \
@@ -532,6 +535,7 @@ build_sdl2() {
 -DSDL_HIDAPI=OFF \
 -DSDL_AUDIO=ON \
 -DSDL_VIDEO=ON \
+-DSDL_PTHREADS=ON \
 -DSDL_RENDER=ON"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_options"
   do_make_and_make_install

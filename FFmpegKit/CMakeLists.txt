@@ -726,11 +726,6 @@ else()
         RUNTIME DESTINATION bin
     )
 
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/"
-        DESTINATION include
-        FILES_MATCHING PATTERN "*.h*"
-    )
-
     set(prefix "${CMAKE_INSTALL_PREFIX}")
     set(exec_prefix "\${prefix}")
     set(libdir "\${exec_prefix}/lib")
@@ -750,6 +745,11 @@ else()
         DESTINATION lib/pkgconfig
     )
 endif()
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/"
+    DESTINATION include
+    FILES_MATCHING PATTERN "*.h*"
+)
 
 if(BUILD_SHARED_LIBS AND CMAKE_SYSTEM_NAME MATCHES "Linux")
     install(CODE "
