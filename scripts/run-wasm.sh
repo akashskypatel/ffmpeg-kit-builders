@@ -526,6 +526,8 @@ build_sdl2() {
   export CFLAGS="$CFLAGS -sUSE_PTHREADS=1"
   export CXXFLAGS="$CXXFLAGS -sUSE_PTHREADS=1"
   export CPPFLAGS="$CPPFLAGS -sUSE_PTHREADS=1"
+  # bug in sdl2 emscripten audio implementation - need to use MAIN_THREAD_EM_ASM_INT instead of EM_ASM_INT
+  gsed -i 's/this->spec.freq = EM_ASM_INT/this->spec.freq = MAIN_THREAD_EM_ASM_INT/g' "$src_dir/$lib/src/audio/emscripten/SDL_emscriptenaudio.c"
   local cmake_options="-DCMAKE_BUILD_TYPE=Release \
 -DSDL_SHARED=OFF \
 -DSDL_STATIC=ON \
