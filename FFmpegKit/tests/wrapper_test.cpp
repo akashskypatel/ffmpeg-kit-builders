@@ -827,6 +827,47 @@ TEST(FFmpegKitTest, SessionHistory) {
   EXPECT_GT(count, initial_count);
 }
 
+TEST(FFmpegKitTest, SessionHandleAliasesOwnIndependentTokens) {
+  ffmpeg_kit_config_clear_sessions();
+
+  FFmpegSessionHandle primary =
+      ffmpeg_kit_create_session("-hide_banner -loglevel fatal -version");
+  ASSERT_NE(primary, nullptr);
+  ffmpeg_kit_session_execute(primary);
+
+  const int64_t session_id = ffmpeg_kit_session_get_session_id(primary);
+  ASSERT_GT(session_id, 0);
+
+  FFmpegSessionHandle by_id = ffmpeg_kit_get_session(session_id);
+  FFmpegSessionHandle by_id_again = ffmpeg_kit_get_session(session_id);
+  FFmpegSessionHandle last = ffmpeg_kit_get_last_session();
+  ASSERT_NE(by_id, nullptr);
+  ASSERT_NE(by_id_again, nullptr);
+  ASSERT_NE(last, nullptr);
+  EXPECT_NE(primary, by_id);
+  EXPECT_NE(by_id, by_id_again);
+  EXPECT_NE(by_id_again, last);
+
+  // Releasing one alias must leave every other token usable.
+  ffmpeg_kit_handle_release(by_id_again);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(primary), session_id);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(by_id), session_id);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(last), session_id);
+
+  ffmpeg_kit_handle_release(primary);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(by_id), session_id);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(last), session_id);
+
+  ffmpeg_kit_handle_release(last);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(by_id), session_id);
+
+  ffmpeg_kit_handle_release(by_id);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(by_id), -1);
+
+  // A repeated release of an already-consumed token remains harmless.
+  ffmpeg_kit_handle_release(by_id);
+}
+
 TEST(FFmpegKitTest, GenerateTestVideoFile) {
   FFmpegSessionHandle session = ffmpeg_kit_create_session(
       "-hide_banner -loglevel fatal -f lavfi -i "

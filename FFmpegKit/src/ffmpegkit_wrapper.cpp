@@ -46,8 +46,12 @@ extern "C" {
 #include <cstdio>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <set>
+#include <stdexcept>
 #include <thread>
+#include <utility>
 #include <vector>
 #include <chrono>
 #include <ctime>
@@ -173,9 +177,21 @@ void internal_print_stack_trace() {
 
 using namespace ffmpegkit;
 
-// Session registry to keep shared_ptrs alive for the duration of the session
-static std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>> &get_session_registry() {
-    static std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>> *registry = new std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>>();
+// Every exported opaque handle has its own token. The token retains the
+// underlying object independently from other handles that may alias it (for
+// example, a session handle returned by both getSession() and getSessions()).
+struct HandleRecord {
+  explicit HandleRecord(std::shared_ptr<ffmpegkit::FFmpegKitObject> object)
+      : value(std::move(object)) {}
+
+  std::shared_ptr<ffmpegkit::FFmpegKitObject> value;
+};
+
+// Handle registry for all opaque wrapper objects. The map owns each token's
+// lookup entry; the token itself owns one retained shared_ptr to its object.
+static std::map<void*, std::unique_ptr<HandleRecord>> &get_handle_registry() {
+    static std::map<void*, std::unique_ptr<HandleRecord>> *registry =
+        new std::map<void*, std::unique_ptr<HandleRecord>>();
     return *registry;
 }
 
@@ -225,12 +241,16 @@ template <typename T> static std::shared_ptr<T> get_ptr_internal(void *handle) {
     return nullptr;
 
   // 1. Check the unified registry
+  std::shared_ptr<ffmpegkit::FFmpegKitObject> object;
   {
     std::lock_guard<RegistryMutex> lock(get_registry_mutex());
-    auto it = get_session_registry().find(handle);
-    if (it != get_session_registry().end()) {
-      return std::dynamic_pointer_cast<T>(it->second);
+    auto it = get_handle_registry().find(handle);
+    if (it != get_handle_registry().end() && it->second) {
+      object = it->second->value;
     }
+  }
+  if (object) {
+    return std::dynamic_pointer_cast<T>(object);
   }
 
   // 2. Support "fake" handles (Session IDs passed as pointers from log/stats callbacks)
@@ -254,33 +274,41 @@ template <typename T> static std::shared_ptr<T> get_ptr(void *handle) {
 
 template <typename T> static void *create_handle(std::shared_ptr<T> ptr) {
   if (!ptr) return nullptr;
-  
-  void *handle = static_cast<void*>(ptr.get());
-  
+
+  auto record = std::make_unique<HandleRecord>(
+      std::static_pointer_cast<FFmpegKitObject>(ptr));
+  void *handle = static_cast<void *>(record.get());
+
   std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
-  get_session_registry()[handle] = std::static_pointer_cast<FFmpegKitObject>(ptr);
-  
+  if (!get_handle_registry().emplace(handle, std::move(record)).second) {
+    throw std::runtime_error("duplicate opaque handle token");
+  }
   return handle;
 }
 
 template <typename T>
 static void **
 list_to_handle_array(std::shared_ptr<std::list<std::shared_ptr<T>>> list) {
+  void **array = nullptr;
+  size_t created_count = 0;
   try {
     if (!list)
       return nullptr;
     size_t size = list->size();
-    void **array = (void **)malloc((size + 1) * sizeof(void *));
+    array = (void **)malloc((size + 1) * sizeof(void *));
     if (!array)
       return nullptr;
 
-    size_t i = 0;
     for (auto &item : *list) {
-      array[i++] = create_handle(item);
+      array[created_count++] = create_handle(item);
     }
-    array[i] = nullptr;
+    array[created_count] = nullptr;
     return array;
   } catch (const std::exception &e) {
+    for (size_t i = 0; i < created_count; ++i) {
+      ffmpeg_kit_handle_release(array[i]);
+    }
+    free(array);
     std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in list_to_handle_array: " << e.what()
               << std::endl;
     PRINT_STACK_TRACE();
@@ -305,19 +333,34 @@ const char * DLL_ALIGN ffmpeg_kit_get_build_stamp(void) {
 
 void DLL_ALIGN ffmpeg_kit_handle_release(void *handle) {
   if (!handle) return;
-  
+
   std::shared_ptr<Session> session;
-  
+  std::unique_ptr<HandleRecord> record;
+  bool has_other_handles = false;
+
   {
     std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
-    auto it = get_session_registry().find(handle);
-    if (it != get_session_registry().end()) {
-      session = std::dynamic_pointer_cast<Session>(it->second);
-      get_session_registry().erase(it);
+    auto it = get_handle_registry().find(handle);
+    if (it != get_handle_registry().end()) {
+      record = std::move(it->second);
+      session = std::dynamic_pointer_cast<Session>(record->value);
+      get_handle_registry().erase(it);
+
+      if (session) {
+        for (const auto &entry : get_handle_registry()) {
+          if (entry.second && entry.second->value.get() == session.get()) {
+            has_other_handles = true;
+            break;
+          }
+        }
+      }
     }
   }
 
-  if (session) {
+  // Releasing an alias must not cancel the underlying session while another
+  // exported token still owns it. Preserve the historical cancellation
+  // behavior when this is the last token for a running session.
+  if (session && !has_other_handles) {
     const SessionState state = session->getState();
     const bool should_cancel = state == SessionStateRunning;
 
@@ -366,15 +409,19 @@ void DLL_ALIGN ffmpeg_kit_config_clear_sessions() {
   try {
     // First, clear our wrapper registry and collect any lingering sessions
     std::vector<std::shared_ptr<Session>> sessions_to_cancel;
+    std::set<Session *> seen_sessions;
     {
       std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
-      for (auto& pair : get_session_registry()) {
-        auto session = std::dynamic_pointer_cast<Session>(pair.second);
-        if (session) {
+      for (auto& pair : get_handle_registry()) {
+        if (!pair.second) {
+          continue;
+        }
+        auto session = std::dynamic_pointer_cast<Session>(pair.second->value);
+        if (session && seen_sessions.insert(session.get()).second) {
           sessions_to_cancel.push_back(session);
         }
       }
-      get_session_registry().clear();
+      get_handle_registry().clear();
     }
 
     // Cancel and safely drain any running sessions locally

@@ -38,7 +38,11 @@
 extern "C" {
 #endif
 
-// Opaque handles
+// Opaque handles. Every handle returned by this wrapper owns an independent
+// native token, even when multiple handles refer to the same underlying C++
+// object through session history or lookup APIs. Release each returned handle
+// with ffmpeg_kit_handle_release(). Releasing an already-consumed token is a
+// safe no-op.
 /**
  * @brief Opaque FFmpeg session handle used to reference a specific FFmpeg session
  * 
