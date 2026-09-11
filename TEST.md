@@ -255,3 +255,39 @@ sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vsc
   --gtest_filter=PthreadFailureTest.*
 sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g2 --output-on-failure -R ^ffmpegkit_wasm_callback_tests$'
 ```
+
+### G6 session completion callbacks
+
+G6 routes the four global V2 session-completion callback families through
+WasmCallbackDispatcher. The callback event retains only the session ID,
+callback function pointer, and user data. The callback is scheduled after the
+session has reached its terminal state, and Wasm delivery is drained on the
+main runtime thread by the test host.
+
+#### Native Linux
+
+```bash
+sudo cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build
+sudo cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s /home/vscode/ffmpeg-kit-builders/FFmpegKit/build/tests/ffmpegkit_tests --gtest_filter=G6SessionCompletionTest.*
+```
+
+#### Wasm pthread build, direct Node, and registered CTest
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g6 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && emcmake cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g6 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g6 --target ffmpegkit_wasm_callback_tests -j2'
+/usr/local/emsdk/node/24.19.0_64bit/bin/node /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g6/tests/ffmpegkit_wasm_callback_tests.js --gtest_filter=G6SessionCompletionTest.*
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g6 --output-on-failure -R ^ffmpegkit_wasm_callback_tests$'
+```
+
+Results for the G6 verification run:
+
+- Native target rebuilt successfully; the focused test passed 1/1.
+- Wasm pthread target configured and built successfully; the focused Node test
+  passed 1/1.
+- The registered Wasm CTest entry passed 1/1, including the full 15-test G0-G6
+  callback harness.
+- The focused test delivered exactly once for each of the four session
+  families, observed terminal state and the expected session ID, verified
+  main-runtime delivery under Emscripten, and covered disabled, reconfigured,
+  and unregistered callbacks.

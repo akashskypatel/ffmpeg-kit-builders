@@ -39,6 +39,7 @@ extern "C" {
 #include "FFprobeKit.hpp"
 #include "MediaInformation.hpp"
 #include "MediaInformationSession.hpp"
+#include "WasmCallbackDispatcher.h"
 #include "Packages.hpp"
 #include "Statistics.hpp"
 #include "StreamInformation.hpp"
@@ -3204,6 +3205,7 @@ static MediaInformationSessionCompleteCallbackV2 g_media_complete_callback_v2 =
     nullptr;
 static void *g_media_complete_user_data_v2 = nullptr;
 static std::mutex g_callback_state_mutex;
+static WasmCallbackDispatcher g_wasm_callback_dispatcher;
 
 template <typename Callback>
 static void set_global_callback_state(Callback &callback_slot,
@@ -3249,9 +3251,9 @@ static void dispatch_ffmpeg_complete_callback_v2(
   const auto callback_state = snapshot_global_callback_state(
       g_ffmpeg_complete_callback_v2, g_ffmpeg_complete_user_data_v2);
   if (callback_state.first) {
-    callback_state.first(
+    g_wasm_callback_dispatcher.dispatch_session_callback(
         session ? static_cast<int64_t>(session->getSessionId()) : 0,
-        callback_state.second);
+        callback_state.first, callback_state.second);
   }
 }
 
@@ -3260,9 +3262,9 @@ static void dispatch_ffprobe_complete_callback_v2(
   const auto callback_state = snapshot_global_callback_state(
       g_ffprobe_complete_callback_v2, g_ffprobe_complete_user_data_v2);
   if (callback_state.first) {
-    callback_state.first(
+    g_wasm_callback_dispatcher.dispatch_session_callback(
         session ? static_cast<int64_t>(session->getSessionId()) : 0,
-        callback_state.second);
+        callback_state.first, callback_state.second);
   }
 }
 
@@ -3271,9 +3273,9 @@ static void dispatch_ffplay_complete_callback_v2(
   const auto callback_state = snapshot_global_callback_state(
       g_ffplay_complete_callback_v2, g_ffplay_complete_user_data_v2);
   if (callback_state.first) {
-    callback_state.first(
+    g_wasm_callback_dispatcher.dispatch_session_callback(
         session ? static_cast<int64_t>(session->getSessionId()) : 0,
-        callback_state.second);
+        callback_state.first, callback_state.second);
   }
 }
 
@@ -3282,9 +3284,9 @@ static void dispatch_media_information_complete_callback_v2(
   const auto callback_state = snapshot_global_callback_state(
       g_media_complete_callback_v2, g_media_complete_user_data_v2);
   if (callback_state.first) {
-    callback_state.first(
+    g_wasm_callback_dispatcher.dispatch_session_callback(
         session ? static_cast<int64_t>(session->getSessionId()) : 0,
-        callback_state.second);
+        callback_state.first, callback_state.second);
   }
 }
 
@@ -3464,6 +3466,10 @@ ffmpeg_kit_config_enable_media_information_session_complete_callback_v2(
 }
 
 #ifdef FFMPEG_KIT_TEST_HOOKS
+void DLL_ALIGN ffmpeg_kit_test_process_wasm_callback_queue(void) {
+  g_wasm_callback_dispatcher.process_pending();
+}
+
 void DLL_ALIGN ffmpeg_kit_test_emit_v2_log_with_session_id(
     int64_t session_id, const char *message) {
   dispatch_log_callback_v2(session_id, message);

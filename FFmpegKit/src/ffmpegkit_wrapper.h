@@ -418,6 +418,9 @@ void FFMPEG_KIT_C_EXPORT ffmpeg_kit_set_complete_callback(
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_test_emit_v2_log_with_session_id(int64_t session_id,
                                             const char *message);
+
+/** Drives the Wasm callback dispatcher queue for regression tests. */
+FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_process_wasm_callback_queue(void);
 #endif
 
 
