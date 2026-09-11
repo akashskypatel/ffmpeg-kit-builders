@@ -398,3 +398,41 @@ Results for the G9 verification run:
 - The link command contains `-sALLOW_TABLE_GROWTH=1`.
 - Instantiating the actual built module and calling `table.grow(1)`
   succeeded, satisfying the G9 gate.
+
+### G10 Wasm table-growth artifact test
+
+G10 adds an automated Node artifact test for the final `ffmpegkit.wasm`.
+The test instantiates the actual Wasm binary, discovers the table by runtime
+type, verifies growth, preserves an existing callable Wasm function, writes
+compatible Wasm functions into new slots, and repeats growth.
+
+#### Test-enabled Wasm build
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g10 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && cd /home/vscode/ffmpeg-kit-builders && emcmake cmake -S FFmpegKit -B FFmpegKit/build-wasm-table-g10 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build FFmpegKit/build-wasm-table-g10 --target ffmpegkit_wasm -j2'
+```
+
+#### Direct pinned Node test
+
+```bash
+/usr/local/emsdk/node/24.19.0_64bit/bin/node FFmpegKit/tests/g10_table_growth_test.mjs FFmpegKit/build-wasm-table-g10/ffmpegkit.wasm
+```
+
+Output:
+
+```text
+{"artifact":"FFmpegKit/build-wasm-table-g10/ffmpegkit.wasm","tableDiscoveryCount":1,"initialLength":14575,"firstGrowReturn":14575,"finalLength":14602,"oldFunctionIndex":9,"writableIndex":14575,"repeatedGrowth":[3,7,16],"status":"PASS"}
+```
+
+#### Registered CTest
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && cd /home/vscode/ffmpeg-kit-builders && ctest --test-dir FFmpegKit/build-wasm-table-g10 --output-on-failure -R ^ffmpegkit_wasm_table_growth$'
+```
+
+Result: 1/1 test passed in 0.09 seconds.
+
+The G10 contract is verified: the table was discovered exactly once by
+`instanceof WebAssembly.Table`, `table.grow(1)` returned the old length,
+existing and newly written compatible functions remained callable, and
+repeated growth succeeded.

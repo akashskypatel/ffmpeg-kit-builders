@@ -139,4 +139,10 @@ if(EMSCRIPTEN)
         NAME ffmpegkit_wasm_callback_tests
         COMMAND node $<TARGET_FILE:ffmpegkit_wasm_callback_tests>
     )
+
+    add_test(
+        NAME ffmpegkit_wasm_table_growth
+        COMMAND node "${CMAKE_CURRENT_SOURCE_DIR}/g10_table_growth_test.mjs"
+                "${CMAKE_BINARY_DIR}/ffmpegkit.wasm"
+    )
 endif()
