@@ -47,3 +47,39 @@ setarch $(uname -m) -R ./FFmpegKit/build/tests/ffmpegkit_tests > test_tsan.log 2
 export LSAN_OPTIONS=suppressions=/home/vscode/ffmpeg-kit-builders/FFmpegKit/tests/asan.supp && export ASAN_OPTIONS=detect_odr_violation=0:detect_leaks=1 && ./FFmpegKit/build/tests/ffmpegkit_tests > test_asan.log 2>&1
 ```
 
+
+### Wasm pthread callback authority
+
+The G0 callback authority test must be configured and executed with Emscripten
+pthread support. The isolated build below uses the existing Wasm base bundle
+and runs the test executable under Node:
+
+```bash
+source /usr/local/emsdk/emsdk_env.sh
+export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g0
+export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig
+
+emcmake cmake \
+  -S /home/vscode/ffmpeg-kit-builders/FFmpegKit \
+  -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g0 \
+  -DBUILD_TESTS=ON \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl \
+  -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base \
+  -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+
+cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g0 \
+  --target ffmpegkit_wasm_callback_tests -j2
+
+node /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g0/tests/ffmpegkit_wasm_callback_tests.js \
+  --gtest_filter=WasmCallbackAuthorityTest.*
+
+ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g0 \
+  --output-on-failure -R '^ffmpegkit_wasm_callback_tests$'
+```
+
+The test is valid only when it passes under Emscripten and proves that the
+worker pthread is distinct from the main runtime thread, with the proxied
+callback observed on the main runtime thread.

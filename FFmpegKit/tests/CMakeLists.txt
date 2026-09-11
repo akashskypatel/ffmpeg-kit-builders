@@ -69,3 +69,54 @@ if(APPLE)
         COMMENT "Signing ffmpegkit_tests for debugging"
     )
 endif()
+if(EMSCRIPTEN)
+    # GTest is a static library, so it must be compiled with the same
+    # Emscripten pthread and exception flags as the Wasm harness.
+    foreach(_gtest_target IN ITEMS gtest gtest_main)
+        if(TARGET ${_gtest_target})
+            target_compile_options(${_gtest_target} PRIVATE
+                -pthread
+                -fwasm-exceptions
+                "-sSUPPORT_LONGJMP=wasm"
+            )
+        endif()
+    endforeach()
+
+    # Keep the G0 authority harness small and independent from the existing
+    # native-oriented test suite. It links the same ffmpegkit target so its
+    # pthread/compiler configuration is the configuration used by FFmpegKit.
+    add_executable(ffmpegkit_wasm_callback_tests
+        wasm_callback_test.cpp
+    )
+
+    target_link_libraries(ffmpegkit_wasm_callback_tests
+        PRIVATE
+        ffmpegkit
+        GTest::gtest_main
+    )
+
+    target_include_directories(ffmpegkit_wasm_callback_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${FFMPEG_BUILD_DIR}/include
+    )
+
+    target_compile_features(ffmpegkit_wasm_callback_tests PRIVATE cxx_std_17)
+    target_compile_options(ffmpegkit_wasm_callback_tests PRIVATE
+        -pthread
+        -fwasm-exceptions
+        "-sSUPPORT_LONGJMP=wasm"
+    )
+    target_link_options(ffmpegkit_wasm_callback_tests PRIVATE
+        -pthread
+        -fwasm-exceptions
+        "-sSUPPORT_LONGJMP=wasm"
+        "-sPTHREAD_POOL_SIZE=${FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE}"
+        "-sEXIT_RUNTIME=1"
+        "-sENVIRONMENT=node"
+    )
+
+    add_test(
+        NAME ffmpegkit_wasm_callback_tests
+        COMMAND node $<TARGET_FILE:ffmpegkit_wasm_callback_tests>
+    )
+endif()
