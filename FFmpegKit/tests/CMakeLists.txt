@@ -5,6 +5,7 @@ add_executable(ffmpegkit_tests
     callback_lock_test.cpp
     pthread_failure_test.cpp
     stress_test.cpp
+    wrapper_callback_state_test.cpp
     config_test.cpp
     runtime_reuse_test.cpp
     packages_test.cpp
@@ -92,6 +93,7 @@ if(EMSCRIPTEN)
         wasm_callback_test.cpp
         callback_lock_test.cpp
         pthread_failure_test.cpp
+        wrapper_callback_state_test.cpp
     )
 
     target_link_libraries(ffmpegkit_wasm_callback_tests

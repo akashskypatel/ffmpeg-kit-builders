@@ -3190,22 +3190,43 @@ static void *g_ffplay_complete_user_data = nullptr;
 static ::MediaInformationSessionCompleteCallback g_media_complete_callback =
     nullptr;
 static void *g_media_complete_user_data = nullptr;
+static std::mutex g_callback_state_mutex;
+
+template <typename Callback>
+static void set_global_callback_state(Callback &callback_slot,
+                                      void *&user_data_slot,
+                                      Callback callback, void *user_data) {
+  std::lock_guard<std::mutex> lock(g_callback_state_mutex);
+  callback_slot = callback;
+  user_data_slot = user_data;
+}
+
+template <typename Callback>
+static std::pair<Callback, void *> snapshot_global_callback_state(
+    const Callback &callback_slot, void *const &user_data_slot) {
+  std::lock_guard<std::mutex> lock(g_callback_state_mutex);
+  return {callback_slot, user_data_slot};
+}
+
 
 extern "C" {
 void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(FFmpegKitLogCallback log_cb,
                                            void *user_data) {
   try {
-    g_log_callback = log_cb;
-    g_log_user_data = user_data;
+    set_global_callback_state(g_log_callback, g_log_user_data, log_cb,
+                              user_data);
     if (log_cb) {
       FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
-        if (g_log_callback && log) {
+        const auto callback_state = snapshot_global_callback_state(
+            g_log_callback, g_log_user_data);
+        if (callback_state.first && log) {
           const std::string &message = log->getMessage();
 
           // Pass ID as pointer (Hack to avoid allocation/threading issues)
           void *session_handle = (void *)(uintptr_t)log->getSessionId();
 
-          g_log_callback(session_handle, message.c_str(), g_log_user_data);
+          callback_state.first(session_handle, message.c_str(),
+                              callback_state.second);
         }
       });
     } else {
@@ -3221,19 +3242,21 @@ void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(FFmpegKitLogCallback log_cb
 void DLL_ALIGN ffmpeg_kit_config_enable_statistics_callback(
     FFmpegKitStatisticsCallback stats_cb, void *user_data) {
   try {
-    g_stats_callback = stats_cb;
-    g_stats_user_data = user_data;
+    set_global_callback_state(g_stats_callback, g_stats_user_data, stats_cb,
+                              user_data);
     if (stats_cb) {
       FFmpegKitConfig::enableStatisticsCallback([](std::shared_ptr<Statistics> s) {
-            if (g_stats_callback && s) {
+            const auto callback_state = snapshot_global_callback_state(
+                g_stats_callback, g_stats_user_data);
+            if (callback_state.first && s) {
               // Pass ID as pointer (Hack to avoid allocation/threading issues)
               void *session_handle = (void *)(uintptr_t)s->getSessionId();
 
-              g_stats_callback(session_handle, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(),
+              callback_state.first(session_handle, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(),
                                s->getBitrate(), s->getSpeed(),
                                s->getVideoFrameNumber(), s->getVideoFps(),
                                s->getVideoQuality(), s->getDupFrames(),
-                               s->getDropFrames(), g_stats_user_data);
+                               s->getDropFrames(), callback_state.second);
             }
           });
     } else {
@@ -3249,13 +3272,16 @@ void DLL_ALIGN ffmpeg_kit_config_enable_statistics_callback(
 void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
     FFmpegKitCompleteCallback complete_cb, void *user_data) {
   try {
-    g_ffmpeg_complete_callback = complete_cb;
-    g_ffmpeg_complete_user_data = user_data;
+    set_global_callback_state(g_ffmpeg_complete_callback,
+                              g_ffmpeg_complete_user_data, complete_cb,
+                              user_data);
     if (complete_cb) {
       FFmpegKitConfig::enableFFmpegSessionCompleteCallback([](std::shared_ptr<FFmpegSession> title) {
-            if (g_ffmpeg_complete_callback) {
+            const auto callback_state = snapshot_global_callback_state(
+                g_ffmpeg_complete_callback, g_ffmpeg_complete_user_data);
+            if (callback_state.first) {
               auto handle = create_handle(title);
-              g_ffmpeg_complete_callback(handle, g_ffmpeg_complete_user_data);
+              callback_state.first(handle, callback_state.second);
               // Handle ownership transferred to Dart callback
             }
           });
@@ -3273,13 +3299,16 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
 void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
     FFprobeKitCompleteCallback complete_cb, void *user_data) {
   try {
-    g_ffprobe_complete_callback = complete_cb;
-    g_ffprobe_complete_user_data = user_data;
+    set_global_callback_state(g_ffprobe_complete_callback,
+                              g_ffprobe_complete_user_data, complete_cb,
+                              user_data);
     if (complete_cb) {
       FFmpegKitConfig::enableFFprobeSessionCompleteCallback([](std::shared_ptr<FFprobeSession> title) {
-            if (g_ffprobe_complete_callback) {
+            const auto callback_state = snapshot_global_callback_state(
+                g_ffprobe_complete_callback, g_ffprobe_complete_user_data);
+            if (callback_state.first) {
               auto handle = create_handle(title);
-              g_ffprobe_complete_callback(handle, g_ffprobe_complete_user_data);
+              callback_state.first(handle, callback_state.second);
               // Handle ownership transferred to Dart callback
             }
           });
@@ -3297,13 +3326,16 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
 void DLL_ALIGN ffmpeg_kit_config_enable_ffplay_session_complete_callback(
     FFplayKitCompleteCallback complete_cb, void *user_data) {
   try {
-    g_ffplay_complete_callback = complete_cb;
-    g_ffplay_complete_user_data = user_data;
+    set_global_callback_state(g_ffplay_complete_callback,
+                              g_ffplay_complete_user_data, complete_cb,
+                              user_data);
     if (complete_cb) {
       FFmpegKitConfig::enableFFplaySessionCompleteCallback([](std::shared_ptr<FFplaySession> title) {
-            if (g_ffplay_complete_callback) {
+            const auto callback_state = snapshot_global_callback_state(
+                g_ffplay_complete_callback, g_ffplay_complete_user_data);
+            if (callback_state.first) {
               auto handle = create_handle(title);
-              g_ffplay_complete_callback(handle, g_ffplay_complete_user_data);
+              callback_state.first(handle, callback_state.second);
               // Handle ownership transferred to Dart callback
             }
           });
@@ -3321,13 +3353,16 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffplay_session_complete_callback(
 void DLL_ALIGN ffmpeg_kit_config_enable_media_information_session_complete_callback(
     ::MediaInformationSessionCompleteCallback complete_cb, void *user_data) {
   try {
-    g_media_complete_callback = complete_cb;
-    g_media_complete_user_data = user_data;
+    set_global_callback_state(g_media_complete_callback,
+                              g_media_complete_user_data, complete_cb,
+                              user_data);
     if (complete_cb) {
       FFmpegKitConfig::enableMediaInformationSessionCompleteCallback([](std::shared_ptr<MediaInformationSession> title) {
-            if (g_media_complete_callback) {
+            const auto callback_state = snapshot_global_callback_state(
+                g_media_complete_callback, g_media_complete_user_data);
+            if (callback_state.first) {
               auto handle = create_handle(title);
-              g_media_complete_callback(handle, g_media_complete_user_data);
+              callback_state.first(handle, callback_state.second);
               // Handle ownership transferred to Dart callback
             }
           });

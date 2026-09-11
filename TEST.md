@@ -145,6 +145,36 @@ setarch $(uname -m) -R timeout 90s \
 
 #### Wasm pthread build
 
+### G3 synchronized C wrapper callback state
+
+The G3 stress test concurrently replaces and clears the global log callback
+while another thread emits unattributed logs. Callback and user-data pairs are
+snapshotted under one mutex, and user callbacks run after the snapshot.
+
+#### Native Linux with ThreadSanitizer
+
+```bash
+sudo cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build \
+  --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s \
+  /home/vscode/ffmpeg-kit-builders/FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter=WrapperCallbackStateTest.*
+```
+
+#### Wasm pthread build and registered harness
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g3 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && emcmake cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g3 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g3 --target ffmpegkit_wasm_callback_tests -j2'
+/usr/local/emsdk/node/24.19.0_64bit/bin/node \
+  /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g3/tests/ffmpegkit_wasm_callback_tests.js \
+  --gtest_filter=WrapperCallbackStateTest.*
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g3 --output-on-failure -R ^ffmpegkit_wasm_callback_tests$'
+```
+
+The Wasm build uses 1,000 emissions to remain within the existing fixed
+16 MiB test heap after the preceding startup-failure suite; the registration
+side still performs 3,000 replacements.
+
 ```bash
 sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g2 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && emcmake cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g2 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g2 --target ffmpegkit_wasm_callback_tests -j2'
 /usr/local/emsdk/node/24.19.0_64bit/bin/node \
