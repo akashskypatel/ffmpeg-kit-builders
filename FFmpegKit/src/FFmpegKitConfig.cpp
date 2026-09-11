@@ -279,6 +279,10 @@ static KitMutex &getGlobalCallbacksMutex() {
   static KitMutex *m = new KitMutex();
   return *m;
 }
+static ffmpegkit::StatisticsCallback getGlobalStatisticsCallback() {
+  std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
+  return statisticsCallback;
+}
 static std::mutex &getCallbackMutex() {
   static std::mutex *instance = new std::mutex();
   return *instance;
@@ -1142,20 +1146,19 @@ static void process_log(long sessionId, int levelValueInt,
     }
   }
 
-  {
-    std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
-    if (logCallback != nullptr) {
-      globalCallbackDefined = true;
+  ffmpegkit::LogCallback globalLogCallback =
+      ffmpegkit::FFmpegKitConfig::getLogCallback();
+  if (globalLogCallback != nullptr) {
+    globalCallbackDefined = true;
 
-      try {
-        // NOTIFY GLOBAL CALLBACK DEFINED
-        logCallback(log);
-      } catch (const std::exception &exception) {
-        std::cout << "[" << getCurrentTimeStamp()
-                  << "] [ffmpeg-kit] [ERROR] Exception thrown inside global "
-                     "log callback. "
-                  << exception.what() << std::endl;
-      }
+    try {
+      // NOTIFY GLOBAL CALLBACK DEFINED
+      globalLogCallback(log);
+    } catch (const std::exception &exception) {
+      std::cout << "[" << getCurrentTimeStamp()
+                << "] [ffmpeg-kit] [ERROR] Exception thrown inside global "
+                   "log callback. "
+                << exception.what() << std::endl;
     }
   }
 
@@ -1227,17 +1230,16 @@ void process_statistics(long sessionId, int videoFrameNumber, float videoFps,
     }
   }
 
-  {
-    std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
-    if (statisticsCallback != nullptr) {
-      try {
-        statisticsCallback(statistics);
-      } catch (const std::exception &exception) {
-        std::cout << "[" << getCurrentTimeStamp()
-                  << "] [ffmpeg-kit] [ERROR] Exception thrown inside global "
-                     "statistics callback. "
-                  << exception.what() << std::endl;
-      }
+  ffmpegkit::StatisticsCallback globalStatisticsCallback =
+      getGlobalStatisticsCallback();
+  if (globalStatisticsCallback != nullptr) {
+    try {
+      globalStatisticsCallback(statistics);
+    } catch (const std::exception &exception) {
+      std::cout << "[" << getCurrentTimeStamp()
+                << "] [ffmpeg-kit] [ERROR] Exception thrown inside global "
+                   "statistics callback. "
+                << exception.what() << std::endl;
     }
   }
 }
@@ -2205,19 +2207,16 @@ void ffmpegkit::FFmpegKitConfig::asyncFFmpegExecute(
                       << e.what() << std::endl;
           }
         }
-        {
-          std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
-          auto globalCallback =
-              ffmpegkit::FFmpegKitConfig::getFFmpegSessionCompleteCallback();
-          if (globalCallback != nullptr) {
-            try {
-              globalCallback(session);
-            } catch (const std::exception &e) {
-              std::cout << "[" << getCurrentTimeStamp()
-                        << "] [ffmpeg-kit] [ERROR] Exception in global "
-                           "complete callback: "
-                        << e.what() << std::endl;
-            }
+        auto globalCallback =
+            ffmpegkit::FFmpegKitConfig::getFFmpegSessionCompleteCallback();
+        if (globalCallback != nullptr) {
+          try {
+            globalCallback(session);
+          } catch (const std::exception &e) {
+            std::cout << "[" << getCurrentTimeStamp()
+                      << "] [ffmpeg-kit] [ERROR] Exception in global "
+                         "complete callback: "
+                      << e.what() << std::endl;
           }
         }
         return nullptr;
@@ -2251,19 +2250,16 @@ void ffmpegkit::FFmpegKitConfig::asyncFFprobeExecute(
                       << e.what() << std::endl;
           }
         }
-        {
-          std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
-          auto globalCallback =
-              ffmpegkit::FFmpegKitConfig::getFFprobeSessionCompleteCallback();
-          if (globalCallback != nullptr) {
-            try {
-              globalCallback(session);
-            } catch (const std::exception &e) {
-              std::cout << "[" << getCurrentTimeStamp()
-                        << "] [ffmpeg-kit] [ERROR] Exception in global "
-                           "complete callback: "
-                        << e.what() << std::endl;
-            }
+        auto globalCallback =
+            ffmpegkit::FFmpegKitConfig::getFFprobeSessionCompleteCallback();
+        if (globalCallback != nullptr) {
+          try {
+            globalCallback(session);
+          } catch (const std::exception &e) {
+            std::cout << "[" << getCurrentTimeStamp()
+                      << "] [ffmpeg-kit] [ERROR] Exception in global "
+                         "complete callback: "
+                      << e.what() << std::endl;
           }
         }
         return nullptr;
@@ -2307,19 +2303,16 @@ void ffmpegkit::FFmpegKitConfig::asyncFFplayExecute(
                       << e.what() << std::endl;
           }
         }
-        {
-          std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
-          auto globalCallback =
-              ffmpegkit::FFmpegKitConfig::getFFplaySessionCompleteCallback();
-          if (globalCallback != nullptr) {
-            try {
-              globalCallback(session);
-            } catch (const std::exception &e) {
-              std::cout << "[" << getCurrentTimeStamp()
-                        << "] [ffmpeg-kit] [ERROR] Exception in global "
-                           "complete callback: "
-                        << e.what() << std::endl;
-            }
+        auto globalCallback =
+            ffmpegkit::FFmpegKitConfig::getFFplaySessionCompleteCallback();
+        if (globalCallback != nullptr) {
+          try {
+            globalCallback(session);
+          } catch (const std::exception &e) {
+            std::cout << "[" << getCurrentTimeStamp()
+                      << "] [ffmpeg-kit] [ERROR] Exception in global "
+                         "complete callback: "
+                      << e.what() << std::endl;
           }
         }
         return nullptr;
@@ -2358,19 +2351,16 @@ void ffmpegkit::FFmpegKitConfig::asyncGetMediaInformationExecute(
                       << e.what() << std::endl;
           }
         }
-        {
-          std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
-          auto globalCallback = ffmpegkit::FFmpegKitConfig::
-              getMediaInformationSessionCompleteCallback();
-          if (globalCallback != nullptr) {
-            try {
-              globalCallback(session);
-            } catch (const std::exception &e) {
-              std::cout << "[" << getCurrentTimeStamp()
-                        << "] [ffmpeg-kit] [ERROR] Exception in global "
-                           "complete callback: "
-                        << e.what() << std::endl;
-            }
+        auto globalCallback = ffmpegkit::FFmpegKitConfig::
+            getMediaInformationSessionCompleteCallback();
+        if (globalCallback != nullptr) {
+          try {
+            globalCallback(session);
+          } catch (const std::exception &e) {
+            std::cout << "[" << getCurrentTimeStamp()
+                      << "] [ffmpeg-kit] [ERROR] Exception in global "
+                         "complete callback: "
+                      << e.what() << std::endl;
           }
         }
         return nullptr;

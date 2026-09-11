@@ -2,6 +2,7 @@ add_executable(ffmpegkit_tests
     main_test.cpp
     wrapper_test.cpp
     callback_test.cpp
+    callback_lock_test.cpp
     stress_test.cpp
     config_test.cpp
     runtime_reuse_test.cpp
@@ -87,6 +88,7 @@ if(EMSCRIPTEN)
     # pthread/compiler configuration is the configuration used by FFmpegKit.
     add_executable(ffmpegkit_wasm_callback_tests
         wasm_callback_test.cpp
+        callback_lock_test.cpp
     )
 
     target_link_libraries(ffmpegkit_wasm_callback_tests

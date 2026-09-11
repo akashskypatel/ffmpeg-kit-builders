@@ -83,3 +83,45 @@ ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-
 The test is valid only when it passes under Emscripten and proves that the
 worker pthread is distinct from the main runtime thread, with the proxied
 callback observed on the main runtime thread.
+
+### G1 callback lock re-entry
+
+The G1 regression test registers a real FFmpegKit global log callback. The
+callback unregisters itself through the public wrapper API, which acquires the
+same global callback-state lock. A five-second watchdog makes lock re-entry
+failure explicit.
+
+#### Native Linux
+
+```bash
+cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build --target ffmpegkit_tests -j2
+ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build --output-on-failure -R '^ffmpegkit_tests$'
+```
+
+#### Wasm pthread build
+
+```bash
+source /usr/local/emsdk/emsdk_env.sh
+export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g1
+export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig
+
+emcmake cmake \
+  -S /home/vscode/ffmpeg-kit-builders/FFmpegKit \
+  -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g1 \
+  -DBUILD_TESTS=ON \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl \
+  -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base \
+  -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+
+cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g1 \
+  --target ffmpegkit_wasm_callback_tests -j2
+
+node /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g1/tests/ffmpegkit_wasm_callback_tests.js \
+  --gtest_filter=GlobalCallbackLockTest.*
+
+ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g1 \
+  --output-on-failure -R '^ffmpegkit_wasm_callback_tests$'
+```
