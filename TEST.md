@@ -363,3 +363,38 @@ Results for the G8 verification run:
   harness.
 - The hard gate is satisfied: the native C/C++ callback layer is proven under
   pthread-enabled Wasm independently of Dart and `ffigen_js`.
+
+### G9 Wasm indirect function-table growth
+
+G9 enables Emscripten runtime table growth on the final `ffmpegkit_wasm`
+module with `-sALLOW_TABLE_GROWTH=1`.
+
+#### Build
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g9 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && emcmake cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-table-g9 -DBUILD_TESTS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-table-g9 --target ffmpegkit_wasm -j2'
+```
+
+#### Artifact inspection
+
+The built artifact is:
+
+```text
+/home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-table-g9/ffmpegkit.wasm
+```
+
+An inspection of the actual `WebAssembly.Table` export
+`__indirect_function_table` recorded:
+
+- initial table size: 14,575
+- maximum table size: no explicit maximum declared; runtime growth is enabled
+- occupied slots before growth: 14,574
+- `table.grow(1)`: returned old length 14,575 and succeeded
+- element count after growth: 14,576
+
+Results for the G9 verification run:
+
+- The final `ffmpegkit_wasm` target configured and built successfully.
+- The link command contains `-sALLOW_TABLE_GROWTH=1`.
+- Instantiating the actual built module and calling `table.grow(1)`
+  succeeded, satisfying the G9 gate.
