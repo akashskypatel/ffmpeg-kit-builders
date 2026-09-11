@@ -774,6 +774,7 @@ endif()
 # - Add test directory to build system
 # ==============================================================================
 if(BUILD_TESTS)
+    target_compile_definitions(ffmpegkit PRIVATE FFMPEG_KIT_TEST_HOOKS)
     enable_testing()
 
     include(FetchContent)

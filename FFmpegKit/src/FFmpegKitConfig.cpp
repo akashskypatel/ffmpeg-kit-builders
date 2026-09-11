@@ -57,6 +57,7 @@ extern "C" {
 #include <cctype>
 #include <cstdlib>
 #include <ctime>
+#include <cerrno>
 #include <functional>
 #include <fstream>
 #include <iostream>
@@ -271,6 +272,9 @@ static ffmpegkit::LogRedirectionStrategy globalLogRedirectionStrategy;
 
 /** Redirection control variables */
 static std::atomic<int> redirectionEnabled{0};
+#ifdef FFMPEG_KIT_TEST_HOOKS
+static std::atomic<int> pthreadCreateFailuresForTesting{0};
+#endif
 static KitMutex &getCallbackDataMutex() {
   static KitMutex *m = new KitMutex();
   return *m;
@@ -282,6 +286,52 @@ static KitMutex &getGlobalCallbacksMutex() {
 static ffmpegkit::StatisticsCallback getGlobalStatisticsCallback() {
   std::lock_guard<KitMutex> lock(getGlobalCallbacksMutex());
   return statisticsCallback;
+}
+
+static int createPthread(pthread_t *thread, const pthread_attr_t *attributes,
+                         void *(*startRoutine)(void *), void *argument) {
+#ifdef FFMPEG_KIT_TEST_HOOKS
+  int failures = pthreadCreateFailuresForTesting.load(std::memory_order_relaxed);
+  while (failures > 0) {
+    if (pthreadCreateFailuresForTesting.compare_exchange_weak(
+            failures, failures - 1, std::memory_order_relaxed)) {
+      return EAGAIN;
+    }
+  }
+#endif
+  return pthread_create(thread, attributes, startRoutine, argument);
+}
+
+template <typename SessionType, typename GlobalCallbackGetter>
+static void failAsyncSession(const std::shared_ptr<SessionType> &session,
+                             const char *error,
+                             GlobalCallbackGetter globalCallbackGetter) {
+  if (session == nullptr) {
+    return;
+  }
+  session->fail(error);
+  auto completeCallback = session->getCompleteCallback();
+  if (completeCallback != nullptr) {
+    try {
+      completeCallback(session);
+    } catch (const std::exception &exception) {
+      std::cout << "[" << getCurrentTimeStamp()
+                << "] [ffmpeg-kit] [ERROR] Exception in session complete "
+                   "callback after pthread startup failure: "
+                << exception.what() << std::endl;
+    }
+  }
+  auto globalCallback = globalCallbackGetter();
+  if (globalCallback != nullptr) {
+    try {
+      globalCallback(session);
+    } catch (const std::exception &exception) {
+      std::cout << "[" << getCurrentTimeStamp()
+                << "] [ffmpeg-kit] [ERROR] Exception in global complete "
+                   "callback after pthread startup failure: "
+                << exception.what() << std::endl;
+    }
+  }
 }
 static std::mutex &getCallbackMutex() {
   static std::mutex *instance = new std::mutex();
@@ -1682,13 +1732,20 @@ void ffmpegkit::FFmpegKitConfig::enableRedirection() {
 
   lock.unlock();
 
-  int rc = pthread_create(&callbackThread, NULL, callbackThreadFunction, NULL);
+  int rc = createPthread(&callbackThread, NULL, callbackThreadFunction, NULL);
   if (rc != 0) {
+    lock.lock();
+    redirectionEnabled.store(0, std::memory_order_release);
+    callbackThread = 0;
+    lock.unlock();
+
     std::cout
         << "[" << getCurrentTimeStamp()
-        << "] [ffmpeg-kit] [ERROR] Failed to create async callback block: %d"
+        << "] [ffmpeg-kit] [ERROR] Failed to create async callback block: "
         << rc << std::endl;
-    lock.unlock();
+    ffmpegkit_set_log_delegate_callback(nullptr);
+    av_log_set_callback(av_log_default_callback);
+    set_report_callback(nullptr);
     return;
   }
 
@@ -1748,6 +1805,18 @@ void ffmpegkit::FFmpegKitConfig::disableRedirection() {
   av_log_set_callback(av_log_default_callback);
   set_report_callback(NULL);
 }
+
+#ifdef FFMPEG_KIT_TEST_HOOKS
+void ffmpegkit::FFmpegKitConfig::setPthreadCreateFailuresForTesting(
+    const int count) {
+  pthreadCreateFailuresForTesting.store(std::max(0, count),
+                                        std::memory_order_relaxed);
+}
+
+bool ffmpegkit::FFmpegKitConfig::isRedirectionEnabledForTesting() {
+  return redirectionEnabled.load(std::memory_order_acquire) != 0;
+}
+#endif
 
 int ffmpegkit::FFmpegKitConfig::setFontconfigConfigurationPath(
     const std::string &path) {
@@ -2187,7 +2256,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFmpegExecute(
 
   auto *args = new AsyncFFmpegArgs{ffmpegSession};
   pthread_t thread;
-  pthread_create(
+  const int rc = createPthread(
       &thread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncFFmpegArgs *>(arg);
@@ -2222,6 +2291,12 @@ void ffmpegkit::FFmpegKitConfig::asyncFFmpegExecute(
         return nullptr;
       },
       args);
+  if (rc != 0) {
+    delete args;
+    failAsyncSession(ffmpegSession, "pthread_create failed for async FFmpeg execution",
+                     [] { return ffmpegkit::FFmpegKitConfig::getFFmpegSessionCompleteCallback(); });
+    return;
+  }
   pthread_detach(thread);
 }
 
@@ -2230,7 +2305,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFprobeExecute(
 
   auto *args = new AsyncFFprobeArgs{ffprobeSession};
   pthread_t thread;
-  pthread_create(
+  const int rc = createPthread(
       &thread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncFFprobeArgs *>(arg);
@@ -2265,6 +2340,12 @@ void ffmpegkit::FFmpegKitConfig::asyncFFprobeExecute(
         return nullptr;
       },
       args);
+  if (rc != 0) {
+    delete args;
+    failAsyncSession(ffprobeSession, "pthread_create failed for async FFprobe execution",
+                     [] { return ffmpegkit::FFmpegKitConfig::getFFprobeSessionCompleteCallback(); });
+    return;
+  }
   pthread_detach(thread);
 }
 
@@ -2282,7 +2363,7 @@ void ffmpegkit::FFmpegKitConfig::asyncFFplayExecute(
   }
 
   auto *args = new AsyncFFplayArgs{ffplaySession, waitTimeout};
-  pthread_create(
+  const int rc = createPthread(
       &asyncFFplayThread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncFFplayArgs *>(arg);
@@ -2318,6 +2399,13 @@ void ffmpegkit::FFmpegKitConfig::asyncFFplayExecute(
         return nullptr;
       },
       args);
+  if (rc != 0) {
+    delete args;
+    asyncFFplayThread = 0;
+    failAsyncSession(ffplaySession, "pthread_create failed for async FFplay execution",
+                     [] { return ffmpegkit::FFmpegKitConfig::getFFplaySessionCompleteCallback(); });
+    return;
+  }
   // Do NOT detach: keep asyncFFplayThread joinable so we can wait for it at
   // program exit (in ~FFmpegKitConfig) and avoid ASAN/TLS teardown crashes.
 }
@@ -2329,7 +2417,7 @@ void ffmpegkit::FFmpegKitConfig::asyncGetMediaInformationExecute(
 
   auto *args = new AsyncMediaInfoArgs{mediaInformationSession, waitTimeout};
   pthread_t thread;
-  pthread_create(
+  const int rc = createPthread(
       &thread, nullptr,
       [](void *arg) -> void * {
         auto *a = static_cast<AsyncMediaInfoArgs *>(arg);
@@ -2366,6 +2454,13 @@ void ffmpegkit::FFmpegKitConfig::asyncGetMediaInformationExecute(
         return nullptr;
       },
       args);
+  if (rc != 0) {
+    delete args;
+    failAsyncSession(mediaInformationSession,
+                     "pthread_create failed for async media information execution",
+                     [] { return ffmpegkit::FFmpegKitConfig::getMediaInformationSessionCompleteCallback(); });
+    return;
+  }
   pthread_detach(thread);
 }
 

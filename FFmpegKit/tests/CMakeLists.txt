@@ -3,6 +3,7 @@ add_executable(ffmpegkit_tests
     wrapper_test.cpp
     callback_test.cpp
     callback_lock_test.cpp
+    pthread_failure_test.cpp
     stress_test.cpp
     config_test.cpp
     runtime_reuse_test.cpp
@@ -52,6 +53,7 @@ else()
 endif()
 
 target_compile_definitions(ffmpegkit_tests PRIVATE 
+    FFMPEG_KIT_TEST_HOOKS
     FFMPEG_KIT_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
@@ -89,6 +91,7 @@ if(EMSCRIPTEN)
     add_executable(ffmpegkit_wasm_callback_tests
         wasm_callback_test.cpp
         callback_lock_test.cpp
+        pthread_failure_test.cpp
     )
 
     target_link_libraries(ffmpegkit_wasm_callback_tests
@@ -103,6 +106,9 @@ if(EMSCRIPTEN)
     )
 
     target_compile_features(ffmpegkit_wasm_callback_tests PRIVATE cxx_std_17)
+    target_compile_definitions(ffmpegkit_wasm_callback_tests PRIVATE
+        FFMPEG_KIT_TEST_HOOKS
+    )
     target_compile_options(ffmpegkit_wasm_callback_tests PRIVATE
         -pthread
         -fwasm-exceptions
