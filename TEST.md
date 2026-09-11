@@ -330,3 +330,36 @@ Results for the G7 verification run:
   main runtime thread, and delivered the completion callback last.
 - The direct Node run emitted the known post-exit callback cleanup warning
   after a successful exit.
+
+### G8 independent C/C++ Wasm callback gate
+
+G8 is satisfied by the complete Wasm-only callback harness. No Flutter,
+generated bindings, or `ffigen_js` code is involved.
+
+#### Full pinned Node harness and registered CTest
+
+```bash
+/usr/local/emsdk/node/24.19.0_64bit/bin/node /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g7/tests/ffmpegkit_wasm_callback_tests.js
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g7 && ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g7 --output-on-failure -R ^ffmpegkit_wasm_callback_tests$'
+```
+
+Coverage matrix:
+
+- FFmpeg, FFprobe, FFplay, and MediaInformation completion: G6.
+- Log payload lifetime and statistics scalar delivery: G7.
+- Callback re-entry and callback-state stress: G1/G3.
+- Callback unregister and replacement: G6 lifecycle assertions.
+- Pthread producer to main-runtime consumer: G0/G5/G7.
+- High session IDs: G4.
+- Concurrent sessions: G6.
+- Pthread creation and redirection startup failures: G2.
+- Callback ordering and drain-before-completion: G7.
+
+Results for the G8 verification run:
+
+- The complete pinned Node harness ran 16 tests from 8 suites and passed
+  16/16.
+- The registered Wasm CTest entry passed 1/1 and covers the same 16-test
+  harness.
+- The hard gate is satisfied: the native C/C++ callback layer is proven under
+  pthread-enabled Wasm independently of Dart and `ffigen_js`.
