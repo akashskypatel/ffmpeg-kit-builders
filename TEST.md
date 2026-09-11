@@ -291,3 +291,42 @@ Results for the G6 verification run:
   families, observed terminal state and the expected session ID, verified
   main-runtime delivery under Emscripten, and covered disabled, reconfigured,
   and unregistered callbacks.
+
+### G7 log and statistics callbacks
+
+G7 routes global V2 log and statistics callbacks through the shared
+WasmCallbackDispatcher. Log messages are copied into owned event storage before
+the producer callback returns; statistics are captured as scalar values. The
+same queue also carries FFmpeg completion callbacks, so the ordering test
+defines and verifies a drain-before-completion contract.
+
+#### Native Linux
+
+```bash
+sudo cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build
+sudo cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s /home/vscode/ffmpeg-kit-builders/FFmpegKit/build/tests/ffmpegkit_tests --gtest_filter=G7LogStatisticsTest.*
+```
+
+#### Wasm pthread build, direct Node, and registered CTest
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g7 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && emcmake cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g7 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g7 --target ffmpegkit_wasm_callback_tests -j2'
+/usr/local/emsdk/node/24.19.0_64bit/bin/node /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g7/tests/ffmpegkit_wasm_callback_tests.js --gtest_filter=G7LogStatisticsTest.*
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g7 && ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g7 --output-on-failure -R ^ffmpegkit_wasm_callback_tests$'
+```
+
+Results for the G7 verification run:
+
+- Native target rebuilt successfully; the focused test passed 1/1.
+- Wasm pthread target configured and built successfully; the focused Node test
+  passed 1/1.
+- The registered Wasm CTest entry passed 1/1, including the full 16-test G0-G7
+  callback harness.
+- The focused test generated 2,048 worker log events and 2,048 worker
+  statistics events, verified exact-once delivery, preserved log contents
+  after the producer buffer was overwritten, preserved every scalar statistic,
+  preserved session IDs and ordering, delivered all events on the Emscripten
+  main runtime thread, and delivered the completion callback last.
+- The direct Node run emitted the known post-exit callback cleanup warning
+  after a successful exit.

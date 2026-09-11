@@ -26,6 +26,7 @@
 class WasmCallbackDispatcher final {
  public:
   using Callback = std::function<void(std::string payload)>;
+  using Task = std::function<void()>;
   using SessionCallback = void (*)(int64_t session_id, void *user_data);
 
   WasmCallbackDispatcher();
@@ -51,6 +52,14 @@ class WasmCallbackDispatcher final {
   bool dispatch_session_callback(int64_t session_id,
                                  SessionCallback callback, void *user_data);
 
+  /**
+   * Delivers an owned callback task exactly once if this returns true.
+   *
+   * The task owns any copied string or scalar captures that it needs until
+   * the callback runs on the target runtime thread.
+   */
+  bool dispatch_task(Task callback);
+
   /** Returns whether the caller is the platform's main runtime thread. */
   bool is_main_runtime_thread() const;
 
@@ -74,8 +83,13 @@ class WasmCallbackDispatcher final {
     void *user_data;
   };
 
+  struct OwnedTaskEvent {
+    Task callback;
+  };
+
   static void invoke_owned_event(void *raw_event);
   static void invoke_owned_session_event(void *raw_event);
+  static void invoke_owned_task_event(void *raw_event);
 
 #if defined(__EMSCRIPTEN__)
   struct em_proxying_queue *queue_;

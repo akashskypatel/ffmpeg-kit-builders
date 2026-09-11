@@ -52,6 +52,33 @@ bool WasmCallbackDispatcher::dispatch(std::string payload,
   return true;
 #endif
 }
+bool WasmCallbackDispatcher::dispatch_task(Task callback) {
+  if (!callback) {
+    return false;
+  }
+
+  auto event =
+      std::make_unique<OwnedTaskEvent>(OwnedTaskEvent{std::move(callback)});
+
+#if defined(__EMSCRIPTEN__)
+  if (emscripten_is_main_runtime_thread()) {
+    invoke_owned_task_event(event.release());
+    return true;
+  }
+
+  if (queue_ == nullptr ||
+      !emscripten_proxy_async(queue_, main_runtime_thread_,
+                              &WasmCallbackDispatcher::invoke_owned_task_event,
+                              event.get())) {
+    return false;
+  }
+  event.release();
+  return true;
+#else
+  invoke_owned_task_event(event.release());
+  return true;
+#endif
+}
 
 bool WasmCallbackDispatcher::is_main_runtime_thread() const {
 #if defined(__EMSCRIPTEN__)
@@ -107,4 +134,10 @@ void WasmCallbackDispatcher::invoke_owned_session_event(void *raw_event) {
   std::unique_ptr<OwnedSessionEvent> event(
       static_cast<OwnedSessionEvent *>(raw_event));
   event->callback(event->session_id, event->user_data);
+}
+
+void WasmCallbackDispatcher::invoke_owned_task_event(void *raw_event) {
+  std::unique_ptr<OwnedTaskEvent> event(
+      static_cast<OwnedTaskEvent *>(raw_event));
+  event->callback();
 }

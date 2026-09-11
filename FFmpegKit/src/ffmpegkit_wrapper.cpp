@@ -3228,7 +3228,15 @@ static void dispatch_log_callback_v2(int64_t session_id,
   const auto callback_state = snapshot_global_callback_state(
       g_log_callback_v2, g_log_user_data_v2);
   if (callback_state.first) {
-    callback_state.first(session_id, message, callback_state.second);
+    const bool has_message = message != nullptr;
+    std::string copied_message = has_message ? message : "";
+    g_wasm_callback_dispatcher.dispatch_task(
+        [session_id, callback = callback_state.first,
+         user_data = callback_state.second, has_message,
+         message = std::move(copied_message)]() {
+          callback(session_id, has_message ? message.c_str() : nullptr,
+                   user_data);
+        });
   }
 }
 
@@ -3240,21 +3248,30 @@ static void dispatch_statistics_callback_v2(
   const auto callback_state = snapshot_global_callback_state(
       g_stats_callback_v2, g_stats_user_data_v2);
   if (callback_state.first) {
-    callback_state.first(session_id, time_elapsed, time, size, bitrate, speed,
-                         video_frame_number, video_fps, video_quality,
-                         dup_frames, drop_frames, callback_state.second);
+    g_wasm_callback_dispatcher.dispatch_task(
+        [session_id, time_elapsed, time, size, bitrate, speed,
+         video_frame_number, video_fps, video_quality, dup_frames, drop_frames,
+         callback = callback_state.first, user_data = callback_state.second]() {
+          callback(session_id, time_elapsed, time, size, bitrate, speed,
+                   video_frame_number, video_fps, video_quality, dup_frames,
+                   drop_frames, user_data);
+        });
+  }
+}
+
+static void dispatch_ffmpeg_complete_callback_v2_with_id(int64_t session_id) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_ffmpeg_complete_callback_v2, g_ffmpeg_complete_user_data_v2);
+  if (callback_state.first) {
+    g_wasm_callback_dispatcher.dispatch_session_callback(
+        session_id, callback_state.first, callback_state.second);
   }
 }
 
 static void dispatch_ffmpeg_complete_callback_v2(
     const std::shared_ptr<FFmpegSession> &session) {
-  const auto callback_state = snapshot_global_callback_state(
-      g_ffmpeg_complete_callback_v2, g_ffmpeg_complete_user_data_v2);
-  if (callback_state.first) {
-    g_wasm_callback_dispatcher.dispatch_session_callback(
-        session ? static_cast<int64_t>(session->getSessionId()) : 0,
-        callback_state.first, callback_state.second);
-  }
+  dispatch_ffmpeg_complete_callback_v2_with_id(
+      session ? static_cast<int64_t>(session->getSessionId()) : 0);
 }
 
 static void dispatch_ffprobe_complete_callback_v2(
@@ -3473,6 +3490,21 @@ void DLL_ALIGN ffmpeg_kit_test_process_wasm_callback_queue(void) {
 void DLL_ALIGN ffmpeg_kit_test_emit_v2_log_with_session_id(
     int64_t session_id, const char *message) {
   dispatch_log_callback_v2(session_id, message);
+}
+
+void DLL_ALIGN ffmpeg_kit_test_emit_v2_statistics_with_session_id(
+    int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
+    double bitrate, double speed, int64_t video_frame_number,
+    double video_fps, double video_quality, int64_t dup_frames,
+    int64_t drop_frames) {
+  dispatch_statistics_callback_v2(
+      session_id, time_elapsed, time, size, bitrate, speed,
+      video_frame_number, video_fps, video_quality, dup_frames, drop_frames);
+}
+
+void DLL_ALIGN ffmpeg_kit_test_emit_v2_ffmpeg_completion_with_session_id(
+    int64_t session_id) {
+  dispatch_ffmpeg_complete_callback_v2_with_id(session_id);
 }
 #endif
 }

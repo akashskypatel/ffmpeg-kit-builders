@@ -419,6 +419,24 @@ FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_test_emit_v2_log_with_session_id(int64_t session_id,
                                             const char *message);
 
+/**
+ * Emits a synthetic V2 statistics callback with an arbitrary stable session
+ * ID. This is available only to the native/Wasm regression-test targets.
+ */
+FFMPEG_KIT_C_EXPORT void
+ffmpeg_kit_test_emit_v2_statistics_with_session_id(
+    int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
+    double bitrate, double speed, int64_t video_frame_number,
+    double video_fps, double video_quality, int64_t dup_frames,
+    int64_t drop_frames);
+
+/**
+ * Emits a synthetic FFmpeg V2 completion callback with an arbitrary stable
+ * session ID.
+ */
+FFMPEG_KIT_C_EXPORT void
+ffmpeg_kit_test_emit_v2_ffmpeg_completion_with_session_id(int64_t session_id);
+
 /** Drives the Wasm callback dispatcher queue for regression tests. */
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_process_wasm_callback_queue(void);
 #endif

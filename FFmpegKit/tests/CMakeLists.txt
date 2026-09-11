@@ -9,6 +9,7 @@ add_executable(ffmpegkit_tests
     v2_callback_test.cpp
     wasm_callback_dispatcher_test.cpp
     g6_session_completion_test.cpp
+    g7_log_statistics_test.cpp
     ../src/WasmCallbackDispatcher.cpp
     config_test.cpp
     runtime_reuse_test.cpp
@@ -100,6 +101,7 @@ if(EMSCRIPTEN)
         wrapper_callback_state_test.cpp
         v2_callback_test.cpp
         g6_session_completion_test.cpp
+        g7_log_statistics_test.cpp
         wasm_callback_dispatcher_test.cpp
         ../src/WasmCallbackDispatcher.cpp
     )
