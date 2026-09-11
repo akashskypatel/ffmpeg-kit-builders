@@ -211,6 +211,43 @@ Results for the G4 verification run:
 - The registered Wasm CTest harness passed 1/1 entries, including the full
   13-test G0-G4 callback suite.
 
+### G5 main-runtime callback dispatcher
+
+The G5 dispatcher owns each payload until delivery. Native callers execute
+callbacks directly; Emscripten worker callers use `emscripten_proxy_async()`
+to target `emscripten_main_runtime_thread_id()`. `process_pending()` lets
+deterministic hosts and tests explicitly drain the main-runtime queue.
+
+#### Native Linux
+
+```bash
+sudo cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit \
+  -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build
+sudo cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build \
+  --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s \
+  /home/vscode/ffmpeg-kit-builders/FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter=WasmCallbackDispatcherTest.*
+```
+
+#### Wasm pthread build and registered harness
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g5 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && emcmake cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g5 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g5 --target ffmpegkit_wasm_callback_tests -j2'
+/usr/local/emsdk/node/24.19.0_64bit/bin/node \
+  /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g5/tests/ffmpegkit_wasm_callback_tests.js \
+  --gtest_filter=WasmCallbackDispatcherTest.*
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && ctest --test-dir /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g5 --output-on-failure -R ^ffmpegkit_wasm_callback_tests$'
+```
+
+Results for the G5 verification run:
+
+- Native direct-dispatch test: 1/1 passed.
+- Wasm pthread dispatcher test: 10,000/10,000 callbacks passed exactly once
+  with intact payloads on the main runtime thread.
+- Registered Wasm CTest harness: 1/1 entry passed, including the full
+  14-test G0-G5 callback suite.
+
 ```bash
 sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g2 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && emcmake cmake -S /home/vscode/ffmpeg-kit-builders/FFmpegKit -B /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g2 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g2 --target ffmpegkit_wasm_callback_tests -j2'
 /usr/local/emsdk/node/24.19.0_64bit/bin/node \
