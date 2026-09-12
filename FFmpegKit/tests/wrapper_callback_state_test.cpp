@@ -83,7 +83,7 @@ TEST(WrapperCallbackStateTest,
 
     std::thread emitter([&] {
         for (int i = 0; i < kEmissionCount; ++i) {
-            ffmpeg_kit_test_emit_unattributed_log("g3 callback state stress");
+            ffmpeg_kit_test_emit_unattributed_log("callback-state-stress");
             if (i % 32 == 0) {
                 std::this_thread::yield();
             }
@@ -98,7 +98,7 @@ TEST(WrapperCallbackStateTest,
     ffmpeg_kit_config_enable_log_callback(callback_a, &data_a);
     constexpr int kFinalEmissionCount = 128;
     for (int i = 0; i < kFinalEmissionCount; ++i) {
-        ffmpeg_kit_test_emit_unattributed_log("g3 callback state final");
+        ffmpeg_kit_test_emit_unattributed_log("callback-state-final");
     }
 
     const auto deadline = std::chrono::steady_clock::now() +

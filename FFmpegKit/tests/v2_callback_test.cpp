@@ -45,7 +45,7 @@ TEST(VersionedCallbackTest, StableSessionIdsDoNotUseOpaquePointerTransport) {
     };
     for (const int64_t session_id : expected_ids) {
         ffmpeg_kit_test_emit_v2_log_with_session_id(session_id,
-                                                    "g4 stable session id");
+                                                    "stable session id");
     }
 
     ffmpeg_kit_config_enable_log_callback_v2(nullptr, nullptr);

@@ -48,7 +48,7 @@ void *dispatch_worker(void *raw_arguments) {
 
   for (int index = 0; index < kCallbackCount; ++index) {
     const bool accepted = arguments->dispatcher->dispatch(
-        "g5-payload-" + std::to_string(index),
+        "callback-payload-" + std::to_string(index),
         [diagnostics, producer](std::string payload) {
           {
             std::lock_guard<std::mutex> lock(diagnostics->events_mutex);
@@ -116,7 +116,7 @@ TEST(WasmCallbackDispatcherTest, WorkerPayloadsRunOnMainExactlyOnce) {
                                diagnostics.main_runtime_thread));
     EXPECT_TRUE(pthread_equal(event.consumer,
                               diagnostics.main_runtime_thread));
-    ASSERT_TRUE(event.payload.rfind("g5-payload-", 0) == 0);
+    ASSERT_TRUE(event.payload.rfind("callback-payload-", 0) == 0);
     const int index = std::stoi(event.payload.substr(11));
     ASSERT_GE(index, 0);
     ASSERT_LT(index, kCallbackCount);

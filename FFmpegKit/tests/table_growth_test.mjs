@@ -5,11 +5,11 @@ import process from 'node:process';
 
 const artifactPath = process.argv[2];
 if (!artifactPath) {
-  throw new Error('usage: g10_table_growth_test.mjs <ffmpegkit.wasm>');
+  throw new Error('usage: table_growth_test.mjs <ffmpegkit.wasm>');
 }
 
 const assert = (condition, message) => {
-  if (!condition) throw new Error(`G10 assertion failed: ${message}`);
+  if (!condition) throw new Error(`Table-growth assertion failed: ${message}`);
 };
 
 const module = await WebAssembly.compile(await readFile(artifactPath));

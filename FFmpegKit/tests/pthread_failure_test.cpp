@@ -79,7 +79,7 @@ TEST(PthreadFailureTest, FFplayStartupFailureIsTerminalAndNotifies) {
 TEST(PthreadFailureTest, MediaInformationStartupFailureIsTerminalAndNotifies) {
   std::atomic<int> callbackCount{0};
   auto session = ffmpegkit::MediaInformationSession::create(
-      FFmpegKitConfig::parseArguments("-i /definitely/missing/g2-input"),
+      FFmpegKitConfig::parseArguments("-i /definitely/missing/callback-test-input"),
       [&](std::shared_ptr<ffmpegkit::MediaInformationSession>) {
         callbackCount++;
       });
@@ -122,7 +122,7 @@ TEST(PthreadFailureTest, FFplayStartupSuccessCreatesAndCompletesThread) {
 TEST(PthreadFailureTest, MediaInformationStartupSuccessCreatesAndCompletesThread) {
   std::atomic<int> callbackCount{0};
   auto session = ffmpegkit::MediaInformationSession::create(
-      FFmpegKitConfig::parseArguments("-i /definitely/missing/g2-input"),
+      FFmpegKitConfig::parseArguments("-i /definitely/missing/callback-test-input"),
       [&](std::shared_ptr<ffmpegkit::MediaInformationSession>) {
         callbackCount++;
       });

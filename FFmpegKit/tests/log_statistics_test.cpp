@@ -109,7 +109,7 @@ struct WorkerArguments {
 void *emit_worker(void *raw_arguments) {
   auto *arguments = static_cast<WorkerArguments *>(raw_arguments);
   for (int index = 0; index < kEventCount; ++index) {
-    std::string message = "g7-log-" + std::to_string(index);
+    std::string message = "callback-log-" + std::to_string(index);
     ffmpeg_kit_test_emit_v2_log_with_session_id(kSessionId, message.c_str());
     message = "producer-buffer-overwritten";
 
@@ -134,7 +134,7 @@ void disable_callbacks() {
 
 }  // namespace
 
-TEST(G7LogStatisticsTest,
+TEST(LogStatisticsTest,
      WorkerEventsAreOwnedOrderedAndDeliveredBeforeCompletion) {
   ffmpeg_kit_initialize();
   disable_callbacks();
@@ -178,7 +178,7 @@ TEST(G7LogStatisticsTest,
     const Event &statistics = events[static_cast<size_t>(index * 2 + 1)];
     EXPECT_EQ(log.kind, EventKind::Log);
     EXPECT_EQ(log.session_id, kSessionId);
-    EXPECT_EQ(log.message, "g7-log-" + std::to_string(index));
+    EXPECT_EQ(log.message, "callback-log-" + std::to_string(index));
     EXPECT_EQ(statistics.kind, EventKind::Statistics);
     EXPECT_EQ(statistics.session_id, kSessionId);
     EXPECT_EQ(statistics.time_elapsed, 1000 + index);

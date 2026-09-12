@@ -8,8 +8,8 @@ add_executable(ffmpegkit_tests
     wrapper_callback_state_test.cpp
     v2_callback_test.cpp
     wasm_callback_dispatcher_test.cpp
-    g6_session_completion_test.cpp
-    g7_log_statistics_test.cpp
+    session_completion_test.cpp
+    log_statistics_test.cpp
     ../src/WasmCallbackDispatcher.cpp
     config_test.cpp
     runtime_reuse_test.cpp
@@ -91,7 +91,7 @@ if(EMSCRIPTEN)
         endif()
     endforeach()
 
-    # Keep the G0 authority harness small and independent from the existing
+    # Keep the callback harness small and independent from the existing
     # native-oriented test suite. It links the same ffmpegkit target so its
     # pthread/compiler configuration is the configuration used by FFmpegKit.
     add_executable(ffmpegkit_wasm_callback_tests
@@ -100,8 +100,8 @@ if(EMSCRIPTEN)
         pthread_failure_test.cpp
         wrapper_callback_state_test.cpp
         v2_callback_test.cpp
-        g6_session_completion_test.cpp
-        g7_log_statistics_test.cpp
+        session_completion_test.cpp
+        log_statistics_test.cpp
         wasm_callback_dispatcher_test.cpp
         ../src/WasmCallbackDispatcher.cpp
     )
@@ -142,7 +142,7 @@ if(EMSCRIPTEN)
 
     add_test(
         NAME ffmpegkit_wasm_table_growth
-        COMMAND node "${CMAKE_CURRENT_SOURCE_DIR}/g10_table_growth_test.mjs"
+        COMMAND node "${CMAKE_CURRENT_SOURCE_DIR}/table_growth_test.mjs"
                 "${CMAKE_BINARY_DIR}/ffmpegkit.wasm"
     )
 endif()

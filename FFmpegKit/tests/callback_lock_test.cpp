@@ -38,7 +38,7 @@ TEST(GlobalCallbackLockTest, LogCallbackCanReenterRegistration) {
     ffmpeg_kit_config_enable_log_callback(reentrant_log_callback, &state);
     ffmpeg_kit_config_set_log_level(FFMPEG_KIT_LOG_LEVEL_INFO);
 
-    av_log(nullptr, AV_LOG_INFO, "g1 callback lock re-entry\n");
+    av_log(nullptr, AV_LOG_INFO, "callback lock re-entry\n");
 
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::seconds(5);

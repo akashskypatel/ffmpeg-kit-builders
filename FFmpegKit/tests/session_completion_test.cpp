@@ -60,7 +60,7 @@ bool populate_batch(BatchHandles &handles, CompletionObservation *observations) 
   handles.ffprobe = ffprobe_kit_create_session("-version");
   handles.ffplay = ffplay_kit_create_session("-version");
   handles.media = media_information_create_session(
-      "-i /definitely/missing/g6-input");
+      "-i /definitely/missing/callback-test-input");
   if (!handles.ffmpeg || !handles.ffprobe || !handles.ffplay ||
       !handles.media) {
     return false;
@@ -176,7 +176,7 @@ void expect_batch(CompletionObservation *observations) {
 
 }  // namespace
 
-TEST(G6SessionCompletionTest,
+TEST(SessionCompletionTest,
      AsyncCompletionUsesStableIdsFinalStateAndRuntimeThread) {
   ffmpeg_kit_initialize();
   disable_all();
