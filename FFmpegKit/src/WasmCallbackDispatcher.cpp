@@ -6,23 +6,18 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/proxying.h>
 #include <emscripten/threading.h>
+#include <emscripten/threading_legacy.h>
 #endif
 
 WasmCallbackDispatcher::WasmCallbackDispatcher()
 #if defined(__EMSCRIPTEN__)
-    : queue_(em_proxying_queue_create()),
+    : queue_(emscripten_proxy_get_system_queue()),
       main_runtime_thread_(emscripten_main_runtime_thread_id())
 #endif
 {
 }
 
-WasmCallbackDispatcher::~WasmCallbackDispatcher() {
-#if defined(__EMSCRIPTEN__)
-  if (queue_ != nullptr) {
-    em_proxying_queue_destroy(queue_);
-  }
-#endif
-}
+WasmCallbackDispatcher::~WasmCallbackDispatcher() = default;
 
 bool WasmCallbackDispatcher::dispatch(std::string payload,
                                       Callback callback) {
@@ -46,6 +41,8 @@ bool WasmCallbackDispatcher::dispatch(std::string payload,
     return false;
   }
   event.release();
+  emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI,
+      &WasmCallbackDispatcher::process_pending_on_main, this);
   return true;
 #else
   invoke_owned_event(event.release());
@@ -73,6 +70,8 @@ bool WasmCallbackDispatcher::dispatch_task(Task callback) {
     return false;
   }
   event.release();
+  emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI,
+      &WasmCallbackDispatcher::process_pending_on_main, this);
   return true;
 #else
   invoke_owned_task_event(event.release());
@@ -94,6 +93,10 @@ void WasmCallbackDispatcher::process_pending() {
     emscripten_proxy_execute_queue(queue_);
   }
 #endif
+}
+
+void WasmCallbackDispatcher::process_pending_on_main(void *raw_dispatcher) {
+  static_cast<WasmCallbackDispatcher *>(raw_dispatcher)->process_pending();
 }
 
 void WasmCallbackDispatcher::invoke_owned_event(void *raw_event) {
@@ -123,6 +126,8 @@ bool WasmCallbackDispatcher::dispatch_session_callback(
     return false;
   }
   event.release();
+  emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI,
+      &WasmCallbackDispatcher::process_pending_on_main, this);
   return true;
 #else
   invoke_owned_session_event(event.release());

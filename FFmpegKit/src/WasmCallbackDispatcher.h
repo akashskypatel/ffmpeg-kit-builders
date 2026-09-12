@@ -87,6 +87,7 @@ class WasmCallbackDispatcher final {
     Task callback;
   };
 
+  static void process_pending_on_main(void *raw_dispatcher);
   static void invoke_owned_event(void *raw_event);
   static void invoke_owned_session_event(void *raw_event);
   static void invoke_owned_task_event(void *raw_event);

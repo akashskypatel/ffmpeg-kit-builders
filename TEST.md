@@ -400,7 +400,7 @@ verification build selects `node`.
 
 ```bash
 export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-callback-roundtrip
-export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-roundtrip
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-node
 emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_KIT_WASM_ENVIRONMENT=node \
@@ -414,8 +414,17 @@ From the Windows checkout, run the loader-initialized test with the artifact
 and generated loader from the Wasm build:
 
 ```bash
-wsl.exe -d ManyLinux -- bash -lc "cd /mnt/d/Projects/ffmpeg_kit_extended && /usr/local/emsdk/node/24.19.0_64bit/bin/node flutter/web/ffmpegkit_callback_roundtrip_test.mjs /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-roundtrip/ffmpegkit.wasm /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-roundtrip/ffmpegkit.mjs"
+wsl.exe -d ManyLinux -- bash -lc "cd /mnt/d/Projects/ffmpeg_kit_extended && /usr/local/emsdk/node/24.19.0_64bit/bin/node flutter/web/ffmpegkit_callback_roundtrip_test.mjs /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-node/ffmpegkit.wasm /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-node/ffmpegkit.mjs"
 ```
+
+### Flutter Web callback probe
+
+Run the public API probe from the Flutter example checkout against the locally staged Wasm bundle. Pthread-enabled bundles require cross-origin isolation.
+~~~bash
+cd /mnt/d/Projects/ffmpeg_kit_extended/flutter/example
+flutter run -d chrome --wasm -t lib/wasm_callback_probe.dart
+~~~
+The probe reports FFmpeg completion, logs, statistics, FFprobe completion and logs, and MediaInformation completion. Each completion must be delivered exactly once.
 
 The test should report one completion, the expected log and statistics counts,
 the stable session ID, and `"status":"PASS"`.
