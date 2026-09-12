@@ -326,7 +326,7 @@ public:
     std::atomic<int64_t> complete_called_count{0};
     std::vector<std::string> logs;
 
-    static void LogCallback(FFmpegSessionHandle session, const char* log, void* user_data) {
+    static void LogCallback(int64_t session_id, const char* log, void* user_data) {
         auto* capturer = static_cast<GlobalCallbackCapturer*>(user_data);
         if (log) {
             capturer->logs.push_back(log);
@@ -334,41 +334,29 @@ public:
         capturer->log_called = true;
     }
 
-    static void StatisticsCallback(FFmpegSessionHandle session, int64_t timeElapsed, int64_t time, int64_t size, double bitrate, double speed, int64_t videoFrameNumber, double videoFps, double videoQuality, int64_t dupFrames, int64_t dropFrames, void* user_data) {
+    static void StatisticsCallback(int64_t session_id, int64_t timeElapsed, int64_t time, int64_t size, double bitrate, double speed, int64_t videoFrameNumber, double videoFps, double videoQuality, int64_t dupFrames, int64_t dropFrames, void* user_data) {
         auto* capturer = static_cast<GlobalCallbackCapturer*>(user_data);
         capturer->stats_called = true;
     }
 
-    static void CompleteCallback(FFmpegSessionHandle session, void* user_data) {
+    static void CompleteCallback(int64_t session_id, void* user_data) {
         auto* capturer = static_cast<GlobalCallbackCapturer*>(user_data);
         capturer->complete_called_count++;
-        if (session) {
-            ffmpeg_kit_handle_release(session);
-        }
     }
 
-    static void FFprobeCompleteCallback(FFprobeSessionHandle session, void* user_data) {
+    static void FFprobeCompleteCallback(int64_t session_id, void* user_data) {
         auto* capturer = static_cast<GlobalCallbackCapturer*>(user_data);
         capturer->complete_called_count++;
-        if (session) {
-            ffmpeg_kit_handle_release(session);
-        }
     }
 
-    static void FFplayCompleteCallback(FFplaySessionHandle session, void* user_data) {
+    static void FFplayCompleteCallback(int64_t session_id, void* user_data) {
         auto* capturer = static_cast<GlobalCallbackCapturer*>(user_data);
         capturer->complete_called_count++;
-        if (session) {
-            ffmpeg_kit_handle_release(session);
-        }
     }
 
-    static void MediaInformationCompleteCallback(MediaInformationSessionHandle session, void* user_data) {
+    static void MediaInformationCompleteCallback(int64_t session_id, void* user_data) {
         auto* capturer = static_cast<GlobalCallbackCapturer*>(user_data);
         capturer->complete_called_count++;
-        if (session) {
-            ffmpeg_kit_handle_release(session);
-        }
     }
 };
 

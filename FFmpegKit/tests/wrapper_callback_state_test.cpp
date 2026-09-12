@@ -15,7 +15,7 @@ struct CallbackUserData {
     std::atomic<int> *calls;
 };
 
-void callback_a(FFmpegSessionHandle, const char *, void *user_data) {
+void callback_a(int64_t, const char *, void *user_data) {
     auto *data = static_cast<CallbackUserData *>(user_data);
     if (data == nullptr || data->marker != 1) {
         if (data != nullptr) {
@@ -26,7 +26,7 @@ void callback_a(FFmpegSessionHandle, const char *, void *user_data) {
     data->calls->fetch_add(1, std::memory_order_relaxed);
 }
 
-void callback_b(FFmpegSessionHandle, const char *, void *user_data) {
+void callback_b(int64_t, const char *, void *user_data) {
     auto *data = static_cast<CallbackUserData *>(user_data);
     if (data == nullptr || data->marker != 2) {
         if (data != nullptr) {
@@ -83,7 +83,7 @@ TEST(WrapperCallbackStateTest,
 
     std::thread emitter([&] {
         for (int i = 0; i < kEmissionCount; ++i) {
-            ffmpeg_kit_test_emit_unattributed_log("callback-state-stress");
+            ffmpeg_kit_test_emit_log_with_session_id(0, "callback-state-stress");
             if (i % 32 == 0) {
                 std::this_thread::yield();
             }
@@ -93,18 +93,28 @@ TEST(WrapperCallbackStateTest,
     registrar.join();
     emitter.join();
 
+#ifdef __EMSCRIPTEN__
+    // Complete all queued worker callbacks before their stack user data
+    // leaves scope.
+    ffmpeg_kit_test_process_wasm_callback_queue();
+#endif
+    calls.store(0, std::memory_order_release);
+
     // Leave a callback installed while the final emissions drain so the test
-    // also proves that the stress path actually delivered callback traffic.
+    // verifies that callback delivery remains correct after concurrent updates.
     ffmpeg_kit_config_enable_log_callback(callback_a, &data_a);
     constexpr int kFinalEmissionCount = 128;
     for (int i = 0; i < kFinalEmissionCount; ++i) {
-        ffmpeg_kit_test_emit_unattributed_log("callback-state-final");
+        ffmpeg_kit_test_emit_log_with_session_id(0, "callback-state-final");
     }
 
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::seconds(5);
     while (calls.load(std::memory_order_acquire) < kFinalEmissionCount &&
            std::chrono::steady_clock::now() < deadline) {
+#ifdef __EMSCRIPTEN__
+        ffmpeg_kit_test_process_wasm_callback_queue();
+#endif
         std::this_thread::yield();
     }
 

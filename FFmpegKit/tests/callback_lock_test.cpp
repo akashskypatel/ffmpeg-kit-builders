@@ -17,7 +17,7 @@ struct ReentrantCallbackState {
     std::atomic<bool> reentry_completed{false};
 };
 
-void reentrant_log_callback(FFmpegSessionHandle, const char *, void *user_data) {
+void reentrant_log_callback(int64_t, const char *, void *user_data) {
     auto *state = static_cast<ReentrantCallbackState *>(user_data);
     state->callback_count.fetch_add(1, std::memory_order_relaxed);
 
@@ -44,6 +44,9 @@ TEST(GlobalCallbackLockTest, LogCallbackCanReenterRegistration) {
                           std::chrono::seconds(5);
     while (std::chrono::steady_clock::now() < deadline &&
            !state.reentry_completed.load(std::memory_order_acquire)) {
+#ifdef __EMSCRIPTEN__
+        ffmpeg_kit_test_process_wasm_callback_queue();
+#endif
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 

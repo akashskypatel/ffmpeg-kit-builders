@@ -92,6 +92,15 @@ void release_batch(BatchHandles &handles) {
   handles = {};
 }
 
+void settle_async_callbacks() {
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(1);
+  while (std::chrono::steady_clock::now() < deadline) {
+    ffmpeg_kit_test_process_wasm_callback_queue();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+}
+
 bool wait_for_callbacks(CompletionObservation *observations, size_t count) {
   const auto deadline = std::chrono::steady_clock::now() +
                         std::chrono::seconds(15);
@@ -135,24 +144,24 @@ bool wait_for_batch_terminal(const BatchHandles &handles) {
 }
 
 void enable_all(CompletionObservation *observations) {
-  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback_v2(
+  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
       record_completion, &observations[0]);
-  ffmpeg_kit_config_enable_ffprobe_session_complete_callback_v2(
+  ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
       record_completion, &observations[1]);
-  ffmpeg_kit_config_enable_ffplay_session_complete_callback_v2(
+  ffmpeg_kit_config_enable_ffplay_session_complete_callback(
       record_completion, &observations[2]);
-  ffmpeg_kit_config_enable_media_information_session_complete_callback_v2(
+  ffmpeg_kit_config_enable_media_information_session_complete_callback(
       record_completion, &observations[3]);
 }
 
 void disable_all() {
-  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback_v2(nullptr,
+  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(nullptr,
                                                                 nullptr);
-  ffmpeg_kit_config_enable_ffprobe_session_complete_callback_v2(nullptr,
+  ffmpeg_kit_config_enable_ffprobe_session_complete_callback(nullptr,
                                                                  nullptr);
-  ffmpeg_kit_config_enable_ffplay_session_complete_callback_v2(nullptr,
+  ffmpeg_kit_config_enable_ffplay_session_complete_callback(nullptr,
                                                                 nullptr);
-  ffmpeg_kit_config_enable_media_information_session_complete_callback_v2(
+  ffmpeg_kit_config_enable_media_information_session_complete_callback(
       nullptr, nullptr);
 }
 
@@ -179,6 +188,11 @@ void expect_batch(CompletionObservation *observations) {
 TEST(SessionCompletionTest,
      AsyncCompletionUsesStableIdsFinalStateAndRuntimeThread) {
   ffmpeg_kit_initialize();
+  const bool redirection_was_enabled =
+      ffmpegkit::FFmpegKitConfig::isRedirectionEnabledForTesting();
+  if (!redirection_was_enabled) {
+    ffmpegkit::FFmpegKitConfig::enableRedirection();
+  }
   disable_all();
 
   // A null callback disables delivery before asynchronous work starts.
@@ -187,6 +201,7 @@ TEST(SessionCompletionTest,
   ASSERT_TRUE(wait_for_batch_terminal(disabled_handles));
   ffmpeg_kit_test_process_wasm_callback_queue();
   release_batch(disabled_handles);
+  settle_async_callbacks();
 
   CompletionObservation first[4];
   enable_all(first);
@@ -220,4 +235,7 @@ TEST(SessionCompletionTest,
   }
   release_batch(unregistered_handles);
   disable_all();
+  if (!redirection_was_enabled) {
+    ffmpegkit::FFmpegKitConfig::disableRedirection();
+  }
 }

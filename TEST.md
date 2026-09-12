@@ -189,8 +189,8 @@ replacements.
 
 ### Stable session-ID callback ABI
 
-This boundary test verifies versioned C callback exports that pass the stable
-session ID as an `int64_t`. Legacy opaque-handle exports remain available, and
+This boundary test verifies global C callback exports that pass the stable
+session ID as an `int64_t`. per-session opaque-handle APIs remain available, and
 a synthetic emitter validates IDs beyond the Wasm 32-bit pointer range.
 
 #### Native Linux
@@ -199,7 +199,7 @@ a synthetic emitter validates IDs beyond the Wasm 32-bit pointer range.
 cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
 setarch $(uname -m) -R timeout 120s \
   "$FFMPEG_KIT_SOURCE/build/tests/ffmpegkit_tests" \
-  --gtest_filter=VersionedCallbackTest.*
+  --gtest_filter=GlobalCallbackSessionIdTest.*
 ```
 
 #### Wasm
@@ -214,7 +214,7 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=VersionedCallbackTest.*
+  --gtest_filter=GlobalCallbackSessionIdTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_callback_tests$'
 ```
@@ -393,7 +393,7 @@ Example output:
 
 ### C-to-JS Wasm callback round-trip
 
-This test-only build exports the C++ V2 callback emitters and uses the
+This test-only build exports the session-ID callback emitters and uses the
 generated Emscripten loader to initialize the main runtime before registering
 callback pointers. The production environment remains `web,worker`; this
 verification build selects `node`.

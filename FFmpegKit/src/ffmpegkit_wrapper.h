@@ -134,30 +134,29 @@ typedef void (*FFprobeKitCompleteCallback)(FFprobeSessionHandle session,
 typedef void (*FFplayKitCompleteCallback)(FFplaySessionHandle session,
                                           void *user_data);
 /**
- * Stable session-ID callback types. These callbacks do not pass session IDs
- * through opaque pointer values and are the preferred ABI for Wasm clients.
+ * Global callback types. These callbacks identify sessions with their stable
+ * session IDs instead of passing IDs through opaque pointer values.
  */
-typedef void (*FFmpegKitLogCallbackV2)(int64_t session_id, const char *log,
-                                       void *user_data);
+typedef void (*FFmpegKitGlobalLogCallback)(int64_t session_id, const char *log,
+                                           void *user_data);
 
-typedef void (*FFmpegKitStatisticsCallbackV2)(
+typedef void (*FFmpegKitGlobalStatisticsCallback)(
     int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
     double bitrate, double speed, int64_t videoFrameNumber, double videoFps,
     double videoQuality, int64_t dupFrames, int64_t dropFrames,
     void *user_data);
 
-typedef void (*FFmpegKitCompleteCallbackV2)(int64_t session_id,
-                                             void *user_data);
-typedef void (*FFprobeKitCompleteCallbackV2)(int64_t session_id,
-                                              void *user_data);
-typedef void (*FFplayKitCompleteCallbackV2)(int64_t session_id,
-                                             void *user_data);
-typedef void (*MediaInformationSessionCompleteCallbackV2)(
+typedef void (*FFmpegKitGlobalCompleteCallback)(int64_t session_id,
+                                                void *user_data);
+typedef void (*FFprobeKitGlobalCompleteCallback)(int64_t session_id,
+                                                 void *user_data);
+typedef void (*FFplayKitGlobalCompleteCallback)(int64_t session_id,
+                                                void *user_data);
+typedef void (*MediaInformationSessionGlobalCompleteCallback)(
     int64_t session_id, void *user_data);
-
 /**
  * @brief Media information session complete callback function type
- * 
+ *
  * @param session The media information session handle
  * @param user_data User data passed to the callback
  */
@@ -412,30 +411,30 @@ void FFMPEG_KIT_C_EXPORT ffmpeg_kit_set_complete_callback(
     void *user_data);
 #ifdef FFMPEG_KIT_TEST_HOOKS
 /**
- * Emits a synthetic V2 log callback with an arbitrary stable session ID.
+ * Emits a synthetic log callback with an arbitrary stable session ID.
  * This is available only to the native/Wasm regression-test targets.
  */
 FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_test_emit_v2_log_with_session_id(int64_t session_id,
+ffmpeg_kit_test_emit_log_with_session_id(int64_t session_id,
                                             const char *message);
 
 /**
- * Emits a synthetic V2 statistics callback with an arbitrary stable session
+ * Emits a synthetic statistics callback with an arbitrary stable session
  * ID. This is available only to the native/Wasm regression-test targets.
  */
 FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_test_emit_v2_statistics_with_session_id(
+ffmpeg_kit_test_emit_statistics_with_session_id(
     int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
     double bitrate, double speed, int64_t video_frame_number,
     double video_fps, double video_quality, int64_t dup_frames,
     int64_t drop_frames);
 
 /**
- * Emits a synthetic FFmpeg V2 completion callback with an arbitrary stable
+ * Emits a synthetic FFmpeg completion callback with an arbitrary stable
  * session ID.
  */
 FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_test_emit_v2_ffmpeg_completion_with_session_id(int64_t session_id);
+ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id(int64_t session_id);
 
 /** Drives the Wasm callback dispatcher queue for regression tests. */
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_process_wasm_callback_queue(void);
@@ -1938,7 +1937,7 @@ FFMPEG_KIT_C_EXPORT void ffmpeg_kit_clear_sessions(void);
  * callback owner including the handle.
  */
 FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_config_enable_log_callback(FFmpegKitLogCallback log_cb,
+ffmpeg_kit_config_enable_log_callback(FFmpegKitGlobalLogCallback log_cb,
                                       void *user_data);
 
 /**
@@ -1948,7 +1947,7 @@ ffmpeg_kit_config_enable_log_callback(FFmpegKitLogCallback log_cb,
  * @param user_data the user data
  */
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_config_enable_statistics_callback(
-    FFmpegKitStatisticsCallback stats_cb, void *user_data);
+    FFmpegKitGlobalStatisticsCallback stats_cb, void *user_data);
 
 /**
  * Enables the FFmpeg session complete callback.
@@ -1960,7 +1959,7 @@ FFMPEG_KIT_C_EXPORT void ffmpeg_kit_config_enable_statistics_callback(
  */
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
-    FFmpegKitCompleteCallback complete_cb, void *user_data);
+    FFmpegKitGlobalCompleteCallback complete_cb, void *user_data);
 
 /**
  * Enables the FFprobe session complete callback.
@@ -1972,7 +1971,7 @@ ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
  */
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
-    FFprobeKitCompleteCallback complete_cb, void *user_data);
+    FFprobeKitGlobalCompleteCallback complete_cb, void *user_data);
 
 /**
  * Enables the FFplay session complete callback.
@@ -1984,7 +1983,7 @@ ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
  */
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_config_enable_ffplay_session_complete_callback(
-    FFplayKitCompleteCallback complete_cb, void *user_data);
+    FFplayKitGlobalCompleteCallback complete_cb, void *user_data);
 
 /**
  * Enables the media information session complete callback.
@@ -1996,32 +1995,7 @@ ffmpeg_kit_config_enable_ffplay_session_complete_callback(
  */
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_config_enable_media_information_session_complete_callback(
-    MediaInformationSessionCompleteCallback complete_cb, void *user_data);
-
-/** Stable session-ID callback registration APIs for Wasm-safe dispatch. */
-FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_config_enable_log_callback_v2(FFmpegKitLogCallbackV2 log_cb,
-                                         void *user_data);
-
-FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_config_enable_statistics_callback_v2(
-    FFmpegKitStatisticsCallbackV2 stats_cb, void *user_data);
-
-FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_config_enable_ffmpeg_session_complete_callback_v2(
-    FFmpegKitCompleteCallbackV2 complete_cb, void *user_data);
-
-FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_config_enable_ffprobe_session_complete_callback_v2(
-    FFprobeKitCompleteCallbackV2 complete_cb, void *user_data);
-
-FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_config_enable_ffplay_session_complete_callback_v2(
-    FFplayKitCompleteCallbackV2 complete_cb, void *user_data);
-
-FFMPEG_KIT_C_EXPORT void
-ffmpeg_kit_config_enable_media_information_session_complete_callback_v2(
-    MediaInformationSessionCompleteCallbackV2 complete_cb, void *user_data);
+    MediaInformationSessionGlobalCompleteCallback complete_cb, void *user_data);
 
 /* Utils */
 

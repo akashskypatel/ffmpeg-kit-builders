@@ -638,7 +638,7 @@ endif()
 
 if(EMSCRIPTEN)
     if(BUILD_TESTS)
-        set(FFMPEGKIT_WASM_TEST_EXPORTS ",_ffmpeg_kit_test_emit_v2_log_with_session_id,_ffmpeg_kit_test_emit_v2_statistics_with_session_id,_ffmpeg_kit_test_emit_v2_ffmpeg_completion_with_session_id,_ffmpeg_kit_test_process_wasm_callback_queue")
+        set(FFMPEGKIT_WASM_TEST_EXPORTS ",_ffmpeg_kit_test_emit_log_with_session_id,_ffmpeg_kit_test_emit_statistics_with_session_id,_ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id,_ffmpeg_kit_test_process_wasm_callback_queue")
     else()
         set(FFMPEGKIT_WASM_TEST_EXPORTS "")
     endif()

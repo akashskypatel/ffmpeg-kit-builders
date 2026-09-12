@@ -110,24 +110,24 @@ void *emit_worker(void *raw_arguments) {
   auto *arguments = static_cast<WorkerArguments *>(raw_arguments);
   for (int index = 0; index < kEventCount; ++index) {
     std::string message = "callback-log-" + std::to_string(index);
-    ffmpeg_kit_test_emit_v2_log_with_session_id(kSessionId, message.c_str());
+    ffmpeg_kit_test_emit_log_with_session_id(kSessionId, message.c_str());
     message = "producer-buffer-overwritten";
 
-    ffmpeg_kit_test_emit_v2_statistics_with_session_id(
+    ffmpeg_kit_test_emit_statistics_with_session_id(
         kSessionId, 1000 + index, 2000 + index, 3000 + index,
         4.5 + index, 5.5 + index, 6000 + index, 7.5 + index,
         8.5 + index, 9 + index, 10 + index);
   }
 
-  ffmpeg_kit_test_emit_v2_ffmpeg_completion_with_session_id(kSessionId);
+  ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id(kSessionId);
   arguments->observation->worker_done.store(true, std::memory_order_release);
   return nullptr;
 }
 
 void disable_callbacks() {
-  ffmpeg_kit_config_enable_log_callback_v2(nullptr, nullptr);
-  ffmpeg_kit_config_enable_statistics_callback_v2(nullptr, nullptr);
-  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback_v2(nullptr,
+  ffmpeg_kit_config_enable_log_callback(nullptr, nullptr);
+  ffmpeg_kit_config_enable_statistics_callback(nullptr, nullptr);
+  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(nullptr,
                                                                 nullptr);
 }
 
@@ -141,10 +141,10 @@ TEST(LogStatisticsTest,
 
   Observation observation;
   observation.main_runtime_thread = pthread_self();
-  ffmpeg_kit_config_enable_log_callback_v2(log_callback, &observation);
-  ffmpeg_kit_config_enable_statistics_callback_v2(statistics_callback,
+  ffmpeg_kit_config_enable_log_callback(log_callback, &observation);
+  ffmpeg_kit_config_enable_statistics_callback(statistics_callback,
                                                   &observation);
-  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback_v2(
+  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
       completion_callback, &observation);
 
   WorkerArguments arguments{&observation};

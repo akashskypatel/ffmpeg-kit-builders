@@ -117,7 +117,7 @@ TEST(WasmCallbackDispatcherTest, WorkerPayloadsRunOnMainExactlyOnce) {
     EXPECT_TRUE(pthread_equal(event.consumer,
                               diagnostics.main_runtime_thread));
     ASSERT_TRUE(event.payload.rfind("callback-payload-", 0) == 0);
-    const int index = std::stoi(event.payload.substr(11));
+    const int index = std::stoi(event.payload.substr(std::string("callback-payload-").size()));
     ASSERT_GE(index, 0);
     ASSERT_LT(index, kCallbackCount);
     EXPECT_FALSE(seen[index]);

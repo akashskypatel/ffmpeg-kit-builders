@@ -3172,38 +3172,24 @@ void DLL_ALIGN ffmpeg_kit_clear_sessions(void) {
 } /* End extern "C" */
 
 /* Global Callbacks */
-// Static storage for callbacks
-static FFmpegKitLogCallback g_log_callback = nullptr;
+// Static storage for global callbacks
+static FFmpegKitGlobalLogCallback g_log_callback = nullptr;
 static void *g_log_user_data = nullptr;
-static FFmpegKitLogCallbackV2 g_log_callback_v2 = nullptr;
-static void *g_log_user_data_v2 = nullptr;
 
-static FFmpegKitStatisticsCallback g_stats_callback = nullptr;
+static FFmpegKitGlobalStatisticsCallback g_stats_callback = nullptr;
 static void *g_stats_user_data = nullptr;
-static FFmpegKitStatisticsCallbackV2 g_stats_callback_v2 = nullptr;
-static void *g_stats_user_data_v2 = nullptr;
 
-static FFmpegKitCompleteCallback g_ffmpeg_complete_callback = nullptr;
+static FFmpegKitGlobalCompleteCallback g_ffmpeg_complete_callback = nullptr;
 static void *g_ffmpeg_complete_user_data = nullptr;
-static FFmpegKitCompleteCallbackV2 g_ffmpeg_complete_callback_v2 = nullptr;
-static void *g_ffmpeg_complete_user_data_v2 = nullptr;
 
-static FFprobeKitCompleteCallback g_ffprobe_complete_callback = nullptr;
+static FFprobeKitGlobalCompleteCallback g_ffprobe_complete_callback = nullptr;
 static void *g_ffprobe_complete_user_data = nullptr;
-static FFprobeKitCompleteCallbackV2 g_ffprobe_complete_callback_v2 = nullptr;
-static void *g_ffprobe_complete_user_data_v2 = nullptr;
 
-static FFplayKitCompleteCallback g_ffplay_complete_callback = nullptr;
+static FFplayKitGlobalCompleteCallback g_ffplay_complete_callback = nullptr;
 static void *g_ffplay_complete_user_data = nullptr;
-static FFplayKitCompleteCallbackV2 g_ffplay_complete_callback_v2 = nullptr;
-static void *g_ffplay_complete_user_data_v2 = nullptr;
 
-static ::MediaInformationSessionCompleteCallback g_media_complete_callback =
-    nullptr;
+static MediaInformationSessionGlobalCompleteCallback g_media_complete_callback = nullptr;
 static void *g_media_complete_user_data = nullptr;
-static MediaInformationSessionCompleteCallbackV2 g_media_complete_callback_v2 =
-    nullptr;
-static void *g_media_complete_user_data_v2 = nullptr;
 static std::mutex g_callback_state_mutex;
 static WasmCallbackDispatcher g_wasm_callback_dispatcher;
 
@@ -3223,10 +3209,10 @@ static std::pair<Callback, void *> snapshot_global_callback_state(
   return {callback_slot, user_data_slot};
 }
 
-static void dispatch_log_callback_v2(int64_t session_id,
+static void dispatch_log_callback(int64_t session_id,
                                      const char *message) {
   const auto callback_state = snapshot_global_callback_state(
-      g_log_callback_v2, g_log_user_data_v2);
+      g_log_callback, g_log_user_data);
   if (callback_state.first) {
     const bool has_message = message != nullptr;
     std::string copied_message = has_message ? message : "";
@@ -3240,13 +3226,13 @@ static void dispatch_log_callback_v2(int64_t session_id,
   }
 }
 
-static void dispatch_statistics_callback_v2(
+static void dispatch_statistics_callback(
     int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
     double bitrate, double speed, int64_t video_frame_number,
     double video_fps, double video_quality, int64_t dup_frames,
     int64_t drop_frames) {
   const auto callback_state = snapshot_global_callback_state(
-      g_stats_callback_v2, g_stats_user_data_v2);
+      g_stats_callback, g_stats_user_data);
   if (callback_state.first) {
     g_wasm_callback_dispatcher.dispatch_task(
         [session_id, time_elapsed, time, size, bitrate, speed,
@@ -3259,25 +3245,25 @@ static void dispatch_statistics_callback_v2(
   }
 }
 
-static void dispatch_ffmpeg_complete_callback_v2_with_id(int64_t session_id) {
+static void dispatch_ffmpeg_complete_callback_with_id(int64_t session_id) {
   const auto callback_state = snapshot_global_callback_state(
-      g_ffmpeg_complete_callback_v2, g_ffmpeg_complete_user_data_v2);
+      g_ffmpeg_complete_callback, g_ffmpeg_complete_user_data);
   if (callback_state.first) {
     g_wasm_callback_dispatcher.dispatch_session_callback(
         session_id, callback_state.first, callback_state.second);
   }
 }
 
-static void dispatch_ffmpeg_complete_callback_v2(
+static void dispatch_ffmpeg_complete_callback(
     const std::shared_ptr<FFmpegSession> &session) {
-  dispatch_ffmpeg_complete_callback_v2_with_id(
+  dispatch_ffmpeg_complete_callback_with_id(
       session ? static_cast<int64_t>(session->getSessionId()) : 0);
 }
 
-static void dispatch_ffprobe_complete_callback_v2(
+static void dispatch_ffprobe_complete_callback(
     const std::shared_ptr<FFprobeSession> &session) {
   const auto callback_state = snapshot_global_callback_state(
-      g_ffprobe_complete_callback_v2, g_ffprobe_complete_user_data_v2);
+      g_ffprobe_complete_callback, g_ffprobe_complete_user_data);
   if (callback_state.first) {
     g_wasm_callback_dispatcher.dispatch_session_callback(
         session ? static_cast<int64_t>(session->getSessionId()) : 0,
@@ -3285,10 +3271,10 @@ static void dispatch_ffprobe_complete_callback_v2(
   }
 }
 
-static void dispatch_ffplay_complete_callback_v2(
+static void dispatch_ffplay_complete_callback(
     const std::shared_ptr<FFplaySession> &session) {
   const auto callback_state = snapshot_global_callback_state(
-      g_ffplay_complete_callback_v2, g_ffplay_complete_user_data_v2);
+      g_ffplay_complete_callback, g_ffplay_complete_user_data);
   if (callback_state.first) {
     g_wasm_callback_dispatcher.dispatch_session_callback(
         session ? static_cast<int64_t>(session->getSessionId()) : 0,
@@ -3296,10 +3282,10 @@ static void dispatch_ffplay_complete_callback_v2(
   }
 }
 
-static void dispatch_media_information_complete_callback_v2(
+static void dispatch_media_information_complete_callback(
     const std::shared_ptr<MediaInformationSession> &session) {
   const auto callback_state = snapshot_global_callback_state(
-      g_media_complete_callback_v2, g_media_complete_user_data_v2);
+      g_media_complete_callback, g_media_complete_user_data);
   if (callback_state.first) {
     g_wasm_callback_dispatcher.dispatch_session_callback(
         session ? static_cast<int64_t>(session->getSessionId()) : 0,
@@ -3309,11 +3295,11 @@ static void dispatch_media_information_complete_callback_v2(
 
 
 
-static void install_log_callback_v2() {
-  if (g_log_callback_v2) {
+static void install_log_callback() {
+  if (g_log_callback) {
     FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
       if (log) {
-        dispatch_log_callback_v2(static_cast<int64_t>(log->getSessionId()),
+        dispatch_log_callback(static_cast<int64_t>(log->getSessionId()),
                                  log->getMessage().c_str());
       }
     });
@@ -3322,12 +3308,12 @@ static void install_log_callback_v2() {
   }
 }
 
-static void install_statistics_callback_v2() {
-  if (g_stats_callback_v2) {
+static void install_statistics_callback() {
+  if (g_stats_callback) {
     FFmpegKitConfig::enableStatisticsCallback(
         [](std::shared_ptr<Statistics> statistics) {
           if (statistics) {
-            dispatch_statistics_callback_v2(
+            dispatch_statistics_callback(
                 static_cast<int64_t>(statistics->getSessionId()),
                 static_cast<int64_t>(statistics->getTimeElapsed() * 1000),
                 static_cast<int64_t>(statistics->getTime() * 1000),
@@ -3342,141 +3328,141 @@ static void install_statistics_callback_v2() {
   }
 }
 
-static void install_ffmpeg_complete_callback_v2() {
-  if (g_ffmpeg_complete_callback_v2) {
+static void install_ffmpeg_complete_callback() {
+  if (g_ffmpeg_complete_callback) {
     FFmpegKitConfig::enableFFmpegSessionCompleteCallback(
         [](std::shared_ptr<FFmpegSession> session) {
-          dispatch_ffmpeg_complete_callback_v2(session);
+          dispatch_ffmpeg_complete_callback(session);
         });
   } else {
     FFmpegKitConfig::enableFFmpegSessionCompleteCallback(nullptr);
   }
 }
 
-static void install_ffprobe_complete_callback_v2() {
-  if (g_ffprobe_complete_callback_v2) {
+static void install_ffprobe_complete_callback() {
+  if (g_ffprobe_complete_callback) {
     FFmpegKitConfig::enableFFprobeSessionCompleteCallback(
         [](std::shared_ptr<FFprobeSession> session) {
-          dispatch_ffprobe_complete_callback_v2(session);
+          dispatch_ffprobe_complete_callback(session);
         });
   } else {
     FFmpegKitConfig::enableFFprobeSessionCompleteCallback(nullptr);
   }
 }
 
-static void install_ffplay_complete_callback_v2() {
-  if (g_ffplay_complete_callback_v2) {
+static void install_ffplay_complete_callback() {
+  if (g_ffplay_complete_callback) {
     FFmpegKitConfig::enableFFplaySessionCompleteCallback(
         [](std::shared_ptr<FFplaySession> session) {
-          dispatch_ffplay_complete_callback_v2(session);
+          dispatch_ffplay_complete_callback(session);
         });
   } else {
     FFmpegKitConfig::enableFFplaySessionCompleteCallback(nullptr);
   }
 }
 
-static void install_media_information_complete_callback_v2() {
-  if (g_media_complete_callback_v2) {
+static void install_media_information_complete_callback() {
+  if (g_media_complete_callback) {
     FFmpegKitConfig::enableMediaInformationSessionCompleteCallback(
         [](std::shared_ptr<MediaInformationSession> session) {
-          dispatch_media_information_complete_callback_v2(session);
+          dispatch_media_information_complete_callback(session);
         });
   } else {
     FFmpegKitConfig::enableMediaInformationSessionCompleteCallback(nullptr);
   }
 }
 extern "C" {
-void DLL_ALIGN ffmpeg_kit_config_enable_log_callback_v2(
-    FFmpegKitLogCallbackV2 log_cb, void *user_data) {
+void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(
+    FFmpegKitGlobalLogCallback log_cb, void *user_data) {
   try {
-    set_global_callback_state(g_log_callback_v2, g_log_user_data_v2, log_cb,
+    set_global_callback_state(g_log_callback, g_log_user_data, log_cb,
                               user_data);
-    install_log_callback_v2();
+    install_log_callback();
   } catch (const std::exception &e) {
     std::cerr << "[" << getCurrentTimeStamp()
               << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_log_callback_v2: "
+                 "ffmpeg_kit_config_enable_log_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
-void DLL_ALIGN ffmpeg_kit_config_enable_statistics_callback_v2(
-    FFmpegKitStatisticsCallbackV2 stats_cb, void *user_data) {
+void DLL_ALIGN ffmpeg_kit_config_enable_statistics_callback(
+    FFmpegKitGlobalStatisticsCallback stats_cb, void *user_data) {
   try {
-    set_global_callback_state(g_stats_callback_v2, g_stats_user_data_v2,
+    set_global_callback_state(g_stats_callback, g_stats_user_data,
                               stats_cb, user_data);
-    install_statistics_callback_v2();
+    install_statistics_callback();
   } catch (const std::exception &e) {
     std::cerr << "[" << getCurrentTimeStamp()
               << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_statistics_callback_v2: "
+                 "ffmpeg_kit_config_enable_statistics_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
-void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback_v2(
-    FFmpegKitCompleteCallbackV2 complete_cb, void *user_data) {
+void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
+    FFmpegKitGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    set_global_callback_state(g_ffmpeg_complete_callback_v2,
-                              g_ffmpeg_complete_user_data_v2, complete_cb,
+    set_global_callback_state(g_ffmpeg_complete_callback,
+                              g_ffmpeg_complete_user_data, complete_cb,
                               user_data);
-    install_ffmpeg_complete_callback_v2();
+    install_ffmpeg_complete_callback();
   } catch (const std::exception &e) {
     std::cerr << "[" << getCurrentTimeStamp()
               << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_ffmpeg_session_complete_callback_v2: "
+                 "ffmpeg_kit_config_enable_ffmpeg_session_complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
-void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback_v2(
-    FFprobeKitCompleteCallbackV2 complete_cb, void *user_data) {
+void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
+    FFprobeKitGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    set_global_callback_state(g_ffprobe_complete_callback_v2,
-                              g_ffprobe_complete_user_data_v2, complete_cb,
+    set_global_callback_state(g_ffprobe_complete_callback,
+                              g_ffprobe_complete_user_data, complete_cb,
                               user_data);
-    install_ffprobe_complete_callback_v2();
+    install_ffprobe_complete_callback();
   } catch (const std::exception &e) {
     std::cerr << "[" << getCurrentTimeStamp()
               << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_ffprobe_session_complete_callback_v2: "
+                 "ffmpeg_kit_config_enable_ffprobe_session_complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
-void DLL_ALIGN ffmpeg_kit_config_enable_ffplay_session_complete_callback_v2(
-    FFplayKitCompleteCallbackV2 complete_cb, void *user_data) {
+void DLL_ALIGN ffmpeg_kit_config_enable_ffplay_session_complete_callback(
+    FFplayKitGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    set_global_callback_state(g_ffplay_complete_callback_v2,
-                              g_ffplay_complete_user_data_v2, complete_cb,
+    set_global_callback_state(g_ffplay_complete_callback,
+                              g_ffplay_complete_user_data, complete_cb,
                               user_data);
-    install_ffplay_complete_callback_v2();
+    install_ffplay_complete_callback();
   } catch (const std::exception &e) {
     std::cerr << "[" << getCurrentTimeStamp()
               << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_ffplay_session_complete_callback_v2: "
+                 "ffmpeg_kit_config_enable_ffplay_session_complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
 void DLL_ALIGN
-ffmpeg_kit_config_enable_media_information_session_complete_callback_v2(
-    MediaInformationSessionCompleteCallbackV2 complete_cb, void *user_data) {
+ffmpeg_kit_config_enable_media_information_session_complete_callback(
+    MediaInformationSessionGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    set_global_callback_state(g_media_complete_callback_v2,
-                              g_media_complete_user_data_v2, complete_cb,
+    set_global_callback_state(g_media_complete_callback,
+                              g_media_complete_user_data, complete_cb,
                               user_data);
-    install_media_information_complete_callback_v2();
+    install_media_information_complete_callback();
   } catch (const std::exception &e) {
     std::cerr << "[" << getCurrentTimeStamp()
               << "] [ffmpeg-kit] [Exception] in "
                  "ffmpeg_kit_config_enable_media_information_session_"
-                 "complete_callback_v2: "
+                 "complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
@@ -3487,198 +3473,27 @@ void DLL_ALIGN ffmpeg_kit_test_process_wasm_callback_queue(void) {
   g_wasm_callback_dispatcher.process_pending();
 }
 
-void DLL_ALIGN ffmpeg_kit_test_emit_v2_log_with_session_id(
+void DLL_ALIGN ffmpeg_kit_test_emit_log_with_session_id(
     int64_t session_id, const char *message) {
-  dispatch_log_callback_v2(session_id, message);
+  dispatch_log_callback(session_id, message);
 }
 
-void DLL_ALIGN ffmpeg_kit_test_emit_v2_statistics_with_session_id(
+void DLL_ALIGN ffmpeg_kit_test_emit_statistics_with_session_id(
     int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
     double bitrate, double speed, int64_t video_frame_number,
     double video_fps, double video_quality, int64_t dup_frames,
     int64_t drop_frames) {
-  dispatch_statistics_callback_v2(
+  dispatch_statistics_callback(
       session_id, time_elapsed, time, size, bitrate, speed,
       video_frame_number, video_fps, video_quality, dup_frames, drop_frames);
 }
 
-void DLL_ALIGN ffmpeg_kit_test_emit_v2_ffmpeg_completion_with_session_id(
+void DLL_ALIGN ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id(
     int64_t session_id) {
-  dispatch_ffmpeg_complete_callback_v2_with_id(session_id);
+  dispatch_ffmpeg_complete_callback_with_id(session_id);
 }
 #endif
-}
 
-
-
-extern "C" {
-void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(FFmpegKitLogCallback log_cb,
-                                           void *user_data) {
-  try {
-    set_global_callback_state(g_log_callback, g_log_user_data, log_cb,
-                              user_data);
-    if (log_cb) {
-      FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
-        const auto callback_state = snapshot_global_callback_state(
-            g_log_callback, g_log_user_data);
-        if (callback_state.first && log) {
-          const std::string &message = log->getMessage();
-
-          // Pass ID as pointer (Hack to avoid allocation/threading issues)
-          void *session_handle = (void *)(uintptr_t)log->getSessionId();
-
-          callback_state.first(session_handle, message.c_str(),
-                              callback_state.second);
-        }
-      });
-    } else {
-      FFmpegKitConfig::enableLogCallback(nullptr);
-    }
-  } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in ffmpeg_kit_config_enable_log_callback: "
-              << e.what() << std::endl;
-    PRINT_STACK_TRACE();
-  }
-}
-
-void DLL_ALIGN ffmpeg_kit_config_enable_statistics_callback(
-    FFmpegKitStatisticsCallback stats_cb, void *user_data) {
-  try {
-    set_global_callback_state(g_stats_callback, g_stats_user_data, stats_cb,
-                              user_data);
-    if (stats_cb) {
-      FFmpegKitConfig::enableStatisticsCallback([](std::shared_ptr<Statistics> s) {
-            const auto callback_state = snapshot_global_callback_state(
-                g_stats_callback, g_stats_user_data);
-            if (callback_state.first && s) {
-              // Pass ID as pointer (Hack to avoid allocation/threading issues)
-              void *session_handle = (void *)(uintptr_t)s->getSessionId();
-
-              callback_state.first(session_handle, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(),
-                               s->getBitrate(), s->getSpeed(),
-                               s->getVideoFrameNumber(), s->getVideoFps(),
-                               s->getVideoQuality(), s->getDupFrames(),
-                               s->getDropFrames(), callback_state.second);
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableStatisticsCallback(nullptr);
-    }
-  } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in ffmpeg_kit_config_enable_statistics_callback: "
-              << e.what() << std::endl;
-    PRINT_STACK_TRACE();
-  }
-}
-
-void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
-    FFmpegKitCompleteCallback complete_cb, void *user_data) {
-  try {
-    set_global_callback_state(g_ffmpeg_complete_callback,
-                              g_ffmpeg_complete_user_data, complete_cb,
-                              user_data);
-    if (complete_cb) {
-      FFmpegKitConfig::enableFFmpegSessionCompleteCallback([](std::shared_ptr<FFmpegSession> title) {
-            const auto callback_state = snapshot_global_callback_state(
-                g_ffmpeg_complete_callback, g_ffmpeg_complete_user_data);
-            if (callback_state.first) {
-              auto handle = create_handle(title);
-              callback_state.first(handle, callback_state.second);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableFFmpegSessionCompleteCallback(nullptr);
-    }
-  } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_ffmpeg_session_complete_callback: "
-              << e.what() << std::endl;
-    PRINT_STACK_TRACE();
-  }
-}
-
-void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
-    FFprobeKitCompleteCallback complete_cb, void *user_data) {
-  try {
-    set_global_callback_state(g_ffprobe_complete_callback,
-                              g_ffprobe_complete_user_data, complete_cb,
-                              user_data);
-    if (complete_cb) {
-      FFmpegKitConfig::enableFFprobeSessionCompleteCallback([](std::shared_ptr<FFprobeSession> title) {
-            const auto callback_state = snapshot_global_callback_state(
-                g_ffprobe_complete_callback, g_ffprobe_complete_user_data);
-            if (callback_state.first) {
-              auto handle = create_handle(title);
-              callback_state.first(handle, callback_state.second);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableFFprobeSessionCompleteCallback(nullptr);
-    }
-  } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_ffprobe_session_complete_callback: "
-              << e.what() << std::endl;
-    PRINT_STACK_TRACE();
-  }
-}
-
-void DLL_ALIGN ffmpeg_kit_config_enable_ffplay_session_complete_callback(
-    FFplayKitCompleteCallback complete_cb, void *user_data) {
-  try {
-    set_global_callback_state(g_ffplay_complete_callback,
-                              g_ffplay_complete_user_data, complete_cb,
-                              user_data);
-    if (complete_cb) {
-      FFmpegKitConfig::enableFFplaySessionCompleteCallback([](std::shared_ptr<FFplaySession> title) {
-            const auto callback_state = snapshot_global_callback_state(
-                g_ffplay_complete_callback, g_ffplay_complete_user_data);
-            if (callback_state.first) {
-              auto handle = create_handle(title);
-              callback_state.first(handle, callback_state.second);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableFFplaySessionCompleteCallback(nullptr);
-    }
-  } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_ffplay_session_complete_callback: "
-              << e.what() << std::endl;
-    PRINT_STACK_TRACE();
-  }
-}
-
-void DLL_ALIGN ffmpeg_kit_config_enable_media_information_session_complete_callback(
-    ::MediaInformationSessionCompleteCallback complete_cb, void *user_data) {
-  try {
-    set_global_callback_state(g_media_complete_callback,
-                              g_media_complete_user_data, complete_cb,
-                              user_data);
-    if (complete_cb) {
-      FFmpegKitConfig::enableMediaInformationSessionCompleteCallback([](std::shared_ptr<MediaInformationSession> title) {
-            const auto callback_state = snapshot_global_callback_state(
-                g_media_complete_callback, g_media_complete_user_data);
-            if (callback_state.first) {
-              auto handle = create_handle(title);
-              callback_state.first(handle, callback_state.second);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableMediaInformationSessionCompleteCallback(nullptr);
-    }
-  } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_media_information_session_complete_"
-                 "callback: "
-              << e.what() << std::endl;
-    PRINT_STACK_TRACE();
-  }
-}
 
 /* Utils */
 char * DLL_ALIGN ffmpeg_kit_config_register_new_ffmpeg_pipe(void) {

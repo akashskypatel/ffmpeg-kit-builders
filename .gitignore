@@ -46,3 +46,4 @@ QWEN.md
 **/_prebuilt/*
 **/.prebuilt/*
 **/*.zip
+.emscripten*/
