@@ -436,3 +436,33 @@ The G10 contract is verified: the table was discovered exactly once by
 `instanceof WebAssembly.Table`, `table.grow(1)` returned the old length,
 existing and newly written compatible functions remained callable, and
 repeated growth succeeded.
+
+### G12 C-to-JS Wasm callback round-trip
+
+G12 adds test-only exports for the C++ V2 callback emitters and uses the
+generated Emscripten loader to initialize the main runtime before testing
+callback pointers. The default production environment remains
+`web,worker`; this verification build selects `node`.
+
+#### Loader-initialized Wasm build
+
+```bash
+sudo bash -lc 'source /usr/local/emsdk/emsdk_env.sh && export EM_CACHE=/home/vscode/ffmpeg-kit-builders/.emscripten-cache-g12 && export PKG_CONFIG_PATH=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries/lib/pkgconfig:/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl/lib/pkgconfig && cd /home/vscode/ffmpeg-kit-builders && emcmake cmake -S FFmpegKit -B FFmpegKit/build-wasm-callback-g12 -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug -DFFMPEG_KIT_WASM_ENVIRONMENT=node -DFFMPEG_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl -DDEPENDENCY_BUILD_DIR=/home/vscode/ffmpeg-kit-builders/prebuilt/wasm-wasm32/libraries -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 && cmake --build FFmpegKit/build-wasm-callback-g12 --target ffmpegkit_wasm -j2'
+```
+
+#### C-to-JS test
+
+```bash
+wsl.exe -d ManyLinux -- bash -lc "cd /mnt/d/Projects/ffmpeg_kit_extended && /usr/local/emsdk/node/24.19.0_64bit/bin/node flutter/web/ffmpegkit_callback_roundtrip_test.mjs /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g12/ffmpegkit.wasm /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-g12/ffmpegkit.mjs"
+```
+
+Output:
+
+```text
+{"sessionId":"4328719365","callbacks":["log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","log","statistics","log","log","statistics","completion"],"realLogCount":60,"realStatisticsCount":2,"realCompletionCount":1,"userData":31232,"status":"PASS"}
+```
+
+The G12 gate is satisfied: C++ registered the exact `vjp`, `vjpp`, and
+`vjjjjddjddjjp` callback pointers, the Wasm worker session delivered logs,
+statistics, and one completion through the main-runtime dispatcher, and all
+callbacks carried the expected stable session ID and user data.

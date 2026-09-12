@@ -46,6 +46,8 @@ set(FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE "4" CACHE STRING
     "Number of Emscripten pthread workers created when the WASM module starts")
 set(FFMPEG_KIT_WASM_INITIAL_MEMORY "67108864" CACHE STRING
     "Initial memory size in bytes for the final Emscripten module")
+set(FFMPEG_KIT_WASM_ENVIRONMENT "web,worker" CACHE STRING
+    "Emscripten runtime environments for the generated Wasm module")
 
 # CMAKE_BUILD_TYPE is a CMake built-in string variable, not a boolean option.
 # Using option() on it silently converts it to OFF. Use set() instead.
@@ -635,6 +637,12 @@ else()
 endif()
 
 if(EMSCRIPTEN)
+    if(BUILD_TESTS)
+        set(FFMPEGKIT_WASM_TEST_EXPORTS ",_ffmpeg_kit_test_emit_v2_log_with_session_id,_ffmpeg_kit_test_emit_v2_statistics_with_session_id,_ffmpeg_kit_test_emit_v2_ffmpeg_completion_with_session_id,_ffmpeg_kit_test_process_wasm_callback_queue")
+    else()
+        set(FFMPEGKIT_WASM_TEST_EXPORTS "")
+    endif()
+
     # A static archive is useful to native Emscripten consumers, but browsers
     # need a final linked module and its JavaScript loader. Explicitly rooting
     # the initialization API pulls in the wrapper object; its remaining public
@@ -657,13 +665,13 @@ if(EMSCRIPTEN)
         "-sMODULARIZE=1"
         "-sEXPORT_ES6=1"
         "-sEXPORT_NAME=createFFmpegKit"
-        "-sENVIRONMENT=web,worker"
+        "-sENVIRONMENT=${FFMPEG_KIT_WASM_ENVIRONMENT}"
         "-sINITIAL_MEMORY=${FFMPEG_KIT_WASM_INITIAL_MEMORY}"
         "-sALLOW_MEMORY_GROWTH=1"
         "-sALLOW_TABLE_GROWTH=1"
         "-sPTHREAD_POOL_SIZE=${FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE}"
         "-sFORCE_FILESYSTEM=1"
-        "-sEXPORTED_FUNCTIONS=_malloc,_free,_ffmpeg_kit_initialize,_ffplay_kit_execute_async,_ffplay_kit_create_session,_ffplay_kit_close_session,_ffplay_kit_session_execute_async,_ffplay_kit_session_seek,_ffplay_kit_session_start,_ffplay_kit_session_pause,_ffplay_kit_session_resume,_ffplay_kit_session_stop,_ffplay_kit_session_get_position,_ffplay_kit_session_get_duration,_ffplay_kit_session_is_playing,_ffplay_kit_session_is_paused,_ffplay_kit_session_set_volume,_ffplay_kit_session_get_volume,_ffplay_kit_session_get_video_width,_ffplay_kit_session_get_video_height,_ffplay_kit_get_frame_buffer_size,_ffplay_kit_copy_frame"
+        "-sEXPORTED_FUNCTIONS=_malloc,_free,_ffmpeg_kit_initialize,_ffplay_kit_execute_async,_ffplay_kit_create_session,_ffplay_kit_close_session,_ffplay_kit_session_execute_async,_ffplay_kit_session_seek,_ffplay_kit_session_start,_ffplay_kit_session_pause,_ffplay_kit_session_resume,_ffplay_kit_session_stop,_ffplay_kit_session_get_position,_ffplay_kit_session_get_duration,_ffplay_kit_session_is_playing,_ffplay_kit_session_is_paused,_ffplay_kit_session_set_volume,_ffplay_kit_session_get_volume,_ffplay_kit_session_get_video_width,_ffplay_kit_session_get_video_height,_ffplay_kit_get_frame_buffer_size,_ffplay_kit_copy_frame${FFMPEGKIT_WASM_TEST_EXPORTS}"
         "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToNewUTF8"
     )
     set_target_properties(ffmpegkit_wasm PROPERTIES
