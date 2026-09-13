@@ -10,6 +10,7 @@
   with runtime function-table growth support.
 - Added native, WebAssembly, and C-to-JavaScript regression coverage for
   callback delivery, lifecycle, ordering, and table behavior.
+- Added non-interactive browser stdin handling and headless Flutter Web callback tests.
 
 ## Version 0.11.1
 

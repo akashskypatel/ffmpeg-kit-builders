@@ -419,11 +419,18 @@ wsl.exe -d ManyLinux -- bash -lc "cd /mnt/d/Projects/ffmpeg_kit_extended && /usr
 
 ### Flutter Web callback probe
 
-Run the public API probe from the Flutter example checkout against the locally staged Wasm bundle. Pthread-enabled bundles require cross-origin isolation.
-~~~bash
+Run the public API callback test from the Flutter example checkout against the
+locally staged Wasm bundle. The test runner launches Chrome headlessly, so it
+does not open a browser window or accept interactive input. Pthread-enabled
+bundles require cross-origin isolation.
+```bash
 cd /mnt/d/Projects/ffmpeg_kit_extended/flutter/example
-flutter run -d chrome --wasm -t lib/wasm_callback_probe.dart
-~~~
+flutter test --platform chrome --wasm test/wasm_callback_test.dart
+```
+
+For an interactive manual probe, launch the example explicitly with
+`flutter run -d chrome --wasm -t lib/wasm_callback_probe.dart`.
+
 The probe reports FFmpeg completion, logs, statistics, FFprobe completion and logs, and MediaInformation completion. Each completion must be delivered exactly once.
 
 The test should report one completion, the expected log and statistics counts,

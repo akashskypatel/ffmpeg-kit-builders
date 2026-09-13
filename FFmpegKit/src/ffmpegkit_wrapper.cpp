@@ -3296,7 +3296,7 @@ static void dispatch_media_information_complete_callback(
 
 
 static void install_log_callback() {
-  if (g_log_callback) {
+  if (snapshot_global_callback_state(g_log_callback, g_log_user_data).first) {
     FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
       if (log) {
         dispatch_log_callback(static_cast<int64_t>(log->getSessionId()),
@@ -3309,7 +3309,7 @@ static void install_log_callback() {
 }
 
 static void install_statistics_callback() {
-  if (g_stats_callback) {
+  if (snapshot_global_callback_state(g_stats_callback, g_stats_user_data).first) {
     FFmpegKitConfig::enableStatisticsCallback(
         [](std::shared_ptr<Statistics> statistics) {
           if (statistics) {
@@ -3329,7 +3329,9 @@ static void install_statistics_callback() {
 }
 
 static void install_ffmpeg_complete_callback() {
-  if (g_ffmpeg_complete_callback) {
+  if (snapshot_global_callback_state(g_ffmpeg_complete_callback,
+                                     g_ffmpeg_complete_user_data)
+          .first) {
     FFmpegKitConfig::enableFFmpegSessionCompleteCallback(
         [](std::shared_ptr<FFmpegSession> session) {
           dispatch_ffmpeg_complete_callback(session);
@@ -3340,7 +3342,9 @@ static void install_ffmpeg_complete_callback() {
 }
 
 static void install_ffprobe_complete_callback() {
-  if (g_ffprobe_complete_callback) {
+  if (snapshot_global_callback_state(g_ffprobe_complete_callback,
+                                     g_ffprobe_complete_user_data)
+          .first) {
     FFmpegKitConfig::enableFFprobeSessionCompleteCallback(
         [](std::shared_ptr<FFprobeSession> session) {
           dispatch_ffprobe_complete_callback(session);
@@ -3351,7 +3355,9 @@ static void install_ffprobe_complete_callback() {
 }
 
 static void install_ffplay_complete_callback() {
-  if (g_ffplay_complete_callback) {
+  if (snapshot_global_callback_state(g_ffplay_complete_callback,
+                                     g_ffplay_complete_user_data)
+          .first) {
     FFmpegKitConfig::enableFFplaySessionCompleteCallback(
         [](std::shared_ptr<FFplaySession> session) {
           dispatch_ffplay_complete_callback(session);
@@ -3362,7 +3368,9 @@ static void install_ffplay_complete_callback() {
 }
 
 static void install_media_information_complete_callback() {
-  if (g_media_complete_callback) {
+  if (snapshot_global_callback_state(g_media_complete_callback,
+                                     g_media_complete_user_data)
+          .first) {
     FFmpegKitConfig::enableMediaInformationSessionCompleteCallback(
         [](std::shared_ptr<MediaInformationSession> session) {
           dispatch_media_information_complete_callback(session);
