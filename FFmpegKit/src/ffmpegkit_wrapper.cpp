@@ -1862,14 +1862,21 @@ void DLL_ALIGN ffplay_kit_clear_android_surface(void) {}
 
 void DLL_ALIGN ffplay_kit_register_frame_callback(
     FFplayKitFrameCallback callback, void *userdata) {
+#if defined(__EMSCRIPTEN__)
+  (void)callback;
+  (void)userdata;
+#else
   ffplay_set_frame_callback(
       reinterpret_cast<void (*)(void *, const uint8_t *, int, int, int,
                                 const char *)>(callback),
       userdata);
+#endif
 }
 
 void DLL_ALIGN ffplay_kit_unregister_frame_callback(void) {
+#if !defined(__EMSCRIPTEN__)
   ffplay_set_frame_callback(nullptr, nullptr);
+#endif
 }
 
 size_t DLL_ALIGN ffplay_kit_get_frame_buffer_size(void) {

@@ -386,6 +386,12 @@ void ffplay_lib_on_frame(const uint8_t *pixels, int width, int height,
 }
 
 void ffplay_set_frame_callback(FFplayFrameCallback callback, void *userdata) {
+#if defined(__EMSCRIPTEN__)
+    /* Wasm hosts must use the pull API; native function-pointer callbacks are
+     * not a safe cross-runtime boundary. */
+    (void)callback;
+    (void)userdata;
+#else
     /* Hold the API mutex so that when this returns with callback==NULL,
      * ffplay_step is guaranteed to have finished any in-flight call.
      * (ffplay_step holds this same mutex for the entire callback block.) */
@@ -393,6 +399,7 @@ void ffplay_set_frame_callback(FFplayFrameCallback callback, void *userdata) {
     g_frame_callback = callback;
     g_frame_callback_userdata = userdata;
     unlock_ffplay_api();
+#endif
 }
 
 /* Compatibility string entry point. Prefer ffplay_init_argv() when

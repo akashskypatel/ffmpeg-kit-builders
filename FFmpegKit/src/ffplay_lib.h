@@ -233,7 +233,8 @@ FFMPEG_API void ffplay_set_android_window(ANativeWindow *window);
 #endif /* __ANDROID__ */
 
 /**
- * Frame-ready callback for desktop video output. Fired inside ffplay_step().
+ * Frame-ready callback for native desktop video output. Unsupported on
+ * WebAssembly. Fired inside ffplay_step() on supported native platforms.
  * Pixel format: RGBA8888 ([R][G][B][A] on little-endian), linesize == width * 4.
  * The pixel buffer is reused for later frames; copy if you need to retain it.
  *
@@ -248,7 +249,8 @@ typedef void (*FFplayFrameCallback)(void *userdata, const uint8_t *pixels,
                                     const char *pixel_format);
 
 /**
- * Registers a frame-ready callback for desktop video output. Call before ffplay_init().
+ * Registers a frame-ready callback for native desktop video output. This is
+ * a no-op on WebAssembly. Call before ffplay_init().
  *
  * @param callback  frame callback, or NULL to clear
  * @param userdata  forwarded to every callback invocation

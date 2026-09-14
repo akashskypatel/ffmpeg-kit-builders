@@ -83,10 +83,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=WasmCallbackAuthorityTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_authority_tests$'
 ```
 
 ### Callback lock re-entry
@@ -113,10 +111,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=GlobalCallbackLockTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_callback_lock_tests$'
 ```
 
 ### Pthread startup failure safety
@@ -145,10 +141,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=PthreadFailureTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_pthread_failure_tests$'
 ```
 
 ### Synchronized wrapper callback state
@@ -177,10 +171,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=WrapperCallbackStateTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_wrapper_state_tests$'
 ```
 
 The Wasm configuration uses a bounded emission count to remain within the
@@ -213,10 +205,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=GlobalCallbackSessionIdTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_session_id_tests$'
 ```
 
 ### Main-runtime callback dispatcher
@@ -247,10 +237,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=WasmCallbackDispatcherTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_dispatcher_tests$'
 ```
 
 ### Session completion callbacks
@@ -279,10 +267,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=SessionCompletionTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_session_completion_tests$'
 ```
 
 ### Log and statistics callbacks
@@ -310,10 +296,19 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-node "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js" \
-  --gtest_filter=LogStatisticsTest.*
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^ffmpegkit_wasm_log_statistics_tests$'
+```
+
+### FFplay frame callback contract
+
+The native frame callback is unsupported on WebAssembly. The Wasm API uses the
+caller-owned pull functions instead.
+
+```bash
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_ffplay_frame_tests$'
 ```
 
 ### Complete C/C++ Wasm callback harness
@@ -332,10 +327,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
   -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
-/usr/local/emsdk/node/24.19.0_64bit/bin/node \
-  "$FFMPEG_KIT_BUILD/tests/ffmpegkit_wasm_callback_tests.js"
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^ffmpegkit_wasm_callback_tests$'
+  -R '^(ffmpegkit_wasm_(authority|callback_lock|pthread_failure|wrapper_state|session_id|session_completion|log_statistics|dispatcher|ffplay_frame)_tests|ffmpegkit_wasm_table_growth)$'
 ```
 
 ### Wasm indirect function-table growth

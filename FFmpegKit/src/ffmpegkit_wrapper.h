@@ -172,8 +172,11 @@ typedef void (*MediaInformationSessionCompleteCallback)(
     MediaInformationSessionHandle session, void *user_data);
 
 /**
- * Frame-ready callback type for native desktop and WebAssembly video output.
-*
+ * Frame-ready callback type for native desktop video output.
+ *
+ * This callback is unsupported on WebAssembly. WebAssembly callers must use
+ * ffplay_kit_get_frame_buffer_size() and ffplay_kit_copy_frame() instead.
+ *
  * Fired inside ffplay_step() on every rendered video frame.
  * Pixel format: RGBA8888 — bytes [R][G][B][A] on little-endian, compatible
  * with Flutter's FlutterDesktopPixelBuffer.
@@ -1045,11 +1048,14 @@ ffplay_kit_set_android_surface_ptr(int64_t native_window_ptr);
 FFMPEG_KIT_C_EXPORT void ffplay_kit_clear_android_surface(void);
 
 /**
- * Registers a global frame-ready callback for desktop video output
+ * Registers a global frame-ready callback for native desktop video output
  * (Linux/Windows).
  *
+ * This function is a no-op on WebAssembly. WebAssembly callers must use
+ * ffplay_kit_get_frame_buffer_size() and ffplay_kit_copy_frame() instead.
  * Must be called before ffplay_kit_session_execute() / ffplay_kit_execute().
- * On Android this is a no-op; video output is delivered to the ANativeWindow.
+ * On Android this is also a no-op; video output is delivered to the
+ * ANativeWindow.
  *
  * Dart FFI usage:
  *   ffplay_kit_register_frame_callback(Pointer.fromFunction(myCallback),
@@ -1064,9 +1070,9 @@ ffplay_kit_register_frame_callback(FFplayKitFrameCallback callback,
                                    void *userdata);
 
 /**
- * Clears the global frame callback, stopping desktop pixel delivery.
+ * Clears the global native-desktop frame callback.
  * Equivalent to ffplay_kit_register_frame_callback(NULL, NULL).
- * On Android this is a no-op.
+ * On WebAssembly and Android this is a no-op.
  */
 FFMPEG_KIT_C_EXPORT void ffplay_kit_unregister_frame_callback(void);
 
