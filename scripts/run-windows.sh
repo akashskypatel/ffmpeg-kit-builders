@@ -641,13 +641,31 @@ build_libwebp() {
   local lib="libwebp"
   local repo="https://chromium.googlesource.com/webm/libwebp"
   local repo_ver="v1.6.0"
+  export LIBPNG_CONFIG="$dependency_install_prefix/bin/libpng-config --static" # LibPNG somehow doesn't get autodetected.
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-	change_dir "$src_dir/$lib"
-	export LIBPNG_CONFIG="$dependency_install_prefix/bin/libpng-config --static" # LibPNG somehow doesn't get autodetected.
-	generic_configure "--disable-wic --enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-	do_make_and_make_install
+	change_dir "$src_dir/$lib/build" 1
+  local cmake_args="-DCMAKE_BUILD_TYPE=Release \
+-DCMAKE_C_FLAGS_RELEASE=\"-O3 -DNDEBUG\" \
+-DBUILD_SHARED_LIBS=OFF \
+-DWEBP_LINK_STATIC=ON \
+-DWEBP_ENABLE_SIMD=ON \
+-DWEBP_USE_THREAD=ON \
+-DWEBP_NEAR_LOSSLESS=ON \
+-DWEBP_BUILD_ANIM_UTILS=OFF \
+-DWEBP_BUILD_CWEBP=OFF \
+-DWEBP_BUILD_DWEBP=OFF \
+-DWEBP_BUILD_GIF2WEBP=OFF \
+-DWEBP_BUILD_IMG2WEBP=OFF \
+-DWEBP_BUILD_VWEBP=OFF \
+-DWEBP_BUILD_WEBPINFO=OFF \
+-DWEBP_BUILD_LIBWEBPMUX=ON \
+-DWEBP_BUILD_WEBPMUX=OFF \
+-DWEBP_BUILD_EXTRAS=OFF \
+-DWEBP_BUILD_WEBP_JS=OFF \
+-DWEBP_BUILD_FUZZTEST=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args" "libwebp-cmake"
+  do_make_and_make_install "" "" "libwebp-cmake"
 	unset LIBPNG_CONFIG
 	change_dir "$src_dir"
 }
