@@ -4,13 +4,15 @@
 
 - Expanded WebAssembly support for library builds and runtime integration.
 - Improved callback safety across native and WebAssembly execution, including
-  thread-safe callback state and main-runtime delivery for logs, statistics,
-  and completion callbacks.
+  thread-safe callback state, dedicated main-runtime dispatch, and failure
+  handling for logs, statistics, and completion callbacks.
+- Preserved opaque-handle per-session APIs while making FFmpeg, FFprobe, FFplay,
+  and media-information callbacks safe across Wasm pthreads.
 - Added stable session-ID callback transport and JavaScript callback registration
-  with runtime function-table growth support.
-- Added native, WebAssembly, and C-to-JavaScript regression coverage for
-  callback delivery, lifecycle, ordering, and table behavior.
-- Added non-interactive browser stdin handling and headless Flutter Web callback tests.
+  with runtime function-table growth support and module-lifetime slot ownership.
+- Added deterministic Wasm load failures, non-interactive browser stdin handling,
+  and headless native/Web callback regression coverage for delivery, lifecycle,
+  ordering, and table behavior.
 
 ## Version 0.11.1
 

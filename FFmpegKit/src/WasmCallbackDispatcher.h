@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <atomic>
 #include <string>
 
 #if defined(__EMSCRIPTEN__)
@@ -60,6 +61,15 @@ class WasmCallbackDispatcher final {
    */
   bool dispatch_task(Task callback);
 
+  /**
+   * Delivers a terminal callback synchronously on the target runtime.
+   *
+   * This is a blocking last-resort path for lifecycle callbacks whose
+   * successful delivery is required to settle an execution. It uses the
+   * dedicated queue and returns false if the target runtime is unavailable.
+   */
+  bool dispatch_task_sync(Task callback);
+
   /** Returns whether the caller is the platform's main runtime thread. */
   bool is_main_runtime_thread() const;
 
@@ -70,6 +80,11 @@ class WasmCallbackDispatcher final {
    * and tests that explicitly drive the main runtime queue.
    */
   void process_pending();
+
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+  /** Makes the next [count] queue submissions fail for fault-injection tests. */
+  void set_enqueue_failures_for_testing(int count);
+#endif
 
  private:
   struct OwnedEvent {
@@ -87,14 +102,22 @@ class WasmCallbackDispatcher final {
     Task callback;
   };
 
-  static void process_pending_on_main(void *raw_dispatcher);
   static void invoke_owned_event(void *raw_event);
   static void invoke_owned_session_event(void *raw_event);
   static void invoke_owned_task_event(void *raw_event);
+  static void invoke_borrowed_task_event(void *raw_event);
+
+#if defined(__EMSCRIPTEN__)
+  bool enqueue(void (*callback)(void *), void *event);
+#endif
 
 #if defined(__EMSCRIPTEN__)
   struct em_proxying_queue *queue_;
   pthread_t main_runtime_thread_;
+#endif
+
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+  std::atomic<int> enqueue_failures_{0};
 #endif
 };
 

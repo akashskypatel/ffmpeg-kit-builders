@@ -183,7 +183,113 @@ void expect_batch(CompletionObservation *observations) {
   }
 }
 
+struct PerSessionObservation {
+  void *expected_handle = nullptr;
+  std::atomic<int> complete_count{0};
+  std::atomic<int> log_count{0};
+  std::atomic<int> statistics_count{0};
+  std::atomic<bool> callbacks_on_main{true};
+};
+
+void per_session_complete(void *handle, void *user_data) {
+  auto *observation = static_cast<PerSessionObservation *>(user_data);
+  if (handle != observation->expected_handle) {
+    observation->callbacks_on_main.store(false, std::memory_order_release);
+  }
+#if defined(__EMSCRIPTEN__)
+  if (!emscripten_is_main_runtime_thread()) {
+    observation->callbacks_on_main.store(false, std::memory_order_release);
+  }
+#endif
+  observation->complete_count.fetch_add(1, std::memory_order_release);
+}
+
+void per_session_log(void *handle, const char *message, void *user_data) {
+  auto *observation = static_cast<PerSessionObservation *>(user_data);
+  if (handle != observation->expected_handle || message == nullptr) {
+    observation->callbacks_on_main.store(false, std::memory_order_release);
+  }
+#if defined(__EMSCRIPTEN__)
+  if (!emscripten_is_main_runtime_thread()) {
+    observation->callbacks_on_main.store(false, std::memory_order_release);
+  }
+#endif
+  observation->log_count.fetch_add(1, std::memory_order_release);
+}
+
+void per_session_statistics(
+    void *handle, int64_t, int64_t, int64_t, double, double, int64_t, double,
+    double, int64_t, int64_t, void *user_data) {
+  auto *observation = static_cast<PerSessionObservation *>(user_data);
+  if (handle != observation->expected_handle) {
+    observation->callbacks_on_main.store(false, std::memory_order_release);
+  }
+#if defined(__EMSCRIPTEN__)
+  if (!emscripten_is_main_runtime_thread()) {
+    observation->callbacks_on_main.store(false, std::memory_order_release);
+  }
+#endif
+  observation->statistics_count.fetch_add(1, std::memory_order_release);
+}
+
+#if defined(__EMSCRIPTEN__)
+struct CompletionFallbackWorkerArguments {
+  int64_t session_id;
+};
+
+void *emit_completion_from_worker(void *raw_arguments) {
+  auto *arguments =
+      static_cast<CompletionFallbackWorkerArguments *>(raw_arguments);
+  ffmpeg_kit_test_set_wasm_callback_enqueue_failures(2);
+  ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id(arguments->session_id);
+  return nullptr;
+}
+#endif
+
 }  // namespace
+
+#if defined(__EMSCRIPTEN__)
+TEST(SessionCompletionTest, PersistentCompletionEnqueueFailureUsesSyncFallback) {
+  ASSERT_TRUE(emscripten_is_main_runtime_thread());
+  ffmpeg_kit_initialize();
+
+  CompletionObservation observation;
+  auto handle = ffmpeg_kit_create_session("-version");
+  ASSERT_NE(handle, nullptr);
+  observation.expected_session_id =
+      ffmpeg_kit_session_get_session_id(handle);
+
+  ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
+      record_completion, &observation);
+
+  CompletionFallbackWorkerArguments arguments{observation.expected_session_id};
+  pthread_t worker{};
+  ASSERT_EQ(
+      pthread_create(&worker, nullptr, emit_completion_from_worker, &arguments),
+      0);
+
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(5);
+  while (std::chrono::steady_clock::now() < deadline &&
+         observation.callback_count.load(std::memory_order_acquire) == 0) {
+    ffmpeg_kit_test_process_wasm_callback_queue();
+  }
+
+  ASSERT_EQ(pthread_join(worker, nullptr), 0);
+  EXPECT_EQ(observation.callback_count.load(std::memory_order_acquire), 1);
+  {
+    std::lock_guard<std::mutex> lock(observation.mutex);
+    ASSERT_EQ(observation.records.size(), 1u);
+    EXPECT_EQ(observation.records[0].session_id,
+              observation.expected_session_id);
+    EXPECT_TRUE(observation.records[0].on_main_runtime_thread);
+  }
+
+  ffmpeg_kit_test_set_wasm_callback_enqueue_failures(0);
+  disable_all();
+  ffmpeg_kit_handle_release(handle);
+}
+#endif
 
 TEST(SessionCompletionTest,
      AsyncCompletionUsesStableIdsFinalStateAndRuntimeThread) {
@@ -235,6 +341,42 @@ TEST(SessionCompletionTest,
   }
   release_batch(unregistered_handles);
   disable_all();
+  if (!redirection_was_enabled) {
+    ffmpegkit::FFmpegKitConfig::disableRedirection();
+  }
+}
+TEST(SessionCompletionTest, PerSessionCallbacksUseMainRuntimeAndOpaqueHandle) {
+  ffmpeg_kit_initialize();
+  const bool redirection_was_enabled =
+      ffmpegkit::FFmpegKitConfig::isRedirectionEnabledForTesting();
+  if (!redirection_was_enabled) {
+    ffmpegkit::FFmpegKitConfig::enableRedirection();
+  }
+
+  PerSessionObservation observation;
+  const auto handle = ffmpeg_kit_create_session_with_callbacks(
+      "-nostdin -loglevel info -f lavfi -i "
+      "testsrc=duration=0.5:size=32x32:rate=10 -f null -",
+      per_session_complete, per_session_log, per_session_statistics,
+      &observation);
+  ASSERT_NE(handle, nullptr);
+  observation.expected_handle = handle;
+  ffmpeg_kit_session_execute_async(handle);
+
+  ASSERT_TRUE(wait_for_terminal(handle));
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(5);
+  while (observation.complete_count.load(std::memory_order_acquire) == 0 &&
+         std::chrono::steady_clock::now() < deadline) {
+    ffmpeg_kit_test_process_wasm_callback_queue();
+    std::this_thread::yield();
+  }
+
+  EXPECT_EQ(observation.complete_count.load(std::memory_order_acquire), 1);
+  EXPECT_GT(observation.log_count.load(std::memory_order_acquire), 0);
+  EXPECT_GT(observation.statistics_count.load(std::memory_order_acquire), 0);
+  EXPECT_TRUE(observation.callbacks_on_main.load(std::memory_order_acquire));
+  ffmpeg_kit_handle_release(handle);
   if (!redirection_was_enabled) {
     ffmpegkit::FFmpegKitConfig::disableRedirection();
   }

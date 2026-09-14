@@ -67,11 +67,113 @@ void *dispatch_worker(void *raw_arguments) {
   diagnostics->worker_done.store(true, std::memory_order_release);
   return nullptr;
 }
+
+struct FailureDiagnostics {
+  WasmCallbackDispatcher *dispatcher;
+  std::atomic<bool> accepted{false};
+  std::atomic<int> invoked{0};
+};
+
+void *failure_worker(void *raw_arguments) {
+  auto *diagnostics = static_cast<FailureDiagnostics *>(raw_arguments);
+  diagnostics->accepted.store(
+      diagnostics->dispatcher->dispatch(
+          "rejected-payload",
+          [diagnostics](std::string) {
+            diagnostics->invoked.fetch_add(1, std::memory_order_release);
+          }),
+      std::memory_order_release);
+  return nullptr;
+}
+
+struct SyncFallbackDiagnostics {
+  WasmCallbackDispatcher *dispatcher;
+  std::atomic<bool> worker_done{false};
+  std::atomic<bool> async_accepted{false};
+  std::atomic<bool> fallback_accepted{false};
+  std::atomic<int> invoked{0};
+};
+
+void *sync_fallback_worker(void *raw_arguments) {
+  auto *diagnostics =
+      static_cast<SyncFallbackDiagnostics *>(raw_arguments);
+  WasmCallbackDispatcher::Task task = [diagnostics]() {
+    diagnostics->invoked.fetch_add(1, std::memory_order_release);
+  };
+  diagnostics->async_accepted.store(
+      diagnostics->dispatcher->dispatch_task(task),
+      std::memory_order_release);
+  if (!diagnostics->async_accepted.load(std::memory_order_acquire)) {
+    diagnostics->fallback_accepted.store(
+        diagnostics->dispatcher->dispatch_task_sync(std::move(task)),
+        std::memory_order_release);
+  }
+  diagnostics->worker_done.store(true, std::memory_order_release);
+  return nullptr;
+}
 #endif
 
 }  // namespace
 
 #if defined(__EMSCRIPTEN__)
+TEST(WasmCallbackDispatcherTest, EnqueueFailureDoesNotInvokeOrLeakCallback) {
+  ASSERT_TRUE(emscripten_is_main_runtime_thread());
+
+  WasmCallbackDispatcher dispatcher;
+  FailureDiagnostics diagnostics{&dispatcher};
+  dispatcher.set_enqueue_failures_for_testing(2);
+
+  pthread_t worker{};
+  ASSERT_EQ(pthread_create(&worker, nullptr, failure_worker, &diagnostics), 0);
+  ASSERT_EQ(pthread_join(worker, nullptr), 0);
+
+  dispatcher.process_pending();
+  EXPECT_FALSE(diagnostics.accepted.load(std::memory_order_acquire));
+  EXPECT_EQ(diagnostics.invoked.load(std::memory_order_acquire), 0);
+  dispatcher.set_enqueue_failures_for_testing(0);
+}
+
+TEST(WasmCallbackDispatcherTest, TransientEnqueueFailureIsRetried) {
+  ASSERT_TRUE(emscripten_is_main_runtime_thread());
+
+  WasmCallbackDispatcher dispatcher;
+  FailureDiagnostics diagnostics{&dispatcher};
+  dispatcher.set_enqueue_failures_for_testing(1);
+
+  pthread_t worker{};
+  ASSERT_EQ(pthread_create(&worker, nullptr, failure_worker, &diagnostics), 0);
+  ASSERT_EQ(pthread_join(worker, nullptr), 0);
+
+  dispatcher.process_pending();
+  EXPECT_TRUE(diagnostics.accepted.load(std::memory_order_acquire));
+  EXPECT_EQ(diagnostics.invoked.load(std::memory_order_acquire), 1);
+}
+
+TEST(WasmCallbackDispatcherTest, PersistentAsyncFailureSupportsSyncFallback) {
+  ASSERT_TRUE(emscripten_is_main_runtime_thread());
+
+  WasmCallbackDispatcher dispatcher;
+  SyncFallbackDiagnostics diagnostics{&dispatcher};
+  dispatcher.set_enqueue_failures_for_testing(2);
+
+  pthread_t worker{};
+  ASSERT_EQ(
+      pthread_create(&worker, nullptr, sync_fallback_worker, &diagnostics), 0);
+
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::seconds(5);
+  while (std::chrono::steady_clock::now() < deadline &&
+         !diagnostics.worker_done.load(std::memory_order_acquire)) {
+    dispatcher.process_pending();
+  }
+
+  ASSERT_TRUE(diagnostics.worker_done.load(std::memory_order_acquire));
+  ASSERT_EQ(pthread_join(worker, nullptr), 0);
+  EXPECT_FALSE(diagnostics.async_accepted.load(std::memory_order_acquire));
+  EXPECT_TRUE(diagnostics.fallback_accepted.load(std::memory_order_acquire));
+  EXPECT_EQ(diagnostics.invoked.load(std::memory_order_acquire), 1);
+}
+
 TEST(WasmCallbackDispatcherTest, WorkerPayloadsRunOnMainExactlyOnce) {
   ASSERT_TRUE(emscripten_is_main_runtime_thread());
 

@@ -6,18 +6,50 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/proxying.h>
 #include <emscripten/threading.h>
-#include <emscripten/threading_legacy.h>
 #endif
 
 WasmCallbackDispatcher::WasmCallbackDispatcher()
 #if defined(__EMSCRIPTEN__)
-    : queue_(emscripten_proxy_get_system_queue()),
+    : queue_(em_proxying_queue_create()),
       main_runtime_thread_(emscripten_main_runtime_thread_id())
 #endif
 {
 }
 
-WasmCallbackDispatcher::~WasmCallbackDispatcher() = default;
+WasmCallbackDispatcher::~WasmCallbackDispatcher() {
+#if defined(__EMSCRIPTEN__)
+  if (queue_ != nullptr) {
+    em_proxying_queue_destroy(queue_);
+    queue_ = nullptr;
+  }
+#endif
+}
+
+#if defined(__EMSCRIPTEN__)
+bool WasmCallbackDispatcher::enqueue(void (*callback)(void *), void *event) {
+  // A mailbox can report a transient failure while the target runtime is
+  // returning to its event loop. Retry once before reporting a rejected
+  // callback, while still preserving the bool failure contract.
+  for (int attempt = 0; attempt < 2; ++attempt) {
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+    int failures = enqueue_failures_.load(std::memory_order_acquire);
+    while (failures > 0 &&
+           !enqueue_failures_.compare_exchange_weak(
+               failures, failures - 1, std::memory_order_acq_rel,
+               std::memory_order_acquire)) {
+    }
+    if (failures > 0) {
+      continue;
+    }
+#endif
+    if (queue_ != nullptr &&
+        emscripten_proxy_async(queue_, main_runtime_thread_, callback, event)) {
+      return true;
+    }
+  }
+  return false;
+}
+#endif
 
 bool WasmCallbackDispatcher::dispatch(std::string payload,
                                       Callback callback) {
@@ -34,15 +66,10 @@ bool WasmCallbackDispatcher::dispatch(std::string payload,
     return true;
   }
 
-  if (queue_ == nullptr ||
-      !emscripten_proxy_async(queue_, main_runtime_thread_,
-                              &WasmCallbackDispatcher::invoke_owned_event,
-                              event.get())) {
+  if (!enqueue(&WasmCallbackDispatcher::invoke_owned_event, event.get())) {
     return false;
   }
   event.release();
-  emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI,
-      &WasmCallbackDispatcher::process_pending_on_main, this);
   return true;
 #else
   invoke_owned_event(event.release());
@@ -63,15 +90,11 @@ bool WasmCallbackDispatcher::dispatch_task(Task callback) {
     return true;
   }
 
-  if (queue_ == nullptr ||
-      !emscripten_proxy_async(queue_, main_runtime_thread_,
-                              &WasmCallbackDispatcher::invoke_owned_task_event,
-                              event.get())) {
+  if (!enqueue(&WasmCallbackDispatcher::invoke_owned_task_event,
+               event.get())) {
     return false;
   }
   event.release();
-  emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI,
-      &WasmCallbackDispatcher::process_pending_on_main, this);
   return true;
 #else
   invoke_owned_task_event(event.release());
@@ -95,10 +118,6 @@ void WasmCallbackDispatcher::process_pending() {
 #endif
 }
 
-void WasmCallbackDispatcher::process_pending_on_main(void *raw_dispatcher) {
-  static_cast<WasmCallbackDispatcher *>(raw_dispatcher)->process_pending();
-}
-
 void WasmCallbackDispatcher::invoke_owned_event(void *raw_event) {
   std::unique_ptr<OwnedEvent> event(static_cast<OwnedEvent *>(raw_event));
   event->callback(std::move(event->payload));
@@ -119,15 +138,11 @@ bool WasmCallbackDispatcher::dispatch_session_callback(
     return true;
   }
 
-  if (queue_ == nullptr ||
-      !emscripten_proxy_async(
-          queue_, main_runtime_thread_,
-          &WasmCallbackDispatcher::invoke_owned_session_event, event.get())) {
+  if (!enqueue(&WasmCallbackDispatcher::invoke_owned_session_event,
+               event.get())) {
     return false;
   }
   event.release();
-  emscripten_async_run_in_main_runtime_thread(EM_FUNC_SIG_VI,
-      &WasmCallbackDispatcher::process_pending_on_main, this);
   return true;
 #else
   invoke_owned_session_event(event.release());
@@ -146,3 +161,35 @@ void WasmCallbackDispatcher::invoke_owned_task_event(void *raw_event) {
       static_cast<OwnedTaskEvent *>(raw_event));
   event->callback();
 }
+
+void WasmCallbackDispatcher::invoke_borrowed_task_event(void *raw_event) {
+  static_cast<OwnedTaskEvent *>(raw_event)->callback();
+}
+
+bool WasmCallbackDispatcher::dispatch_task_sync(Task callback) {
+  if (!callback) {
+    return false;
+  }
+
+#if defined(__EMSCRIPTEN__)
+  if (emscripten_is_main_runtime_thread()) {
+    callback();
+    return true;
+  }
+
+  OwnedTaskEvent event{std::move(callback)};
+  return queue_ != nullptr &&
+         emscripten_proxy_sync(
+             queue_, main_runtime_thread_,
+             &WasmCallbackDispatcher::invoke_borrowed_task_event, &event);
+#else
+  callback();
+  return true;
+#endif
+}
+
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+void WasmCallbackDispatcher::set_enqueue_failures_for_testing(int count) {
+  enqueue_failures_.store(count > 0 ? count : 0, std::memory_order_release);
+}
+#endif
