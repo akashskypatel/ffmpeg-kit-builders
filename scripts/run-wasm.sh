@@ -3220,10 +3220,11 @@ build_libtiff() {
   export CPPFLAGS="$CPPFLAGS -s -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
   export CXXFLAGS="$CXXFLAGS -s -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
   export LDFLAGS="$LDFLAGS -s -lpthread -fwasm-exceptions"
-  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests"
+  export LIBS="-llzma -ljpeg -lz -ljbig -lwebp -lLerc -lsharpyuv"
+  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests LIBS=\"$LIBS\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
-  add_libs_to_pkg -t="$install_pkgconfig_dir/libtiff-4.pc" -l="-ltiff -llzma -ljpeg -lz -ljbig -lwebp -lLerc"
+  add_libs_to_pkg -t="$install_pkgconfig_dir/libtiff-4.pc" -l="-ltiff -llzma -ljpeg -lz -ljbig -lwebp -lLerc -lsharpyuv"
   change_dir "$src_dir"
 }
 build_libjpeg_turbo() {
