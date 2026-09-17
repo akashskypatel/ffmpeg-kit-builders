@@ -3178,10 +3178,12 @@ build_libtiff() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests"
+  export LIBS="-lsharpyuv"
+  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests LIBS=\"$LIBS\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   gsed -i "s/-ltiff.*$/-ltiff -llzma -ljpeg -lz/" "$install_pkgconfig_dir/libtiff-4.pc" # static deps
+  unset LIBS
   change_dir "$src_dir"
 }
 build_libjpeg_turbo() {
