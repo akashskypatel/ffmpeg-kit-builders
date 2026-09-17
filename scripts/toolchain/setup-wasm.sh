@@ -154,7 +154,15 @@ fi
 
 select_emsdk_python
 
-dnf install -y --setopt=install_weak_deps=False git curl xz unzip
+if command -v dnf >/dev/null 2>&1; then
+  dnf install -y --setopt=install_weak_deps=False git curl xz unzip
+elif command -v apt-get >/dev/null 2>&1; then
+  apt-get update -qq
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl xz-utils unzip
+else
+  echo "A supported package manager (dnf or apt-get) is required." >&2
+  exit 1
+fi
 
 if [[ ! -x "${EMSDK_ROOT}/emsdk" ]]; then
   rm -rf "$EMSDK_ROOT"
