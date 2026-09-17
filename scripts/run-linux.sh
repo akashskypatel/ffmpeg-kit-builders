@@ -3282,10 +3282,12 @@ build_libleptonica() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC"
-  generic_configure "--enable-static --disable-shared"
+  export LIBS="-lsharpyuv"
+  generic_configure "--enable-static --disable-shared LIBS=\"$LIBS\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cppflags
+  unset LIBS
   change_dir "$src_dir"
 }
 build_lz4() {
