@@ -45,11 +45,11 @@ select_emsdk_python() {
 rust_target_installed() {
   local target="$1"
 
-  if ! command -v rustup >/dev/null 2>&1; then
-    return 0
-  fi
+  ! command -v rustup >/dev/null 2>&1 ||
+    rustup target list --installed 2>/dev/null | grep -qx "$target"
 
-  rustup target list --installed 2>/dev/null | grep -qx "$target"
+  rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+  rustup component add rust-src --toolchain nightly
 }
 
 activate_emsdk() {
