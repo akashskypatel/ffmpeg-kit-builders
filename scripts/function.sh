@@ -894,9 +894,6 @@ setup_wasm_environment() {
     elif [[ -x /usr/local/bin/python3.12 ]]; then
         export EMSDK_BOOTSTRAP_PYTHON=/usr/local/bin/python3.12
         export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
-    elif command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 10))'; then
-        export EMSDK_BOOTSTRAP_PYTHON="$(command -v python3)"
-        export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
     else
         exit_message 1 "setup_wasm_environment: Emscripten requires Python 3.10 or newer."
     fi
