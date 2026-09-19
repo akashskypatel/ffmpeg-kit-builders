@@ -13,6 +13,7 @@
 - Added deterministic Wasm load failures, non-interactive browser stdin handling,
   and headless native/Web callback regression coverage for delivery, lifecycle,
   ordering, and table behavior.
+- Bump FFmpeg version to v9.0.2
 
 ## Version 0.11.1
 
