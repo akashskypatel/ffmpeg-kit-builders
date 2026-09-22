@@ -121,16 +121,12 @@ TEST(Review24NativeCallbackAbiTest,
   EXPECT_EQ(ffmpeg_kit_test_get_log_payload_outstanding(), baseline);
 }
 
-TEST(Review24NativeCallbackAbiTest, ReportsPinnedVersionAndCallbackAbiIdentity) {
+TEST(Review24NativeCallbackAbiTest, ReportsPinnedVersion) {
   char *version = ffmpeg_kit_config_get_version();
-  char *callback_abi = ffmpeg_kit_config_get_callback_abi_version();
   ASSERT_NE(version, nullptr);
-  ASSERT_NE(callback_abi, nullptr);
 
   EXPECT_STREQ(version, "0.11.2");
-  EXPECT_STREQ(callback_abi, "review24-global-log-v1");
   ffmpeg_kit_free(version);
-  ffmpeg_kit_free(callback_abi);
 }
 
 TEST(Review24NativeCallbackAbiTest, MultiSessionSequencesRemainIndependent) {

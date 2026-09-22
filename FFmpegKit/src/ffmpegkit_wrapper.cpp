@@ -60,9 +60,6 @@ extern "C" {
 #include <condition_variable>
 #include <ctime>
 
-static constexpr const char *kCallbackAbiVersion =
-    "review24-global-log-v1";
-
 static std::string getCurrentTimeStamp() {
   time_t now = time(0);
   struct tm *timeinfo = localtime(&now);
@@ -2008,10 +2005,6 @@ char * DLL_ALIGN ffmpeg_kit_config_get_version(void) {
     PRINT_STACK_TRACE();
     return nullptr;
   }
-}
-
-char * DLL_ALIGN ffmpeg_kit_config_get_callback_abi_version(void) {
-  return strdup_cpp(kCallbackAbiVersion);
 }
 
 void DLL_ALIGN ffmpeg_kit_config_set_audio_output_device(const char *device_name) {

@@ -1971,14 +1971,6 @@ ffmpeg_kit_config_enable_log_callback(FFmpegKitGlobalLogCallback log_cb,
                                       void *user_data);
 
 /**
- * Returns the callback ABI identity required by this wrapper release.
- *
- * @return an allocated callback ABI identity string; release with
- * ffmpeg_kit_free()
- */
-FFMPEG_KIT_C_EXPORT char *ffmpeg_kit_config_get_callback_abi_version(void);
-
-/**
  * Enables the statistics callback.
  *
  * @param stats_cb the statistics callback
