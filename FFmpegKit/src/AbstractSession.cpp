@@ -43,7 +43,7 @@ ffmpegkit::AbstractSession::AbstractSession(
       _debuggingEnabled{false}, _debugLog{""},
       _createTime{std::chrono::system_clock::now()},
       _arguments{std::make_shared<std::list<std::string>>(arguments)},
-      _logs{std::make_shared<std::list<std::shared_ptr<ffmpegkit::Log>>>()},
+      _logs{std::make_shared<std::deque<std::shared_ptr<ffmpegkit::Log>>>()},
       _state{SessionStateCreated}, _returnCode{nullptr},
       _logRedirectionStrategy{logRedirectionStrategy} {}
 
@@ -140,7 +140,7 @@ ffmpegkit::AbstractSession::getAllLogs() const {
 std::shared_ptr<std::list<std::shared_ptr<ffmpegkit::Log>>>
 ffmpegkit::AbstractSession::getLogs() const {
   std::lock_guard<std::mutex> lock(_stateMutex);
-  return std::make_shared<std::list<std::shared_ptr<ffmpegkit::Log>>>(*_logs);
+  return std::make_shared<std::list<std::shared_ptr<ffmpegkit::Log>>>(_logs->begin(), _logs->end());
 }
 
 int64_t ffmpegkit::AbstractSession::getLogsCount() const {
@@ -150,10 +150,8 @@ int64_t ffmpegkit::AbstractSession::getLogsCount() const {
 
 std::shared_ptr<ffmpegkit::Log> ffmpegkit::AbstractSession::getLogAt(int64_t index) const {
   std::lock_guard<std::mutex> lock(_stateMutex);
-  if (index >= 0 && index < _logs->size()) {
-      auto it = _logs->begin();
-      std::advance(it, index);
-      return *it;
+  if (index >= 0 && index < static_cast<int64_t>(_logs->size())) {
+      return (*_logs)[static_cast<size_t>(index)];
   }
   return nullptr;
 }
@@ -224,6 +222,9 @@ bool ffmpegkit::AbstractSession::thereAreAsynchronousMessagesInTransmit()
 void ffmpegkit::AbstractSession::addLog(
     const std::shared_ptr<ffmpegkit::Log> log) {
   std::lock_guard<std::mutex> lock(_stateMutex);
+  if (log) {
+    log->setSequence(_nextLogSequence++);
+  }
   _logs->push_back(log);
 }
 

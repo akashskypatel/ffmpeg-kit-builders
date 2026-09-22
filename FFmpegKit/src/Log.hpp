@@ -21,9 +21,12 @@
 #define FFMPEG_KIT_LOG_H
 
 #include "Level.hpp"
+#include <cstdint>
 #include <string>
 
 namespace ffmpegkit {
+
+class AbstractSession;
 
 /**
  * <p>Log entry for an <code>FFmpegKit</code> session.
@@ -34,11 +37,16 @@ public:
   long getSessionId() const;
   ffmpegkit::Level getLevel() const;
   const std::string& getMessage() const;
+  int64_t getSequence() const;
 
 private:
+  friend class AbstractSession;
+  void setSequence(const int64_t sequence);
+
   long _sessionId;
   ffmpegkit::Level _level;
   std::string _message;
+  int64_t _sequence{-1};
 };
 
 } // namespace ffmpegkit

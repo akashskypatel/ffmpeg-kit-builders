@@ -28,3 +28,9 @@ long ffmpegkit::Log::getSessionId() const { return _sessionId; }
 ffmpegkit::Level ffmpegkit::Log::getLevel() const { return _level; }
 
 const std::string& ffmpegkit::Log::getMessage() const { return _message; }
+
+int64_t ffmpegkit::Log::getSequence() const { return _sequence; }
+
+void ffmpegkit::Log::setSequence(const int64_t sequence) {
+  _sequence = sequence;
+}
