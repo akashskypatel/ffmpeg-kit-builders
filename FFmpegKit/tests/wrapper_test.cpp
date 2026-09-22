@@ -1283,6 +1283,7 @@ TEST_F(FFplayKitInteractiveTest, PlayPauseResume) {
            video_file);
   const char *ext_libraries = ffmpeg_kit_packages_get_external_libraries();
   printf("Linked External Libraries: %s\n", ext_libraries);
+  free((void *)ext_libraries);
   FFplaySessionHandle session =
       ffplay_kit_execute_async(command, nullptr, nullptr, 1000);
   printf("FFplay Session: %p\n", session);

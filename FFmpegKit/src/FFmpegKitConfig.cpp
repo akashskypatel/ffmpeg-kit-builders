@@ -1511,6 +1511,8 @@ int executeFFprobe(const std::shared_ptr<ffmpegkit::AbstractSession> &session,
     }
   }
 
+  restoreConfiguredLogState();
+
   // ALWAYS REMOVE THE ID FROM THE MAP
   removeSession(sessionId);
 
@@ -1520,7 +1522,6 @@ int executeFFprobe(const std::shared_ptr<ffmpegkit::AbstractSession> &session,
   }
   clearSessionFromThread();
   ffprobe_free(ctx);
-  restoreConfiguredLogState();
 
   session->debugLog("FFmpegKitConfig::executeFFprobe end session_handle=%s session_id=%d", sessionStr.c_str(), sessionId);
 
