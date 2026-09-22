@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "FFmpegSession.hpp"
+#include "FFmpegKitConfig.hpp"
 #include "Level.hpp"
 #include "ffmpegkit_wrapper.h"
 
@@ -201,4 +202,21 @@ TEST(Review23NativeRegressionTest,
   }
   EXPECT_EQ(session->getLogAt(-1), nullptr);
   EXPECT_EQ(session->getLogAt(kLogCount), nullptr);
+}
+
+TEST(Review23NativeRegressionTest,
+     GlobalLogCallbackRegistrationDoesNotEnableRedirection) {
+  const bool redirection_was_enabled =
+      ffmpegkit::FFmpegKitConfig::isRedirectionEnabledForTesting();
+  ffmpegkit::FFmpegKitConfig::disableRedirection();
+  ASSERT_FALSE(ffmpegkit::FFmpegKitConfig::isRedirectionEnabledForTesting());
+
+  V2Observation observation;
+  ffmpeg_kit_config_enable_log_callback_v2(v2_log_callback, &observation);
+  EXPECT_FALSE(ffmpegkit::FFmpegKitConfig::isRedirectionEnabledForTesting());
+  ffmpeg_kit_config_enable_log_callback_v2(nullptr, nullptr);
+
+  if (redirection_was_enabled) {
+    ffmpegkit::FFmpegKitConfig::enableRedirection();
+  }
 }

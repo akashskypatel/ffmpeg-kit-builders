@@ -2819,16 +2819,10 @@ TEST(FFmpegKitTest, RobustnessTest) {
   EXPECT_EQ(ffmpeg_kit_session_get_statistics_count(session), -1);
   EXPECT_EQ(ffmpeg_kit_session_get_statistics_at(session, 0), nullptr);
 
-  // 5. Try with "fake" handle (ID as pointer)
-  // This should work because get_ptr_internal now supports looking up by ID in
-  // history
+  // 5. Numeric session IDs are not opaque handles. They must fail closed
+  // instead of being guessed from pointer values.
   void *fake_handle = (void *)(uintptr_t)id;
-  EXPECT_EQ(ffmpeg_kit_session_get_session_id(fake_handle), id);
-
-  char *output = ffmpeg_kit_session_get_output(fake_handle);
-  EXPECT_NE(output, nullptr);
-  if (output) {
-    printf("Output from fake handle: %s\n", output);
-    free(output);
-  }
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(fake_handle), -1);
+  EXPECT_EQ(ffmpeg_kit_session_get_output(fake_handle), nullptr);
+  EXPECT_EQ(ffmpeg_kit_session_get_logs_count(fake_handle), -1);
 }

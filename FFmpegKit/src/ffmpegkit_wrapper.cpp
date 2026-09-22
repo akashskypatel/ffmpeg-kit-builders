@@ -275,17 +275,6 @@ template <typename T> static std::shared_ptr<T> get_ptr_internal(void *handle) {
     return std::dynamic_pointer_cast<T>(object);
   }
 
-  // 2. Support "fake" handles (Session IDs passed as pointers from log/stats callbacks)
-  // WARNING: This heuristic relies on the assumption that real heap pointers (handles) 
-  // will be > 1,000,000. It is a necessary bridging hack to pass raw numeric Session IDs 
-  // through the opaque void* fields of C-callbacks without complex allocation tracking.
-  uintptr_t value = (uintptr_t)handle;
-  if (value > 0 && value < 1000000) {
-    auto session = FFmpegKitConfig::getSession((long)value);
-    if (session) {
-      return std::dynamic_pointer_cast<T>(session);
-    }
-  }
 
   return nullptr;
 }
