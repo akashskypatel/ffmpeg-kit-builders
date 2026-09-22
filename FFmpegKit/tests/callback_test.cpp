@@ -326,12 +326,15 @@ public:
     std::atomic<int64_t> complete_called_count{0};
     std::vector<std::string> logs;
 
-    static void LogCallback(int64_t session_id, const char* log, void* user_data) {
+    static void LogCallback(int64_t session_id, int64_t sequence,
+                            int32_t level, char* owned_message,
+                            void* user_data) {
         auto* capturer = static_cast<GlobalCallbackCapturer*>(user_data);
-        if (log) {
-            capturer->logs.push_back(log);
+        if (owned_message) {
+            capturer->logs.emplace_back(owned_message);
         }
         capturer->log_called = true;
+        ffmpeg_kit_free(owned_message);
     }
 
     static void StatisticsCallback(int64_t session_id, int64_t timeElapsed, int64_t time, int64_t size, double bitrate, double speed, int64_t videoFrameNumber, double videoFps, double videoQuality, int64_t dupFrames, int64_t dropFrames, void* user_data) {

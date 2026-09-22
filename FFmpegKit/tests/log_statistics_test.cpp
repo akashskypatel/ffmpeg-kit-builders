@@ -60,13 +60,17 @@ bool is_main_runtime_thread(const Observation &observation) {
 #endif
 }
 
-void log_callback(int64_t session_id, const char *message, void *user_data) {
+void log_callback(int64_t session_id, int64_t, int32_t, char *owned_message,
+                  void *user_data) {
   auto *observation = static_cast<Observation *>(user_data);
-  std::lock_guard<std::mutex> lock(observation->mutex);
-  observation->events.push_back(
-      {EventKind::Log, session_id, message != nullptr ? message : "",
-       0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-       is_main_runtime_thread(*observation)});
+  {
+    std::lock_guard<std::mutex> lock(observation->mutex);
+    observation->events.push_back(
+        {EventKind::Log, session_id,
+         owned_message != nullptr ? owned_message : "", 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0, is_main_runtime_thread(*observation)});
+  }
+  ffmpeg_kit_free(owned_message);
 }
 
 void statistics_callback(int64_t session_id, int64_t time_elapsed, int64_t time,

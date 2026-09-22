@@ -14,10 +14,14 @@ struct CallbackIds {
     std::vector<int64_t> log_ids;
 };
 
-void log_callback(int64_t session_id, const char *, void *user_data) {
+void log_callback(int64_t session_id, int64_t, int32_t, char *owned_message,
+                  void *user_data) {
     auto *ids = static_cast<CallbackIds *>(user_data);
-    std::lock_guard<std::mutex> lock(ids->mutex);
-    ids->log_ids.push_back(session_id);
+    {
+        std::lock_guard<std::mutex> lock(ids->mutex);
+        ids->log_ids.push_back(session_id);
+    }
+    ffmpeg_kit_free(owned_message);
 }
 
 }  // namespace

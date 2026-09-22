@@ -783,7 +783,6 @@ TEST(FFmpegKitTest, DebugLog) {
 
 TEST(FFmpegKitTest, ConfigurationSetters) {
   ffmpeg_kit_config_set_log_level(FFMPEG_KIT_LOG_LEVEL_QUIET);
-  // ffmpeg_kit_config_enable_log_callback(test_log_callback, nullptr);
   // No easy way to verify these without internal access or observing side
   // effects, assuming no crash is success for now.
   EXPECT_EQ(ffmpeg_kit_config_get_log_level(), FFMPEG_KIT_LOG_LEVEL_QUIET);

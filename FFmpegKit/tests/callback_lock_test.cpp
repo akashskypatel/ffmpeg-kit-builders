@@ -17,7 +17,9 @@ struct ReentrantCallbackState {
     std::atomic<bool> reentry_completed{false};
 };
 
-void reentrant_log_callback(int64_t, const char *, void *user_data) {
+void reentrant_log_callback(int64_t, int64_t, int32_t, char *owned_message,
+                            void *user_data) {
+    ffmpeg_kit_free(owned_message);
     auto *state = static_cast<ReentrantCallbackState *>(user_data);
     state->callback_count.fetch_add(1, std::memory_order_relaxed);
 

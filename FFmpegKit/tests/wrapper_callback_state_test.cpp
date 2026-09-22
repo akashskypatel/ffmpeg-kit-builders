@@ -15,7 +15,8 @@ struct CallbackUserData {
     std::atomic<int> *calls;
 };
 
-void callback_a(int64_t, const char *, void *user_data) {
+void callback_a(int64_t, int64_t, int32_t, char *owned_message, void *user_data) {
+    ffmpeg_kit_free(owned_message);
     auto *data = static_cast<CallbackUserData *>(user_data);
     if (data == nullptr || data->marker != 1) {
         if (data != nullptr) {
@@ -26,7 +27,8 @@ void callback_a(int64_t, const char *, void *user_data) {
     data->calls->fetch_add(1, std::memory_order_relaxed);
 }
 
-void callback_b(int64_t, const char *, void *user_data) {
+void callback_b(int64_t, int64_t, int32_t, char *owned_message, void *user_data) {
+    ffmpeg_kit_free(owned_message);
     auto *data = static_cast<CallbackUserData *>(user_data);
     if (data == nullptr || data->marker != 2) {
         if (data != nullptr) {

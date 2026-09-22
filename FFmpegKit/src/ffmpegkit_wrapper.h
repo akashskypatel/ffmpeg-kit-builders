@@ -137,14 +137,12 @@ typedef void (*FFplayKitCompleteCallback)(FFplaySessionHandle session,
  * Global callback types. These callbacks identify sessions with their stable
  * session IDs instead of passing IDs through opaque pointer values.
  */
-typedef void (*FFmpegKitGlobalLogCallback)(int64_t session_id, const char *log,
-                                           void *user_data);
 /**
  * Owned global log callback. Native allocates a payload for non-null
  * messages and transfers ownership after accepted invocation. The callback
- * must release the payload exactly once with ffmpeg_kit_free().
+ * must release each non-null payload exactly once with ffmpeg_kit_free().
  */
-typedef void (*FFmpegKitGlobalLogCallbackV2)(
+typedef void (*FFmpegKitGlobalLogCallback)(
     int64_t session_id, int64_t sequence, int32_t level,
     char *owned_message, void *user_data);
 
@@ -430,7 +428,8 @@ void FFMPEG_KIT_C_EXPORT ffmpeg_kit_set_complete_callback(
     void *user_data);
 #ifdef FFMPEG_KIT_TEST_HOOKS
 /**
- * Emits a synthetic v2 log event with explicit identity, sequence and level.
+ * Emits a synthetic structured log event with explicit identity, sequence and
+ * level.
  */
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_emit_log_event_with_session_id(
     int64_t session_id, int64_t sequence, int32_t level,
@@ -465,8 +464,8 @@ ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id(int64_t session_id);
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_process_wasm_callback_queue(void);
 /** Fails the next [count] Wasm callback queue submissions in tests. */
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_set_wasm_callback_enqueue_failures(int count);
-/** Returns the number of v2 log payloads not yet released in a test build. */
-FFMPEG_KIT_C_EXPORT int64_t ffmpeg_kit_test_get_v2_log_payload_outstanding(void);
+/** Returns the number of log payloads not yet released in a test build. */
+FFMPEG_KIT_C_EXPORT int64_t ffmpeg_kit_test_get_log_payload_outstanding(void);
 #endif
 
 
@@ -1962,20 +1961,22 @@ FFMPEG_KIT_C_EXPORT void ffmpeg_kit_clear_sessions(void);
  *
  * @param log_cb the log callback
  * @param user_data the user data
- * @note The caller owns user_data and must keep it valid until all callbacks
- * for this session have completed. The callback does not transfer ownership.
+ * The callback receives the stable session ID, per-session sequence, exact
+ * log level, and an owned message payload. The callback must release each
+ * non-null payload exactly once with ffmpeg_kit_free(). Native releases a
+ * payload when dispatch is rejected before callback invocation.
  */
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_config_enable_log_callback(FFmpegKitGlobalLogCallback log_cb,
                                       void *user_data);
 
 /**
- * Enables the owned v2 global log callback.
- * The callback must call ffmpeg_kit_free() exactly once for every non-null
- * payload. A null native message is delivered as nullptr.
+ * Returns the callback ABI identity required by this wrapper release.
+ *
+ * @return an allocated callback ABI identity string; release with
+ * ffmpeg_kit_free()
  */
-FFMPEG_KIT_C_EXPORT void ffmpeg_kit_config_enable_log_callback_v2(
-    FFmpegKitGlobalLogCallbackV2 log_cb, void *user_data);
+FFMPEG_KIT_C_EXPORT char *ffmpeg_kit_config_get_callback_abi_version(void);
 
 /**
  * Enables the statistics callback.

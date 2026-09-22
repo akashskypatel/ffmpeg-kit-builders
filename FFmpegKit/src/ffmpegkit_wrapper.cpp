@@ -60,6 +60,9 @@ extern "C" {
 #include <condition_variable>
 #include <ctime>
 
+static constexpr const char *kCallbackAbiVersion =
+    "review24-global-log-v1";
+
 static std::string getCurrentTimeStamp() {
   time_t now = time(0);
   struct tm *timeinfo = localtime(&now);
@@ -2007,6 +2010,10 @@ char * DLL_ALIGN ffmpeg_kit_config_get_version(void) {
   }
 }
 
+char * DLL_ALIGN ffmpeg_kit_config_get_callback_abi_version(void) {
+  return strdup_cpp(kCallbackAbiVersion);
+}
+
 void DLL_ALIGN ffmpeg_kit_config_set_audio_output_device(const char *device_name) {
   try {
     FFmpegKitConfig::setAudioOutputDevice(device_name ? std::string(device_name)
@@ -3202,8 +3209,6 @@ void DLL_ALIGN ffmpeg_kit_clear_sessions(void) {
 // Static storage for global callbacks
 static FFmpegKitGlobalLogCallback g_log_callback = nullptr;
 static void *g_log_user_data = nullptr;
-static FFmpegKitGlobalLogCallbackV2 g_log_callback_v2 = nullptr;
-static void *g_log_user_data_v2 = nullptr;
 
 static FFmpegKitGlobalStatisticsCallback g_stats_callback = nullptr;
 static void *g_stats_user_data = nullptr;
@@ -3223,29 +3228,29 @@ static std::mutex g_callback_state_mutex;
 static WasmCallbackDispatcher g_wasm_callback_dispatcher;
 
 #ifdef FFMPEG_KIT_TEST_HOOKS
-static std::mutex g_v2_payload_mutex;
-static std::unordered_set<void *> g_v2_payloads;
+static std::mutex g_log_payload_mutex;
+static std::unordered_set<void *> g_log_payloads;
 #endif
 
-static void track_v2_log_payload(void *payload) {
+static void track_log_payload(void *payload) {
 #ifdef FFMPEG_KIT_TEST_HOOKS
   if (payload != nullptr) {
-    std::lock_guard<std::mutex> lock(g_v2_payload_mutex);
-    g_v2_payloads.insert(payload);
+    std::lock_guard<std::mutex> lock(g_log_payload_mutex);
+    g_log_payloads.insert(payload);
   }
 #else
   (void)payload;
 #endif
 }
 
-static void release_v2_log_payload(void *payload) {
+static void release_log_payload(void *payload) {
   if (payload == nullptr) {
     return;
   }
 #ifdef FFMPEG_KIT_TEST_HOOKS
   {
-    std::lock_guard<std::mutex> lock(g_v2_payload_mutex);
-    g_v2_payloads.erase(payload);
+    std::lock_guard<std::mutex> lock(g_log_payload_mutex);
+    g_log_payloads.erase(payload);
   }
 #endif
   free(payload);
@@ -3460,51 +3465,35 @@ static void dispatch_log_callback(int64_t session_id, int64_t sequence,
                                    int32_t level, const char *message) {
   const auto callback_state = snapshot_global_callback_state(
       g_log_callback, g_log_user_data);
-  if (callback_state.first) {
-    const bool has_message = message != nullptr;
-    std::string copied_message = has_message ? message : "";
-    dispatch_tracked_id_task(
-        session_id,
-        [session_id, callback = callback_state.first,
-         user_data = callback_state.second, has_message,
-         message = std::move(copied_message)]() {
-          callback(session_id, has_message ? message.c_str() : nullptr,
-                   user_data);
-        },
-        "log");
-  }
-
-  const auto callback_state_v2 = snapshot_global_callback_state(
-      g_log_callback_v2, g_log_user_data_v2);
-  if (!callback_state_v2.first) {
+  if (!callback_state.first) {
     return;
   }
 
   struct OwnedLogMessage {
     char *value{nullptr};
-    ~OwnedLogMessage() { release_v2_log_payload(value); }
+    ~OwnedLogMessage() { release_log_payload(value); }
   };
   auto owned_message = std::make_shared<OwnedLogMessage>();
   if (message != nullptr) {
     owned_message->value = strdup_cpp(message);
     if (owned_message->value == nullptr) {
       std::cerr << "[" << getCurrentTimeStamp()
-                << "] [ffmpeg-kit] [Error] failed to allocate v2 log payload"
+                << "] [ffmpeg-kit] [Error] failed to allocate log payload"
                 << std::endl;
       return;
     }
-    track_v2_log_payload(owned_message->value);
+    track_log_payload(owned_message->value);
   }
   dispatch_tracked_id_task(
       session_id,
       [session_id, sequence, level,
-       callback = callback_state_v2.first,
-       user_data = callback_state_v2.second, owned_message]() mutable {
+       callback = callback_state.first, user_data = callback_state.second,
+       owned_message]() mutable {
         char *payload = owned_message->value;
         owned_message->value = nullptr;
         callback(session_id, sequence, level, payload, user_data);
       },
-      "log-v2");
+      "log");
 }
 
 static void dispatch_statistics_callback(
@@ -3591,9 +3580,7 @@ static void dispatch_media_information_complete_callback(
 static void install_log_callback() {
   const auto callback_state = snapshot_global_callback_state(
       g_log_callback, g_log_user_data);
-  const auto callback_state_v2 = snapshot_global_callback_state(
-      g_log_callback_v2, g_log_user_data_v2);
-  if (callback_state.first || callback_state_v2.first) {
+  if (callback_state.first) {
     FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
       if (log) {
         dispatch_log_callback(static_cast<int64_t>(log->getSessionId()),
@@ -3694,21 +3681,6 @@ void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(
   }
 }
 
-void DLL_ALIGN ffmpeg_kit_config_enable_log_callback_v2(
-    FFmpegKitGlobalLogCallbackV2 log_cb, void *user_data) {
-  try {
-    set_global_callback_state(g_log_callback_v2, g_log_user_data_v2, log_cb,
-                              user_data);
-    install_log_callback();
-  } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp()
-              << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_log_callback_v2: "
-              << e.what() << std::endl;
-    PRINT_STACK_TRACE();
-  }
-}
-
 void DLL_ALIGN ffmpeg_kit_config_enable_statistics_callback(
     FFmpegKitGlobalStatisticsCallback stats_cb, void *user_data) {
   try {
@@ -3799,9 +3771,9 @@ void DLL_ALIGN ffmpeg_kit_test_set_wasm_callback_enqueue_failures(int count) {
   g_wasm_callback_dispatcher.set_enqueue_failures_for_testing(count);
 }
 
-int64_t DLL_ALIGN ffmpeg_kit_test_get_v2_log_payload_outstanding(void) {
-  std::lock_guard<std::mutex> lock(g_v2_payload_mutex);
-  return static_cast<int64_t>(g_v2_payloads.size());
+int64_t DLL_ALIGN ffmpeg_kit_test_get_log_payload_outstanding(void) {
+  std::lock_guard<std::mutex> lock(g_log_payload_mutex);
+  return static_cast<int64_t>(g_log_payloads.size());
 }
 
 void DLL_ALIGN ffmpeg_kit_test_emit_log_with_session_id(
@@ -4476,7 +4448,7 @@ bool DLL_ALIGN session_is_media_information_session(void *session) {
 }
 
 void DLL_ALIGN ffmpeg_kit_free(void *ptr) {
-  release_v2_log_payload(ptr);
+  release_log_payload(ptr);
 }
 
 void DLL_ALIGN session_enable_debug_log(void *session) {
