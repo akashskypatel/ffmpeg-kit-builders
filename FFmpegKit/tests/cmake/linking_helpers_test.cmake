@@ -29,6 +29,8 @@ file(WRITE "${DEPENDENCY_BUILD_DIR}/lib/libdylib.a" "dylib-static")
 file(WRITE "${DEPENDENCY_BUILD_DIR}/lib/libdylib.dylib" "dylib-shared")
 file(WRITE "${DEPENDENCY_BUILD_DIR}/lib/libwindows.a" "windows-static")
 file(WRITE "${DEPENDENCY_BUILD_DIR}/lib/libwindows.dll" "windows-shared")
+file(WRITE "${DEPENDENCY_BUILD_DIR}/lib/libmingw.dll.a" "mingw-import")
+file(WRITE "${DEPENDENCY_BUILD_DIR}/lib/libmingw.dll" "mingw-shared")
 file(WRITE "${_pkg_a}/../libfoo.a" "pkg-a")
 file(WRITE "${_pkg_b}/../libfoo.a" "pkg-b")
 file(WRITE "${_pkg_a}/../nested/a/libfoo.a" "nested-pkg-a-decoy")
@@ -99,7 +101,16 @@ assert_equal(
     "Windows import-library to DLL replacement"
 )
 
+set(MINGW TRUE)
+replace_static_with_shared("${DEPENDENCY_BUILD_DIR}/lib/libmingw.dll.a" _mingw_shared)
+assert_equal(
+    "${DEPENDENCY_BUILD_DIR}/lib/libmingw.dll"
+    "${_mingw_shared}"
+    "MinGW import-library to DLL replacement"
+)
+
 set(WIN32 FALSE)
+set(MINGW FALSE)
 set(APPLE TRUE)
 set(CMAKE_SYSTEM_NAME Darwin)
 replace_static_with_shared("${DEPENDENCY_BUILD_DIR}/lib/libdylib.a" _dylib_shared)
