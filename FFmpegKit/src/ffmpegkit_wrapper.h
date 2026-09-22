@@ -139,6 +139,14 @@ typedef void (*FFplayKitCompleteCallback)(FFplaySessionHandle session,
  */
 typedef void (*FFmpegKitGlobalLogCallback)(int64_t session_id, const char *log,
                                            void *user_data);
+/**
+ * Owned global log callback. Native allocates a payload for non-null
+ * messages and transfers ownership after accepted invocation. The callback
+ * must release the payload exactly once with ffmpeg_kit_free().
+ */
+typedef void (*FFmpegKitGlobalLogCallbackV2)(
+    int64_t session_id, int64_t sequence, int32_t level,
+    char *owned_message, void *user_data);
 
 typedef void (*FFmpegKitGlobalStatisticsCallback)(
     int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
@@ -421,6 +429,12 @@ void FFMPEG_KIT_C_EXPORT ffmpeg_kit_set_complete_callback(
     FFmpegSessionHandle session, FFmpegKitCompleteCallback complete_cb,
     void *user_data);
 #ifdef FFMPEG_KIT_TEST_HOOKS
+/**
+ * Emits a synthetic v2 log event with explicit identity, sequence and level.
+ */
+FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_emit_log_event_with_session_id(
+    int64_t session_id, int64_t sequence, int32_t level,
+    const char *message);
 /**
  * Emits a synthetic log callback with an arbitrary stable session ID.
  * This is available only to the native/Wasm regression-test targets.
@@ -1952,6 +1966,14 @@ FFMPEG_KIT_C_EXPORT void ffmpeg_kit_clear_sessions(void);
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_config_enable_log_callback(FFmpegKitGlobalLogCallback log_cb,
                                       void *user_data);
+
+/**
+ * Enables the owned v2 global log callback.
+ * The callback must call ffmpeg_kit_free() exactly once for every non-null
+ * payload. A null native message is delivered as nullptr.
+ */
+FFMPEG_KIT_C_EXPORT void ffmpeg_kit_config_enable_log_callback_v2(
+    FFmpegKitGlobalLogCallbackV2 log_cb, void *user_data);
 
 /**
  * Enables the statistics callback.

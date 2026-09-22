@@ -3212,6 +3212,8 @@ void DLL_ALIGN ffmpeg_kit_clear_sessions(void) {
 // Static storage for global callbacks
 static FFmpegKitGlobalLogCallback g_log_callback = nullptr;
 static void *g_log_user_data = nullptr;
+static FFmpegKitGlobalLogCallbackV2 g_log_callback_v2 = nullptr;
+static void *g_log_user_data_v2 = nullptr;
 
 static FFmpegKitGlobalStatisticsCallback g_stats_callback = nullptr;
 static void *g_stats_user_data = nullptr;
@@ -3435,8 +3437,8 @@ static std::pair<Callback, void *> snapshot_global_callback_state(
   return {callback_slot, user_data_slot};
 }
 
-static void dispatch_log_callback(int64_t session_id,
-                                   const char *message) {
+static void dispatch_log_callback(int64_t session_id, int64_t sequence,
+                                   int32_t level, const char *message) {
   const auto callback_state = snapshot_global_callback_state(
       g_log_callback, g_log_user_data);
   if (callback_state.first) {
@@ -3452,6 +3454,37 @@ static void dispatch_log_callback(int64_t session_id,
         },
         "log");
   }
+
+  const auto callback_state_v2 = snapshot_global_callback_state(
+      g_log_callback_v2, g_log_user_data_v2);
+  if (!callback_state_v2.first) {
+    return;
+  }
+
+  struct OwnedLogMessage {
+    char *value{nullptr};
+    ~OwnedLogMessage() { free(value); }
+  };
+  auto owned_message = std::make_shared<OwnedLogMessage>();
+  if (message != nullptr) {
+    owned_message->value = strdup_cpp(message);
+    if (owned_message->value == nullptr) {
+      std::cerr << "[" << getCurrentTimeStamp()
+                << "] [ffmpeg-kit] [Error] failed to allocate v2 log payload"
+                << std::endl;
+      return;
+    }
+  }
+  dispatch_tracked_id_task(
+      session_id,
+      [session_id, sequence, level,
+       callback = callback_state_v2.first,
+       user_data = callback_state_v2.second, owned_message]() mutable {
+        char *payload = owned_message->value;
+        owned_message->value = nullptr;
+        callback(session_id, sequence, level, payload, user_data);
+      },
+      "log-v2");
 }
 
 static void dispatch_statistics_callback(
@@ -3536,10 +3569,16 @@ static void dispatch_media_information_complete_callback(
 
 
 static void install_log_callback() {
-  if (snapshot_global_callback_state(g_log_callback, g_log_user_data).first) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_log_callback, g_log_user_data);
+  const auto callback_state_v2 = snapshot_global_callback_state(
+      g_log_callback_v2, g_log_user_data_v2);
+  if (callback_state.first || callback_state_v2.first) {
     FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
       if (log) {
         dispatch_log_callback(static_cast<int64_t>(log->getSessionId()),
+                              log->getSequence(),
+                              static_cast<int32_t>(log->getLevel()),
                                  log->getMessage().c_str());
       }
     });
@@ -3630,6 +3669,21 @@ void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(
     std::cerr << "[" << getCurrentTimeStamp()
               << "] [ffmpeg-kit] [Exception] in "
                  "ffmpeg_kit_config_enable_log_callback: "
+              << e.what() << std::endl;
+    PRINT_STACK_TRACE();
+  }
+}
+
+void DLL_ALIGN ffmpeg_kit_config_enable_log_callback_v2(
+    FFmpegKitGlobalLogCallbackV2 log_cb, void *user_data) {
+  try {
+    set_global_callback_state(g_log_callback_v2, g_log_user_data_v2, log_cb,
+                              user_data);
+    install_log_callback();
+  } catch (const std::exception &e) {
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
+                 "ffmpeg_kit_config_enable_log_callback_v2: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
@@ -3727,7 +3781,13 @@ void DLL_ALIGN ffmpeg_kit_test_set_wasm_callback_enqueue_failures(int count) {
 
 void DLL_ALIGN ffmpeg_kit_test_emit_log_with_session_id(
     int64_t session_id, const char *message) {
-  dispatch_log_callback(session_id, message);
+  dispatch_log_callback(session_id, -1, FFMPEG_KIT_LOG_LEVEL_INFO, message);
+}
+
+void DLL_ALIGN ffmpeg_kit_test_emit_log_event_with_session_id(
+    int64_t session_id, int64_t sequence, int32_t level,
+    const char *message) {
+  dispatch_log_callback(session_id, sequence, level, message);
 }
 
 void DLL_ALIGN ffmpeg_kit_test_emit_statistics_with_session_id(
