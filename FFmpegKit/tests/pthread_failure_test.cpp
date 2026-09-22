@@ -9,6 +9,8 @@
 
 #include <atomic>
 #include <memory>
+#include <chrono>
+#include <thread>
 
 namespace {
 
@@ -26,10 +28,19 @@ void expect_failed_startup(const std::shared_ptr<SessionType> &session,
 }
 
 template <typename SessionType>
-void expect_successful_startup(const std::shared_ptr<SessionType> &session) {
+void expect_successful_startup(const std::shared_ptr<SessionType> &session,
+                               const std::atomic<int> &callbackCount) {
   ASSERT_NE(session, nullptr);
   EXPECT_TRUE(session->waitFor(10000));
   EXPECT_NE(session->getState(), ffmpegkit::SessionStateRunning);
+
+  const auto callbackDeadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  while (callbackCount.load(std::memory_order_acquire) == 0 &&
+         std::chrono::steady_clock::now() < callbackDeadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_EQ(callbackCount.load(std::memory_order_acquire), 1);
 }
 
 }  // namespace
@@ -95,7 +106,7 @@ TEST(PthreadFailureTest, FFmpegStartupSuccessCreatesAndCompletesThread) {
       [&](std::shared_ptr<ffmpegkit::FFmpegSession>) { callbackCount++; });
   FFmpegKitConfig::setPthreadCreateFailuresForTesting(0);
   FFmpegKitConfig::asyncFFmpegExecute(session);
-  expect_successful_startup(session);
+  expect_successful_startup(session, callbackCount);
 }
 
 TEST(PthreadFailureTest, FFprobeStartupSuccessCreatesAndCompletesThread) {
@@ -105,7 +116,7 @@ TEST(PthreadFailureTest, FFprobeStartupSuccessCreatesAndCompletesThread) {
       [&](std::shared_ptr<ffmpegkit::FFprobeSession>) { callbackCount++; });
   FFmpegKitConfig::setPthreadCreateFailuresForTesting(0);
   FFmpegKitConfig::asyncFFprobeExecute(session);
-  expect_successful_startup(session);
+  expect_successful_startup(session, callbackCount);
 }
 
 TEST(PthreadFailureTest, FFplayStartupSuccessCreatesAndCompletesThread) {
@@ -115,7 +126,7 @@ TEST(PthreadFailureTest, FFplayStartupSuccessCreatesAndCompletesThread) {
       [&](std::shared_ptr<ffmpegkit::FFplaySession>) { callbackCount++; });
   FFmpegKitConfig::setPthreadCreateFailuresForTesting(0);
   FFmpegKitConfig::asyncFFplayExecute(session, 100);
-  expect_successful_startup(session);
+  expect_successful_startup(session, callbackCount);
   FFmpegKitConfig::joinAsyncFFplayThread();
 }
 
@@ -128,5 +139,5 @@ TEST(PthreadFailureTest, MediaInformationStartupSuccessCreatesAndCompletesThread
       });
   FFmpegKitConfig::setPthreadCreateFailuresForTesting(0);
   FFmpegKitConfig::asyncGetMediaInformationExecute(session, 100);
-  expect_successful_startup(session);
+  expect_successful_startup(session, callbackCount);
 }

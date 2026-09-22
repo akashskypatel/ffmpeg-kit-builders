@@ -3,6 +3,7 @@
 #include <chrono>
 #include <gtest/gtest.h>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #ifdef _WIN32
@@ -261,24 +262,26 @@ TEST_F(StressTest, ParallelSyncHammer) {
   const int iterations_per_thread = 10;
   std::vector<TestThread> threads;
   std::vector<FFprobeSessionHandle> sessions;
+  std::mutex sessions_mutex;
   sessions.reserve(thread_count * iterations_per_thread);
   for (int t = 0; t < thread_count; ++t) {
-    threads.emplace_back([iterations_per_thread, &sessions]() {
+    threads.emplace_back([iterations_per_thread, &sessions, &sessions_mutex]() {
       for (int i = 0; i < iterations_per_thread; ++i) {
         FFprobeSessionHandle session = ffprobe_kit_execute("-version");
         if (session) {
+          std::lock_guard<std::mutex> lock(sessions_mutex);
           sessions.push_back(session);
         }
       }
     });
   }
 
-  for (auto &session : sessions) {
-    ffmpeg_kit_handle_release(session);
-  }
-
   for (auto &thread : threads) {
     thread.join();
+  }
+
+  for (auto &session : sessions) {
+    ffmpeg_kit_handle_release(session);
   }
 }
 
