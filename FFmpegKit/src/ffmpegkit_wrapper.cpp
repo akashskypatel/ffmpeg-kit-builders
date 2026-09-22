@@ -53,6 +53,7 @@ extern "C" {
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <chrono>
@@ -3232,6 +3233,35 @@ static void *g_media_complete_user_data = nullptr;
 static std::mutex g_callback_state_mutex;
 static WasmCallbackDispatcher g_wasm_callback_dispatcher;
 
+#ifdef FFMPEG_KIT_TEST_HOOKS
+static std::mutex g_v2_payload_mutex;
+static std::unordered_set<void *> g_v2_payloads;
+#endif
+
+static void track_v2_log_payload(void *payload) {
+#ifdef FFMPEG_KIT_TEST_HOOKS
+  if (payload != nullptr) {
+    std::lock_guard<std::mutex> lock(g_v2_payload_mutex);
+    g_v2_payloads.insert(payload);
+  }
+#else
+  (void)payload;
+#endif
+}
+
+static void release_v2_log_payload(void *payload) {
+  if (payload == nullptr) {
+    return;
+  }
+#ifdef FFMPEG_KIT_TEST_HOOKS
+  {
+    std::lock_guard<std::mutex> lock(g_v2_payload_mutex);
+    g_v2_payloads.erase(payload);
+  }
+#endif
+  free(payload);
+}
+
 static void report_callback_dispatch_failure(const char *callback_kind);
 
 // Accepted callbacks are counted separately for each session identity. A
@@ -3463,7 +3493,7 @@ static void dispatch_log_callback(int64_t session_id, int64_t sequence,
 
   struct OwnedLogMessage {
     char *value{nullptr};
-    ~OwnedLogMessage() { free(value); }
+    ~OwnedLogMessage() { release_v2_log_payload(value); }
   };
   auto owned_message = std::make_shared<OwnedLogMessage>();
   if (message != nullptr) {
@@ -3474,6 +3504,7 @@ static void dispatch_log_callback(int64_t session_id, int64_t sequence,
                 << std::endl;
       return;
     }
+    track_v2_log_payload(owned_message->value);
   }
   dispatch_tracked_id_task(
       session_id,
@@ -3777,6 +3808,11 @@ void DLL_ALIGN ffmpeg_kit_test_process_wasm_callback_queue(void) {
 
 void DLL_ALIGN ffmpeg_kit_test_set_wasm_callback_enqueue_failures(int count) {
   g_wasm_callback_dispatcher.set_enqueue_failures_for_testing(count);
+}
+
+int64_t DLL_ALIGN ffmpeg_kit_test_get_v2_log_payload_outstanding(void) {
+  std::lock_guard<std::mutex> lock(g_v2_payload_mutex);
+  return static_cast<int64_t>(g_v2_payloads.size());
 }
 
 void DLL_ALIGN ffmpeg_kit_test_emit_log_with_session_id(
@@ -4451,9 +4487,7 @@ bool DLL_ALIGN session_is_media_information_session(void *session) {
 }
 
 void DLL_ALIGN ffmpeg_kit_free(void *ptr) {
-  if (ptr) {
-    free(ptr);
-  }
+  release_v2_log_payload(ptr);
 }
 
 void DLL_ALIGN session_enable_debug_log(void *session) {

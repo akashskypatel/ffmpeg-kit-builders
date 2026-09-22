@@ -465,6 +465,8 @@ ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id(int64_t session_id);
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_process_wasm_callback_queue(void);
 /** Fails the next [count] Wasm callback queue submissions in tests. */
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_test_set_wasm_callback_enqueue_failures(int count);
+/** Returns the number of v2 log payloads not yet released in a test build. */
+FFMPEG_KIT_C_EXPORT int64_t ffmpeg_kit_test_get_v2_log_payload_outstanding(void);
 #endif
 
 
