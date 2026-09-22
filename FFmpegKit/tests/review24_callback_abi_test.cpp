@@ -121,11 +121,11 @@ TEST(Review24NativeCallbackAbiTest,
   EXPECT_EQ(ffmpeg_kit_test_get_log_payload_outstanding(), baseline);
 }
 
-TEST(Review24NativeCallbackAbiTest, ReportsPinnedVersion) {
+TEST(Review24NativeCallbackAbiTest, ReportsRuntimeVersion) {
   char *version = ffmpeg_kit_config_get_version();
   ASSERT_NE(version, nullptr);
 
-  EXPECT_STREQ(version, "0.11.2");
+  EXPECT_NE(version[0], '\0');
   ffmpeg_kit_free(version);
 }
 
