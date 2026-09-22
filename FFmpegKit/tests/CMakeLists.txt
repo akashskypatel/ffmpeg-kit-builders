@@ -61,6 +61,13 @@ else()
     endif()
 endif()
 
+add_test(
+    NAME ffmpegkit_cmake_linking_helpers
+    COMMAND ${CMAKE_COMMAND}
+        -DFFMPEGKIT_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/cmake-linking-helpers-fixture
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/linking_helpers_test.cmake
+)
+
 target_compile_definitions(ffmpegkit_tests PRIVATE 
     FFMPEG_KIT_TEST_HOOKS
     FFMPEG_KIT_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
