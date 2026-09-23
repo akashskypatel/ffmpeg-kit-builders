@@ -29,6 +29,7 @@ set_toolchain_paths() {
 
 configure_ffmpeg_kit() {
 	echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
+	! truthy "$build_tests" && configure_ffmpeg
 	local type_postfix="$build_ffmpeg_kit_type"
 
 	if truthy "$force_kit"; then

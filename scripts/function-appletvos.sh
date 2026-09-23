@@ -17,6 +17,7 @@ fi
 
 configure_ffmpeg_kit() {
   echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
+	! truthy "$build_tests" && configure_ffmpeg
   reset_allflags
   set_toolchain_paths
   

@@ -106,7 +106,7 @@ install_cross_compiler() {
 configure_ffmpeg_kit() {
 	echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
 	local type_postfix="$build_ffmpeg_kit_type"
-	
+	! truthy "$build_tests" && configure_ffmpeg
 	iswindows && fix_pkgconfig_flags
 
 	if truthy "$force_kit"; then

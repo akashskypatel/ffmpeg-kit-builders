@@ -4884,10 +4884,14 @@ configure_ffmpeg() {
   # Common compiler flags for Windows    
   if isapple; then
     get_gas_preprocessor
-    [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
-    export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
-    init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
-    
+    # [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
+    # export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
+    # init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
+    init_options+=" --as=$(xcrun --sdk "$toolchain_sys" --find clang)"
+    if [[ "$host_arch" == "arm64" ]]; then
+      init_options+=" --cpu=armv8"
+    fi
+    export AS="$(xcrun --sdk "$toolchain_sys" --find clang)"
   fi
   if iswindows; then
     export LDFLAGS="$LDFLAGS -Wl,-Bstatic -l:libpthreadGC3.a"
@@ -5347,6 +5351,26 @@ configure_ffmpeg() {
   else
     postpend_configure_opts+=" --extra-cflags=\"-std=gnu17\" --extra-libs=\"-Wl,--start-group $extra_libs -Wl,--end-group\" $ff_flags_values"
   fi
+
+  if truthy "$build_tests" && islinux; then
+    case "$test_type" in
+      tsan|thread|t)
+      postpend_configure_opts+=" --target-exec='setarch x86_64 -R' --toolchain=gcc-tsan"
+      ;;
+      asan|address|a)
+      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=address\""
+      postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=address\""
+      ;;
+      undefined|ubsan|u)
+      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=undefined\""
+      postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=undefined\""
+      ;;
+      *)
+      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=undefined\""
+      postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=undefined\""
+      ;;
+    esac
+  fi
   
   if iswindows; then
     cross_windres y
@@ -5433,7 +5457,7 @@ install_ffmpeg() {
   iswindows && export LD=${cross_prefix}gcc # ld weirdness with windows
   isandroid && export AS="$CC" && export LD="$CC"
   if isapple; then 
-    export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
+    # export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
     local bin2c_py=$(create_bin2c_py)
     setup_default_python
     gsed -i 's|RUN_BIN2C = $(BIN2C)|RUN_BIN2C = python3 ffbuild/bin2c.py|' "$ffmpeg_source_dir/ffbuild/common.mak"

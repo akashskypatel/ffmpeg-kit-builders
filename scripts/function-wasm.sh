@@ -141,7 +141,9 @@ EOF
 
 configure_ffmpeg_kit() {
   echo -e "INFO: Configuring ffmpeg kit for Emscripten" | tee -a "$LOG_FILE"
-
+  
+  ! truthy "$build_tests" && configure_ffmpeg
+  
   if [[ "$build_ffmpeg_kit_type" != "static" ]]; then
     echo "INFO: Emscripten does not use the native shared-library packaging path; building ffmpeg-kit statically." | tee -a "$LOG_FILE"
     export build_ffmpeg_kit_type=static
