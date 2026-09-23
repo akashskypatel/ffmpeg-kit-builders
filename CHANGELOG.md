@@ -1,9 +1,4 @@
 # FFmpegKit Changelog
-## Version 0.11.3
-
-- Publish the Review 24 single structured global-log callback ABI runtime built from the frozen native handoff.
-- Remove the obsolete dual-ABI runtime family from the production release line.
-
 
 ## Version 0.11.2
 
