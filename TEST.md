@@ -65,6 +65,7 @@ export FFMPEG_KIT_ROOT=/home/vscode/ffmpeg-kit-builders
 export FFMPEG_KIT_SOURCE=$FFMPEG_KIT_ROOT/FFmpegKit
 export FFMPEG_KIT_DEPS=$FFMPEG_KIT_ROOT/prebuilt/wasm-wasm32/libraries
 export FFMPEG_KIT_BUNDLE=$FFMPEG_KIT_ROOT/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl
+export FFMPEG_KIT_VERSION="$(sed -n 's/^## Version //p' "$FFMPEG_KIT_ROOT/CHANGELOG.md" | head -n 1)"
 export PKG_CONFIG_PATH=$FFMPEG_KIT_DEPS/lib/pkgconfig:$FFMPEG_KIT_BUNDLE/lib/pkgconfig
 source /usr/local/emsdk/emsdk_env.sh
 ```
@@ -81,7 +82,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_authority_tests$'
@@ -109,7 +111,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_callback_lock_tests$'
@@ -139,7 +142,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_pthread_failure_tests$'
@@ -169,7 +173,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_wrapper_state_tests$'
@@ -203,7 +208,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_session_id_tests$'
@@ -235,7 +241,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_dispatcher_tests$'
@@ -265,7 +272,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_session_completion_tests$'
@@ -294,7 +302,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
   -R '^ffmpegkit_wasm_log_statistics_tests$'
@@ -325,10 +334,11 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
-cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests ffmpegkit_wasm -j2
 ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
-  -R '^(ffmpegkit_wasm_(authority|callback_lock|pthread_failure|wrapper_state|session_id|session_completion|log_statistics|dispatcher|ffplay_frame)_tests|ffmpegkit_wasm_table_growth)$'
+  -R '^(ffmpegkit_wasm_(authority|callback_lock|pthread_failure|wrapper_state|session_id|session_completion|log_statistics|callback_abi|dispatcher|ffplay_frame)_tests|ffmpegkit_wasm_table_growth)$'
 ```
 
 ### Wasm indirect function-table growth
@@ -343,7 +353,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm -j2
 ```
 
@@ -369,7 +380,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm -j2
 /usr/local/emsdk/node/24.19.0_64bit/bin/node \
   "$FFMPEG_KIT_SOURCE/tests/table_growth_test.mjs" \
@@ -399,7 +411,8 @@ emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
   -DFFMPEG_KIT_WASM_ENVIRONMENT=node \
   -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
   -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
-  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
 cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm -j2
 ```
 

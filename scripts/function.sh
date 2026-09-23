@@ -5358,15 +5358,11 @@ configure_ffmpeg() {
       postpend_configure_opts+=" --target-exec='setarch x86_64 -R' --toolchain=gcc-tsan"
       ;;
       asan|address|a)
-      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=address\""
+      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=address\" --toolchain=gcc-asan"
       postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=address\""
       ;;
       undefined|ubsan|u)
-      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=undefined\""
-      postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=undefined\""
-      ;;
-      *)
-      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=undefined\""
+      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=undefined\" --toolchain=gcc-ubsan"
       postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=undefined\""
       ;;
     esac

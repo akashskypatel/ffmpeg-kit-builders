@@ -392,7 +392,7 @@ while [ $# -gt 0 ]; do
       export test_type=undefined
       ;;
       *)
-      export test_type=undefined
+      export test_type=none
       ;;
     esac
 		shift
