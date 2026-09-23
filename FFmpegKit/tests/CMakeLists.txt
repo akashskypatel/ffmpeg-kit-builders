@@ -14,7 +14,7 @@ add_executable(ffmpegkit_tests
     config_test.cpp
     runtime_reuse_test.cpp
     packages_test.cpp
-    review24_callback_abi_test.cpp
+    callback_abi_contract_test.cpp
 )
 
 target_link_libraries(ffmpegkit_tests
@@ -22,6 +22,12 @@ target_link_libraries(ffmpegkit_tests
     ffmpegkit
     GTest::gtest_main
 )
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(ffmpegkit_tests PRIVATE OpenSSL::SSL OpenSSL::Crypto ${CMAKE_DL_LIBS})
+    target_compile_definitions(ffmpegkit_tests PRIVATE FFMPEG_KIT_TEST_TLS=1)
+endif()
 
 if(WIN32)
     target_link_libraries(ffmpegkit_tests PRIVATE ws2_32)
@@ -135,7 +141,7 @@ if(EMSCRIPTEN)
         ffmpegkit_wasm_session_id_tests
         ffmpegkit_wasm_session_completion_tests
         ffmpegkit_wasm_log_statistics_tests
-        ffmpegkit_wasm_review24_callback_abi_tests
+        ffmpegkit_wasm_callback_abi_tests
         ffmpegkit_wasm_dispatcher_tests
         ffmpegkit_wasm_ffplay_frame_tests
     )
@@ -147,7 +153,7 @@ if(EMSCRIPTEN)
     add_ffmpegkit_wasm_callback_test(ffmpegkit_wasm_session_id_tests session_id_callback_test.cpp)
     add_ffmpegkit_wasm_callback_test(ffmpegkit_wasm_session_completion_tests session_completion_test.cpp)
     add_ffmpegkit_wasm_callback_test(ffmpegkit_wasm_log_statistics_tests log_statistics_test.cpp)
-    add_ffmpegkit_wasm_callback_test(ffmpegkit_wasm_review24_callback_abi_tests review24_callback_abi_test.cpp)
+    add_ffmpegkit_wasm_callback_test(ffmpegkit_wasm_callback_abi_tests callback_abi_contract_test.cpp)
     add_ffmpegkit_wasm_callback_test(ffmpegkit_wasm_dispatcher_tests wasm_callback_dispatcher_test.cpp)
     add_ffmpegkit_wasm_callback_test(ffmpegkit_wasm_ffplay_frame_tests ffplay_frame_callback_test.cpp)
 

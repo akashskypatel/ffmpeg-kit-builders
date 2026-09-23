@@ -16,6 +16,13 @@
 #include <optional>
 #include <sstream>
 #include <vector>
+#ifdef FFMPEG_KIT_TEST_TLS
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/ssl.h>
+#include <openssl/x509v3.h>
+#endif
 
 #ifdef _WIN32
 #include <process.h>
@@ -35,9 +42,6 @@
 #endif
 #define TEST_VIDEO_FILE FFMPEG_KIT_TEST_DIR "/dummy_video.mp4"
 #define TEST_AUDIO_FILE FFMPEG_KIT_TEST_DIR "/dummy_audio.wav"
-#define FFMPEG_KIT_REMOTE_STREAM_URL                                           \
-  "https://cdn.flowplayer.com/a30bd6bc-f98b-47bc-abf5-97633d4faea0/hls/"       \
-  "de3f6ca7-2db3-4689-8160-0f574a5996ad/playlist.m3u8"
 
 // Helper log callback for tests
 void test_log_callback(FFmpegSessionHandle session, const char *message,
@@ -287,19 +291,45 @@ static std::optional<std::string> remote_stream_url() {
   if (value != nullptr && *value != '\0') {
     return std::string(value);
   }
-  return std::string(FFMPEG_KIT_REMOTE_STREAM_URL);
+  return std::nullopt;
 }
 
 static std::string
 remote_recording_command(const std::string &url,
-                         const std::filesystem::path &output) {
+                         const std::filesystem::path &output,
+                         const std::filesystem::path &ca_file = {},
+                         bool reconnect_at_eof = true) {
   std::ostringstream command;
-  command << "-y -nostdin -hide_banner -loglevel debug "
-          << "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 "
+  command << "-y -nostdin -hide_banner -loglevel debug -tls_verify 1 ";
+  if (!ca_file.empty()) {
+    command << "-ca_file " << quote_path(ca_file) << " ";
+  }
+  // HLS playlist EOF is a normal resource boundary. FFmpeg copies these
+  // protocol options to playlist requests, so reconnect_at_eof would retry a
+  // finite manifest before the HLS parser can consume it.
+  command << "-reconnect 1 -reconnect_at_eof "
+          << (reconnect_at_eof ? 1 : 0) << " -reconnect_streamed 1 "
           << "-reconnect_delay_max 5 -rw_timeout 5000000 "
           << "-i " << quote_argument(url) << " "
           << "-map 0 -c copy -f mpegts " << quote_path(output);
   return command.str();
+}
+
+static bool create_remote_stream_asset(const std::filesystem::path &path) {
+  std::ostringstream command;
+  command << "-y -hide_banner -loglevel fatal "
+          << "-f lavfi -i testsrc=duration=8:size=128x128:rate=10 "
+          << "-f lavfi -i sine=frequency=1000:duration=8 "
+          << "-shortest -c:v mpeg2video -c:a mp2 -f mpegts "
+          << quote_path(path);
+  FFmpegSessionHandle session = ffmpeg_kit_execute(command.str().c_str());
+  if (session == nullptr) {
+    return false;
+  }
+  const bool completed =
+      ffmpeg_kit_session_get_state(session) == FFMPEG_KIT_SESSION_STATE_COMPLETED;
+  ffmpeg_kit_handle_release(session);
+  return completed;
 }
 
 static bool wait_for_file_size_at_least(const std::filesystem::path &path,
@@ -339,6 +369,267 @@ static void close_socket(SocketType socket) {
 }
 #endif
 
+#ifdef FFMPEG_KIT_TEST_TLS
+class LocalTlsMaterial {
+public:
+  ~LocalTlsMaterial() {
+    if (!directory_.empty()) {
+      std::error_code ec;
+      std::filesystem::remove_all(directory_, ec);
+    }
+  }
+
+  bool initialize(std::string &error) {
+    std::call_once(once_, [this]() { create(); });
+    error = error_;
+    return ready_;
+  }
+
+  const std::filesystem::path &ca_file() const { return ca_file_; }
+  const std::filesystem::path &server_certificate_file() const {
+    return server_certificate_file_;
+  }
+  const std::filesystem::path &server_key_file() const {
+    return server_key_file_;
+  }
+  const std::filesystem::path &mismatched_server_certificate_file() const {
+    return mismatched_server_certificate_file_;
+  }
+  const std::filesystem::path &untrusted_ca_file() const {
+    return untrusted_ca_file_;
+  }
+
+private:
+  static EVP_PKEY *generate_key() {
+    EVP_PKEY_CTX *raw_context = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+    if (raw_context == nullptr) {
+      return nullptr;
+    }
+    std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)> context(
+        raw_context, EVP_PKEY_CTX_free);
+    EVP_PKEY *key = nullptr;
+    if (EVP_PKEY_keygen_init(context.get()) <= 0 ||
+        EVP_PKEY_CTX_set_rsa_keygen_bits(context.get(), 2048) <= 0 ||
+        EVP_PKEY_keygen(context.get(), &key) <= 0) {
+      EVP_PKEY_free(key);
+      return nullptr;
+    }
+    return key;
+  }
+
+  static bool add_extension(X509 *certificate, X509 *issuer, int nid,
+                            const char *value) {
+    X509V3_CTX context;
+    X509V3_set_ctx(&context, issuer == nullptr ? certificate : issuer,
+                   certificate, nullptr, nullptr, 0);
+    X509_EXTENSION *extension = X509V3_EXT_conf_nid(
+        nullptr, &context, nid, const_cast<char *>(value));
+    if (extension == nullptr) {
+      return false;
+    }
+    const bool added = X509_add_ext(certificate, extension, -1) == 1;
+    X509_EXTENSION_free(extension);
+    return added;
+  }
+
+  static X509 *make_certificate(EVP_PKEY *key, X509 *issuer,
+                                EVP_PKEY *issuer_key, const char *common_name,
+                                bool is_ca,
+                                const char *subject_alt_name =
+                                    "IP:127.0.0.1,DNS:localhost") {
+    X509 *certificate = X509_new();
+    if (certificate == nullptr || X509_set_version(certificate, 2) != 1 ||
+        ASN1_INTEGER_set(X509_get_serialNumber(certificate),
+                         is_ca ? 1 : 2) != 1 ||
+        X509_gmtime_adj(X509_get_notBefore(certificate), -60) == nullptr ||
+        X509_gmtime_adj(X509_get_notAfter(certificate),
+                        10 * 365 * 24 * 60 * 60) == nullptr ||
+        X509_set_pubkey(certificate, key) != 1) {
+      X509_free(certificate);
+      return nullptr;
+    }
+
+    X509_NAME *subject = X509_get_subject_name(certificate);
+    if (X509_NAME_add_entry_by_txt(
+            subject, "CN", MBSTRING_ASC,
+            reinterpret_cast<const unsigned char *>(common_name), -1, -1,
+            0) != 1 ||
+        X509_set_issuer_name(certificate,
+                             issuer == nullptr ? subject
+                                               : X509_get_subject_name(issuer)) !=
+            1) {
+      X509_free(certificate);
+      return nullptr;
+    }
+
+    const char *basic_constraints =
+        is_ca ? "critical,CA:TRUE,pathlen:0" : "critical,CA:FALSE";
+    const char *key_usage =
+        is_ca ? "critical,keyCertSign,cRLSign"
+              : "critical,digitalSignature,keyEncipherment";
+    if (!add_extension(certificate, issuer, NID_basic_constraints,
+                       basic_constraints) ||
+        !add_extension(certificate, issuer, NID_key_usage, key_usage) ||
+        (!is_ca &&
+         (!add_extension(certificate, issuer, NID_ext_key_usage, "serverAuth") ||
+          !add_extension(certificate, issuer, NID_subject_alt_name,
+                         subject_alt_name))) ||
+        X509_sign(certificate, issuer_key == nullptr ? key : issuer_key,
+                  EVP_sha256()) <= 0) {
+      X509_free(certificate);
+      return nullptr;
+    }
+    return certificate;
+  }
+
+  static bool write_certificate(const std::filesystem::path &path,
+                               X509 *certificate) {
+    FILE *file = std::fopen(path.string().c_str(), "wb");
+    if (file == nullptr) {
+      return false;
+    }
+    const bool written = PEM_write_X509(file, certificate) == 1;
+    std::fclose(file);
+    return written;
+  }
+
+  static bool write_private_key(const std::filesystem::path &path,
+                                EVP_PKEY *key) {
+    FILE *file = std::fopen(path.string().c_str(), "wb");
+    if (file == nullptr) {
+      return false;
+    }
+    const bool written =
+        PEM_write_PrivateKey(file, key, nullptr, nullptr, 0, nullptr, nullptr) ==
+        1;
+    std::fclose(file);
+    return written;
+  }
+
+  void create() {
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    directory_ = std::filesystem::temp_directory_path() /
+                 ("ffmpegkit-verified-tls-" + std::to_string(nonce));
+    std::error_code ec;
+    if (!std::filesystem::create_directory(directory_, ec) || ec) {
+      error_ = "could not create the isolated TLS fixture directory";
+      return;
+    }
+    std::filesystem::permissions(
+        directory_, std::filesystem::perms::owner_all,
+        std::filesystem::perm_options::replace, ec);
+    if (ec) {
+      error_ = "could not restrict permissions on the TLS fixture directory";
+      return;
+    }
+
+    ca_file_ = directory_ / "test-ca.pem";
+    server_certificate_file_ = directory_ / "server-cert.pem";
+    mismatched_server_certificate_file_ =
+        directory_ / "server-cert-wrong-san.pem";
+    server_key_file_ = directory_ / "server-key.pem";
+    untrusted_ca_file_ = directory_ / "untrusted-ca.pem";
+
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> ca_key(generate_key(),
+                                                               EVP_PKEY_free);
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> server_key(
+        generate_key(), EVP_PKEY_free);
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> untrusted_ca_key(
+        generate_key(), EVP_PKEY_free);
+    if (!ca_key || !server_key || !untrusted_ca_key) {
+      error_ = "could not generate TLS fixture keys";
+      return;
+    }
+    std::unique_ptr<X509, decltype(&X509_free)> ca_certificate(
+        make_certificate(ca_key.get(), nullptr, nullptr, "FFmpegKit Verified TLS Test CA",
+                         true),
+        X509_free);
+    std::unique_ptr<X509, decltype(&X509_free)> server_certificate(
+        ca_certificate
+            ? make_certificate(server_key.get(), ca_certificate.get(),
+                               ca_key.get(), "127.0.0.1", false)
+            : nullptr,
+        X509_free);
+    std::unique_ptr<X509, decltype(&X509_free)> mismatched_server_certificate(
+        ca_certificate
+            ? make_certificate(server_key.get(), ca_certificate.get(),
+                               ca_key.get(), "wrong.invalid", false,
+                               "DNS:wrong.invalid")
+            : nullptr,
+        X509_free);
+    std::unique_ptr<X509, decltype(&X509_free)> untrusted_ca_certificate(
+        make_certificate(untrusted_ca_key.get(), nullptr, nullptr,
+                         "FFmpegKit Untrusted TLS Test CA", true),
+        X509_free);
+    if (!ca_certificate || !server_certificate ||
+        !mismatched_server_certificate || !untrusted_ca_certificate ||
+        !write_certificate(ca_file_, ca_certificate.get()) ||
+        !write_certificate(server_certificate_file_, server_certificate.get()) ||
+        !write_certificate(mismatched_server_certificate_file_,
+                           mismatched_server_certificate.get()) ||
+        !write_certificate(untrusted_ca_file_, untrusted_ca_certificate.get()) ||
+        !write_private_key(server_key_file_, server_key.get())) {
+      error_ = "could not write the verified-TLS fixture material";
+      return;
+    }
+    std::filesystem::permissions(
+        server_key_file_,
+        std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+        std::filesystem::perm_options::replace, ec);
+    if (ec) {
+      error_ = "could not restrict permissions on the TLS server key";
+      return;
+    }
+    ready_ = true;
+  }
+
+  std::once_flag once_;
+  bool ready_{false};
+  std::string error_;
+  std::filesystem::path directory_;
+  std::filesystem::path ca_file_;
+  std::filesystem::path server_certificate_file_;
+  std::filesystem::path mismatched_server_certificate_file_;
+  std::filesystem::path server_key_file_;
+  std::filesystem::path untrusted_ca_file_;
+};
+
+static LocalTlsMaterial &local_tls_material() {
+  static LocalTlsMaterial material;
+  return material;
+}
+
+class ScopedTestEnvironmentVariable {
+public:
+  ScopedTestEnvironmentVariable(const std::string &name,
+                               const std::string &value)
+      : name_(name) {
+    if (const char *previous = std::getenv(name_.c_str())) {
+      previous_ = previous;
+    }
+    active_ = ::setenv(name_.c_str(), value.c_str(), 1) == 0;
+  }
+
+  ~ScopedTestEnvironmentVariable() {
+    if (!active_) {
+      return;
+    }
+    if (previous_) {
+      ::setenv(name_.c_str(), previous_->c_str(), 1);
+    } else {
+      ::unsetenv(name_.c_str());
+    }
+  }
+
+  bool active() const { return active_; }
+
+private:
+  std::string name_;
+  std::optional<std::string> previous_;
+  bool active_{false};
+};
+#endif
+
 class LocalHttpStallServer {
 public:
   enum class StreamEndMode {
@@ -348,8 +639,10 @@ public:
 
   explicit LocalHttpStallServer(
       const std::string &asset_path,
-      StreamEndMode stream_end_mode = StreamEndMode::StallAfterBody)
-      : asset_path_(asset_path), stream_end_mode_(stream_end_mode) {}
+      StreamEndMode stream_end_mode = StreamEndMode::StallAfterBody,
+      bool use_tls = false, bool mismatched_tls_identity = false)
+      : asset_path_(asset_path), stream_end_mode_(stream_end_mode),
+        use_tls_(use_tls), mismatched_tls_identity_(mismatched_tls_identity) {}
 
   bool start() {
     if (!load_asset()) {
@@ -366,6 +659,12 @@ public:
     });
     if (!winsock_ready) {
       last_error_ = "winsock initialization failed";
+      return false;
+    }
+#endif
+
+#ifdef FFMPEG_KIT_TEST_TLS
+    if (use_tls_ && !initialize_tls()) {
       return false;
     }
 #endif
@@ -426,18 +725,44 @@ public:
 
   void stop() {
     stop_requested_.store(true);
-    close_socket(client_socket_.exchange(kInvalidSocket));
-    close_socket(listen_socket_.exchange(kInvalidSocket));
+    const SocketType client = client_socket_.exchange(kInvalidSocket);
+    if (client != kInvalidSocket) {
+#ifdef _WIN32
+      shutdown(client, SD_BOTH);
+#else
+      shutdown(client, SHUT_RDWR);
+#endif
+    }
     if (server_thread_.joinable()) {
       server_thread_.join();
     }
+    if (client != kInvalidSocket) {
+      close_socket(client);
+    }
+    close_socket(client_socket_.exchange(kInvalidSocket));
+    close_socket(listen_socket_.exchange(kInvalidSocket));
     cleanup_socket();
+#ifdef FFMPEG_KIT_TEST_TLS
+    if (ssl_context_ != nullptr) {
+      SSL_CTX_free(ssl_context_);
+      ssl_context_ = nullptr;
+    }
+#endif
   }
 
   ~LocalHttpStallServer() { stop(); }
 
   std::string url(const std::string &path) const {
-    return "http://127.0.0.1:" + std::to_string(port_) + path;
+    return std::string(use_tls_ ? "https://" : "http://") +
+           "127.0.0.1:" + std::to_string(port_) + path;
+  }
+
+  std::string ca_file() const {
+#ifdef FFMPEG_KIT_TEST_TLS
+    return local_tls_material().ca_file().string();
+#else
+    return {};
+#endif
   }
 
   const std::string &last_error() const { return last_error_; }
@@ -461,7 +786,47 @@ public:
         });
   }
 
+  bool wait_for_request_count(int minimum_requests, int timeout_ms) {
+    std::unique_lock<std::mutex> lock(state_mutex_);
+    return request_cv_.wait_for(
+        lock, std::chrono::milliseconds(timeout_ms), [&]() {
+          return request_count_ >= minimum_requests ||
+                 failed_.load(std::memory_order_acquire);
+        });
+  }
+
 private:
+#ifdef FFMPEG_KIT_TEST_TLS
+  bool initialize_tls() {
+    LocalTlsMaterial &material = local_tls_material();
+    if (!material.initialize(last_error_)) {
+      return false;
+    }
+    ssl_context_ = SSL_CTX_new(TLS_server_method());
+    const auto &certificate_file =
+        mismatched_tls_identity_
+            ? material.mismatched_server_certificate_file()
+            : material.server_certificate_file();
+    if (ssl_context_ == nullptr ||
+        SSL_CTX_set_min_proto_version(ssl_context_, TLS1_2_VERSION) != 1 ||
+        SSL_CTX_use_certificate_file(
+            ssl_context_, certificate_file.string().c_str(),
+            SSL_FILETYPE_PEM) != 1 ||
+        SSL_CTX_use_PrivateKey_file(
+            ssl_context_, material.server_key_file().string().c_str(),
+            SSL_FILETYPE_PEM) != 1 ||
+        SSL_CTX_check_private_key(ssl_context_) != 1) {
+      last_error_ = "could not configure the HTTPS test server";
+      if (ssl_context_ != nullptr) {
+        SSL_CTX_free(ssl_context_);
+        ssl_context_ = nullptr;
+      }
+      return false;
+    }
+    return true;
+  }
+#endif
+
   bool load_asset() {
     for (int waited = 0; waited <= 2000; waited += 50) {
       std::ifstream file(asset_path_, std::ios::binary);
@@ -487,11 +852,20 @@ private:
     return request.find(needle) != std::string::npos;
   }
 
-  std::string read_request(SocketType client) {
+  std::string read_request(SocketType client
+#ifdef FFMPEG_KIT_TEST_TLS
+                           , SSL *ssl
+#endif
+                           ) {
     std::string request;
     char buffer[1024];
     for (;;) {
+#ifdef FFMPEG_KIT_TEST_TLS
+      int received = ssl == nullptr ? recv(client, buffer, sizeof(buffer), 0)
+                                    : SSL_read(ssl, buffer, sizeof(buffer));
+#else
       int received = recv(client, buffer, sizeof(buffer), 0);
+#endif
       if (received <= 0) {
         break;
       }
@@ -503,11 +877,22 @@ private:
     return request;
   }
 
-  size_t send_all(SocketType client, const char *data, size_t size) {
+  size_t send_all(SocketType client, const char *data, size_t size
+#ifdef FFMPEG_KIT_TEST_TLS
+                  , SSL *ssl
+#endif
+                  ) {
     size_t written = 0;
     while (written < size && !stop_requested_.load()) {
-      int sent =
-          send(client, data + written, static_cast<int>(size - written), 0);
+#ifdef FFMPEG_KIT_TEST_TLS
+      int sent = ssl == nullptr
+                     ? send(client, data + written,
+                            static_cast<int>(size - written), 0)
+                     : SSL_write(ssl, data + written,
+                                 static_cast<int>(size - written));
+#else
+      int sent = send(client, data + written, static_cast<int>(size - written), 0);
+#endif
       if (sent <= 0) {
         break;
       }
@@ -516,11 +901,24 @@ private:
     return written;
   }
 
-  void handle_client(SocketType client) {
-    const std::string request = read_request(client);
+  void handle_client(SocketType client
+#ifdef FFMPEG_KIT_TEST_TLS
+                     , SSL *ssl
+#endif
+                     ) {
+    const std::string request = read_request(client
+#ifdef FFMPEG_KIT_TEST_TLS
+                                              , ssl
+#endif
+                                              );
     if (request.empty()) {
       return;
     }
+    {
+      std::lock_guard<std::mutex> lock(state_mutex_);
+      ++request_count_;
+    }
+    request_cv_.notify_all();
 
     if (path_contains(request, "GET /segment0.ts")) {
       {
@@ -534,19 +932,31 @@ private:
               << "Connection: keep-alive\r\n"
               << "Content-Length: " << file_bytes_.size() << "\r\n\r\n";
       const std::string header_blob = headers.str();
-      send_all(client, header_blob.c_str(), header_blob.size());
-      const size_t initial_bytes = std::min<size_t>(
-          file_bytes_.size(),
-          std::max<size_t>(128 * 1024, file_bytes_.size() / 2));
+      send_all(client, header_blob.c_str(), header_blob.size()
+#ifdef FFMPEG_KIT_TEST_TLS
+               , ssl
+#endif
+               );
+      // Complete the TLS HLS segment before stalling on the next segment fetch.
+      const size_t initial_bytes =
+#ifdef FFMPEG_KIT_TEST_TLS
+          use_tls_ ? file_bytes_.size() :
+#endif
+          std::min<size_t>(file_bytes_.size(),
+                           std::max<size_t>(128 * 1024, file_bytes_.size() / 2));
       const size_t body_bytes =
           send_all(client, reinterpret_cast<const char *>(file_bytes_.data()),
-                   initial_bytes);
+                   initial_bytes
+#ifdef FFMPEG_KIT_TEST_TLS
+                   , ssl
+#endif
+                   );
       {
         std::lock_guard<std::mutex> lock(state_mutex_);
         body_bytes_sent_ = body_bytes;
       }
       request_cv_.notify_all();
-      if (stream_end_mode_ == StreamEndMode::CloseAfterBody) {
+      if (stream_end_mode_ == StreamEndMode::CloseAfterBody || use_tls_) {
         return;
       }
       while (!stop_requested_.load()) {
@@ -564,13 +974,27 @@ private:
               << "Connection: keep-alive\r\n"
               << "Content-Length: " << file_bytes_.size() << "\r\n\r\n";
       const std::string header_blob = headers.str();
-      send_all(client, header_blob.c_str(), header_blob.size());
+      send_all(client, header_blob.c_str(), header_blob.size()
+#ifdef FFMPEG_KIT_TEST_TLS
+               , ssl
+#endif
+               );
+
+#ifdef FFMPEG_KIT_TEST_TLS
+      if (use_tls_) {
+        const size_t initial_bytes = std::min<size_t>(
+            file_bytes_.size(),
+            std::max<size_t>(128 * 1024, file_bytes_.size() / 2));
+        send_all(client, reinterpret_cast<const char *>(file_bytes_.data()),
+                 initial_bytes, ssl);
+      }
+#endif
       while (!stop_requested_.load()) {
         test_sleep_for_ms(100);
       }
 
     } else if (path_contains(request, "GET /master.m3u8")) {
-      const std::string playlist = "#EXTM3U\r\n"
+      std::string playlist = "#EXTM3U\r\n"
                                    "#EXT-X-VERSION:3\r\n"
                                    "#EXT-X-TARGETDURATION:6\r\n"
                                    "#EXT-X-MEDIA-SEQUENCE:0\r\n"
@@ -578,18 +1002,35 @@ private:
                                    "/segment0.ts\r\n"
                                    "#EXTINF:6.0,\r\n"
                                    "/segment1.ts\r\n";
+#ifdef FFMPEG_KIT_TEST_TLS
+      if (use_tls_) {
+        playlist += "#EXT-X-ENDLIST\r\n";
+      }
+#endif
       std::ostringstream headers;
       headers << "HTTP/1.1 200 OK\r\n"
               << "Content-Type: application/vnd.apple.mpegurl\r\n"
               << "Connection: close\r\n"
               << "Content-Length: " << playlist.size() << "\r\n\r\n";
       const std::string header_blob = headers.str();
-      send_all(client, header_blob.c_str(), header_blob.size());
-      send_all(client, playlist.c_str(), playlist.size());
+      send_all(client, header_blob.c_str(), header_blob.size()
+#ifdef FFMPEG_KIT_TEST_TLS
+               , ssl
+#endif
+               );
+      send_all(client, playlist.c_str(), playlist.size()
+#ifdef FFMPEG_KIT_TEST_TLS
+               , ssl
+#endif
+               );
     } else {
       const std::string not_found = "HTTP/1.1 404 Not Found\r\nConnection: "
                                     "close\r\nContent-Length: 0\r\n\r\n";
-      send_all(client, not_found.c_str(), not_found.size());
+      send_all(client, not_found.c_str(), not_found.size()
+#ifdef FFMPEG_KIT_TEST_TLS
+               , ssl
+#endif
+               );
     }
   }
 
@@ -627,13 +1068,46 @@ private:
       }
 
       client_socket_.store(client_socket);
+      if (stop_requested_.load()) {
+#ifdef _WIN32
+        shutdown(client_socket, SD_BOTH);
+#else
+        shutdown(client_socket, SHUT_RDWR);
+#endif
+      }
+#ifdef FFMPEG_KIT_TEST_TLS
+      SSL *ssl = nullptr;
+      if (use_tls_) {
+        ssl = SSL_new(ssl_context_);
+        if (ssl == nullptr ||
+            SSL_set_fd(ssl, static_cast<int>(client_socket)) != 1 ||
+            SSL_accept(ssl) != 1) {
+          if (ssl != nullptr) {
+            SSL_free(ssl);
+          }
+          close_socket(client_socket_.exchange(kInvalidSocket));
+          continue;
+        }
+      }
+      handle_client(client_socket, ssl);
+      if (ssl != nullptr) {
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+      }
+#else
       handle_client(client_socket);
+#endif
       close_socket(client_socket_.exchange(kInvalidSocket));
     }
   }
 
   std::string asset_path_;
   StreamEndMode stream_end_mode_;
+  bool use_tls_{false};
+  bool mismatched_tls_identity_{false};
+#ifdef FFMPEG_KIT_TEST_TLS
+  SSL_CTX *ssl_context_{nullptr};
+#endif
   std::vector<uint8_t> file_bytes_;
   std::atomic<SocketType> listen_socket_{kInvalidSocket};
   std::atomic<SocketType> client_socket_{kInvalidSocket};
@@ -647,6 +1121,60 @@ private:
   std::atomic<bool> failed_{false};
   std::string requested_path_;
   size_t body_bytes_sent_{0};
+  int request_count_{0};
+  std::string last_error_;
+};
+
+class RemoteStreamSource {
+public:
+  bool start(const std::filesystem::path &asset_path) {
+    // An explicit URL remains available for optional real-network coverage.
+    const auto remote_url = remote_stream_url();
+    if (remote_url) {
+      url_ = *remote_url;
+      return true;
+    }
+#ifdef FFMPEG_KIT_TEST_TLS
+    server_ = std::make_unique<LocalHttpStallServer>(
+        asset_path, LocalHttpStallServer::StreamEndMode::StallAfterBody, true);
+    if (!server_->start()) {
+      last_error_ = server_->last_error();
+      return false;
+    }
+    url_ = server_->url("/master.m3u8");
+    ca_file_ = server_->ca_file();
+    // Let the finite manifest reach the HLS parser. Verify EOF reconnect on
+    // a direct media resource so the HLS cancellation scenarios stay intact.
+    reconnect_at_eof_ = false;
+    trust_environment_ = std::make_unique<ScopedTestEnvironmentVariable>(
+        "SSL_CERT_FILE", ca_file_);
+    if (!trust_environment_->active()) {
+      last_error_ = "could not configure the scoped local TLS trust file";
+      return false;
+    }
+    return true;
+#else
+    last_error_ =
+        "local verified-TLS test fixture is available only on Linux; "
+        "set FFMPEG_KIT_REMOTE_STREAM_URL for optional external coverage";
+    return false;
+#endif
+  }
+
+  const std::string &last_error() const { return last_error_; }
+
+  std::string recording_command(const std::filesystem::path &output) const {
+    return remote_recording_command(url_, output, ca_file_, reconnect_at_eof_);
+  }
+
+private:
+#ifdef FFMPEG_KIT_TEST_TLS
+  std::unique_ptr<ScopedTestEnvironmentVariable> trust_environment_;
+#endif
+  std::unique_ptr<LocalHttpStallServer> server_;
+  std::string url_;
+  std::string ca_file_;
+  bool reconnect_at_eof_{true};
   std::string last_error_;
 };
 
@@ -2363,19 +2891,161 @@ TEST(FFmpegKitTest, UnexpectedMidStreamEndCallsOnComplete) {
   std::filesystem::remove_all(output_dir, ec);
 }
 
-TEST(FFmpegKitTest, RemoteStreamParallelRecordingCancellationIsolation) {
-  auto url = remote_stream_url();
-  if (!url) {
-    GTEST_SKIP() << "Set FFMPEG_KIT_REMOTE_STREAM_URL to enable remote stream "
-                    "recording tests.";
-  }
+#ifdef FFMPEG_KIT_TEST_TLS
+TEST(FFmpegKitTest, RemoteStreamTlsRejectsUntrustedCa) {
+  const std::filesystem::path output_dir =
+      std::filesystem::temp_directory_path() /
+      "ffmpegkit_remote_recording_untrusted_ca";
+  std::error_code ec;
+  std::filesystem::create_directories(output_dir, ec);
+  ASSERT_FALSE(ec) << "Failed to create temporary output directory";
 
+  const std::filesystem::path asset = output_dir / "source.ts";
+  ASSERT_TRUE(create_remote_stream_asset(asset));
+
+  LocalTlsMaterial &material = local_tls_material();
+  std::string tls_error;
+  ASSERT_TRUE(material.initialize(tls_error)) << tls_error;
+  LocalHttpStallServer server(
+      asset.string(), LocalHttpStallServer::StreamEndMode::StallAfterBody,
+      true);
+  ASSERT_TRUE(server.start()) << server.last_error();
+
+  ScopedTestEnvironmentVariable cert_file(
+      "SSL_CERT_FILE", material.untrusted_ca_file().string());
+  const std::filesystem::path output = output_dir / "untrusted-ca.ts";
+  const std::string command = remote_recording_command(
+      server.url("/master.m3u8"), output, material.untrusted_ca_file(), false);
+  FFmpegSessionHandle session = ffmpeg_kit_execute(command.c_str());
+  ASSERT_NE(session, nullptr);
+  const auto state = ffmpeg_kit_session_get_state(session);
+  EXPECT_TRUE(state == FFMPEG_KIT_SESSION_STATE_COMPLETED ||
+              state == FFMPEG_KIT_SESSION_STATE_FAILED);
+  EXPECT_NE(ffmpeg_kit_session_get_return_code(session), 0);
+  const std::string logs = session_logs_as_string(session);
+  EXPECT_NE(logs.find("certificate verify failed"), std::string::npos)
+      << "Expected strict TLS rejection for an untrusted CA. Logs:\n" << logs;
+  ffmpeg_kit_handle_release(session);
+  std::filesystem::remove_all(output_dir, ec);
+}
+
+TEST(FFmpegKitTest, RemoteStreamTlsRejectsMismatchedSan) {
+  const std::filesystem::path output_dir =
+      std::filesystem::temp_directory_path() /
+      "ffmpegkit_remote_recording_mismatched_san";
+  std::error_code ec;
+  std::filesystem::create_directories(output_dir, ec);
+  ASSERT_FALSE(ec) << "Failed to create temporary output directory";
+
+  const std::filesystem::path asset = output_dir / "source.ts";
+  ASSERT_TRUE(create_remote_stream_asset(asset));
+
+  LocalTlsMaterial &material = local_tls_material();
+  std::string tls_error;
+  ASSERT_TRUE(material.initialize(tls_error)) << tls_error;
+  LocalHttpStallServer server(
+      asset.string(), LocalHttpStallServer::StreamEndMode::StallAfterBody,
+      true, true);
+  ASSERT_TRUE(server.start()) << server.last_error();
+
+  ScopedTestEnvironmentVariable cert_file(
+      "SSL_CERT_FILE", material.ca_file().string());
+  const std::filesystem::path output = output_dir / "mismatched-san.ts";
+  const std::string command = remote_recording_command(
+      server.url("/master.m3u8"), output, material.ca_file(), false);
+  FFmpegSessionHandle session = ffmpeg_kit_execute(command.c_str());
+  ASSERT_NE(session, nullptr);
+  const auto state = ffmpeg_kit_session_get_state(session);
+  EXPECT_TRUE(state == FFMPEG_KIT_SESSION_STATE_COMPLETED ||
+              state == FFMPEG_KIT_SESSION_STATE_FAILED);
+  EXPECT_NE(ffmpeg_kit_session_get_return_code(session), 0);
+  const std::string logs = session_logs_as_string(session);
+  EXPECT_NE(logs.find("certificate verify failed"), std::string::npos)
+      << "Expected strict TLS rejection for a mismatched IP SAN. Logs:\n"
+      << logs;
+  ffmpeg_kit_handle_release(session);
+  std::filesystem::remove_all(output_dir, ec);
+}
+
+TEST(FFmpegKitTest, RemoteStreamReconnectsAtHttpEof) {
+  const std::filesystem::path output_dir =
+      std::filesystem::temp_directory_path() /
+      "ffmpegkit_remote_recording_eof_reconnect";
+  std::error_code ec;
+  std::filesystem::create_directories(output_dir, ec);
+  ASSERT_FALSE(ec) << "Failed to create temporary output directory";
+  remove_matching_files(output_dir, "remote_eof_reconnect_");
+
+  const std::filesystem::path asset = output_dir / "source.ts";
+  ASSERT_TRUE(create_remote_stream_asset(asset));
+
+  LocalTlsMaterial &material = local_tls_material();
+  std::string tls_error;
+  ASSERT_TRUE(material.initialize(tls_error)) << tls_error;
+  LocalHttpStallServer server(
+      asset.string(), LocalHttpStallServer::StreamEndMode::CloseAfterBody,
+      true);
+  ASSERT_TRUE(server.start()) << server.last_error();
+
+  ScopedTestEnvironmentVariable cert_file(
+      "SSL_CERT_FILE", material.ca_file().string());
+  ASSERT_TRUE(cert_file.active());
+  const std::filesystem::path output = output_dir / "remote_eof_reconnect.ts";
+  const std::string command = remote_recording_command(
+      server.url("/segment0.ts"), output, material.ca_file(), true);
+  FFmpegSessionHandle session = ffmpeg_kit_create_session(command.c_str());
+  ASSERT_NE(session, nullptr);
+  auto signal = std::make_shared<CompletionSignal>();
+  ScopedFFmpegCompleteCallback callback(session, signal);
+
+  ffmpeg_kit_session_execute_async(session);
+  const bool reached_running_state = wait_for_running_state(session, 15000);
+  const bool reconnected = server.wait_for_request_count(2, 15000);
+  const bool wrote_stream_data = wait_for_file_size_at_least(output, 188, 15000);
+  EXPECT_TRUE(reached_running_state);
+  EXPECT_TRUE(reconnected)
+      << "Verified TLS stream did not reconnect after HTTP EOF";
+  EXPECT_TRUE(wrote_stream_data)
+      << "Verified TLS stream produced no MPEG-TS output";
+
+  ffmpeg_kit_session_cancel(session);
+  const bool completed = wait_for_completion_signal(signal, 30000);
+  EXPECT_TRUE(completed)
+      << "Timed out waiting for EOF-reconnect session completion";
+  EXPECT_NE(ffmpeg_kit_session_get_state(session),
+            FFMPEG_KIT_SESSION_STATE_RUNNING);
+  const std::string logs = session_logs_as_string(session);
+  EXPECT_NE(logs.find("Will reconnect at"), std::string::npos)
+      << "Expected the HTTP EOF reconnect path. Logs:\n" << logs;
+
+  ffmpeg_kit_handle_release(session);
+  remove_matching_files(output_dir, "remote_eof_reconnect_");
+  std::filesystem::remove_all(output_dir, ec);
+}
+#endif
+
+TEST(FFmpegKitTest, RemoteStreamParallelRecordingCancellationIsolation) {
+#ifndef FFMPEG_KIT_TEST_TLS
+  if (!remote_stream_url()) {
+    GTEST_SKIP() << "Set FFMPEG_KIT_REMOTE_STREAM_URL to enable remote "
+                    "recording tests on non-Linux platforms.";
+  }
+#endif
   const std::filesystem::path output_dir =
       std::filesystem::temp_directory_path() /
       "ffmpegkit_remote_recording_parallel";
   std::error_code ec;
   std::filesystem::create_directories(output_dir, ec);
   ASSERT_FALSE(ec) << "Failed to create temporary output directory";
+  remove_matching_files(output_dir, "remote_recording_");
+
+  const std::filesystem::path asset = output_dir / "source.ts";
+  ASSERT_TRUE(create_remote_stream_asset(asset))
+      << "Failed to create the local HLS transport fixture";
+  RemoteStreamSource source1;
+  ASSERT_TRUE(source1.start(asset)) << source1.last_error();
+  RemoteStreamSource source2;
+  ASSERT_TRUE(source2.start(asset)) << source2.last_error();
 
   const std::filesystem::path output1 = output_dir / "remote_recording_1.ts";
   const std::filesystem::path output2 = output_dir / "remote_recording_2.ts";
@@ -2383,9 +3053,9 @@ TEST(FFmpegKitTest, RemoteStreamParallelRecordingCancellationIsolation) {
   auto signal2 = std::make_shared<CompletionSignal>();
 
   FFmpegSessionHandle session1 = ffmpeg_kit_create_session(
-      remote_recording_command(*url, output1).c_str());
+      source1.recording_command(output1).c_str());
   FFmpegSessionHandle session2 = ffmpeg_kit_create_session(
-      remote_recording_command(*url, output2).c_str());
+      source2.recording_command(output2).c_str());
   ASSERT_NE(session1, nullptr);
   ASSERT_NE(session2, nullptr);
 
@@ -2422,18 +3092,27 @@ TEST(FFmpegKitTest, RemoteStreamParallelRecordingCancellationIsolation) {
 }
 
 TEST(FFmpegKitTest, RemoteStreamCancelAndImmediateRestart) {
-  auto url = remote_stream_url();
-  if (!url) {
-    GTEST_SKIP() << "Set FFMPEG_KIT_REMOTE_STREAM_URL to enable remote stream "
-                    "recording tests.";
+#ifndef FFMPEG_KIT_TEST_TLS
+  if (!remote_stream_url()) {
+    GTEST_SKIP() << "Set FFMPEG_KIT_REMOTE_STREAM_URL to enable remote "
+                    "recording tests on non-Linux platforms.";
   }
-
+#endif
   const std::filesystem::path output_dir =
       std::filesystem::temp_directory_path() /
       "ffmpegkit_remote_recording_restart";
   std::error_code ec;
   std::filesystem::create_directories(output_dir, ec);
   ASSERT_FALSE(ec) << "Failed to create temporary output directory";
+  remove_matching_files(output_dir, "remote_restart_");
+
+  const std::filesystem::path asset = output_dir / "source.ts";
+  ASSERT_TRUE(create_remote_stream_asset(asset))
+      << "Failed to create the local HLS transport fixture";
+  RemoteStreamSource source1;
+  ASSERT_TRUE(source1.start(asset)) << source1.last_error();
+  RemoteStreamSource source2;
+  ASSERT_TRUE(source2.start(asset)) << source2.last_error();
 
   const std::filesystem::path output1 = output_dir / "remote_restart_1.ts";
   const std::filesystem::path output2 = output_dir / "remote_restart_2.ts";
@@ -2441,7 +3120,7 @@ TEST(FFmpegKitTest, RemoteStreamCancelAndImmediateRestart) {
   auto signal2 = std::make_shared<CompletionSignal>();
 
   FFmpegSessionHandle session1 = ffmpeg_kit_create_session(
-      remote_recording_command(*url, output1).c_str());
+      source1.recording_command(output1).c_str());
   ASSERT_NE(session1, nullptr);
   ScopedFFmpegCompleteCallback callback1(session1, signal1);
 
@@ -2453,7 +3132,7 @@ TEST(FFmpegKitTest, RemoteStreamCancelAndImmediateRestart) {
   ffmpeg_kit_session_cancel(session1);
 
   FFmpegSessionHandle session2 = ffmpeg_kit_create_session(
-      remote_recording_command(*url, output2).c_str());
+      source2.recording_command(output2).c_str());
   ASSERT_NE(session2, nullptr);
   ScopedFFmpegCompleteCallback callback2(session2, signal2);
 
@@ -2480,24 +3159,31 @@ TEST(FFmpegKitTest, RemoteStreamCancelAndImmediateRestart) {
 }
 
 TEST(FFmpegKitTest, RemoteStreamRepeatedCancelRequestsAreIgnored) {
-  auto url = remote_stream_url();
-  if (!url) {
-    GTEST_SKIP() << "Set FFMPEG_KIT_REMOTE_STREAM_URL to enable remote stream "
-                    "recording tests.";
+#ifndef FFMPEG_KIT_TEST_TLS
+  if (!remote_stream_url()) {
+    GTEST_SKIP() << "Set FFMPEG_KIT_REMOTE_STREAM_URL to enable remote "
+                    "recording tests on non-Linux platforms.";
   }
-
+#endif
   const std::filesystem::path output_dir =
       std::filesystem::temp_directory_path() /
       "ffmpegkit_remote_recording_repeated_cancel";
   std::error_code ec;
   std::filesystem::create_directories(output_dir, ec);
   ASSERT_FALSE(ec) << "Failed to create temporary output directory";
+  remove_matching_files(output_dir, "remote_repeated_cancel_");
+
+  const std::filesystem::path asset = output_dir / "source.ts";
+  ASSERT_TRUE(create_remote_stream_asset(asset))
+      << "Failed to create the local HLS transport fixture";
+  RemoteStreamSource source;
+  ASSERT_TRUE(source.start(asset)) << source.last_error();
 
   const std::filesystem::path output = output_dir / "remote_repeated_cancel.ts";
   auto signal = std::make_shared<CompletionSignal>();
 
   FFmpegSessionHandle session =
-      ffmpeg_kit_create_session(remote_recording_command(*url, output).c_str());
+      ffmpeg_kit_create_session(source.recording_command(output).c_str());
   ASSERT_NE(session, nullptr);
   ScopedFFmpegCompleteCallback callback(session, signal);
 

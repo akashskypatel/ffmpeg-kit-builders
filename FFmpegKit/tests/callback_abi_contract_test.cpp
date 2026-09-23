@@ -91,7 +91,7 @@ void ordered_completion_callback(int64_t, void *user_data) {
 
 }  // namespace
 
-TEST(Review24NativeCallbackAbiTest,
+TEST(NativeCallbackAbiContractTest,
      CallbackCarriesStableIdentitySequenceLevelAndOwnedMessage) {
   ffmpeg_kit_initialize();
   ffmpeg_kit_config_enable_log_callback(nullptr, nullptr);
@@ -121,7 +121,7 @@ TEST(Review24NativeCallbackAbiTest,
   EXPECT_EQ(ffmpeg_kit_test_get_log_payload_outstanding(), baseline);
 }
 
-TEST(Review24NativeCallbackAbiTest, ReportsRuntimeVersion) {
+TEST(NativeCallbackAbiContractTest, ReportsRuntimeVersion) {
   char *version = ffmpeg_kit_config_get_version();
   ASSERT_NE(version, nullptr);
 
@@ -129,7 +129,7 @@ TEST(Review24NativeCallbackAbiTest, ReportsRuntimeVersion) {
   ffmpeg_kit_free(version);
 }
 
-TEST(Review24NativeCallbackAbiTest, MultiSessionSequencesRemainIndependent) {
+TEST(NativeCallbackAbiContractTest, MultiSessionSequencesRemainIndependent) {
   ffmpeg_kit_initialize();
   ffmpeg_kit_config_enable_log_callback(nullptr, nullptr);
 
@@ -156,7 +156,7 @@ TEST(Review24NativeCallbackAbiTest, MultiSessionSequencesRemainIndependent) {
   EXPECT_EQ(ffmpeg_kit_test_get_log_payload_outstanding(), 0);
 }
 
-TEST(Review24NativeCallbackAbiTest,
+TEST(NativeCallbackAbiContractTest,
      AcceptedLogIsDeliveredBeforeSameSessionCompletion) {
   constexpr int64_t kSessionId = 7000000002LL;
   ffmpeg_kit_initialize();
@@ -196,7 +196,7 @@ TEST(Review24NativeCallbackAbiTest,
 }
 
 #if defined(__EMSCRIPTEN__)
-TEST(Review24NativeCallbackAbiTest,
+TEST(NativeCallbackAbiContractTest,
      RejectedWasmLogReleasesPayloadWithoutInvokingCallback) {
   constexpr int64_t kSessionId = 7000000003LL;
   ffmpeg_kit_initialize();
@@ -230,7 +230,7 @@ TEST(Review24NativeCallbackAbiTest,
 }
 #endif
 
-TEST(Review24NativeCallbackAbiTest,
+TEST(NativeCallbackAbiContractTest,
      IndexedHistoryPreservesOrderAndCarriesPerSessionSequences) {
   auto session = ffmpegkit::FFmpegSession::create(
       std::list<std::string>{"-version"});
@@ -256,7 +256,7 @@ TEST(Review24NativeCallbackAbiTest,
   EXPECT_EQ(session->getLogAt(kLogCount), nullptr);
 }
 
-TEST(Review24NativeCallbackAbiTest,
+TEST(NativeCallbackAbiContractTest,
      GlobalLogCallbackRegistrationDoesNotEnableRedirection) {
   const bool redirection_was_enabled =
       ffmpegkit::FFmpegKitConfig::isRedirectionEnabledForTesting();
