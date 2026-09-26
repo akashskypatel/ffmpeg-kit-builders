@@ -4935,7 +4935,14 @@ configure_ffmpeg() {
   if ! isapple; then
     truthy "$enable_libvpl" && config_options+=" --enable-libvpl"                     # enable Intel oneVPL code via libvpl if libmfx is not used [no]
   fi
-  truthy "$enable_vulkan_static" && config_options+=" --enable-vulkan-static"         # enable statically link to libvulkan [no]
+  if isandroid; then
+    # Android exposes the system Vulkan loader as libvulkan.so. Keep FFmpeg's
+    # dynamic loader enabled so it can fall back from libvulkan.so.1 to that
+    # Android soname instead of linking Vulkan-Shim-Loader statically.
+    config_options+=" --disable-vulkan-static"
+  elif truthy "$enable_vulkan_static"; then
+    config_options+=" --enable-vulkan-static"                                       # enable statically link to libvulkan [no]
+  fi
   if truthy "$enable_libtorch" && (ismacos || islinux); then
     config_options+=" --enable-libtorch \
   --extra-cflags=\"-I${dependency_install_prefix}/include/torch/csrc/api/include\" \

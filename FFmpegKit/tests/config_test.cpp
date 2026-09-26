@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "Log.hpp"
 #include "ffmpegkit_wrapper.h"
 #include <cstdlib>
 
@@ -63,4 +64,12 @@ TEST(FFmpegKitConfigTest, ArgumentsToStringPreservesSpecialValues) {
         str,
         "-i 'C:\\Program Files\\Media\\clip \"quoted\"\\' '' 'single'\\''value'");
     free(str);
+}
+
+TEST(FFmpegKitConfigTest, LogReplacesTruncatedUtf8) {
+    const char malformed[] = {'A', static_cast<char>(0xe2),
+                              static_cast<char>(0x82), '\0'};
+    ffmpegkit::Log log(1, ffmpegkit::LevelAVLogInfo, malformed);
+
+    EXPECT_EQ(log.getMessage(), std::string("A\xEF\xBF\xBD"));
 }

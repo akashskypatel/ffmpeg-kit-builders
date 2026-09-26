@@ -1522,8 +1522,13 @@ build_libgsm() {
   -e "s|^GSM_INSTALL_MAN.*|GSM_INSTALL_MAN = $dependency_install_prefix/man/man3|g" \
   Makefile
   export CFLAGS="$CFLAGS -c -O2 -DNeedFunctionPrototypes=1 -Wall -Wno-comment -DSASR -DWAV49 -I./inc"
-  generic_make "lib/libgsm.a CFLAGS='${CFLAGS}'" "make"
-  generic_make "gsminstall CFLAGS='${CFLAGS}'" "install"
+  # libgsm's recursive Makefile inherits invalid GNU Make jobserver descriptors
+  # when runner dependency steps execute concurrently. Force this small build to
+  # be serial and verify the archive instead of accepting a header-only install.
+  generic_make "-j1 lib/libgsm.a CFLAGS='${CFLAGS}'" "make"
+  [[ -s "lib/libgsm.a" ]] || exit_message 1 "build_libgsm: lib/libgsm.a was not created"
+  generic_make "-j1 gsminstall CFLAGS='${CFLAGS}'" "install"
+  [[ -s "${dependency_install_prefix}/lib/libgsm.a" ]] || exit_message 1 "build_libgsm: libgsm.a was not installed"
   cat > "$install_pkgconfig_dir/gsm.pc" <<EOF
 prefix=${dependency_install_prefix}
 exec_prefix=\${prefix}

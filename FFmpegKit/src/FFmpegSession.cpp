@@ -26,6 +26,7 @@
 
 extern void
 addSessionToSessionHistory(const std::shared_ptr<ffmpegkit::Session> session);
+extern "C" void cancel_operation(long id);
 
 static std::string getCurrentTimeStamp() {
   time_t now = time(0);
@@ -187,12 +188,16 @@ void ffmpegkit::FFmpegSession::addStatistics(
   _statistics->push_back(statistics);
 }
 
-FFmpegContext *ffmpegkit::FFmpegSession::getContext() {
-  return _context.load(std::memory_order_acquire);
+void ffmpegkit::FFmpegSession::setContext(FFmpegContext *context) {
+  std::lock_guard<std::mutex> lock(_contextMutex);
+  _context = context;
 }
 
-void ffmpegkit::FFmpegSession::setContext(FFmpegContext *context) {
-  _context.store(context, std::memory_order_release);
+FFmpegContext *ffmpegkit::FFmpegSession::detachContext() {
+  std::lock_guard<std::mutex> lock(_contextMutex);
+  FFmpegContext *context = _context;
+  _context = nullptr;
+  return context;
 }
 
 bool ffmpegkit::FFmpegSession::isFFmpeg() const { return true; }
@@ -203,13 +208,20 @@ bool ffmpegkit::FFmpegSession::isFFplay() const { return false; }
 
 bool ffmpegkit::FFmpegSession::isMediaInformation() const { return false; }
 
-void ffmpegkit::FFmpegSession::cancel() {
-  FFmpegContext *context = getContext();
-  if (context != nullptr) {
-    ffmpeg_cancel(context);
+void ffmpegkit::FFmpegSession::requestCancel() {
+  // Preserve the legacy id flag for input interrupt callbacks and for a cancel
+  // that arrives before executeFFmpeg has attached its native context.
+  cancel_operation(getSessionId());
+
+  // Teardown detaches the context under this same mutex before freeing it.
+  // Holding the mutex through ffmpeg_cancel prevents a cancel/free race.
+  std::lock_guard<std::mutex> lock(_contextMutex);
+  if (_context != nullptr) {
+    ffmpeg_cancel(_context);
   }
-  ffmpegkit::AbstractSession::cancel();
 }
+
+void ffmpegkit::FFmpegSession::cancel() { requestCancel(); }
 
 void ffmpegkit::FFmpegSession::setCompleteCallback(
     const FFmpegSessionCompleteCallback completeCallback) {
