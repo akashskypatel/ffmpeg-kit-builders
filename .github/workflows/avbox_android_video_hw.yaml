@@ -1,0 +1,105 @@
+name: avbox_android_video_hw
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: avbox-android-video-hw
+  cancel-in-progress: false
+
+jobs:
+  aar:
+    name: Android arm64-v8a video_hw AAR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/ffmpeg-kit-builders-dev:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_USERNAME: ${{ github.repository_owner }}
+
+    steps:
+      - name: Checkout Fixed branch
+        uses: actions/checkout@v4
+
+      - name: Prepare build scripts
+        shell: bash
+        run: find scripts FFmpegKit -type f -name "*.sh" -exec chmod +x {} + && chmod +x runner.sh
+
+      - name: Configure Android toolchain
+        shell: bash
+        run: |
+          sudo -E ./scripts/toolchain/setup-android.sh
+          source /etc/profile.d/android-sdk.sh
+          source /etc/profile.d/rust.sh
+          rustc --version
+          cargo --version
+
+      - name: Build dependencies, FFmpeg and FFmpegKit
+        shell: bash
+        run: |
+          source /etc/profile.d/android-sdk.sh
+          source /etc/profile.d/rust.sh
+          sudo -E ./runner.sh \
+            --host=android \
+            --arch=aarch64 \
+            -y \
+            --build-deps \
+            --video-hw-bundle \
+            --ffmpeg -ff --ff-disable-programs \
+            --kit -fk \
+            --small \
+            --no-bundle \
+            --release=local \
+            --skip \
+            --hide-banner
+
+      - name: Package LGPL AAR
+        shell: bash
+        run: |
+          source /etc/profile.d/android-sdk.sh
+          source /etc/profile.d/sdkman.sh
+          sudo -E ./scripts/android/build_aar.sh \
+            --platform=android-aarch64 \
+            --bundle=video_hw \
+            --license=lgpl \
+            --small \
+            --create-aar \
+            --local \
+            --reset
+
+      - name: Verify AAR
+        shell: bash
+        run: |
+          aar="tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar"
+          test -s "$aar"
+          ls -lh "$aar"
+
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-kit-video-hw-android-arm64-v8a-${{ github.run_number }}
+          path: tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-kit-video-hw-failure-${{ github.run_number }}
+          path: |
+            build.log
+            prebuilt/src/ffmpeg/ffbuild/config.log
+            .ffmpeg-kit-build-state/
+          if-no-files-found: ignore
+          retention-days: 14

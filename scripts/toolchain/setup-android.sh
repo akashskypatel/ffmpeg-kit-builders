@@ -20,6 +20,13 @@ ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}
 ANDROID_CMDLINE_TOOLS_URL="${ANDROID_CMDLINE_TOOLS_URL:-https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip}"
 SDKMAN_DIR="${SDKMAN_DIR:-/usr/local/sdkman}"
 
+# sudo uses a restricted environment on GitHub-hosted runners. Restore the
+# shared Rust installation supplied by the builder image.
+if [[ -r /etc/profile.d/rust.sh ]]; then
+  # shellcheck source=/dev/null
+  source /etc/profile.d/rust.sh
+fi
+
 android_toolchain_bin() {
   printf '%s/toolchains/llvm/prebuilt/linux-x86_64/bin' "$ANDROID_NDK_ROOT"
 }

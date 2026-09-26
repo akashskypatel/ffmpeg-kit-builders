@@ -274,7 +274,7 @@ for arg; do
       parse_licenses "${arg#*=}"
       shift;;
     --deps)
-      deps="--deps"
+      deps="--build-deps"
       shift;;
     --reset)
       reset_state=true
