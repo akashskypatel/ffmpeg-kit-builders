@@ -121,7 +121,7 @@ ENV PATH="/opt/python/cp312-cp312/bin:${PATH}"
 
 RUN python3 --version && pip3 --version && \
     pip3 install numpy Cython setuptools && \
-    sudo ln -sf /opt/python/cp312-cp312/bin/cython /bin/cython
+    ln -sf /opt/python/cp312-cp312/bin/cython /bin/cython
 
 # 3. Create 'vscode' user
 # Manylinux images are root-only by default. We must recreate the vscode user 
