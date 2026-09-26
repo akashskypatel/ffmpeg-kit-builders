@@ -391,7 +391,8 @@ Shows which bundle first includes each library on iOS, macOS, Android, Linux, an
 | decklink<sup>[9](#nonfree-info)</sup> *(--enable-nonfree)*                                 | v+      | v+    | v+      | v+   | v+  | v+    |
 | **Hardware Acceleration**                                                                  |         |       |         |      |     |       |
 | amf, libmfx, libplacebo, libvpl                                                            | h+      | h+    | h+      | h+   | h+  | h+    |
-| opencl, opengl, vulkan, vulkan-static                                                      | h+      | h+    | h+      | h+   | h+  | h+    |
+| opencl, opengl, vulkan                                                                     | h+      | h+    | h+      | h+   | h+  | h+    |
+| vulkan-static                                                                              |         | h+    | h+      | h+   | h+  | h+    |
 | ffnvcodec, cuvid, nvdec, nvenc<sup>[12](#redist-info)</sup> *(--enable-nonfree)*           |         | h+    | h+      |      |     |       |
 | cuda-llvm, cuda-nvcc<sup>[12](#redist-info)</sup> *(--enable-nonfree)*                     |         | h+    | h+      |      |     |       |
 | libdrm, vaapi, rkmpp, vdpau                                                                |         | h+    |         |      |     |       |
