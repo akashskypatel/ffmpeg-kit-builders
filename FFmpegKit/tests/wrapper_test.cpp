@@ -1827,6 +1827,17 @@ TEST(FFmpegKitTest, ConcurrentFFprobeSessions) {
   EXPECT_EQ(ffmpeg_kit_session_get_state(ffprobe_session2),
             FFMPEG_KIT_SESSION_STATE_COMPLETED);
 
+  // FFprobe has process-wide output state. Both sessions must retain their own
+  // output even though they were submitted at the same time.
+  char *output1 = ffmpeg_kit_session_get_output(ffprobe_session1);
+  char *output2 = ffmpeg_kit_session_get_output(ffprobe_session2);
+  ASSERT_NE(output1, nullptr);
+  ASSERT_NE(output2, nullptr);
+  EXPECT_GT(strlen(output1), 0u);
+  EXPECT_GT(strlen(output2), 0u);
+  free(output1);
+  free(output2);
+
   // Cleanup
   ffmpeg_kit_handle_release(ffprobe_session1);
   ffmpeg_kit_handle_release(ffprobe_session2);
@@ -2732,6 +2743,28 @@ TEST(FFmpegKitTest, HandleManagement) {
   // 4. Release nullptr - should be no-op
   ffmpeg_kit_handle_release(nullptr);
   SUCCEED();
+}
+
+TEST(FFmpegKitTest, DuplicateSessionHandleHasIndependentLease) {
+  FFmpegSessionHandle session = ffmpeg_kit_create_session("-version");
+  ASSERT_NE(session, nullptr);
+
+  const int64_t session_id = ffmpeg_kit_session_get_session_id(session);
+  ASSERT_GT(session_id, 0);
+
+  FFmpegSessionHandle alias = ffmpeg_kit_get_session(session_id);
+  ASSERT_NE(alias, nullptr);
+  EXPECT_EQ(alias, session);
+
+  // Releasing the lookup wrapper must not invalidate the original Dart
+  // wrapper, even though both expose the same opaque pointer value.
+  ffmpeg_kit_handle_release(alias);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(session), session_id);
+  EXPECT_EQ(ffmpeg_kit_session_get_state(session),
+            FFMPEG_KIT_SESSION_STATE_CREATED);
+
+  ffmpeg_kit_handle_release(session);
+  EXPECT_EQ(ffmpeg_kit_session_get_session_id(session), -1);
 }
 
 TEST(FFmpegKitTest, ConcurrentHandleRelease) {

@@ -25,7 +25,7 @@
 #include "StatisticsCallback.hpp"
 #include "ffmpeg_lib.h"
 
-#include <atomic>
+#include <mutex>
 
 namespace ffmpegkit {
 
@@ -194,14 +194,21 @@ public:
   bool isMediaInformation() const override;
 
   /**
-   * Returns the bound native ffmpeg context.
-   */
-  FFmpegContext *getContext();
-
-  /**
    * Binds the native ffmpeg context for active execution.
    */
   void setContext(FFmpegContext *context);
+
+  /**
+   * Atomically detaches and returns the native context. Once this returns,
+   * cancellation can no longer acquire the context, so the caller may free it.
+   */
+  FFmpegContext *detachContext();
+
+  /**
+   * Records cancellation and stops the active FFmpeg scheduler, if present.
+   * Unlike cancel(), this never dispatches back through FFmpegKit::cancel().
+   */
+  void requestCancel();
 
   /**
    * Cancels the ffmpeg session.
@@ -246,7 +253,8 @@ private:
   FFmpegSessionCompleteCallback _completeCallback;
   std::shared_ptr<std::list<std::shared_ptr<ffmpegkit::Statistics>>>
       _statistics;
-  std::atomic<FFmpegContext *> _context{nullptr};
+  std::mutex _contextMutex;
+  FFmpegContext *_context{nullptr};
 };
 
 } // namespace ffmpegkit
