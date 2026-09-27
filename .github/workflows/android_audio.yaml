@@ -83,7 +83,6 @@ jobs:
             --disable-libsrt
             --disable-librist
             --disable-librtmp
-            --disable-sdl2
             --disable-libgsm
             --disable-libmodplug
             --disable-libopenmpt
@@ -239,6 +238,7 @@ jobs:
         shell: bash
         run: |
           required_features=(
+            CONFIG_SDL2
             CONFIG_HLS_MUXER
             CONFIG_HLS_DEMUXER
             CONFIG_AAC_ENCODER
@@ -256,7 +256,6 @@ jobs:
             CONFIG_LIBSRT
             CONFIG_LIBRIST
             CONFIG_LIBRTMP
-            CONFIG_SDL2
             CONFIG_LIBGSM
             CONFIG_LIBMODPLUG
             CONFIG_LIBOPENMPT
