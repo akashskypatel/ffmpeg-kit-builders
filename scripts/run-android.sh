@@ -2472,7 +2472,10 @@ build_libplacebo() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   local config_options+=" -Dvulkan-registry=$dependency_install_prefix/share/vulkan/registry/vk.xml"
-  local meson_options=" -Ddemos=false -Dbench=false -Dfuzz=false -Dvulkan=enabled -Dvk-proc-addr=disabled -Dshaderc=disabled -Dglslang=disabled -Dc_link_args=-static -Dcpp_link_args=-static $config_options" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined
+  # Vulkan rendering requires a runtime GLSL-to-SPIR-V compiler. Prefer
+  # shaderc here, matching FFmpeg's selected spirv_compiler; shaderc's static
+  # build pulls in glslang and SPIR-V Tools through the dependency graph.
+  local meson_options=" -Ddemos=false -Dbench=false -Dfuzz=false -Dvulkan=enabled -Dvk-proc-addr=disabled -Dshaderc=enabled -Dglslang=disabled -Dc_link_args=-static -Dcpp_link_args=-static $config_options" # https://mesonbuild.com/Dependencies.html#shaderc trigger use of shaderc_combined
   generic_meson "$meson_options"
   # disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install

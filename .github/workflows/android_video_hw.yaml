@@ -153,6 +153,37 @@ jobs:
             --skip \
             --hide-banner
 
+      - name: Verify Vulkan shader toolchain for this ABI
+        shell: bash
+        run: |
+          require_build_file() {
+            local pattern="$1"
+            local description="$2"
+            local match
+            match="$(find prebuilt -type f -path "$pattern" -print -quit)"
+            if [[ -z "$match" || ! -s "$match" ]]; then
+              echo "::error::Missing ${description} (${pattern})"
+              exit 1
+            fi
+            printf '%s: %s\n' "$description" "$match"
+          }
+
+          placebo_config="$(find prebuilt -type f \
+            -path '*/libraries/include/libplacebo/config.h' -print -quit)"
+          test -n "$placebo_config" || {
+            echo "::error::Missing installed libplacebo config.h"
+            exit 1
+          }
+          grep -Eq '^#define[[:space:]]+PL_HAVE_SHADERC[[:space:]]+1$' \
+            "$placebo_config" || {
+              echo "::error::libplacebo was built without shaderc"
+              exit 1
+            }
+
+          require_build_file '*/libraries/lib/libshaderc_combined.a' 'shaderc archive'
+          require_build_file '*/libraries/lib/libglslang.a' 'glslang archive'
+          require_build_file '*/libraries/lib/libSPIRV-Tools.a' 'SPIR-V Tools archive'
+
       - name: Archive ABI packaging input
         shell: bash
         run: |
@@ -320,6 +351,7 @@ jobs:
             CONFIG_LIBDAV1D
             CONFIG_LCMS2
             CONFIG_LIBPLACEBO
+            CONFIG_LIBSHADERC
             CONFIG_LIBTHEORA
             CONFIG_LIBVPX
             CONFIG_LIBWEBP
@@ -339,6 +371,10 @@ jobs:
             CONFIG_H264_MEDIACODEC_ENCODER
             CONFIG_H264_MEDIACODEC_DECODER
             CONFIG_HEVC_MEDIACODEC_DECODER
+            CONFIG_LIBPLACEBO_FILTER
+            CONFIG_OVERLAY_VULKAN_FILTER
+            CONFIG_SCALE_VULKAN_FILTER
+            CONFIG_XFADE_VULKAN_FILTER
           )
           disabled_library_features=(
             CONFIG_OPENSSL
