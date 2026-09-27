@@ -66,7 +66,7 @@ jobs:
           required_commands=(awk git glslangValidator grep install sed sha256sum sort tar tee unzip)
           for required_command in "${required_commands[@]}"; do
             command -v "$required_command" >/dev/null || {
-              echo "::error::Required command is unavailable: ${required_command}"
+              echo "::error::Required command is unavailable: ${required_command}. The builder image predates .devcontainer/Dockerfile; re-run builder_image and dispatch with the new digest."
               exit 1
             }
           done
