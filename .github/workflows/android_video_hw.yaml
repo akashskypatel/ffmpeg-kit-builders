@@ -371,7 +371,7 @@ jobs:
         shell: bash
         run: |
           aar="tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar"
-          shasum -a 256 "$aar" | tee aar-sha256.txt
+          sha256sum "$aar" | tee aar-sha256.txt
           source_sha="$(git rev-parse HEAD)"
           test "$source_sha" = "$GITHUB_SHA"
           builder_image="ghcr.io/${GITHUB_REPOSITORY_OWNER}/ffmpeg-kit-builders-dev@${BUILDER_IMAGE_DIGEST}"
