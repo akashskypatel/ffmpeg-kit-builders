@@ -78,12 +78,28 @@ jobs:
         run: |
           source /etc/profile.d/android-sdk.sh
           source /etc/profile.d/rust.sh
+          disabled_libraries=(
+            --disable-openssl
+            --disable-libsrt
+            --disable-librist
+            --disable-librtmp
+            --disable-sdl2
+            --disable-libgsm
+            --disable-libmodplug
+            --disable-libopenmpt
+            --disable-libopencore-amrwb
+            --disable-libsoxr
+            --disable-libspeex
+            --disable-libtwolame
+            --disable-openal
+          )
           sudo -E ./runner.sh \
             --host=android \
             --arch=${{ matrix.arch }} \
             -y \
             --build-deps \
             --audio-bundle \
+            "${disabled_libraries[@]}" \
             --ffmpeg -ff --ff-disable-programs \
             --kit -fk \
             --small \
@@ -222,14 +238,33 @@ jobs:
       - name: Verify audio bundle capabilities in both ABIs
         shell: bash
         run: |
-          features=(
+          required_features=(
             CONFIG_HLS_MUXER
             CONFIG_HLS_DEMUXER
             CONFIG_AAC_ENCODER
             CONFIG_MOV_MUXER
-            CONFIG_HTTPS_PROTOCOL
             CONFIG_LIBMP3LAME
             CONFIG_LIBMP3LAME_ENCODER
+            CONFIG_LIBOPUS
+            CONFIG_LIBVORBIS
+            CONFIG_LIBOPENCORE_AMRNB
+            CONFIG_LIBVO_AMRWBENC
+          )
+          disabled_features=(
+            CONFIG_HTTPS_PROTOCOL
+            CONFIG_OPENSSL
+            CONFIG_LIBSRT
+            CONFIG_LIBRIST
+            CONFIG_LIBRTMP
+            CONFIG_SDL2
+            CONFIG_LIBGSM
+            CONFIG_LIBMODPLUG
+            CONFIG_LIBOPENMPT
+            CONFIG_LIBOPENCORE_AMRWB
+            CONFIG_LIBSOXR
+            CONFIG_LIBSPEEX
+            CONFIG_LIBTWOLAME
+            CONFIG_OPENAL
           )
           for abi in arm64-v8a armeabi-v7a; do
             header="ffmpeg-configs/${abi}/config.h"
@@ -237,9 +272,15 @@ jobs:
             grep -qx '#define CONFIG_SMALL 1' "$header"
             grep -qx '#define CONFIG_GPL 0' "$header"
             grep -qx '#define CONFIG_NONFREE 0' "$header"
-            for feature in "${features[@]}"; do
+            for feature in "${required_features[@]}"; do
               grep -qx "#define ${feature} 1" "$header" || {
                 echo "::error::${feature} is not enabled for ${abi}"
+                exit 1
+              }
+            done
+            for feature in "${disabled_features[@]}"; do
+              grep -qx "#define ${feature} 0" "$header" || {
+                echo "::error::${feature} is unexpectedly enabled for ${abi}"
                 exit 1
               }
             done

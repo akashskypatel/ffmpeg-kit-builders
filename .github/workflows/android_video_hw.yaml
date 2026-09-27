@@ -78,12 +78,50 @@ jobs:
         run: |
           source /etc/profile.d/android-sdk.sh
           source /etc/profile.d/rust.sh
+          disabled_libraries=(
+            --disable-openssl
+            --disable-libsrt
+            --disable-librist
+            --disable-librtmp
+            --disable-sdl2
+            --disable-libgsm
+            --disable-libmodplug
+            --disable-libopenmpt
+            --disable-libopencore-amrwb
+            --disable-libsoxr
+            --disable-libspeex
+            --disable-libtwolame
+            --disable-openal
+            --disable-libaom
+            --disable-libaribcaption
+            --disable-libass
+            --disable-libcaca
+            --disable-libfontconfig
+            --disable-libfreetype
+            --disable-libfribidi
+            --disable-libharfbuzz
+            --disable-libjxl
+            --disable-libkvazaar
+            --disable-liboapv
+            --disable-libopenjpeg
+            --disable-libopencolorio
+            --disable-librav1e
+            --disable-librsvg
+            --disable-libsnappy
+            --disable-libsvtav1
+            --disable-libvvenc
+            --disable-libxeve
+            --disable-libxml2
+            --disable-libzimg
+            --disable-libzvbi
+          )
           sudo -E ./runner.sh \
             --host=android \
             --arch=${{ matrix.arch }} \
             -y \
             --build-deps \
             --video-hw-bundle \
+            "${disabled_libraries[@]}" \
             --ffmpeg -ff --ff-disable-programs \
             --kit -fk \
             --small \
@@ -222,19 +260,70 @@ jobs:
       - name: Verify video_hw bundle capabilities in both ABIs
         shell: bash
         run: |
-          features=(
+          required_features=(
             CONFIG_HLS_MUXER
             CONFIG_HLS_DEMUXER
             CONFIG_AAC_ENCODER
             CONFIG_MOV_MUXER
-            CONFIG_HTTPS_PROTOCOL
             CONFIG_LIBMP3LAME
+            CONFIG_LIBOPUS
+            CONFIG_LIBVORBIS
+            CONFIG_LIBOPENCORE_AMRNB
+            CONFIG_LIBVO_AMRWBENC
+            CONFIG_LIBDAV1D
+            CONFIG_LCMS2
+            CONFIG_LIBPLACEBO
+            CONFIG_LIBTHEORA
+            CONFIG_LIBVPX
+            CONFIG_LIBWEBP
             CONFIG_LIBOPENH264_ENCODER
+            CONFIG_AMF
+            CONFIG_LIBVPL
             CONFIG_MEDIACODEC
             CONFIG_H264_MEDIACODEC_ENCODER
             CONFIG_H264_MEDIACODEC_DECODER
             CONFIG_HEVC_MEDIACODEC_DECODER
+            CONFIG_OPENCL
+            CONFIG_OPENGL
             CONFIG_VULKAN
+          )
+          disabled_features=(
+            CONFIG_HTTPS_PROTOCOL
+            CONFIG_OPENSSL
+            CONFIG_LIBSRT
+            CONFIG_LIBRIST
+            CONFIG_LIBRTMP
+            CONFIG_SDL2
+            CONFIG_LIBGSM
+            CONFIG_LIBMODPLUG
+            CONFIG_LIBOPENMPT
+            CONFIG_LIBOPENCORE_AMRWB
+            CONFIG_LIBSOXR
+            CONFIG_LIBSPEEX
+            CONFIG_LIBTWOLAME
+            CONFIG_OPENAL
+            CONFIG_LIBAOM
+            CONFIG_LIBARIBCAPTION
+            CONFIG_LIBASS
+            CONFIG_LIBCACA
+            CONFIG_LIBFONTCONFIG
+            CONFIG_LIBFREETYPE
+            CONFIG_LIBFRIBIDI
+            CONFIG_LIBHARFBUZZ
+            CONFIG_LIBJXL
+            CONFIG_LIBKVAZAAR
+            CONFIG_LIBOAPV
+            CONFIG_LIBOPENJPEG
+            CONFIG_LIBOPENCOLORIO
+            CONFIG_LIBRAV1E
+            CONFIG_LIBRSVG
+            CONFIG_LIBSNAPPY
+            CONFIG_LIBSVTAV1
+            CONFIG_LIBVVENC
+            CONFIG_LIBXEVE
+            CONFIG_LIBXML2
+            CONFIG_LIBZIMG
+            CONFIG_LIBZVBI
           )
           for abi in arm64-v8a armeabi-v7a; do
             header="ffmpeg-configs/${abi}/config.h"
@@ -242,9 +331,15 @@ jobs:
             grep -qx '#define CONFIG_SMALL 1' "$header"
             grep -qx '#define CONFIG_GPL 0' "$header"
             grep -qx '#define CONFIG_NONFREE 0' "$header"
-            for feature in "${features[@]}"; do
+            for feature in "${required_features[@]}"; do
               grep -qx "#define ${feature} 1" "$header" || {
                 echo "::error::${feature} is not enabled for ${abi}"
+                exit 1
+              }
+            done
+            for feature in "${disabled_features[@]}"; do
+              grep -qx "#define ${feature} 0" "$header" || {
+                echo "::error::${feature} is unexpectedly enabled for ${abi}"
                 exit 1
               }
             done
