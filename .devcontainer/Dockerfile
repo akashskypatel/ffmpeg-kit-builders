@@ -107,6 +107,25 @@ RUN dnf install 'dnf-command(config-manager)' && \
     dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && \
     dnf install -y gh
 
+# FFmpeg 9 compiles Vulkan filter shaders at build time by invoking a host
+# glslangValidator/glslc executable. The Android shaderc libraries built by the
+# project are target libraries for libplacebo and cannot satisfy this probe.
+ARG GLSLANG_VERSION=16.1.0
+RUN git clone --depth 1 --branch "${GLSLANG_VERSION}" \
+        https://github.com/KhronosGroup/glslang.git /tmp/host-glslang && \
+    cmake -S /tmp/host-glslang -B /tmp/host-glslang/build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        -DENABLE_GLSLANG_BINARIES=ON \
+        -DENABLE_HLSL=OFF \
+        -DENABLE_OPT=OFF \
+        -DGLSLANG_TESTS=OFF \
+        -DGLSLANG_ENABLE_INSTALL=ON && \
+    cmake --build /tmp/host-glslang/build --parallel && \
+    cmake --install /tmp/host-glslang/build && \
+    glslangValidator --version && \
+    rm -rf /tmp/host-glslang
+
 # override installed older tools with bundled existing newer tools
 RUN for tool in autoconf automake aclocal autoheader autoreconf autom4te; do \
     ln -sf /usr/local/bin/$tool /usr/bin/$tool; \

@@ -63,7 +63,7 @@ jobs:
             echo "::error::GNU Bash 4 or newer is required"
             exit 1
           }
-          required_commands=(awk git grep install sed sha256sum sort tar tee unzip)
+          required_commands=(awk git glslangValidator grep install sed sha256sum sort tar tee unzip)
           for required_command in "${required_commands[@]}"; do
             command -v "$required_command" >/dev/null || {
               echo "::error::Required command is unavailable: ${required_command}"
@@ -351,7 +351,6 @@ jobs:
             CONFIG_LIBDAV1D
             CONFIG_LCMS2
             CONFIG_LIBPLACEBO
-            CONFIG_LIBSHADERC
             CONFIG_LIBTHEORA
             CONFIG_LIBVPX
             CONFIG_LIBWEBP

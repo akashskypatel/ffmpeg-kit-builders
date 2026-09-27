@@ -264,7 +264,6 @@ CONFIG_HARDWARE="\
 --enable-amf \
 --enable-libmfx \
 --enable-libplacebo \
---enable-libshaderc \
 --enable-libvpl \
 --enable-ohcodec \
 --enable-opencl \
