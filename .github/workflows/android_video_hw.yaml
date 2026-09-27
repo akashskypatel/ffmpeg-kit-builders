@@ -1,4 +1,4 @@
-name: avbox_android_video_hw
+name: android_video_hw
 
 on:
   workflow_dispatch:
@@ -8,12 +8,12 @@ permissions:
   packages: read
 
 concurrency:
-  group: avbox-android-video-hw
+  group: android-video-hw
   cancel-in-progress: false
 
 jobs:
   aar:
-    name: Android arm64-v8a video_hw AAR
+    name: Android arm64-v8a + armeabi-v7a video_hw AAR
     runs-on: ubuntu-24.04
     timeout-minutes: 355
     container:
@@ -43,7 +43,7 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Build dependencies, FFmpeg and FFmpegKit
+      - name: Build dependencies, FFmpeg and FFmpegKit (aarch64)
         shell: bash
         run: |
           source /etc/profile.d/android-sdk.sh
@@ -62,13 +62,32 @@ jobs:
             --skip \
             --hide-banner
 
+      - name: Build dependencies, FFmpeg and FFmpegKit (armv7a)
+        shell: bash
+        run: |
+          source /etc/profile.d/android-sdk.sh
+          source /etc/profile.d/rust.sh
+          sudo -E ./runner.sh \
+            --host=android \
+            --arch=armv7a \
+            -y \
+            --build-deps \
+            --video-hw-bundle \
+            --ffmpeg -ff --ff-disable-programs \
+            --kit -fk \
+            --small \
+            --no-bundle \
+            --release=local \
+            --skip \
+            --hide-banner
+
       - name: Package LGPL AAR
         shell: bash
         run: |
           source /etc/profile.d/android-sdk.sh
           source /etc/profile.d/sdkman.sh
           sudo -E ./scripts/android/build_aar.sh \
-            --platform=android-aarch64 \
+            --platform=android-aarch64,android-armv7a \
             --bundle=video_hw \
             --license=lgpl \
             --small \
@@ -81,12 +100,14 @@ jobs:
         run: |
           aar="tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar"
           test -s "$aar"
+          unzip -l "$aar" | grep -q 'jni/arm64-v8a/.*\.so'
+          unzip -l "$aar" | grep -q 'jni/armeabi-v7a/.*\.so'
           ls -lh "$aar"
 
       - name: Upload AAR
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-kit-video-hw-android-arm64-v8a-${{ github.run_number }}
+          name: ffmpeg-kit-video-hw-android-${{ github.run_number }}
           path: tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar
           if-no-files-found: error
           compression-level: 0

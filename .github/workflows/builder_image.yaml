@@ -1,4 +1,4 @@
-name: avbox_builder_image
+name: builder_image
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: avbox-builder-image
+  group: builder-image
   cancel-in-progress: false
 
 jobs:
