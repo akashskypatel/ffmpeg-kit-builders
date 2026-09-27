@@ -338,7 +338,7 @@ for arg; do
       REMOTE_RELEASE=false
       shift;;
     --snapshot)
-      SNAPSHOT=" --snapshot"
+      SNAPSHOT=true
       shift;;
     *)  
       echo "Invalid argument: ${arg}"
@@ -524,32 +524,32 @@ echo "========================================" | tee -a "${LOG_FILE}"
 
 rm -rf "${STATE_DIR}"
 
-# Build XCFrameworks for Apple platforms
-declare -a android_platforms
-android_platforms=()
+# Package the exact Android variants selected above.
 android_platforms_str=""
-for platform in "${!PLATFORMS[@]}"; do
-  case "${platform}" in
-    "android")
-      android_platforms+=("${platform}")
-      ;;
-    *)
-      ;;
-  esac
-done
-
-if [[ ${#android_platforms[@]} -gt 0 ]]; then
-  android_platforms_str=$(IFS=,; echo "${android_platforms[*]}")
+if [[ ${#ANDROID_PLATFORM_ARCHS[@]} -gt 0 ]]; then
+  android_platforms_str=$(IFS=,; echo "${ANDROID_PLATFORM_ARCHS[*]}")
 fi
 
-if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
+if [[ -n "${android_platforms_str}" ]] && truthy "$build_bundle"; then
   echo "Building AARs..." | tee -a "${LOG_FILE}"
   repo_path="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
   owner="${repo_path%%/*}"
+  aar_size_flag="--both"
+  if [[ ${#SMALL_FLAGS[@]} -eq 1 && "${SMALL_FLAGS[0]}" == "small" ]]; then
+    aar_size_flag="--small"
+  elif [[ ${#SMALL_FLAGS[@]} -eq 1 && -z "${SMALL_FLAGS[0]}" ]]; then
+    aar_size_flag="--not-small"
+  fi
+  aar_mode=()
   if [[ "${REMOTE_RELEASE}" == true ]]; then
     remote="--remote"
   else
     remote="--local"
+    aar_mode+=(--create-aar)
+  fi
+  snapshot_args=()
+  if truthy "${SNAPSHOT:-false}"; then
+    snapshot_args+=(--snapshot)
   fi
   export GITHUB_USERNAME="$owner" && \
   export GITHUB_REPO="${repo_path#*/}" && \
@@ -559,10 +559,14 @@ if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
   export OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}" && \
   export OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}" && \
   sudo -E "${WORK_DIR}/scripts/android/build_aar.sh" \
+    "--platform=${android_platforms_str}" \
     "--bundle=${bundles}" \
+    "--license=${licenses}" \
+    "${aar_size_flag}" \
     --reset \
     "${remote}" \
-    "${SNAPSHOT}"
+    "${aar_mode[@]}" \
+    "${snapshot_args[@]}"
 fi
 
 # Build XCFrameworks for Apple platforms

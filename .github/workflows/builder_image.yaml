@@ -17,27 +17,65 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
-      - name: Checkout Fixed branch
-        uses: actions/checkout@v4
+      - name: Checkout dispatched source commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build and publish builder image
-        uses: docker/build-push-action@v6
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: .devcontainer/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/ffmpeg-kit-builders-dev:latest
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/ffmpeg-kit-builders-dev:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/ffmpeg-kit-builders-dev:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Record immutable builder image reference
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER}/ffmpeg-kit-builders-dev"
+          test -n "$IMAGE_DIGEST"
+          {
+            echo "image=${image}"
+            echo "source_sha=${GITHUB_SHA}"
+            echo "digest=${IMAGE_DIGEST}"
+            echo "immutable_ref=${image}@${IMAGE_DIGEST}"
+          } | tee builder-image-provenance.txt
+          {
+            echo '### Builder image'
+            echo
+            echo 'Use this digest as the `builder_image_digest` input for the Android AAR workflows:'
+            echo
+            echo '```text'
+            echo "$IMAGE_DIGEST"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload builder image provenance
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ffmpeg-kit-builder-image-${{ github.run_number }}-${{ github.run_attempt }}
+          path: builder-image-provenance.txt
+          if-no-files-found: error
+          retention-days: 90

@@ -1,8 +1,8 @@
-name: android_video_hw
+name: android_audio
 
-# Builds an LGPL small video_hw AAR for arm64-v8a and armeabi-v7a. The ABI
-# builds run as separate GitHub jobs to reduce peak disk usage and keep each
-# build under the hosted-runner time limit. x86 and x86_64 are excluded.
+# Builds an LGPL small audio AAR for arm64-v8a and armeabi-v7a. The ABI builds
+# run as separate GitHub jobs to reduce peak disk usage and keep each build under
+# the hosted-runner time limit. x86 and x86_64 are intentionally excluded.
 
 on:
   workflow_dispatch:
@@ -22,12 +22,12 @@ permissions:
   packages: read
 
 concurrency:
-  group: android-video-hw
+  group: android-audio
   cancel-in-progress: false
 
 jobs:
   build_abi:
-    name: Build video_hw ${{ matrix.abi }}
+    name: Build audio ${{ matrix.abi }}
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 355
     strategy:
@@ -36,10 +36,10 @@ jobs:
         include:
           - arch: aarch64
             abi: arm64-v8a
-            kit_dir: ffmpeg-kit-video_hw-android-aarch64-shared-small
+            kit_dir: ffmpeg-kit-audio-android-aarch64-shared-small
           - arch: armv7a
             abi: armeabi-v7a
-            kit_dir: ffmpeg-kit-video_hw-android-armv7a-shared-small
+            kit_dir: ffmpeg-kit-audio-android-armv7a-shared-small
     container:
       image: ghcr.io/${{ github.repository_owner }}/ffmpeg-kit-builders-dev@${{ inputs.builder_image_digest }}
       credentials:
@@ -83,7 +83,7 @@ jobs:
             --arch=${{ matrix.arch }} \
             -y \
             --build-deps \
-            --video-hw-bundle \
+            --audio-bundle \
             --ffmpeg -ff --ff-disable-programs \
             --kit -fk \
             --small \
@@ -111,7 +111,7 @@ jobs:
       - name: Upload ABI packaging input
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ffmpeg-kit-video-hw-input-${{ matrix.abi }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ffmpeg-kit-audio-input-${{ matrix.abi }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: build-input-${{ matrix.abi }}.tar.gz
           if-no-files-found: error
           compression-level: 0
@@ -121,7 +121,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ffmpeg-kit-video-hw-build-failure-${{ matrix.abi }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ffmpeg-kit-audio-build-failure-${{ matrix.abi }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build.log
             prebuilt/src/ffmpeg/ffbuild/config.log
@@ -131,7 +131,7 @@ jobs:
           retention-days: 14
 
   aar:
-    name: Package and verify video_hw AAR
+    name: Package and verify audio AAR
     needs: build_abi
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 120
@@ -154,7 +154,7 @@ jobs:
       - name: Download ABI packaging inputs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: ffmpeg-kit-video-hw-input-*-${{ github.run_id }}-${{ github.run_attempt }}
+          pattern: ffmpeg-kit-audio-input-*-${{ github.run_id }}-${{ github.run_attempt }}
           path: build-inputs
           merge-multiple: true
 
@@ -189,7 +189,7 @@ jobs:
           source /etc/profile.d/sdkman.sh
           sudo -E ./scripts/android/build_aar.sh \
             --platform=android-aarch64,android-armv7a \
-            --bundle=video_hw \
+            --bundle=audio \
             --license=lgpl \
             --small \
             --create-aar \
@@ -199,7 +199,7 @@ jobs:
       - name: Verify AAR ABIs
         shell: bash
         run: |
-          aar="tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar"
+          aar="tools/android/build/outputs/aar/bundle-audio-shared-small-lgpl-release.aar"
           test -s "$aar"
           unzip -Z1 "$aar" > aar-entries.txt
           mapfile -t actual_abis < <(
@@ -219,7 +219,7 @@ jobs:
           done
           ls -lh "$aar"
 
-      - name: Verify video_hw bundle capabilities in both ABIs
+      - name: Verify audio bundle capabilities in both ABIs
         shell: bash
         run: |
           features=(
@@ -229,12 +229,7 @@ jobs:
             CONFIG_MOV_MUXER
             CONFIG_HTTPS_PROTOCOL
             CONFIG_LIBMP3LAME
-            CONFIG_LIBOPENH264_ENCODER
-            CONFIG_MEDIACODEC
-            CONFIG_H264_MEDIACODEC_ENCODER
-            CONFIG_H264_MEDIACODEC_DECODER
-            CONFIG_HEVC_MEDIACODEC_DECODER
-            CONFIG_VULKAN
+            CONFIG_LIBMP3LAME_ENCODER
           )
           for abi in arm64-v8a armeabi-v7a; do
             header="ffmpeg-configs/${abi}/config.h"
@@ -255,7 +250,7 @@ jobs:
           BUILDER_IMAGE_DIGEST: ${{ inputs.builder_image_digest }}
         shell: bash
         run: |
-          aar="tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar"
+          aar="tools/android/build/outputs/aar/bundle-audio-shared-small-lgpl-release.aar"
           shasum -a 256 "$aar" | tee aar-sha256.txt
           source_sha="$(git rev-parse HEAD)"
           test "$source_sha" = "$GITHUB_SHA"
@@ -264,14 +259,14 @@ jobs:
             echo "source_sha=${source_sha}"
             echo "builder_image=${builder_image}"
             echo "abis=arm64-v8a,armeabi-v7a"
-            echo "bundle=video_hw"
+            echo "bundle=audio"
             echo "license=lgpl"
             echo "small=true"
             echo "github_run_id=${GITHUB_RUN_ID}"
             echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
           } | tee build-provenance.txt
           {
-            echo '### Android video_hw AAR'
+            echo '### Android audio AAR'
             echo
             echo '```text'
             sed "s|tools/android/build/outputs/aar/||" aar-sha256.txt
@@ -284,9 +279,9 @@ jobs:
       - name: Upload AAR
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ffmpeg-kit-video-hw-android-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ffmpeg-kit-audio-android-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            tools/android/build/outputs/aar/bundle-video_hw-shared-small-lgpl-release.aar
+            tools/android/build/outputs/aar/bundle-audio-shared-small-lgpl-release.aar
             aar-sha256.txt
             aar-entries.txt
             build-provenance.txt
@@ -299,7 +294,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ffmpeg-kit-video-hw-package-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ffmpeg-kit-audio-package-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build.log
             .ffmpeg-kit-build-aar-state/
