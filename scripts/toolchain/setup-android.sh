@@ -19,6 +19,7 @@ ANDROID_NDK_VERSION="${ANDROID_NDK_VERSION:-29.0.14206865}"
 ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}}"
 ANDROID_CMDLINE_TOOLS_URL="${ANDROID_CMDLINE_TOOLS_URL:-https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip}"
 SDKMAN_DIR="${SDKMAN_DIR:-/usr/local/sdkman}"
+GRADLE_VERSION="${GRADLE_VERSION:-9.8.0}"
 
 # sudo uses a restricted environment on GitHub-hosted runners. Restore the
 # shared Rust installation supplied by the builder image.
@@ -41,6 +42,16 @@ android_rust_targets_installed() {
     rust_target_installed i686-linux-android &&
     rust_target_installed aarch64-linux-android &&
     rust_target_installed armv7-linux-androideabi
+}
+
+gradle_version_ready() {
+  local installed_version=""
+  [[ -x "${SDKMAN_DIR}/candidates/gradle/current/bin/gradle" ]] || return 1
+  installed_version="$(
+    "${SDKMAN_DIR}/candidates/gradle/current/bin/gradle" --version 2>/dev/null |
+      awk '$1 == "Gradle" { print $2; exit }'
+  )"
+  [[ "$installed_version" == "$GRADLE_VERSION" ]]
 }
 
 write_android_environment() {
@@ -179,7 +190,7 @@ android_toolchain_ready() {
     [[ -x "${toolchain_bin}/aarch64-linux-android-gcc" ]] &&
     [[ -x "${toolchain_bin}/armv7a-linux-androideabi-gcc" ]] &&
     [[ -s "${SDKMAN_DIR}/bin/sdkman-init.sh" ]] &&
-    [[ -x "${SDKMAN_DIR}/candidates/gradle/current/bin/gradle" ]] &&
+    gradle_version_ready &&
     android_rust_targets_installed
 }
 
@@ -233,7 +244,13 @@ if [[ ! -s "${SDKMAN_DIR}/bin/sdkman-init.sh" ]]; then
 fi
 
 source_sdkman
-run_sdkman install gradle || true
+if ! run_sdkman install gradle "$GRADLE_VERSION"; then
+  [[ -x "${SDKMAN_DIR}/candidates/gradle/${GRADLE_VERSION}/bin/gradle" ]] || {
+    echo "Failed to install Gradle ${GRADLE_VERSION}." >&2
+    exit 1
+  }
+fi
+run_sdkman default gradle "$GRADLE_VERSION"
 run_sdkman flush archives || true
 run_sdkman flush temp || true
 write_sdkman_environment
