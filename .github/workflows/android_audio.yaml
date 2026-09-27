@@ -114,9 +114,12 @@ jobs:
           test -d "$kit_dir/include"
           test -d "$kit_dir/lib"
           test -s prebuilt/src/ffmpeg/config.h
+          test -s prebuilt/src/ffmpeg/config_components.h
           test -s prebuilt/src/ffmpeg/ffbuild/config.mak
           install -D -m 0644 prebuilt/src/ffmpeg/config.h \
             ffmpeg-configs/${{ matrix.abi }}/config.h
+          install -D -m 0644 prebuilt/src/ffmpeg/config_components.h \
+            ffmpeg-configs/${{ matrix.abi }}/config_components.h
           install -D -m 0644 prebuilt/src/ffmpeg/ffbuild/config.mak \
             ffmpeg-configs/${{ matrix.abi }}/config.mak
           tar -czf "build-input-${{ matrix.abi }}.tar.gz" \
@@ -237,21 +240,22 @@ jobs:
       - name: Verify audio bundle capabilities in both ABIs
         shell: bash
         run: |
-          required_features=(
+          required_library_features=(
             CONFIG_SDL2
-            CONFIG_HLS_MUXER
-            CONFIG_HLS_DEMUXER
-            CONFIG_AAC_ENCODER
-            CONFIG_MOV_MUXER
             CONFIG_LIBMP3LAME
-            CONFIG_LIBMP3LAME_ENCODER
             CONFIG_LIBOPUS
             CONFIG_LIBVORBIS
             CONFIG_LIBOPENCORE_AMRNB
             CONFIG_LIBVO_AMRWBENC
           )
-          disabled_features=(
-            CONFIG_HTTPS_PROTOCOL
+          required_component_features=(
+            CONFIG_HLS_MUXER
+            CONFIG_HLS_DEMUXER
+            CONFIG_AAC_ENCODER
+            CONFIG_MOV_MUXER
+            CONFIG_LIBMP3LAME_ENCODER
+          )
+          disabled_library_features=(
             CONFIG_OPENSSL
             CONFIG_LIBSRT
             CONFIG_LIBRIST
@@ -265,20 +269,37 @@ jobs:
             CONFIG_LIBTWOLAME
             CONFIG_OPENAL
           )
+          disabled_component_features=(
+            CONFIG_HTTPS_PROTOCOL
+          )
           for abi in arm64-v8a armeabi-v7a; do
-            header="ffmpeg-configs/${abi}/config.h"
-            test -s "$header"
-            grep -qx '#define CONFIG_SMALL 1' "$header"
-            grep -qx '#define CONFIG_GPL 0' "$header"
-            grep -qx '#define CONFIG_NONFREE 0' "$header"
-            for feature in "${required_features[@]}"; do
-              grep -qx "#define ${feature} 1" "$header" || {
+            library_header="ffmpeg-configs/${abi}/config.h"
+            component_header="ffmpeg-configs/${abi}/config_components.h"
+            test -s "$library_header"
+            test -s "$component_header"
+            grep -qx '#define CONFIG_SMALL 1' "$library_header"
+            grep -qx '#define CONFIG_GPL 0' "$library_header"
+            grep -qx '#define CONFIG_NONFREE 0' "$library_header"
+            for feature in "${required_library_features[@]}"; do
+              grep -qx "#define ${feature} 1" "$library_header" || {
                 echo "::error::${feature} is not enabled for ${abi}"
                 exit 1
               }
             done
-            for feature in "${disabled_features[@]}"; do
-              grep -qx "#define ${feature} 0" "$header" || {
+            for feature in "${required_component_features[@]}"; do
+              grep -qx "#define ${feature} 1" "$component_header" || {
+                echo "::error::${feature} is not enabled for ${abi}"
+                exit 1
+              }
+            done
+            for feature in "${disabled_library_features[@]}"; do
+              grep -qx "#define ${feature} 0" "$library_header" || {
+                echo "::error::${feature} is unexpectedly enabled for ${abi}"
+                exit 1
+              }
+            done
+            for feature in "${disabled_component_features[@]}"; do
+              grep -qx "#define ${feature} 0" "$component_header" || {
                 echo "::error::${feature} is unexpectedly enabled for ${abi}"
                 exit 1
               }

@@ -1,3 +1,7 @@
+import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.SourcesJar
+
 plugins {
     id 'com.android.library'
     id 'com.vanniktech.maven.publish'
@@ -106,6 +110,12 @@ signing {
 }
 
 mavenPublishing {
+    configure(new AndroidSingleVariantLibrary(
+        new JavadocJar.Empty(),
+        new SourcesJar.Sources(),
+        "release"
+    ))
+
     def githubUsername = getSafeProperty('GITHUB_USERNAME', 'akashskypatel')
     def githubRepo = getSafeProperty('GITHUB_REPO', 'ffmpeg-kit-builders')
     def signPublications = providers.gradleProperty('FFMPEG_KIT_SIGN_PUBLICATIONS')
