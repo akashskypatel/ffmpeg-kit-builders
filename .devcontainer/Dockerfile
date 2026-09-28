@@ -115,6 +115,8 @@ RUN dnf install 'dnf-command(config-manager)' && \
 # rejects -Os with "not available; optimizer not linked". update_glslang_sources
 # fetches the known-good SPIRV-Tools/SPIRV-Headers commits that ENABLE_OPT needs.
 ARG GLSLANG_VERSION=16.1.0
+# SPIRV-Tools optimizer translation units are memory-heavy, so the host-tool
+# build is capped below the RAM limit of standard GitHub runners.
 RUN git clone --depth 1 --branch "${GLSLANG_VERSION}" \
         https://github.com/KhronosGroup/glslang.git /tmp/host-glslang && \
     (cd /tmp/host-glslang && python3 ./update_glslang_sources.py) && \
@@ -128,7 +130,7 @@ RUN git clone --depth 1 --branch "${GLSLANG_VERSION}" \
         -DSPIRV_SKIP_EXECUTABLES=ON \
         -DGLSLANG_TESTS=OFF \
         -DGLSLANG_ENABLE_INSTALL=ON && \
-    cmake --build /tmp/host-glslang/build --parallel && \
+    cmake --build /tmp/host-glslang/build --parallel 2 && \
     cmake --install /tmp/host-glslang/build && \
     glslangValidator --version && \
     printf '#version 460\nlayout(local_size_x = 1) in;\nvoid main() {}\n' \
