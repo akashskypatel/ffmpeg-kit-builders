@@ -9,7 +9,9 @@ permissions:
 
 concurrency:
   group: builder-image
-  cancel-in-progress: false
+  # A newer immutable image build supersedes an older one. This also prevents
+  # an unresponsive BuildKit process from blocking the replacement run.
+  cancel-in-progress: true
 
 jobs:
   image:
