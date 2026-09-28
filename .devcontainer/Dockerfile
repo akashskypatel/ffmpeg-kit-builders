@@ -123,6 +123,8 @@ RUN git clone --depth 1 --branch "${GLSLANG_VERSION}" \
     test -d /tmp/host-glslang/External/spirv-tools && \
     cmake -S /tmp/host-glslang -B /tmp/host-glslang/build \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS_RELEASE="-O2 -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="-O2 -DNDEBUG" \
         -DCMAKE_INSTALL_PREFIX=/usr/local \
         -DENABLE_GLSLANG_BINARIES=ON \
         -DENABLE_HLSL=OFF \
