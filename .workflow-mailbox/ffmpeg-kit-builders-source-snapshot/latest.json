@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "workflow_key": "ffmpeg-kit-builders-source-snapshot",
+  "workflow": "FFmpegKit Builders Source Snapshot",
+  "repository": "akashskypatel/ffmpeg-kit-builders",
+  "event": "workflow_dispatch",
+  "event_sha": "e0ea89cb7ee518a5e8d7f16f90fad93a3af419bb",
+  "source_sha": "e0ea89cb7ee518a5e8d7f16f90fad93a3af419bb",
+  "source_ref": "e0ea89cb7ee518a5e8d7f16f90fad93a3af419bb",
+  "run_id": 37223002057,
+  "run_attempt": 1,
+  "run_url": "https://github.com/akashskypatel/ffmpeg-kit-builders/actions/runs/37223002057",
+  "result": "success",
+  "summary": "Repository source snapshot for the requested frozen implementation source.",
+  "artifacts": [
+    {
+      "id": "11310613049",
+      "name": "ffmpeg-kit-builders-source-snapshot-37223002057",
+      "artifact_url": "https://github.com/akashskypatel/ffmpeg-kit-builders/actions/runs/37223002057/artifacts/11310613049",
+      "archive_download_url": "https://github.com/akashskypatel/ffmpeg-kit-builders/actions/runs/37223002057/artifacts/11310613049",
+      "digest": "edddd72e5c794319aef2e1ce6dc8fa0b5b0140f956c3592811ca8c6e4d55dc00",
+      "expired": false,
+      "expires_at": null
+    }
+  ],
+  "published_at": "2026-10-04T18:05:18Z"
+}
