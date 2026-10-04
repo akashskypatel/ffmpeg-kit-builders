@@ -4883,10 +4883,10 @@ configure_ffmpeg() {
   fi
   # Common compiler flags for Windows    
   if isapple; then
-    get_gas_preprocessor
-    # [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
-    # export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
-    # init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
+  #   get_gas_preprocessor
+  #   [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
+  #   export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
+  #   init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
     init_options+=" --as=$(xcrun --sdk "$toolchain_sys" --find clang)"
     if [[ "$host_arch" == "arm64" ]]; then
       init_options+=" --cpu=armv8"
