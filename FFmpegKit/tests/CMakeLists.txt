@@ -17,6 +17,13 @@ add_executable(ffmpegkit_tests
     callback_abi_contract_test.cpp
 )
 
+if(NOT EMSCRIPTEN)
+    target_sources(ffmpegkit_tests PRIVATE
+        ffplay_frame_callback_test.cpp
+        ffplay_renderer_source_contract_test.cpp
+    )
+endif()
+
 target_link_libraries(ffmpegkit_tests
     PRIVATE
     ffmpegkit

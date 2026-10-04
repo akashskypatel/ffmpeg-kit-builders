@@ -233,10 +233,14 @@ FFMPEG_API void ffplay_set_android_window(ANativeWindow *window);
 #endif /* __ANDROID__ */
 
 /**
- * Frame-ready callback for native desktop video output. Unsupported on
- * WebAssembly. Fired inside ffplay_step() on supported native platforms.
+ * Frame-ready callback for the composed native video output. Unsupported on
+ * WebAssembly. On native desktop and Apple it is fired after FFplay has drawn
+ * the current video/background/subtitle composition into the software SDL
+ * renderer and the renderer has been read back. Android uses the same packed
+ * RGBA callback for its wrapper-owned ANativeWindow bridge.
  * Pixel format: RGBA8888 ([R][G][B][A] on little-endian), linesize == width * 4.
- * The pixel buffer is reused for later frames; copy if you need to retain it.
+ * The pixel buffer is reused for later frames; copy it before returning if it
+ * must be retained.
  *
  * @param userdata  opaque pointer from ffplay_set_frame_callback()
  * @param pixels    RGBA8888 rows, tightly packed
@@ -249,8 +253,10 @@ typedef void (*FFplayFrameCallback)(void *userdata, const uint8_t *pixels,
                                     const char *pixel_format);
 
 /**
- * Registers a frame-ready callback for native desktop video output. This is
- * a no-op on WebAssembly. Call before ffplay_init().
+ * Registers a frame-ready callback for native non-WebAssembly video output.
+ * The callback receives composed, tightly packed RGBA renderer frames. This
+ * is a no-op on WebAssembly, whose hosts must use the pull API instead. Call
+ * before ffplay_init().
  *
  * @param callback  frame callback, or NULL to clear
  * @param userdata  forwarded to every callback invocation
@@ -276,7 +282,9 @@ FFMPEG_API int ffplay_copy_frame(uint8_t *destination, size_t destination_size,
 
 /**
  * Internal helper to invoke the global frame callback (if set).
- * Called from ffplay_step() after each video frame is decoded.
+ * Native wrapper bridges use this helper for a frame that is ready for the
+ * platform surface; composed desktop/Apple frames are captured by the SDL
+ * renderer readback path before the callback is delivered.
  *
  * @param pixels    RGBA8888 rows, tightly packed
  * @param width     frame width in pixels

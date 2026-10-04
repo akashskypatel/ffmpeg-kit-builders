@@ -88,9 +88,10 @@ static void ffplay_kit_SDL_CloseAudioDevice(SDL_AudioDeviceID dev) {
 static void lock_ffplay_api(void);
 static void unlock_ffplay_api(void);
 
-/* Global frame callback for non-Android video output (Linux, Windows, macOS, iOS).
+/* Global frame callback for native video output (Apple, Linux, Windows, Android).
  * Set by ffplay_set_frame_callback() before ffplay_init().
- * Called inside ffplay_step() with SDL_PIXELFORMAT_ABGR8888 pixel data after each video frame. */
+ * Called while the composed software-renderer RGBA frame is available. Android
+ * uses the same callback for its wrapper-owned surface bridge. */
 static FFplayFrameCallback g_frame_callback = NULL;
 static void *g_frame_callback_userdata = NULL;
 
@@ -172,10 +173,15 @@ static SDL_Window *ffplay_kit_SDL_CreateWindow(
 
 #endif /* __APPLE__ */
 
-// Keep the SDL window hidden and suppress SDL_RenderPresent: pixels are read via
-// SDL_RenderReadPixels from the software back-buffer, so no X11/present needed.
-#ifndef __ANDROID__
+/* Capture from the software back-buffer without presenting a visible window.
+ * Apple still needs FFplay's real SDL_ShowWindow transition: SDL's dummy
+ * renderer can remain logically hidden otherwise and return an untouched black
+ * back-buffer from SDL_RenderReadPixels. */
+#if !defined(__ANDROID__) && !defined(__APPLE__)
 #define SDL_ShowWindow(w) ((void)(w))
+#endif
+
+#ifndef __ANDROID__
 #define SDL_RenderPresent(r) ((void)(r))
 #endif
 // At the top of ffplay_lib.c, before ffplay.c is included, declare the real symbol:

@@ -178,12 +178,13 @@ typedef void (*MediaInformationSessionCompleteCallback)(
     MediaInformationSessionHandle session, void *user_data);
 
 /**
- * Frame-ready callback type for native desktop video output.
+ * Frame-ready callback type for native non-WebAssembly video output.
  *
  * This callback is unsupported on WebAssembly. WebAssembly callers must use
  * ffplay_kit_get_frame_buffer_size() and ffplay_kit_copy_frame() instead.
  *
- * Fired inside ffplay_step() on every rendered video frame.
+ * Fired after FFplay has composed the current video/background/subtitle frame
+ * into the software renderer and read the renderer back into packed RGBA.
  * Pixel format: RGBA8888 — bytes [R][G][B][A] on little-endian, compatible
  * with Flutter's FlutterDesktopPixelBuffer.
  * The pixel buffer is valid only for the duration of the call — copy it
@@ -195,8 +196,9 @@ typedef void (*MediaInformationSessionCompleteCallback)(
  * deadlock. Perform only lightweight, non-blocking work (e.g. memcpy into a
  * pre-allocated buffer and signal a separate rendering thread).
  *
- * Not used on Android; Android video output goes to the ANativeWindow set via
- * ffplay_kit_set_android_surface_ptr().
+ * On Android, the wrapper-owned frame bridge consumes this same callback and
+ * posts the packed RGBA pixels to the bound ANativeWindow. The surface is the
+ * display target; the callback remains available to that bridge.
  *
  * @param userdata  opaque pointer registered with
  * ffplay_kit_register_frame_callback()
@@ -1063,14 +1065,14 @@ ffplay_kit_set_android_surface_ptr(int64_t native_window_ptr);
 FFMPEG_KIT_C_EXPORT void ffplay_kit_clear_android_surface(void);
 
 /**
- * Registers a global frame-ready callback for native desktop video output
- * (Linux/Windows).
+ * Registers a global frame-ready callback for native non-WebAssembly video
+ * output (Apple, Linux, Windows, and Android).
  *
  * This function is a no-op on WebAssembly. WebAssembly callers must use
  * ffplay_kit_get_frame_buffer_size() and ffplay_kit_copy_frame() instead.
  * Must be called before ffplay_kit_session_execute() / ffplay_kit_execute().
- * On Android this is also a no-op; video output is delivered to the
- * ANativeWindow.
+ * On Android, the wrapper-owned frame bridge consumes the callback and posts
+ * frames to the ANativeWindow bound through the platform surface API.
  *
  * Dart FFI usage:
  *   ffplay_kit_register_frame_callback(Pointer.fromFunction(myCallback),
@@ -1085,9 +1087,10 @@ ffplay_kit_register_frame_callback(FFplayKitFrameCallback callback,
                                    void *userdata);
 
 /**
- * Clears the global native-desktop frame callback.
+ * Clears the global native frame callback.
  * Equivalent to ffplay_kit_register_frame_callback(NULL, NULL).
- * On WebAssembly and Android this is a no-op.
+ * On WebAssembly registration is a no-op; on Android this also detaches the
+ * callback used by the wrapper-owned surface bridge.
  */
 FFMPEG_KIT_C_EXPORT void ffplay_kit_unregister_frame_callback(void);
 
