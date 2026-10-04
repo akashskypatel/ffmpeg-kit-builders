@@ -47,3 +47,4 @@ QWEN.md
 **/.prebuilt/*
 **/*.zip
 .emscripten*/
+benchmark-results/*
