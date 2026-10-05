@@ -176,7 +176,7 @@ prefix = '$dependency_install_prefix'
 libdir = '$dependency_install_prefix/lib'
 b_staticpic = 'true'
 optimization = '3'
-b_ndebug = true
+b_ndebug = 'true'
 
 [binaries]
 c = '$CC'
