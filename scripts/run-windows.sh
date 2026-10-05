@@ -628,6 +628,19 @@ build_libpng() {
 -DZLIB_ROOT=\"$dependency_install_prefix\" \
 -DZLIB_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
 -DZLIB_LIBRARY=\"$dependency_install_prefix/lib/libz.a\""
+  if [[ "$host_arch" != "x86_64" ]]; then
+    cmake_params+=" -DPNG_ARM_NEON=on \
+-DPNG_INTEL_SSE=off"
+    CFLAGS+=" -DPNG_ARM_NEON"
+    CXXFLAGS+=" -DPNG_ARM_NEON"
+    CPPFLAGS+=" -DPNG_ARM_NEON"
+  else
+    cmake_params+=" -DPNG_ARM_NEON=off \
+-DPNG_INTEL_SSE=on"
+    CFLAGS+=" -DPNG_INTEL_SSE"
+    CXXFLAGS+=" -DPNG_INTEL_SSE"
+    CPPFLAGS+=" -DPNG_INTEL_SSE"
+  fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
