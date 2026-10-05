@@ -1246,7 +1246,7 @@ static void process_log(long sessionId, int levelValueInt,
     // WRITE TO STDOUT
     std::cout << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] "
               << ffmpegkit::FFmpegKitConfig::logLevelToString(levelValue)
-              << ": " << logMessage->str;
+              << ": " << log->getMessage();
     break;
   }
 }

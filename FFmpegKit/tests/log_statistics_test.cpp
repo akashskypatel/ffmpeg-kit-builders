@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "Log.hpp"
 #include "ffmpegkit_wrapper.h"
 
 #include <atomic>
@@ -137,6 +138,24 @@ void disable_callbacks() {
 
 
 }  // namespace
+
+TEST(LogStatisticsTest, NativeLogMessagesEndWithExactlyOneLineFeed) {
+  const auto withoutLineFeed =
+      ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo, "message");
+  const auto withLineFeed =
+      ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo, "message\n");
+  const auto withCarriageReturn =
+      ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo, "message\r");
+  const auto empty = ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo, "");
+  const auto nullMessage =
+      ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo, nullptr);
+
+  EXPECT_EQ(withoutLineFeed.getMessage(), "message\n");
+  EXPECT_EQ(withLineFeed.getMessage(), "message\n");
+  EXPECT_EQ(withCarriageReturn.getMessage(), "message\r\n");
+  EXPECT_TRUE(empty.getMessage().empty());
+  EXPECT_TRUE(nullMessage.getMessage().empty());
+}
 
 TEST(LogStatisticsTest,
      WorkerEventsAreOwnedOrderedAndDeliveredBeforeCompletion) {
