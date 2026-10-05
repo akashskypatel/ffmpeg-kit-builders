@@ -2256,7 +2256,7 @@ build_libopenh264() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled"
+  local meson_options="-Dtests=disabled -Db_ndebug=true"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
   change_dir "$src_dir"
@@ -3228,7 +3228,7 @@ build_giflib() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -DS_IREAD=S_IRUSR -DS_IWRITE=S_IWUSR"
-  generic_configure
+  generic_configure "--disable-fast-install"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"

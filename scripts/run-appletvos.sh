@@ -1834,7 +1834,8 @@ build_libopenh264() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  gsed -i "s/'ios',/'ios', 'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
+  gsed -i "s/'ios',/'ios', 'ios-simulator', 'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
+  gsed -i "s/\['android', 'ios'\]/['android', 'ios', 'ios-simulator', 'tvos', 'tvos-simulator']/" "$src_dir/$lib/codec/meson.build"
   local meson_options="-Dtests=disabled"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
@@ -2706,7 +2707,7 @@ build_giflib() {
   if istvossimulator; then
     ffi_host="${host_arch}-apple-darwin"
   fi
-  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\""
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --disable-fast-install"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
