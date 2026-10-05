@@ -664,10 +664,12 @@ build_libpng() {
 -DPNG_FRAMEWORK=OFF \
 -DPNG_TARGET_ARCHITECTURE=$host_arch \
 -DPNG_EXECUTABLES=OFF"
-  if [[ $host_arch == "arm64" ]]; then
-    cmake_args+=" -DPNG_ARM_NEON=on"
+  if [[ "$host_arch" != "x86_64" ]]; then
+    cmake_args+=" -DPNG_ARM_NEON=on \
+-DPNG_INTEL_SSE=off"
   else
-    cmake_args+=" -DPNG_ARM_NEON=off"
+    cmake_args+=" -DPNG_ARM_NEON=off \
+-DPNG_INTEL_SSE=on"
   fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
   disable_nonessential "$src_dir/$lib"

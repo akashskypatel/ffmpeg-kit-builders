@@ -961,7 +961,13 @@ build_libpng() {
   export CPPFLAGS=" $CPPFLAGS -I${dependency_install_prefix}/include"
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -lz"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  generic_configure
+  local config_options="--disable-fast-install"
+  if [[ "$host_arch" == "aarch64" || "$host_arch" == "arm64" || "$host_arch" == "armv7a" ]]; then
+    config_options+=" --enable-hardware-optimizations --enable-arm-neon=yes"
+  elif [[ "$host_arch" == "x86_64" ]]; then
+    config_options+=" --enable-hardware-optimizations --enable-intel-sse=yes"
+  fi
+  generic_configure "$config_options"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags

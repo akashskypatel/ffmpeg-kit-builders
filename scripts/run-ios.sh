@@ -670,10 +670,12 @@ build_libpng() {
 -DZLIB_LIBRARY=${dependency_install_prefix}/lib/libz.a \
 -DZLIB_INCLUDE_DIR=${dependency_install_prefix}/include \
 -DPNG_TARGET_ARCHITECTURE=$host_arch"
-  if [[ $host_arch == "arm64" ]]; then
-    cmake_args+=" -DPNG_ARM_NEON=on"
+  if [[ "$host_arch" != "x86_64" ]]; then
+    cmake_args+=" -DPNG_ARM_NEON=on \
+-DPNG_INTEL_SSE=off"
   else
-    cmake_args+=" -DPNG_ARM_NEON=off"
+    cmake_args+=" -DPNG_ARM_NEON=off \
+-DPNG_INTEL_SSE=on"
   fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
   disable_nonessential "$src_dir/$lib"
