@@ -2876,6 +2876,13 @@ build_libjpeg_turbo() {
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_INSTALL_PREFIX=$dependency_install_prefix \
 -DENABLE_SHARED=0 \
+-DENABLE_NEON=ON \
+-DNEON_INTRINSICS=ON \
+-DWITH_JPEG8=1 \
+-DWITH_SIMD=0 \
+-DREQUIRE_SIMD=1 \
+-DWITH_TURBOJPEG=0 \
+-DWITH_JAVA=0 \
 -DCMAKE_ASM_NASM_COMPILER=yasm"
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"

@@ -3197,10 +3197,14 @@ build_libjpeg_turbo() {
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_INSTALL_PREFIX=$dependency_install_prefix \
 -DENABLE_SHARED=0 \
+-DWITH_JPEG8=1 \
+-DWITH_TURBOJPEG=0 \
+-DWITH_JAVA=0 \
+-DWITH_SIMD=ON \
+-DREQUIRE_SIMD=ON \
 -DCMAKE_ASM_NASM_COMPILER=yasm"
   if [[ "$host_arch" == "aarch64" ]]; then
     cmake_params+=" -DENABLE_NEON=ON \
--DWITH_SIMD=ON \
 -DNEON_INTRINSICS=ON \
 -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a \
 -DCMAKE_SYSTEM_PROCESSOR=aarch64"

@@ -3252,7 +3252,19 @@ build_libjpeg_turbo() {
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_INSTALL_PREFIX=$dependency_install_prefix \
 -DENABLE_SHARED=0 \
--DCMAKE_ASM_NASM_COMPILER=yasm"
+-DCMAKE_ASM_NASM_COMPILER=yasm \
+-DWITH_JPEG8=1 \
+-DWITH_SIMD=1 \
+-DREQUIRE_SIMD=1 \
+-DWITH_TURBOJPEG=0 \
+-DWITH_JAVA=0"
+  if [[ "$host_arch" == "x86_64" ]]; then
+    cmake_params+=" -DENABLE_NEON=OFF \
+-DNEON_INTRINSICS=OFF"
+  else
+    cmake_params+=" -DENABLE_NEON=ON \
+-DNEON_INTRINSICS=ON"
+  fi
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
