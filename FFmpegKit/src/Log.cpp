@@ -21,7 +21,12 @@
 
 ffmpegkit::Log::Log(const long sessionId, const ffmpegkit::Level level,
                     const char *message)
-    : _sessionId{sessionId}, _level{level}, _message{message} {}
+    : _sessionId{sessionId}, _level{level},
+      _message{message != nullptr ? message : ""} {
+  if (!_message.empty() && _message.back() != '\n') {
+    _message.push_back('\n');
+  }
+}
 
 long ffmpegkit::Log::getSessionId() const { return _sessionId; }
 
