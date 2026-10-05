@@ -830,7 +830,7 @@ build_lcms2() {
 # build_libaom            # config_options+= --enable-libaom              # enable AV1 video encoding/decoding via libaom [no]
 build_libaom() {
   local lib="libaom"
-  local repo_ver="v3.13.1"
+  local repo_ver="v3.15.1"
   local repo="https://aomedia.googlesource.com/aom"
   change_dir "$src_dir"
   export CFLAGS="$CFLAGS -pthread -sSUPPORT_LONGJMP=wasm"

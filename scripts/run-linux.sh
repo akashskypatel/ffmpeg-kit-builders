@@ -929,7 +929,7 @@ build_lcms2() {
 # build_libaom            # config_options+= --enable-libaom              # enable AV1 video encoding/decoding via libaom [no]
 build_libaom() {
   local lib="libaom"
-    local repo_ver="v3.13.1"
+    local repo_ver="v3.15.1"
     local repo="https://aomedia.googlesource.com/aom"
   change_dir "$src_dir"
     do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
@@ -944,10 +944,21 @@ build_libaom() {
 -DENABLE_EXAMPLES=0 \
 -DENABLE_TOOLS=0 \
 -DENABLE_DOCS=0"
+    if [[ "$host_arch" == "aarch64" ]]; then
+      cmake_params+=" -DAOM_TARGET_CPU=arm64 -DENABLE_NEON=1 -DHAVE_NEON=1"
+      CFLAGS+=" -DENABLE_NEON=1 -DHAVE_NEON=1 -DENABLE_SSE=0 -DHAVE_SSE=0"
+      CXXFLAGS+=" -DENABLE_NEON=1 -DHAVE_NEON=1 -DENABLE_SSE=0 -DHAVE_SSE=0"
+      CPPFLAGS+=" -DENABLE_NEON=1 -DHAVE_NEON=1 -DENABLE_SSE=0 -DHAVE_SSE=0"
+    else
+      cmake_params+=" -DAOM_TARGET_CPU=generic -DENABLE_SSE=1 -DHAVE_SSE=1"
+      CFLAGS+=" -DENABLE_NEON=0 -DHAVE_NEON=0 -DENABLE_SSE=1 -DHAVE_SSE=1"
+      CXXFLAGS+=" -DENABLE_NEON=0 -DHAVE_NEON=0 -DENABLE_SSE=1 -DHAVE_SSE=1"
+      CPPFLAGS+=" -DENABLE_NEON=0 -DHAVE_NEON=0 -DENABLE_SSE=1 -DHAVE_SSE=1"
+    fi
     do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
     disable_nonessential "$src_dir/$lib"
     do_make_and_make_install
-      change_dir "$src_dir"
+    change_dir "$src_dir"
 }
 build_libpng() {
   # run_valid_function "build_zlib" 1
