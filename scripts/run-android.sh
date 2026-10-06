@@ -3203,8 +3203,8 @@ build_libjpeg_turbo() {
 -DWITH_JPEG8=1 \
 -DWITH_TURBOJPEG=0 \
 -DWITH_JAVA=0 \
--DWITH_SIMD=ON \
--DREQUIRE_SIMD=ON \
+-DWITH_SIMD=1 \
+-DREQUIRE_SIMD=1 \
 -DCMAKE_ASM_NASM_COMPILER=yasm"
   if [[ "$host_arch" == "aarch64" ]]; then
     cmake_params+=" -DENABLE_NEON=ON \
