@@ -366,13 +366,18 @@ build_sndio() {
 build_zlib() {
   # https://github.com/madler/zlib
   local lib="zlib"
-  local repo="https://github.com/madler/zlib"
-  local repo_ver="v1.3.1"
+  local repo="https://github.com/zlib-ng/zlib-ng"
+  local repo_ver="2.3.3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/build" 1
-  local cmake_args="-DZLIB_BUILD_EXAMPLES=OFF"
-  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DZLIB_COMPAT=ON \
+-DBUILD_SHARED_LIBS=OFF \
+-DZLIB_ENABLE_TESTS=OFF \
+-DWITH_GTEST=OFF \
+-DWITH_BENCHMARKS=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   copy_path "$src_dir/$lib/build/zlib.pc" "$install_pkgconfig_dir/zlib.pc"

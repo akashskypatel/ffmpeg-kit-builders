@@ -182,19 +182,21 @@ build_mingw_std_threads() {
 }
 # build_zlib              # config_options+= --disable-zlib               # disable zlib [autodetect]
 build_zlib() {
-  local repo="https://github.com/madler/zlib"
   local lib="zlib"
-  local repo_ver="v1.3.1"
-	change_dir "$src_dir"
-	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-	change_dir "$src_dir/$lib"
-	local make_options
+  local repo="https://github.com/zlib-ng/zlib-ng"
+  local repo_ver="2.3.3"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  local make_options
 	export ARFLAGS=rcs # Native can't take ARFLAGS; https://stackoverflow.com/questions/21396988/zlib-build-not-configuring-properly-with-cross-compiler-ignores-ar
-	do_configure "--static \
---prefix=\"$dependency_install_prefix\" \
---libdir=\"$dependency_install_prefix/lib\"
-CFLAGS=\"-O3\" \
-CPPFLAGS=\"\"" #doesnt like host variable
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DZLIB_COMPAT=ON \
+-DBUILD_SHARED_LIBS=OFF \
+-DZLIB_ENABLE_TESTS=OFF \
+-DWITH_GTEST=OFF \
+-DWITH_BENCHMARKS=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
 	do_make_and_make_install "$(get_compiler_flags) ARFLAGS=rcs"
 	unset ARFLAGS

@@ -284,7 +284,7 @@ create_android_aar() {
   change_dir "${BASEDIR}"
 
   chmod +x "${BASEDIR}/gradlew"
-
+	truthy "$do_build_ffmpeg_kit" && \
   { exec "./gradlew" :tools:android:${GRADLE_COMMAND} \
     --no-daemon --info --warning-mode all --gradle-user-home "${USER_HOME}/.gradle" \
     -PFFMPEG_KIT_NAMESPACE="${FFMPEG_KIT_NAMESPACE}" \

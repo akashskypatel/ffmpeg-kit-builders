@@ -3656,6 +3656,8 @@ do_autogen() {
     if [[ ! -d "gnulib" ]]; then
       do_git_checkout "https://github.com/mirror/gnulib" "$(pwd)/gnulib"
       change_dir "$cur_dir2"
+      local bootstrap_makeflags="${MAKEFLAGS:+$MAKEFLAGS }ACLOCAL=$(command -v aclocal) AUTOMAKE=$(command -v automake) CC=$(command -v gcc) CFLAGS=-O2"
+      export MAKEFLAGS="$bootstrap_makeflags"
     fi
     echo "INFO: (Re-)do_autogen() because $touch_name not found with \"autogen $extra_build_args\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_autogen"*
@@ -3668,6 +3670,7 @@ do_autogen() {
     add_src_dir "$(pwd)"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files
 		echo -e "INFO: Done with ./autogen.sh" >>"$LOG_FILE"
+    unset MAKEFLAGS
 	else
 		echo -e "INFO: ./autogen.sh already ran" >>"$LOG_FILE"
 	fi
