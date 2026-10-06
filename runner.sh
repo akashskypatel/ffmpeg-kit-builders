@@ -315,19 +315,19 @@ while [ $# -gt 0 ]; do
 		export build_nonfree=y
 		shift
 		;;
-	--build-deps=*)
-		export build_dependencies="${1#*=}"
-		shift
-		;;
-	--build-only=*)
+  --build-dependents|--build-depts|--depts)
+    export build_dependents=y
+    shift
+    ;;
+	--build-only=*|--only=*)
 		export build_only="${1#*=}"
 		shift
 		;;
-	--build-from=*)
+	--build-from=*|--from=*)
 		export build_from="${1#*=}"
 		shift
 		;;
-	--build-deps-only|--build-deps)
+	--build-deps-only|--build-deps|--deps)
 		export build_dependencies=y
 		shift
 		;;
@@ -961,6 +961,20 @@ done
 
 check_missing_packages
 
+get_platform_deps_file() {
+  local platform="$1"
+  case "$platform" in
+    android) echo "$SCRIPTDIR/deps-android.sh" ;;
+    ios|iphonesimulator) echo "$SCRIPTDIR/deps-ios.sh" ;;
+    appletvos|appletvsimulator) echo "$SCRIPTDIR/deps-appletvos.sh" ;;
+    macos) echo "$SCRIPTDIR/deps-macos.sh" ;;
+    linux) echo "$SCRIPTDIR/deps-linux.sh" ;;
+    windows) echo "$SCRIPTDIR/deps-windows.sh" ;;
+    wasm) echo "$SCRIPTDIR/deps-wasm.sh" ;;
+    *) echo "Unknown platform: $platform" >&2; return 1 ;;
+  esac
+}
+
 main() {
   # single step with no dependency built mode
   if truthy "$dry_run"; then
@@ -970,6 +984,7 @@ main() {
   fi
   if [[ -n $run_only ]]; then
     echo -e "INFO: --- Executing single function: $run_only ---" | tee -a "$LOG_FILE"
+    echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
     if [[ "$run_only" == build_* ]]; then
       if ! declare -F "$run_only" >/dev/null; then
         exit_message 1 "DEBUG: Invalid function: $run_only (not defined on $host_platform)"
@@ -982,21 +997,32 @@ main() {
     echo -e "INFO: --- Done executing single function: $run_only ---" | tee -a "$LOG_FILE"
   # multi-step with requested build_only step and its dependencies
   elif [[ -n "$build_only" ]]; then
-    if [[ "$build_only" == build_* ]]; then
-      if ! declare -F "$build_only" >/dev/null; then
-        exit_message 1 "DEBUG: Invalid function: $build_only (not defined on $host_platform)"
+    IFS=',' read -ra build_only_steps <<< "$build_only"
+    declare -A BUILD_STEPS
+    for step in "${build_only_steps[@]}"; do
+      if [[ "$step" == build_* ]]; then
+        if ! declare -F "$step" >/dev/null; then
+          exit_message 1 "DEBUG: Invalid function: $step (not defined on $host_platform)"
+        fi
+        add_step "$step"
+        if truthy "$build_dependents"; then
+          deps_file="$(get_platform_deps_file "$host_platform")"
+          printf -v deps_command '%q ' "$SCRIPTDIR/transitive-deps.sh" "$deps_file" "$step"
+          dependents="$("$SCRIPTDIR/transitive-deps.sh" "$deps_file" "$step")"
+          IFS=',' read -ra dependents_array <<< "$dependents"
+          for dependent in "${dependents_array[@]}"; do
+            add_step "$dependent"
+          done
+        fi
+      else
+        exit_message 1 "Invalid build function $step"
       fi
-      declare -A BUILD_STEPS
-      add_step "$build_only"
-      optimize_dependencies
-    else
-      exit_message 1 "Invalid build function $build_only"
-    fi
-    echo -e "INFO: --- Executing single build step: $build_only ---" | tee -a "$LOG_FILE"
-    echo -e "WARNING: This may fail if previous dependencies havent been built yet." | tee -a "$LOG_FILE"
+    done
+    optimize_dependencies
+    echo -e "INFO: --- Executing requested build step(s): $build_only ---" | tee -a "$LOG_FILE"
     run_valid_build_functions
     echo | tee -a "$LOG_FILE"
-    echo -e "INFO: --- Done building single build step: $step_name ---" | tee -a "$LOG_FILE"
+    echo -e "INFO: --- Done building requested build step(s): $build_only ---" | tee -a "$LOG_FILE"
   # multi-step build all starting from build_from
   elif [[ -n "$build_from" ]]; then
     if ! declare -F "$build_from" >/dev/null; then

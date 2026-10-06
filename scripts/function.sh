@@ -758,6 +758,7 @@ setup_windows_environment() {
     export GCC_STANDARD_LIBS="$stdgcc_path"
 
     cross_windres
+    setup_default_python
 }
 
 find_windows_static_pthread_win32() {
@@ -864,6 +865,7 @@ setup_linux_environment() {
     create_dir "$install_pkgconfig_dir"
     create_dir "$work_dir/pkgconfig"
     create_dir "$dependency_install_prefix/{bin,lib/pkgconfig,include,usr/include}"
+    setup_default_python
 }
 
 setup_wasm_environment() {
@@ -953,6 +955,7 @@ setup_wasm_environment() {
     create_dir "$install_pkgconfig_dir"
     create_dir "$work_dir/pkgconfig"
     create_dir "$dependency_install_prefix/{bin,lib/pkgconfig,include,usr/include}"
+    setup_default_python
 }
 
 setup_android_environment() {
@@ -1083,6 +1086,7 @@ setup_android_environment() {
     export CPPFLAGS="$android_cppflags"
     export android_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -L${toolchain_lib_path}"
     export LDFLAGS="$android_ldflags"
+    setup_default_python
 }
 
 setup_macos_environment() {
@@ -3648,6 +3652,11 @@ do_autogen() {
 		reset_touch "$cur_dir2" "${touch_prefix}*.touch"
 	fi
 	if [ ! -f "$touch_name" ]; then
+    [[ -d "gnulib" && -z "$(ls -A "gnulib")" ]] && rm -rf "gnulib"
+    if [[ ! -d "gnulib" ]]; then
+      do_git_checkout "https://github.com/mirror/gnulib" "$(pwd)/gnulib"
+      change_dir "$cur_dir2"
+    fi
     echo "INFO: (Re-)do_autogen() because $touch_name not found with \"autogen $extra_build_args\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_autogen"*
 		echo -e "INFO: Running ./autogen.sh with:\n  DIR=$cur_dir2\n  \"./autogen.sh --build-"w$bits_target" $extra_build_args\"" >>"$LOG_FILE"

@@ -297,12 +297,14 @@ build_lzma() {
 }
 build_iconv_minimal() {
   local lib="libiconv-minimal"
-  local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local repo="https://skia.googlesource.com/third_party/libiconv/+archive/refs/tags/v1.18.tar.gz"
   local repo_ver="v1.18"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   touch "no.autoreconf"
 	generic_configure "--enable-static \
 --with-sysroot=${dependency_install_prefix} \
@@ -330,11 +332,13 @@ CFLAGS=\"$CFLAGS\"" "" "minimal"
 build_gettext() {
   # run_valid_function "build_iconv_minimal"
 	local lib="gettext"
-  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+  local repo="https://github.com/autotools-mirror/gettext/archive/refs/tags/v1.0.tar.gz"
+  local mirror="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.0\n' > .tarball-version
+  [[ -f .version ]] || printf '1.0\n' > .version
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime" 1
@@ -391,8 +395,8 @@ EOF
 build_iconv() {
   # run_valid_function "build_gettext"
 	local lib="libiconv"
-  local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local repo="https://skia.googlesource.com/third_party/libiconv/+archive/refs/tags/v1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
@@ -843,11 +847,13 @@ build_libfontconfig() {
 # build_gmp               # config_options+= --enable-gmp                 # enable gmp, needed for rtmp(t)e support if openssl or librtmp is not used [no]
 build_gmp() {
   local lib="gmp"
-  local repo="https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
-  local mirror="https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz"
+  local mirror="https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
+  local repo="https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '6.3.0\n' > .tarball-version
+  [[ -f .version ]] || printf '6.3.0\n' > .version
 	export CC_FOR_BUILD=/usr/bin/gcc # WSL seems to need this..
 	export CPP_FOR_BUILD=usr/bin/cpp
 	generic_configure "ABI=$bits_target"
@@ -859,11 +865,13 @@ build_gmp() {
 
 build_libnettle() {
   local lib="nettle"
-  local repo="https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
+  local mirror="https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
+  local repo="https://github.com/gnutls/nettle/archive/refs/tags/nettle_3.10.2_release_20250626.tar.gz"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
 	change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '3.10.2\n' > .tarball-version
+  [[ -f .version ]] || printf '3.10.2\n' > .version
 	local config_options="--disable-openssl --disable-documentation"
 	generic_configure "$config_options"
 	disable_nonessential "$src_dir/$lib"
@@ -873,11 +881,13 @@ build_libnettle() {
 
 build_libunistring() {
   local lib="libunistring"
-  local repo="https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
+  local mirror="https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
+  local repo="https://github.com/iborderxm/libunistring/archive/refs/tags/1.4.1.tar.gz"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.4.1\n' > .tarball-version
+  [[ -f .version ]] || printf '1.4.1\n' > .version
   touch "no.autogen"
   generic_configure
   gsed -i -E 's/=[[:space:]]*libunistring\.res\.lo/=/g' "lib/Makefile"
@@ -889,13 +899,15 @@ build_libunistring() {
 build_libidn2() {
   # run_valid_function "build_libunistring"
   # run_valid_function "build_iconv"
-  local repo="https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+  local mirror="https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+  local repo="https://gitlab.com/libidn/libidn2/-/archive/v2.3.8/libidn2-v2.3.8.tar.gz"
   local lib="libidn2"
   local repo_ver="2.3.8"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
 	change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '2.3.8\n' > .tarball-version
+  [[ -f .version ]] || printf '2.3.8\n' > .version
   touch "no.autoreconf"
   export LDFLAGS="$LDFLAGS -liconv"
   export CPPFLAGS="$CPPFLAGS -DLIBICONV_STATIC "
@@ -944,6 +956,8 @@ build_gnutls() {
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" # v3.8.10 not found by ffmpeg with identical .pc?
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '3.8.9\n' > .tarball-version
+  [[ -f .version ]] || printf '3.8.9\n' > .version
 	export CFLAGS="-Wno-int-conversion"
 	generic_configure "--disable-cxx \
 --disable-doc \
@@ -5017,11 +5031,13 @@ build_gettext_native() {
   # run_valid_function "build_iconv_minimal_native"
   clear_cross_vars
   local lib="gettext-native"
-  local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+  local repo="https://github.com/autotools-mirror/gettext/archive/refs/tags/v1.0.tar.gz"
+  local mirror="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.0\n' > .tarball-version
+  [[ -f .version ]] || printf '1.0\n' > .version
   do_autogen --skip-gnulib
   change_dir "$src_dir/$lib/gettext-runtime"
   export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
@@ -5069,12 +5085,14 @@ LDFLAGS=\"$LDFLAGS\""
 build_iconv_minimal_native() {
   clear_cross_vars
   local lib="libiconv-native"
-  local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local repo="https://skia.googlesource.com/third_party/libiconv/+archive/refs/tags/v1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   touch "no.autoreconf"
   export CFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
   export CXXFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
