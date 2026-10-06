@@ -3593,21 +3593,42 @@ do_configure() {
 # 3. touch_postfix
 # shellcheck disable=2128,2178
 generic_configure() {
-	local extra_configure_options="$1"
+  local extra_configure_options="$1"
   local configure_name="$2"
   local touch_postfix="$3"
+
+  # Autoconf normally supplies an optimization level itself, but our platform
+  # CFLAGS/CXXFLAGS are already non-empty, so that default is suppressed.
+  # Restore a conservative release baseline without overriding library-specific
+  # optimization or debug/test builds.
+  if ! truthy "$do_debug_build" && ! truthy "$build_tests"; then
+    if [[ ! "${CFLAGS:-}" =~ (^|[[:space:]])-O([0-3]|g|s|z|fast)?($|[[:space:]]) ]]; then
+      export CFLAGS="${CFLAGS:+$CFLAGS }-O2"
+    fi
+
+    if [[ ! "${CXXFLAGS:-}" =~ (^|[[:space:]])-O([0-3]|g|s|z|fast)?($|[[:space:]]) ]]; then
+      export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-O2"
+    fi
+  fi
+
   [[ $extra_configure_options != *--host=* ]] && extra_configure_options+=" --host=$host_target "
-	if [[ -n $build_triple ]]; then extra_configure_options+=" --build=$build_triple"; fi
+
+  if [[ -n $build_triple ]]; then
+    extra_configure_options+=" --build=$build_triple"
+  fi
+
   [[ $extra_configure_options != *--prefix=* ]] && extra_configure_options+=" --prefix=\"$dependency_install_prefix\" "
   [[ $extra_configure_options != *--bindir=* ]] && extra_configure_options+=" --bindir=\"$dependency_install_prefix/bin\" "
   [[ $extra_configure_options != *--libdir=* ]] && extra_configure_options+=" --libdir=\"$dependency_install_prefix/lib\" "
   [[ $extra_configure_options != *--with-sysroot=* ]] && extra_configure_options+=" --with-sysroot=\"$dependency_install_prefix\" "
+
   if iswindows; then
     extra_configure_options+=" --disable-windows-manifest --disable-win32-dll "
   fi
+
   extra_configure_options+=" --disable-shared --enable-static "
-  # truthy "$build_cross_compile" && extra_configure_options+=" --cross-prefix=$cross_prefix"
-	do_configure "$extra_configure_options" "$configure_name" "$touch_postfix"
+
+  do_configure "$extra_configure_options" "$configure_name" "$touch_postfix"
 }
 # 1. extra_build_args
 # 2. touch_postfix

@@ -1784,12 +1784,9 @@ build_libkvazaar() {
   #change_dir "$src_dir/$lib/build" 1
   export ASFLAGS="$ASFLAGS -DPIC"
   local cmake_params="-DCMAKE_BUILD_TESTS=OFF \
--DCMAKE_ASM_NASM_FLAGS=\"-DPIC\"
+-DCMAKE_ASM_NASM_FLAGS=\"-DPIC\" \
 -DBUILD_SHARED_LIBS=OFF"
-  #do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
-  generic_configure "--disable-shared --enable-static --enable-pic --with-pic ASFLAGS=\"$ASFLAGS\""
-  find . -type f -name "Makefile" -exec gsed -i 's/-lrt//g' {} +
-  gsed -i 's/-lrt//g' "$install_pkgconfig_dir/kvazaar.pc"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   change_dir "$src_dir"
