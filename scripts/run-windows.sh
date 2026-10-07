@@ -160,8 +160,10 @@ build_libxavs2() {
 --with-pic \
 --disable-asm \
 --extra-cflags=\"$CFLAGS -Wno-error=incompatible-pointer-types\""
-    wget "https://github.com/pkuvcl/xavs2/compare/master...1480c1:xavs2:gcc14/pointerconversion.patch" > >(redirect_output) 2>&1
-    apply_patch "pointerconversion.patch"
+    change_dir "$src_dir/$lib"
+    wget "https://github.com/pkuvcl/xavs2/compare/master...1480c1:xavs2:gcc14/pointerconversion.diff" > >(redirect_output) 2>&1
+    apply_patch "pointerconversion.diff"
+    change_dir "$src_dir/$lib/build/linux"
     disable_nonessential "$src_dir/$lib/build/linux"
 		do_make_and_make_install "AS= AR=\"$AR rc \" " "AS= AR=\"$AR rc \" "
     reset_cross_vars
