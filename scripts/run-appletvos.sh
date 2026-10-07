@@ -2030,11 +2030,13 @@ build_libdovi() {
   local lib="libdovi"
   local repo="https://github.com/quietvoid/dovi_tool"
   local repo_ver="2.3.1"
+  rustup default stable
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/dolby_vision"
   cargo_build_and_install "--release" "--package dolby_vision --release --library-type=staticlib"
   change_dir "$src_dir"
+  rustup default nightly
 }
 build_vulkan_loader() {
   local parentlib="vulkan-loader"
