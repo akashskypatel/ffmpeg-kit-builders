@@ -1138,7 +1138,7 @@ setup_macos_environment() {
         run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
-    
+    rustup default nightly
     export macos_cflags="$original_cflags -Wno-pedantic -arch $host_arch -I${dependency_install_prefix}/include -isysroot $SDKROOT $macos_version_flag -target $cflags_target"
     export CFLAGS="$macos_cflags"
     export macos_cppflags="$original_cppflags -arch $host_arch -I${dependency_install_prefix}/include -DMACOS -isysroot $SDKROOT $macos_version_flag -target $cflags_target"
@@ -1216,7 +1216,7 @@ setup_ios_environment() {
         run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
-
+    rustup default nightly
     reset_cross_vars
 
     # Cross-compilation tools
@@ -1308,7 +1308,7 @@ setup_tvos_environment() {
         run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
-
+    rustup default nightly
     reset_cross_vars
 
     # Cross-compilation tools
@@ -4166,8 +4166,8 @@ apply_patch() {
   if git apply "${git_apply_args[@]}" --reverse --check --ignore-space-change --ignore-whitespace --verbose "$patch" >/dev/null 2>&1; then
     echo "INFO: Patch already applied. Skipping." >>"$LOG_FILE"
   elif [[ $has_patch_command -eq 1 && $is_git_patch -eq 0 ]] && {
-    patch --dry-run --reverse --batch --silent --ignore-whitespace -p0 -i "$patch" >/dev/null 2>&1 ||
-    patch --dry-run --reverse --batch --silent --ignore-whitespace -p1 -i "$patch" >/dev/null 2>&1
+    patch --dry-run --reverse --batch --force --silent --ignore-whitespace -p0 -i "$patch" >/dev/null 2>&1 ||
+    patch --dry-run --reverse --batch --force --silent --ignore-whitespace -p1 -i "$patch" >/dev/null 2>&1
   }; then
     echo "INFO: Patch already applied. Skipping." >>"$LOG_FILE"
   else
@@ -4939,7 +4939,6 @@ configure_ffmpeg() {
   esac
 
 	change_dir "$ffmpeg_source_dir" || exit_message 1 "configure_ffmpeg: could not change to $ffmpeg_source_dir"
-	# iswindows && apply_patch "$PATCHDIR"/frei0r_load-shared-libraries-dynamically.diff
   local postpend_configure_opts=""
 	local init_options=""
   local extra_libs=""
