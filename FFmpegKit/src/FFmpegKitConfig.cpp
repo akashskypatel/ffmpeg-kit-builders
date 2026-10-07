@@ -1421,8 +1421,9 @@ executeFFmpeg(const std::shared_ptr<ffmpegkit::FFmpegSession> &session,
 
   // 5. CLEANUP
   if (session && session->isFFmpeg()) {
-    std::static_pointer_cast<ffmpegkit::FFmpegSession>(session)->setContext(
-        nullptr);
+    auto ffmpegSession =
+        std::static_pointer_cast<ffmpegkit::FFmpegSession>(session);
+    ctx = ffmpegSession->detachContext();
   }
   clearSessionFromThread();
   if (ffmpeg_shutdown_incomplete(ctx)) {
