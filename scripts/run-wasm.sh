@@ -5001,6 +5001,8 @@ build_libopencolorio() {
   -DOCIO_BUILD_PYTHON=OFF \
   -DZLIB_USE_STATIC_LIBS=ON \
   -DZLIB_ROOT=\"$dependency_install_prefix\" \
+  -DZLIB_LIBRARY=\"$dependency_install_prefix/lib/libz.a\" \
+  -DZLIB_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
   -Dexpat_ROOT=\"$dependency_install_prefix\" \
   -Dexpat_STATIC_LIBRARY=ON \
   -Dexpat_LIBRARY=\"$dependency_install_prefix/lib/libexpat.a\" \
