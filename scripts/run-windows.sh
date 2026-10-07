@@ -3631,10 +3631,10 @@ build_liblc3() {
 build_liblcevc_dec() {
   # https://github.com/v-novaltd/LCEVCdec
 	local lib="liblcevc"
-  local repo="https://github.com/v-novaltd/LCEVCdec"
-  local repo_ver="4.0.4"
+  local repo="https://github.com/v-novaltd/LCEVCdec/archive/refs/tags/4.2.2.tar.gz"
+  local repo_ver="4.2.2"
 	change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  download_and_unpack_file "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib/build" 1
 	local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
