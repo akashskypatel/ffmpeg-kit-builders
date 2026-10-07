@@ -758,7 +758,6 @@ setup_windows_environment() {
     export GCC_STANDARD_LIBS="$stdgcc_path"
 
     cross_windres
-    setup_default_python
 }
 
 find_windows_static_pthread_win32() {
@@ -955,7 +954,6 @@ setup_wasm_environment() {
     create_dir "$install_pkgconfig_dir"
     create_dir "$work_dir/pkgconfig"
     create_dir "$dependency_install_prefix/{bin,lib/pkgconfig,include,usr/include}"
-    setup_default_python
 }
 
 setup_android_environment() {
@@ -1086,7 +1084,6 @@ setup_android_environment() {
     export CPPFLAGS="$android_cppflags"
     export android_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -L${toolchain_lib_path}"
     export LDFLAGS="$android_ldflags"
-    setup_default_python
 }
 
 setup_macos_environment() {
