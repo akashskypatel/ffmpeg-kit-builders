@@ -2994,6 +2994,7 @@ build_librabbitmq() {
   change_dir "$src_dir/$lib"
   [[ ! -f "librabbitmq/amqp_socket.c.bak" ]] && copy_path "librabbitmq/amqp_socket.c" "librabbitmq/amqp_socket.c.bak" "-fv" >>"$LOG_FILE" 2>&1
   apply_patch "$PATCHDIR/librabbitmq_amqp_socket.diff"
+  gsed -i '/^static int connect_socket/,/^}/s/^  int one = 1;$/  unsigned long one = 1;/' "$src_dir/$lib/librabbitmq/amqp_socket.c"
   gsed -i 's/set(libs_private "${libs_private} -l${LIBRT}")/if(LIBRT)\n    set(libs_private "${libs_private} -l${LIBRT}")\nendif()/' \
     "$src_dir/$lib/CMakeLists.txt"
   gsed -i 's/OUTPUT_NAME librabbitmq\.\${RMQ_SOVERSION}/OUTPUT_NAME rabbitmq/' \
