@@ -9,6 +9,7 @@
 #include <mutex>
 #include <pthread.h>
 #include <string>
+#include <utility>
 #include <thread>
 #include <vector>
 
@@ -155,6 +156,34 @@ TEST(LogStatisticsTest, NativeLogMessagesEndWithExactlyOneLineFeed) {
   EXPECT_EQ(withCarriageReturn.getMessage(), "message\r\n");
   EXPECT_TRUE(empty.getMessage().empty());
   EXPECT_TRUE(nullMessage.getMessage().empty());
+}
+
+TEST(LogStatisticsTest, LogPreservesValidUtf8) {
+  const auto log = ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo,
+                                   "caf\xC3\xA9 \xE2\x82\xAC \xF0\x9F\x8C\x8D");
+  EXPECT_EQ(log.getMessage(),
+            "caf\xC3\xA9 \xE2\x82\xAC \xF0\x9F\x8C\x8D\n");
+}
+
+TEST(LogStatisticsTest, LogSanitizesMalformedUtf8) {
+  const std::string replacement = "\xEF\xBF\xBD";
+  const std::vector<std::pair<std::string, std::string>> malformed = {
+      {"\x80", replacement}, {"\xC2", replacement},
+      {"\xE2\x82", replacement + replacement},
+      {"\xF0\x9F\x8C", replacement + replacement + replacement},
+      {"\xC0\xAF", replacement + replacement},
+      {"\xED\xA0\x80", replacement + replacement + replacement},
+      {"\xF4\x90\x80\x80",
+       replacement + replacement + replacement + replacement}};
+  for (const auto &[input, expected] : malformed) {
+    SCOPED_TRACE(input);
+    const auto log = ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo, input.c_str());
+    EXPECT_EQ(log.getMessage(), expected + "\n");
+    EXPECT_EQ(log.getSessionId(), 1);
+    EXPECT_EQ(log.getLevel(), ffmpegkit::LevelAVLogInfo);
+  }
+  EXPECT_EQ(ffmpegkit::Log(1, ffmpegkit::LevelAVLogInfo, "\x80\n").getMessage(),
+            replacement + "\n");
 }
 
 TEST(LogStatisticsTest,

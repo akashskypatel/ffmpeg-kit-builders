@@ -250,7 +250,7 @@ TEST(NativeCallbackAbiContractTest,
     const auto log = session->getLogAt(index);
     ASSERT_NE(log, nullptr);
     EXPECT_EQ(log->getSequence(), index);
-    EXPECT_EQ(log->getMessage(), "history-" + std::to_string(index));
+    EXPECT_EQ(log->getMessage(), "history-" + std::to_string(index) + "\n");
   }
   EXPECT_EQ(session->getLogAt(-1), nullptr);
   EXPECT_EQ(session->getLogAt(kLogCount), nullptr);
