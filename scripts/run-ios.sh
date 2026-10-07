@@ -2346,8 +2346,8 @@ build_libexpat() {
   change_dir "$src_dir/$lib/expat"
   [[ -f buildconf.sh ]] && ./buildconf.sh > >(redirect_output) 2>&1
   touch "no.autoreconf"
-  export aclocal="/usr/local/bin/aclocal"
-  export automake="/usr/local/bin/automake"
+  export aclocal="$(which aclocal)"
+  export automake="$(which automake)"
   export ACLOCAL="$aclocal"
   export AUTOMAKE="$automake"
   find "$src_dir/$lib/expat" -type f -name configure -exec gsed -i \
@@ -2359,6 +2359,7 @@ build_libexpat() {
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
+  unset aclocal automake ACLOCAL AUTOMAKE
 }
 build_libdatrie() {
   local lib="libdatrie"
