@@ -4635,7 +4635,6 @@ build_libffi() {
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" # also dep
 	change_dir "$src_dir/$lib"
-	apply_patch "$PATCHDIR/libffi.patch"
 	generic_configure "--disable-multi-os-directory"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
