@@ -165,3 +165,5 @@ fi
 if ! cargo cinstall --version >/dev/null 2>&1; then
   cargo install --locked cargo-c
 fi
+
+rustup default nightly
