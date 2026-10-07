@@ -1414,7 +1414,6 @@ build_libbs2b() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
-  # apply_patch "$PATCHDIR/libbs2b.patch" # not needed anymore?
 	gsed -i "s/AC_FUNC_MALLOC//" configure.ac # #270
 	generic_configure "--enable-static --disable-shared"
 	disable_nonessential "$src_dir/$lib"
@@ -1451,7 +1450,6 @@ build_libflite() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  # apply_patch "$PATCHDIR/flite-2.1.0_mingw-w64-fixes.patch"
   if grep -Fq -e "cp -pd" Makefile; then
 		gsed -i "s/cp -pd/cp -p/" main/Makefile # friendlier cp for OS X
 	fi
@@ -1574,7 +1572,6 @@ build_librubberband() {
   disable_nonessential "$src_dir/$lib"
 	do_ninja_and_ninja_install
 	change_dir "$src_dir"
-	# apply_patch "$PATCHDIR/rubberband_git_static-lib.diff" # create install-static target
 	# generic_configure "--disable-ladspa"
 	# do_make "install-static AR=${cross_prefix}ar" # No need for 'do_make_install', because 'install-static' already has install-instructions.
 	# gsed -i 's/-lrubberband.*$/-lrubberband -lfftw3 -lsamplerate /' "$install_pkgconfig_dir/rubberband.pc"
@@ -1917,7 +1914,6 @@ build_libvpx() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-	# apply_patch $PATCHDIR/vpx_160_semaphore.patch -p1 # perhaps someday can remove this after 1.6.0 or mingw fixes it LOL
 	if [[ "$bits_target" = "32" ]]; then
 		local config_options="--target=x86-win32-gcc"
 	else
@@ -4101,7 +4097,6 @@ build_libopencv() {
     export LDFLAGS="$LDFLAGS -static-libgcc -static-libstdc++"
 	  change_dir "$src_dir"
     do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-    # apply_patch "$PATCHDIR/opencv.detection_based.patch"
     change_dir "$src_dir/$lib"
     # gsed -i '/^[[:space:]]*cmake_parse_arguments(VS_VER/,/^[[:space:]]*configure_file("${OpenCV_SOURCE_DIR}/ s/^/# /' "cmake/OpenCVUtils.cmake"
     gsed -i '/^[[:space:]]*ocv_generate_vs_version_file("${_VS_VERSION_FILE}"/,/)/ s/^/# /' "cmake/OpenCVModule.cmake"

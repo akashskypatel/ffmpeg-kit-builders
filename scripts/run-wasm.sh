@@ -3924,6 +3924,7 @@ build_libxevd() {
   local repo_ver="v0.5.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
   apply_patch "$PATCHDIR/xevd-0.5.0-emscripten.patch"
   change_dir "$src_dir/$lib/build" 1
   # needs a version.txt file but git repo doesnt have one for some reason
@@ -3960,6 +3961,7 @@ build_libxeve() {
   local repo_ver="v0.5.1"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
   apply_patch "$PATCHDIR/xeve-0.5.1-emscripten.patch"
   change_dir "$src_dir/$lib/build" 1
   # needs a version.txt file but git repo doesnt have one for some reason
