@@ -4157,12 +4157,37 @@ apply_patch() {
   local git_prefix
   git_prefix=$(git rev-parse --show-prefix 2>/dev/null) || git_prefix=""
   local -a git_apply_args=()
+  local strip_level
+  local has_patch_command=0
+  local patch_applied=0
   [[ -n "$git_prefix" ]] && git_apply_args+=(--directory="$git_prefix")
+  command -v patch >/dev/null 2>&1 && has_patch_command=1
   if git apply "${git_apply_args[@]}" --reverse --check --ignore-space-change --ignore-whitespace --verbose "$patch" >/dev/null 2>&1; then
+    echo "INFO: Patch already applied. Skipping." >>"$LOG_FILE"
+  elif [[ $has_patch_command -eq 1 ]] && {
+    patch --dry-run --reverse --batch --silent --ignore-whitespace -p0 -i "$patch" >/dev/null 2>&1 ||
+    patch --dry-run --reverse --batch --silent --ignore-whitespace -p1 -i "$patch" >/dev/null 2>&1
+  }; then
     echo "INFO: Patch already applied. Skipping." >>"$LOG_FILE"
   else
     echo "INFO: Applying $patch..." >>"$LOG_FILE"
-    git apply "${git_apply_args[@]}" --whitespace=fix --verbose "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
+    if git apply "${git_apply_args[@]}" --check --whitespace=fix "$patch" >/dev/null 2>&1; then
+      git apply "${git_apply_args[@]}" --whitespace=fix --verbose "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
+    elif [[ $has_patch_command -eq 1 ]]; then
+      # Some project patches are traditional unified diffs (for example,
+      # `diff -u old-file new-file`) rather than git-formatted patches. Git
+      # cannot parse those, so use patch as a fallback and try common strip levels.
+      for strip_level in 0 1; do
+        if patch --dry-run --forward --batch --silent --ignore-whitespace -p"$strip_level" -i "$patch" >/dev/null 2>&1; then
+          patch --forward --batch --ignore-whitespace -p"$strip_level" -i "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
+          patch_applied=1
+          break
+        fi
+      done
+      [[ $patch_applied -eq 1 ]] || exit_message 1 "apply_patch: unable to patch $patch"
+    else
+      exit_message 1 "apply_patch: unable to patch $patch"
+    fi
   fi
 }
 validate_path() {
