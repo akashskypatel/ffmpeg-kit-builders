@@ -3274,8 +3274,6 @@ do_cargo_install() {
       cinstall_cmd="${cargo_cmd} cinstall"
     fi
     export RUSTFLAGS+=" -C relocation-model=pic"
-    export RUSTUP_HOME=/usr/local/rustup
-    export CARGO_HOME=/usr/local/cargo
 		echo -e "INFO: Running cargo install cargo-c" >>"$LOG_FILE"
     echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cinstall_cmd} --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
     eval "${cinstall_cmd} --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args" > >(redirect_output) 2>&1 || {
