@@ -3637,6 +3637,19 @@ generic_configure() {
 # 1. extra_build_args
 # 2. touch_postfix
 # shellcheck disable=SC2086
+ensure_gettext_tools_sources() {
+  local gettext_src_dir="$1"
+  [[ -f "$gettext_src_dir/gettext-tools/tree-sitter.cfg" ]] && return 0
+  [[ -f "$gettext_src_dir/autopull.sh" ]] || return 1
+
+  local gettext_gnulib_srcdir="${GNULIB_SRCDIR:-$gettext_src_dir/gnulib}"
+  echo "INFO: Fetching gettext-tools auxiliary sources with autopull.sh" >>"$LOG_FILE"
+  (
+    cd "$gettext_src_dir" || exit 1
+    GNULIB_SRCDIR="$gettext_gnulib_srcdir" ./autopull.sh
+  ) > >(redirect_output) 2>&1
+}
+
 do_autogen() {
   [[ -f "no.autogen" ]] && return 0
   [[ ! -f "autogen.sh" ]] && return 0
