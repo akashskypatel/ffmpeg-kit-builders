@@ -2401,6 +2401,101 @@ TEST(FFmpegKitTest, ConcurrentFFprobeSessions) {
   ffmpeg_kit_handle_release(ffprobe_session2);
 }
 
+TEST(FFmpegKitTest, ConcurrentFFprobeSessionsKeepOutputsIsolated) {
+  int iterations = 50;
+  if (const char *value = std::getenv("FFMPEG_KIT_FFPROBE_CONCURRENCY_ITERATIONS")) {
+    iterations = std::max(1, std::atoi(value));
+  }
+  for (int iteration = 0; iteration < iterations; ++iteration) {
+    SCOPED_TRACE(iteration);
+    const char *firstArgs[] = {"-v", "error", "-show_entries", "stream=width,height",
+                               "-of", "default=noprint_wrappers=1", "-f", "lavfi",
+                               "-i", "testsrc=size=123x77:rate=1:duration=1"};
+    const char *secondArgs[] = {"-v", "error", "-show_format", "-show_entries", "stream=sample_rate",
+                                "-of", "default=noprint_wrappers=1", "-f", "lavfi",
+                                "-i", "sine=frequency=777:sample_rate=22050:duration=1"};
+    auto first = ffprobe_kit_create_session_from_argv(10, firstArgs);
+    auto second = ffprobe_kit_create_session_from_argv(11, secondArgs);
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    std::mutex startMutex;
+    std::condition_variable startCondition;
+    int ready = 0;
+    auto run = [&](FFprobeSessionHandle session) {
+      {
+        std::unique_lock<std::mutex> lock(startMutex);
+        ++ready;
+        startCondition.notify_all();
+        startCondition.wait(lock, [&] { return ready == 2; });
+      }
+      ffprobe_kit_session_execute(session);
+    };
+    TestThread firstWorker([&] { run(first); });
+    TestThread secondWorker([&] { run(second); });
+    firstWorker.join();
+    secondWorker.join();
+    EXPECT_EQ(ffmpeg_kit_session_get_return_code(first), 0);
+    EXPECT_EQ(ffmpeg_kit_session_get_return_code(second), 0);
+    char *firstOutput = ffmpeg_kit_session_get_output(first);
+    char *secondOutput = ffmpeg_kit_session_get_output(second);
+    ASSERT_NE(firstOutput, nullptr);
+    ASSERT_NE(secondOutput, nullptr);
+    const std::string a(firstOutput);
+    const std::string b(secondOutput);
+    EXPECT_NE(a.find("width=123"), std::string::npos);
+    EXPECT_NE(a.find("height=77"), std::string::npos);
+    EXPECT_EQ(a.find("sample_rate=22050"), std::string::npos);
+    EXPECT_NE(b.find("sample_rate=22050"), std::string::npos);
+    EXPECT_EQ(b.find("width=123"), std::string::npos);
+    free(firstOutput);
+    free(secondOutput);
+    ffmpeg_kit_handle_release(first);
+    ffmpeg_kit_handle_release(second);
+  }
+}
+
+TEST(FFmpegKitTest, ConcurrentFFprobeSuccessAndFailureKeepStateIsolated) {
+  const char *validArgs[] = {"-v", "error", "-show_entries", "stream=width",
+                              "-of", "default=noprint_wrappers=1", "-f", "lavfi",
+                              "-i", "testsrc=size=137x79:rate=1:duration=1"};
+  const char *invalidArgs[] = {"-v", "error", "-i", "/ffmpeg-kit-missing-input"};
+  auto valid = ffprobe_kit_create_session_from_argv(10, validArgs);
+  auto invalid = ffprobe_kit_create_session_from_argv(4, invalidArgs);
+  ASSERT_NE(valid, nullptr);
+  ASSERT_NE(invalid, nullptr);
+  std::mutex startMutex;
+  std::condition_variable startCondition;
+  int ready = 0;
+  auto run = [&](FFprobeSessionHandle session) {
+    {
+      std::unique_lock<std::mutex> lock(startMutex);
+      ++ready;
+      startCondition.notify_all();
+      startCondition.wait(lock, [&] { return ready == 2; });
+    }
+    ffprobe_kit_session_execute(session);
+  };
+  TestThread validWorker([&] { run(valid); });
+  TestThread invalidWorker([&] { run(invalid); });
+  validWorker.join();
+  invalidWorker.join();
+  EXPECT_EQ(ffmpeg_kit_session_get_return_code(valid), 0);
+  EXPECT_NE(ffmpeg_kit_session_get_return_code(invalid), 0);
+  char *validOutput = ffmpeg_kit_session_get_output(valid);
+  char *invalidOutput = ffmpeg_kit_session_get_output(invalid);
+  ASSERT_NE(validOutput, nullptr);
+  const std::string success(validOutput);
+  EXPECT_NE(success.find("width=137"), std::string::npos);
+  EXPECT_EQ(success.find("missing-input"), std::string::npos);
+  if (invalidOutput) {
+    EXPECT_EQ(std::string(invalidOutput).find("width=137"), std::string::npos);
+  }
+  free(validOutput);
+  free(invalidOutput);
+  ffmpeg_kit_handle_release(valid);
+  ffmpeg_kit_handle_release(invalid);
+}
+
 TEST(FFmpegKitTest, ConcurrentLongRunningFFmpegSessions) {
   const std::filesystem::path output_dir =
       std::filesystem::temp_directory_path() / "ffmpegkit_parallel_ffmpeg";

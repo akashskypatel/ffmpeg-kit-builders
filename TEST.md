@@ -37,6 +37,12 @@ sudo ./runner.sh --host=windows --arch=x86_64 --enable-base --gpl --kit --build-
 
 ## Test execution commands
 
+The native cancellation and FFprobe concurrency tests use small default
+iteration counts. For local stress runs, set
+`FFMPEG_KIT_CANCEL_RACE_ITERATIONS` or
+`FFMPEG_KIT_FFPROBE_CONCURRENCY_ITERATIONS` before running the corresponding
+Google Test filter.
+
 ### Thread Sanitizer
 
 ```bash
