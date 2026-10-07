@@ -3808,8 +3808,8 @@ build_vapoursynth() {
 -Denable_vspipe=false \
 -Denable_python_module=false \
 -Dc_args=\"$CFLAGS -I$py_inc -static-libgcc -static-libstdc++\" \
--Dcpp_args=\"$CXXFLAGS -I$py_inc -static-libgcc -static-libstdc++\" \
--Dcpp_link_args=\"$LDFLAGS -L$py_lib_dir -lpython312 -lpython3 -static-libgcc -static-libstdc++\""
+-Dcpp_args=\"$CXXFLAGS -I$py_inc -include $py_inc/Python.h -static-libgcc -static-libstdc++\" \
+-Dcpp_link_args=\"$LDFLAGS -L$py_lib_dir -lpython312 -lpython3 -ldl -static-libgcc -static-libstdc++\""
 	generic_meson "$meson_options"
 	disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -3820,7 +3820,7 @@ build_vapoursynth() {
     gsed -i -e 's/^Libs:.*/Libs: -L\${libdir} -lvapoursynth-script/' \
       -e '/^Libs.private:.*/d' \
       "$pkg_file"
-    echo "Libs.private: -L$py_lib_dir -lpython312 -lpython3" >> "$pkg_file"
+    echo "Libs.private: -L$py_lib_dir -lpython312 -lpython3 -ldl" >> "$pkg_file"
   fi
 }
 
