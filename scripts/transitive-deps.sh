@@ -11,6 +11,20 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
+get_platform_deps_file() {
+  local platform="$1"
+  case "$platform" in
+    android) echo "scripts/deps-android.sh" ;;
+    ios|iphonesimulator|ios-sim*) echo "scripts/deps-ios.sh" ;;
+    tvos|appletvos|appletvsimulator|appletv-sim*|tvos-sim*) echo "scripts/deps-appletvos.sh" ;;
+    macos) echo "scripts/deps-macos.sh" ;;
+    linux) echo "scripts/deps-linux.sh" ;;
+    windows) echo "scripts/deps-windows.sh" ;;
+    wasm) echo "scripts/deps-wasm.sh" ;;
+    *) echo "Unknown platform: $platform" >&2; return 1 ;;
+  esac
+}
+
 find_build_dependents() {
     local root
     local target dep
@@ -85,7 +99,12 @@ if (( $# < 2 )); then
     exit 64
 fi
 
-deps_file="$1"
+# check if its a file path like scripts/deps-ios.sh or just a platform name like ios
+if [[ "$1" != */deps-*.sh ]]; then
+    deps_file="$(get_platform_deps_file "$1")"
+else
+    deps_file="$1"
+fi
 shift
 
 if [[ ! -f "$deps_file" ]]; then

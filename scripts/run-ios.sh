@@ -2980,12 +2980,13 @@ build_libarchive() {
   if isiossimulator; then
     ffi_host="${host_arch}-apple-darwin"
   fi
-  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared --without-iconv --bindir=$dependency_install_prefix/bin"
+  generic_configure "--host=$ffi_host --with-sysroot=\"$IOS_SYSROOT\" --enable-static --disable-shared --without-iconv --without-xml2 --bindir=$dependency_install_prefix/bin"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags
   reset_ldflags
   change_dir "$src_dir"
+  unset LIBS
 }
 build_libssh2() {
   local lib="libssh2"
@@ -3042,6 +3043,10 @@ build_nghttp2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  autoreconf_library
+  get_config_sub "$src_dir/$lib"
+  get_config_guess "$src_dir/$lib"
+  touch no.autoreconf
   export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
@@ -3058,6 +3063,8 @@ build_libidn2() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  get_config_sub "$src_dir/$lib/build-aux"
+  get_config_guess "$src_dir/$lib/build-aux"
   [[ -f .tarball-version ]] || printf '2.3.8\n' > .tarball-version
   [[ -f .version ]] || printf '2.3.8\n' > .version
   touch "no.autoreconf"
@@ -3074,6 +3081,8 @@ build_libunistring() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  get_config_sub "$src_dir/$lib/build-aux"
+  get_config_guess "$src_dir/$lib/build-aux"
   [[ -f .tarball-version ]] || printf '1.4.1\n' > .tarball-version
   [[ -f .version ]] || printf '1.4.1\n' > .version
   touch "no.autogen"
@@ -3102,10 +3111,15 @@ build_curl() {
 -DBUILD_TESTING=OFF \
 -DBUILD_EXAMPLES=OFF \
 -DCURL_USE_LIBSSH=OFF \
+-DOPENSSL_CRYPTO_LIBRARY=$dependency_install_prefix/lib/libcrypto.a \
+-DOPENSSL_SSL_LIBRARY=$dependency_install_prefix/lib/libssl.a \
+-DOPENSSL_INCLUDE_DIR=$dependency_install_prefix/include/openssl \
+-DHAVE_PIPE2:BOOL=OFF \
+-DUSE_APPLE_SECTRUST=ON \
 -DUSE_LIBRTMP=OFF"
-  export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
-  export CPPFLAGS="$CPPFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
-  export CXXFLAGS="$CXXFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
+  export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
+  export CPPFLAGS="$CPPFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
+  export CXXFLAGS="$CXXFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
   export LIBS="$LIBS -lpsl -lidn2 -lunistring -liconv -lbrotlidec -lbrotlicommon -lz"
   change_dir "$src_dir/$lib/build" 1
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_options"
@@ -4080,19 +4094,21 @@ build_bison() {
 }
 build_swig() {
   local lib="swig"
-  local repo="https://sourceforge.net/projects/swig/files/swig/swig-2.0.12/swig-2.0.12.tar.gz/download"
+  local repo="https://github.com/swig/swig/archive/refs/tags/v2.0.12.tar.gz"
   local repo_ver="v2.0.12"
-  export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='\"${dependency_install_prefix}/share/swig\"' "
+  export CXXFLAGS="$CXXFLAGS -DSWIG_LIB='${dependency_install_prefix}/share/swig'"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  touch "no.autoreconf"
+  autoreconf_library
+  do_autogen
   get_config_sub "$src_dir/$lib/Tools/config"
-  touch "no.autogen"
+  get_config_guess "$src_dir/$lib/Tools/config"
   do_configure "--host=$host_target \
 --prefix=$dependency_install_prefix \
 --libdir=$dependency_install_prefix/lib \
 --without-pcre \
+--disable-ccache \
 --enable-static --disable-shared --enable-pic --with-pic"
   do_make_and_make_install
   reset_cxxflags

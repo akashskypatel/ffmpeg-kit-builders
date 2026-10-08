@@ -2862,6 +2862,10 @@ build_nghttp2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  autoreconf_library
+  get_config_sub "$src_dir/$lib"
+  get_config_guess "$src_dir/$lib"
+  touch no.autoreconf
   export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
@@ -2878,6 +2882,8 @@ build_libidn2() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  get_config_sub "$src_dir/$lib/build-aux"
+  get_config_guess "$src_dir/$lib/build-aux"
   [[ -f .tarball-version ]] || printf '2.3.8\n' > .tarball-version
   [[ -f .version ]] || printf '2.3.8\n' > .version
   touch "no.autoreconf"
@@ -2894,6 +2900,8 @@ build_libunistring() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  get_config_sub "$src_dir/$lib/build-aux"
+  get_config_guess "$src_dir/$lib/build-aux"
   [[ -f .tarball-version ]] || printf '1.4.1\n' > .tarball-version
   [[ -f .version ]] || printf '1.4.1\n' > .version
   touch "no.autogen"
@@ -2922,10 +2930,15 @@ build_curl() {
 -DBUILD_TESTING=OFF \
 -DBUILD_EXAMPLES=OFF \
 -DCURL_USE_LIBSSH=OFF \
+-DOPENSSL_CRYPTO_LIBRARY=$dependency_install_prefix/lib/libcrypto.a \
+-DOPENSSL_SSL_LIBRARY=$dependency_install_prefix/lib/libssl.a \
+-DOPENSSL_INCLUDE_DIR=$dependency_install_prefix/include/openssl \
+-DHAVE_PIPE2:BOOL=OFF \
+-DUSE_APPLE_SECTRUST=ON \
 -DUSE_LIBRTMP=OFF"
-  export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
-  export CPPFLAGS="$CPPFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
-  export CXXFLAGS="$CXXFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
+  export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
+  export CPPFLAGS="$CPPFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
+  export CXXFLAGS="$CXXFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
   export LIBS="$LIBS -lpsl -lidn2 -lunistring -liconv -lbrotlidec -lbrotlicommon -lz"
   change_dir "$src_dir/$lib/build" 1
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_options"
