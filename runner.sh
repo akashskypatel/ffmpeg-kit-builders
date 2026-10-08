@@ -13,6 +13,13 @@ if (( BASH_VERSINFO[0] < 4 )); then
     exit 1
 fi
 
+# GitHub Actions invokes this script through sudo. Restore the Rust environment
+# installed in the builder image before checking or compiling Rust dependencies.
+if [[ -r /etc/profile.d/rust.sh ]]; then
+  # shellcheck source=/dev/null
+  source /etc/profile.d/rust.sh
+fi
+
 export BASEDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export SCRIPTDIR="${BASEDIR}/scripts"
 export LOG_FILE="${BASEDIR}/build.log"

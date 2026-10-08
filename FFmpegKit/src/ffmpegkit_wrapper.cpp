@@ -168,9 +168,19 @@ void internal_print_stack_trace() {
 
 using namespace ffmpegkit;
 
-// Session registry to keep shared_ptrs alive for the duration of the session
-static std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>> &get_session_registry() {
-    static std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>> *registry = new std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>>();
+// The Dart API may wrap the same native object more than once (for example,
+// getSession(id) while the originally-created Session is still alive).  Every
+// wrapper installs its own NativeFinalizer, so the registry must count those
+// independent leases.  Without the count, the first finalizer erases the only
+// registry entry and invalidates every other Dart wrapper for that session.
+struct HandleRegistryEntry {
+  std::shared_ptr<ffmpegkit::FFmpegKitObject> object;
+  size_t leases;
+};
+
+static std::map<void *, HandleRegistryEntry> &get_session_registry() {
+    static std::map<void *, HandleRegistryEntry> *registry =
+        new std::map<void *, HandleRegistryEntry>();
     return *registry;
 }
 
@@ -224,7 +234,7 @@ template <typename T> static std::shared_ptr<T> get_ptr_internal(void *handle) {
     std::lock_guard<RegistryMutex> lock(get_registry_mutex());
     auto it = get_session_registry().find(handle);
     if (it != get_session_registry().end()) {
-      return std::dynamic_pointer_cast<T>(it->second);
+      return std::dynamic_pointer_cast<T>(it->second.object);
     }
   }
 
@@ -249,13 +259,40 @@ template <typename T> static std::shared_ptr<T> get_ptr(void *handle) {
 
 template <typename T> static void *create_handle(std::shared_ptr<T> ptr) {
   if (!ptr) return nullptr;
-  
+
   void *handle = static_cast<void*>(ptr.get());
-  
+
   std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
-  get_session_registry()[handle] = std::static_pointer_cast<FFmpegKitObject>(ptr);
-  
+  auto object = std::static_pointer_cast<FFmpegKitObject>(ptr);
+  auto it = get_session_registry().find(handle);
+  if (it == get_session_registry().end()) {
+    get_session_registry().emplace(
+        handle, HandleRegistryEntry{std::move(object), 1});
+  } else {
+    // The stored shared_ptr keeps the object at this address alive, so the
+    // same address cannot legitimately identify a different object here.
+    ++it->second.leases;
+  }
+
   return handle;
+}
+
+// Drops one registry lease without applying the public release operation's
+// session-cancellation semantics.  Global completion callbacks acquire a
+// temporary lease solely to make their handle valid for the duration of the
+// callback and release it synchronously afterwards.
+static void release_callback_handle(void *handle) {
+  if (!handle) return;
+
+  std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
+  auto it = get_session_registry().find(handle);
+  if (it == get_session_registry().end()) return;
+
+  if (it->second.leases > 1) {
+    --it->second.leases;
+  } else {
+    get_session_registry().erase(it);
+  }
 }
 
 template <typename T>
@@ -300,14 +337,18 @@ const char * DLL_ALIGN ffmpeg_kit_get_build_stamp(void) {
 
 void DLL_ALIGN ffmpeg_kit_handle_release(void *handle) {
   if (!handle) return;
-  
+
   std::shared_ptr<Session> session;
-  
+
   {
     std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
     auto it = get_session_registry().find(handle);
     if (it != get_session_registry().end()) {
-      session = std::dynamic_pointer_cast<Session>(it->second);
+      if (it->second.leases > 1) {
+        --it->second.leases;
+        return;
+      }
+      session = std::dynamic_pointer_cast<Session>(it->second.object);
       get_session_registry().erase(it);
     }
   }
@@ -364,7 +405,7 @@ void DLL_ALIGN ffmpeg_kit_config_clear_sessions() {
     {
       std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
       for (auto& pair : get_session_registry()) {
-        auto session = std::dynamic_pointer_cast<Session>(pair.second);
+        auto session = std::dynamic_pointer_cast<Session>(pair.second.object);
         if (session) {
           sessions_to_cancel.push_back(session);
         }
@@ -3192,7 +3233,7 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
             if (g_ffmpeg_complete_callback) {
               auto handle = create_handle(title);
               g_ffmpeg_complete_callback(handle, g_ffmpeg_complete_user_data);
-              // Handle ownership transferred to Dart callback
+              release_callback_handle(handle);
             }
           });
     } else {
@@ -3216,7 +3257,7 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
             if (g_ffprobe_complete_callback) {
               auto handle = create_handle(title);
               g_ffprobe_complete_callback(handle, g_ffprobe_complete_user_data);
-              // Handle ownership transferred to Dart callback
+              release_callback_handle(handle);
             }
           });
     } else {
@@ -3240,7 +3281,7 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffplay_session_complete_callback(
             if (g_ffplay_complete_callback) {
               auto handle = create_handle(title);
               g_ffplay_complete_callback(handle, g_ffplay_complete_user_data);
-              // Handle ownership transferred to Dart callback
+              release_callback_handle(handle);
             }
           });
     } else {
@@ -3264,7 +3305,7 @@ void DLL_ALIGN ffmpeg_kit_config_enable_media_information_session_complete_callb
             if (g_media_complete_callback) {
               auto handle = create_handle(title);
               g_media_complete_callback(handle, g_media_complete_user_data);
-              // Handle ownership transferred to Dart callback
+              release_callback_handle(handle);
             }
           });
     } else {

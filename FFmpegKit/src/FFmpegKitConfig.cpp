@@ -287,6 +287,14 @@ static std::condition_variable &getCallbackMonitor() {
   static std::condition_variable *instance = new std::condition_variable();
   return *instance;
 }
+// FFprobe retains process-wide execution/output state and cannot safely run
+// two commands concurrently in one process. Keep this lock separate from
+// session-history and callback locks: executeFFprobe blocks while probing and
+// may emit callbacks throughout the call.
+static std::mutex &getFFprobeExecutionMutex() {
+  static auto *instance = new std::mutex();
+  return *instance;
+}
 class CallbackData;
 static std::list<CallbackData *> &getCallbackDataList() {
   static auto *instance = new std::list<CallbackData *>();
@@ -1368,15 +1376,17 @@ executeFFmpeg(const std::shared_ptr<ffmpegkit::FFmpegSession> &session,
   removeSession(sessionId);
 
   // 5. CLEANUP
+  FFmpegContext *detachedContext = ctx;
   if (session && session->isFFmpeg()) {
-    std::static_pointer_cast<ffmpegkit::FFmpegSession>(session)->setContext(
-        nullptr);
+    detachedContext =
+        std::static_pointer_cast<ffmpegkit::FFmpegSession>(session)
+            ->detachContext();
   }
   clearSessionFromThread();
-  if (ffmpeg_shutdown_incomplete(ctx)) {
+  if (ffmpeg_shutdown_incomplete(detachedContext)) {
     session->debugLog("FFmpegKitConfig::executeFFmpeg preserving wrapper context after incomplete shutdown session_handle=%s session_id=%d", sessionStr.c_str(), sessionId);
   } else {
-    ffmpeg_free(ctx);
+    ffmpeg_free(detachedContext);
   }
   restoreConfiguredLogState();
 
@@ -1391,6 +1401,7 @@ int executeFFprobe(const std::shared_ptr<ffmpegkit::AbstractSession> &session,
   if (session == nullptr) {
     return -1;
   }
+  std::unique_lock<std::mutex> executionLock(getFFprobeExecutionMutex());
   const long sessionId = session->getSessionId();
   std::string sessionStr = std::to_string(sessionId);
   session->debugLog("FFmpegKitConfig::executeFFprobe begin session_handle=%s session_id=%d", sessionStr.c_str(), sessionId);
@@ -1626,6 +1637,7 @@ void *ffmpegKitInitialize() {
     (void)getGlobalCallbacksMutex();
     (void)getCallbackMutex();
     (void)getCallbackMonitor();
+    (void)getFFprobeExecutionMutex();
     (void)getCallbackDataList();
 
     sessionHistorySize = 10;

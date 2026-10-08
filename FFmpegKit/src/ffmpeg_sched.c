@@ -307,6 +307,8 @@ struct Scheduler {
 
     enum SchedulerState state;
     atomic_int          terminate;
+    // set once sch_start() has finished building the graph; see sch_request_stop()
+    atomic_int          graph_started;
 
     pthread_mutex_t     schedule_lock;
 
@@ -1897,6 +1899,7 @@ int sch_start(Scheduler *sch)
 
     av_assert0(sch->state == SCH_STATE_UNINIT);
     sch->state = SCH_STATE_STARTED;
+    atomic_store(&sch->graph_started, 1);
 
     for (unsigned i = 0; i < sch->nb_mux; i++) {
         SchMux *mux = &sch->mux[i];
@@ -1986,13 +1989,20 @@ void sch_request_stop(Scheduler *sch)
 
     atomic_store(&sch->terminate, 1);
 
-    for (unsigned type = 0; type < 2; type++)
-        for (unsigned i = 0; i < (type ? sch->nb_demux : sch->nb_filters); i++) {
-            SchWaiter *w = type ? &sch->demux[i].waiter : &sch->filters[i].waiter;
-            waiter_set(w, 1);
-            if (type)
-                choke_demux(sch, i, 0);
-        }
+    // The scheduler is published for cancellation right after sch_alloc(), but
+    // option parsing keeps growing and wiring these arrays on the session thread
+    // until sch_start(). Walking them from the cancelling thread before then
+    // reads half-built nodes (a demux stream whose dst is still NULL) and arrays
+    // GROW_ARRAY may be reallocating. Before start, terminate alone suffices:
+    // sch_wait() observes it and transcode() stops the scheduler.
+    if (atomic_load(&sch->graph_started))
+        for (unsigned type = 0; type < 2; type++)
+            for (unsigned i = 0; i < (type ? sch->nb_demux : sch->nb_filters); i++) {
+                SchWaiter *w = type ? &sch->demux[i].waiter : &sch->filters[i].waiter;
+                waiter_set(w, 1);
+                if (type)
+                    choke_demux(sch, i, 0);
+            }
 
     pthread_mutex_lock(&sch->finish_lock);
     pthread_cond_broadcast(&sch->finish_cond);

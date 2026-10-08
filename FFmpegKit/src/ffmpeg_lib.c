@@ -31,6 +31,7 @@
 #include <string.h>
 #ifdef _WIN32
 #include <io.h>
+#include "pthread_compat.h"
 #include <windows.h>
 #else
 #include <pthread.h>
@@ -55,6 +56,7 @@ static atomic_int ffmpeg_runtime_unrecoverable = 0;
 
 struct FFmpegContext {
   _Atomic(Scheduler *) sch;
+  pthread_mutex_t scheduler_mutex;
   int ret;
   int argc;
   char **argv;
@@ -65,6 +67,28 @@ struct FFmpegContext {
   long session_id;
 };
 
+static FFmpegContext *ffmpeg_alloc_context(void) {
+  FFmpegContext *ctx = av_mallocz(sizeof(FFmpegContext));
+  if (!ctx)
+    return NULL;
+  if (pthread_mutex_init(&ctx->scheduler_mutex, NULL) != 0) {
+    av_free(ctx);
+    return NULL;
+  }
+  atomic_init(&ctx->sch, NULL);
+  atomic_init(&ctx->cancelled, 0);
+  atomic_init(&ctx->shutdown_incomplete, 0);
+  atomic_init(&ctx->output_dumped, 0);
+  return ctx;
+}
+
+static void ffmpeg_free_unstarted_context(FFmpegContext *ctx) {
+  if (!ctx)
+    return;
+  pthread_mutex_destroy(&ctx->scheduler_mutex);
+  av_free(ctx);
+}
+
 static int split_args(const char *args, char ***argv_out) {
   return ffmpegkit_split_command(args, argv_out);
 }
@@ -73,14 +97,14 @@ FFmpegContext *ffmpeg_init(const char *args_string) {
   if (!args_string)
     return NULL;
 
-  FFmpegContext *ctx = av_mallocz(sizeof(FFmpegContext));
+  FFmpegContext *ctx = ffmpeg_alloc_context();
   if (!ctx)
     return NULL;
 
   // Only parse arguments here. Logic happens in run() to be atomic.
   ctx->argc = split_args(args_string, &ctx->argv);
   if (ctx->argc < 0) {
-    av_free(ctx);
+    ffmpeg_free_unstarted_context(ctx);
     return NULL;
   }
 
@@ -91,13 +115,13 @@ FFmpegContext *ffmpeg_init_argv(int argc, const char *const *argv) {
   if (argc <= 0 || !argv)
     return NULL;
 
-  FFmpegContext *ctx = av_mallocz(sizeof(FFmpegContext));
+  FFmpegContext *ctx = ffmpeg_alloc_context();
   if (!ctx)
     return NULL;
 
   ctx->argv = av_mallocz(sizeof(char *) * (argc + 1));
   if (!ctx->argv) {
-    av_free(ctx);
+    ffmpeg_free_unstarted_context(ctx);
     return NULL;
   }
 
@@ -107,7 +131,7 @@ FFmpegContext *ffmpeg_init_argv(int argc, const char *const *argv) {
       for (int j = 0; j < i; j++)
         av_free(ctx->argv[j]);
       av_free(ctx->argv);
-      av_free(ctx);
+      ffmpeg_free_unstarted_context(ctx);
       return NULL;
     }
     ctx->argv[i] = av_strdup(argv[i]);
@@ -115,7 +139,7 @@ FFmpegContext *ffmpeg_init_argv(int argc, const char *const *argv) {
       for (int j = 0; j < i; j++)
         av_free(ctx->argv[j]);
       av_free(ctx->argv);
-      av_free(ctx);
+      ffmpeg_free_unstarted_context(ctx);
       return NULL;
     }
   }
@@ -147,6 +171,7 @@ long ffmpeg_get_session_id(const FFmpegContext *ctx) {
 void ffmpeg_set_scheduler(FFmpegContext *ctx, Scheduler *sch) {
   if (!ctx)
     return;
+  pthread_mutex_lock(&ctx->scheduler_mutex);
   Scheduler *previous = atomic_load(&ctx->sch);
   if (previous && previous != sch) {
     ffmpegkit_unregister_root_context(previous);
@@ -154,7 +179,13 @@ void ffmpeg_set_scheduler(FFmpegContext *ctx, Scheduler *sch) {
   atomic_store(&ctx->sch, sch);
   if (sch) {
     ffmpegkit_register_root_context(sch, ctx->session_id);
+    // A cancel may arrive before ffmpeg_run creates the scheduler. Transfer
+    // either cancellation flag to the scheduler as soon as it is published.
+    if (atomic_load(&ctx->cancelled) || cancelRequested(ctx->session_id)) {
+      sch_request_stop(sch);
+    }
   }
+  pthread_mutex_unlock(&ctx->scheduler_mutex);
 }
 
 void ffmpeg_init_interrupt_callback(AVIOInterruptCB *cb) {
@@ -272,11 +303,15 @@ void ffmpeg_cancel(FFmpegContext *ctx) {
            "[ffmpeg-kit] ffmpeg_cancel: cancelling session for session_id: %ld\n", ctx->session_id);
   atomic_store(&ctx->cancelled, 1);
 
-  // Signal scheduler if it exists
+  // Serialize scheduler access with detachment. Once ffmpeg_set_scheduler has
+  // published NULL under this mutex, teardown may free the old scheduler and
+  // no later cancellation can retain its pointer.
+  pthread_mutex_lock(&ctx->scheduler_mutex);
   Scheduler *sch = atomic_load(&ctx->sch);
   if (sch) {
     sch_request_stop(sch);
   }
+  pthread_mutex_unlock(&ctx->scheduler_mutex);
 }
 
 void ffmpeg_free(FFmpegContext *ctx) {
@@ -292,6 +327,7 @@ void ffmpeg_free(FFmpegContext *ctx) {
   }
 
   avformat_network_deinit();
-  
+
+  pthread_mutex_destroy(&ctx->scheduler_mutex);
   av_free(ctx);
 }

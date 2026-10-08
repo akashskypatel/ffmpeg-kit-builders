@@ -610,6 +610,7 @@ CONFIG_ANDROID_UNSUPPORTED="\
 --disable-libdvdread \
 --disable-mmal \
 --disable-libonnxruntime \
+--disable-vulkan-static \
 --disable-ohcodec"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
