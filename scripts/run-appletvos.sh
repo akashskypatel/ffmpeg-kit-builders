@@ -371,6 +371,8 @@ build_zlib() {
   local repo_ver="2.3.3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  gsed -i 's/list(GET CMAKE_OSX_ARCHITECTURES 0 ARCH)/list(GET CMAKE_OSX_ARCHITECTURES 0 ARCH)\n    if(ARCH STREQUAL "arm64")\n        set(ARCH "aarch64")\n    endif()/' "$src_dir/$lib/cmake/detect-arch.cmake"
   change_dir "$src_dir/$lib/build" 1
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DZLIB_COMPAT=ON \
