@@ -600,13 +600,16 @@ build_zlib() {
   local repo_ver="2.3.3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  gsed -i 's/if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")/if(CMAKE_SYSTEM_NAME MATCHES "^(Linux|Android)$")/' "$src_dir/$lib/CMakeLists.txt"
   change_dir "$src_dir/$lib/build" 1
-  export CFLAGS="${CFLAGS//-Dnl_langinfo\\(x\\)=NULL/}"
-  export CXXFLAGS="${CXXFLAGS//-Dnl_langinfo\\(x\\)=NULL/}"
+  if [[ "$host_arch" == "armv7a" ]]; then
+    export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/ -mfpu=neon -DARM_NOCHECK_NEON}"
+    export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/ -mfpu=neon -DARM_NOCHECK_NEON}"
+  fi
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DZLIB_COMPAT=ON \
 -DBUILD_SHARED_LIBS=OFF \
--DZLIB_ENABLE_TESTS=OFF \
+-DBUILD_TESTING=OFF \
 -DWITH_GTEST=OFF \
 -DWITH_BENCHMARKS=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
@@ -4109,8 +4112,8 @@ build_libzimg() {
 --disable-shared \
 --with-pic"
   if [[ "$host_arch" == "armv7a" ]]; then
-    export CFLAGS="-march=armv7-a -mfpu=neon-fp16 -mfloat-abi=softfp"
-    export CXXFLAGS="-march=armv7-a -mfpu=neon-fp16 -mfloat-abi=softfp"
+    export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/-mfpu=neon-fp16}"
+    export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/-mfpu=neon-fp16}"
   fi
   do_autogen
   touch "no.autoreconf"
