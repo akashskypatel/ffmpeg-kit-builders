@@ -530,6 +530,20 @@ explicitly captured same-target pristine JSON to reject unreviewed ABI
 removals. `--capture-baseline` is an explicit, overwrite-protected operation;
 verification never updates a baseline automatically.
 
+On the Mac build host, use the same runner flags for each iOS, simulator,
+macOS, and tvOS pair, for example:
+
+```bash
+sudo ./runner.sh --host=ios --arch=aarch64 --skip -y \
+  --enable-full --gpl --deps --kit --release=local -fk --no-bundle
+```
+
+The verifier uses ELF dynamic symbols (`readelf` or NDK `llvm-readelf`), the
+PE export directory (`objdump` and `llvm-readobj`), per-arch Mach-O external
+defined names (`xcrun nm`), and the WASM Export section validated with
+`wasm-dis`. JSON reports include the raw-list path, hashes, API checks,
+forbidden matches, and same-target baseline additions/removals.
+
 For Apple packages, set `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` and
 `FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON` when invoking
 `scripts/apple/build_xcframework.sh`. The package hook reads
@@ -537,6 +551,15 @@ For Apple packages, set `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` and
 slices, compares each final symbol set to its pre-package dylib, and checks
 architecture, platform, dSYM UUIDs and compile units, install name, rpaths,
 bundled dependencies, iOS LZMA names, and code signatures before zipping.
+For the local full-GPL package gate, run:
+
+```bash
+sudo env FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
+  FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
+  ./scripts/apple/build_xcframework.sh \
+  --platform=ios,macos,appletvos --bundle=full --license=gpl \
+  --not-small --local --create-framework --reset
+```
 
 The verifier deliberately rejects exported testing-only functions even when
 `BUILD_TESTS=OFF`. A preexisting production export such as

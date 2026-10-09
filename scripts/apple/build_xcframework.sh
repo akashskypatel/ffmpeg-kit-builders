@@ -778,6 +778,7 @@ EOF
       [[ "${small}" == "small" ]] && export_size="small"
       local -a export_profile=()
       [[ "${FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE:-OFF}" == "ON" ]] && export_profile+=(--require-acceptance-profile)
+      mkdir -p "${BASEDIR}/export-verification/xcframework"
       python3 "${BASEDIR}/FFmpegKit/scripts/verify-binary-exports.py" \
         --platform apple \
         --xcframework "${xcframework_output_dir}/${output_name}.xcframework" \
@@ -785,7 +786,7 @@ EOF
         --phase xcframework \
         --target-family "${target_platform}" --expected-archs "${archs_for_platform}" \
         --prepackage-root "${BASEDIR}/prebuilt" \
-        --report "${xcframework_output_dir}/${output_name}.xcframework.exports.json" \
+        --report "${BASEDIR}/export-verification/xcframework/${output_name}.json" \
         "${export_profile[@]}" || return 1
     fi
 

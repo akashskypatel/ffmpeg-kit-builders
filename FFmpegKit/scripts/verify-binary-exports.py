@@ -298,6 +298,34 @@ def uuid_set(path, arch):
     return set(re.findall(r"UUID: ([0-9A-Fa-f-]+) \(" + re.escape(arch) + r"\)", output))
 
 
+def has_compile_unit(path):
+    command = [tool("xcrun"), "dwarfdump", "--debug-info", str(path)]
+    try:
+        process = subprocess.Popen(command, text=True, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL)
+    except OSError as exc:
+        raise VerificationError(f"cannot run dwarfdump: {exc}") from exc
+    try:
+        for line in process.stdout:
+            if "DW_TAG_compile_unit" in line:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired as exc:
+                    process.kill()
+                    process.wait()
+                    raise VerificationError(f"dwarfdump did not stop after finding a compile unit: {path}") from exc
+                return True
+        if process.wait() != 0:
+            raise VerificationError(f"dwarfdump could not inspect {path}")
+        return False
+    finally:
+        process.stdout.close()
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
 def inspect_xcframework(args):
     report = {"platform": "apple", "phase": "xcframework", "xcframework": str(args.xcframework),
               "bundle": args.bundle, "license": args.license, "size": args.size,
@@ -307,6 +335,7 @@ def inspect_xcframework(args):
             raise VerificationError("XCFramework must be an existing absolute directory")
         expected = expected_apple_targets(args.target_family, args.expected_archs)
         report["expected_targets"] = sorted([list(item) for item in expected])
+        report["inspection_tool_version"] = run([tool("xcrun"), "--version"]).strip()
         info_path = args.xcframework / "Info.plist"
         with info_path.open("rb") as stream:
             entries = plistlib.load(stream)["AvailableLibraries"]
@@ -323,7 +352,8 @@ def inspect_xcframework(args):
                 arch = "aarch64" if mach_arch == "arm64" else mach_arch
                 key = (target, arch)
                 seen.add(key)
-                item = {"target": target, "arch": arch, "binary": str(binary), "errors": []}
+                item = {"target": target, "arch": arch, "library_identifier": identifier,
+                        "binary": str(binary), "errors": []}
                 report["slices"].append(item)
                 try:
                     if key not in expected:
@@ -339,6 +369,7 @@ def inspect_xcframework(args):
                     item["export_count"] = len(names)
                     item["fingerprint"] = hashlib.sha256("\n".join(names).encode()).hexdigest()
                     item["inspection_command"] = command
+                    item["lipo_architectures"] = run([tool("xcrun"), "lipo", "-archs", str(binary)]).split()
                     for anchor in anchors(slice_args):
                         if anchor not in exports:
                             item["errors"].append(f"missing public export {anchor}")
@@ -350,6 +381,7 @@ def inspect_xcframework(args):
                         item["errors"].append(f"test-only exports: {tests}")
                     if target in ("ios", "ios-simulator"):
                         lzma = [name for name in names if name.startswith("_lzma_")]
+                        item["unprefixed_lzma_exports"] = len(lzma)
                         if lzma:
                             item["errors"].append(f"unprefixed iOS LZMA exports: {lzma[:10]}")
                     if args.prepackage_root:
@@ -365,7 +397,9 @@ def inspect_xcframework(args):
                             item["errors"].append(f"packaging changed exports: -{len(missing)} +{len(added)}")
                     else:
                         item["errors"].append("prepackage root missing; cannot check A01")
-                    dsym = args.xcframework / identifier / "dSYMs" / "ffmpegkit.framework.dSYM"
+                    debug_symbols_path = entry.get("DebugSymbolsPath", "dSYMs")
+                    dsym = args.xcframework / identifier / debug_symbols_path / "ffmpegkit.framework.dSYM"
+                    item["dsym_path"] = str(dsym)
                     if not dsym.is_dir():
                         item["errors"].append(f"framework dSYM missing: {dsym}")
                     else:
@@ -373,11 +407,17 @@ def inspect_xcframework(args):
                         item["dsym_uuid"] = sorted(uuid_set(dsym, mach_arch))
                         if not item["binary_uuid"] or item["binary_uuid"] != item["dsym_uuid"]:
                             item["errors"].append("framework and dSYM UUIDs differ")
-                        units = run([tool("xcrun"), "dwarfdump", "--debug-info", str(dsym)])
-                        if "DW_TAG_compile_unit" not in units:
+                        item["dsym_has_compile_units"] = has_compile_unit(dsym)
+                        if not item["dsym_has_compile_units"]:
                             item["errors"].append("dSYM has no compile units")
-                    run([tool("codesign"), "--verify", "--verbose=2", str(framework)])
+                    try:
+                        run([tool("codesign"), "--verify", "--verbose=2", str(framework)])
+                        item["codesign_verified"] = True
+                    except VerificationError as exc:
+                        item["codesign_verified"] = False
+                        item["errors"].append(str(exc))
                     identity = run([tool("xcrun"), "otool", "-D", str(binary)])
+                    item["install_name"] = identity.strip().splitlines()[-1]
                     if "@rpath/ffmpegkit.framework/ffmpegkit" not in identity:
                         item["errors"].append("unexpected LC_ID_DYLIB")
                     loads = run([tool("xcrun"), "otool", "-l", str(binary)])
@@ -385,18 +425,35 @@ def inspect_xcframework(args):
                     item["rpaths"] = rpaths
                     if any(path.startswith("/") for path in rpaths):
                         item["errors"].append("absolute build-machine LC_RPATH")
-                    references = run([tool("xcrun"), "otool", "-L", str(binary)]).splitlines()[1:]
-                    refs = [line.strip().split(" ", 1)[0] for line in references if line.strip()]
-                    item["dylib_references"] = refs
-                    for ref in refs:
-                        if ref.startswith("@rpath/") and ref != "@rpath/ffmpegkit.framework/ffmpegkit":
-                            if not (args.xcframework / identifier / Path(ref).name).exists():
-                                item["errors"].append(f"unresolved bundled dylib reference: {ref}")
-                        elif ref.startswith("/") and not (ref.startswith("/usr/lib/") or ref.startswith("/System/Library/")):
-                            item["errors"].append(f"absolute non-system dylib reference: {ref}")
+                    slice_root = args.xcframework / identifier
+                    item["dylib_references"] = {}
+                    item["dependency_signatures"] = {}
+                    for inspected in [binary, *sorted(slice_root.glob("*.dylib"))]:
+                        if inspected != binary:
+                            try:
+                                run([tool("codesign"), "--verify", "--verbose=2", str(inspected)])
+                                item["dependency_signatures"][str(inspected)] = True
+                            except VerificationError as exc:
+                                item["dependency_signatures"][str(inspected)] = False
+                                item["errors"].append(str(exc))
+                        references = run([tool("xcrun"), "otool", "-L", str(inspected)]).splitlines()[1:]
+                        refs = [line.strip().split(" ", 1)[0] for line in references if line.strip()]
+                        item["dylib_references"][str(inspected)] = refs
+                        for ref in refs:
+                            if ref == "@rpath/ffmpegkit.framework/ffmpegkit":
+                                continue
+                            if ref.startswith("@rpath/"):
+                                if not (slice_root / Path(ref).name).exists():
+                                    item["errors"].append(f"{inspected.name}: unresolved bundled dylib reference: {ref}")
+                            elif ref.startswith("@loader_path/"):
+                                if not (inspected.parent / ref[len("@loader_path/"):]).exists():
+                                    item["errors"].append(f"{inspected.name}: unresolved loader-path reference: {ref}")
+                            elif ref.startswith("/") and not (ref.startswith("/usr/lib/") or ref.startswith("/System/Library/")):
+                                item["errors"].append(f"{inspected.name}: absolute non-system dylib reference: {ref}")
                     raw_path = args.report.with_name(args.report.stem + f"-{target}-{arch}.exports.txt")
                     raw_path.parent.mkdir(parents=True, exist_ok=True)
                     raw_path.write_text("\n".join(names) + "\n")
+                    item["raw_exports_path"] = str(raw_path)
                 except (VerificationError, ValueError, KeyError, OSError, UnicodeError) as exc:
                     item["errors"].append(str(exc))
                 report["errors"].extend(f"{target}/{arch}: {error}" for error in item["errors"])
@@ -536,9 +593,12 @@ def main():
                     report["errors"].append("ELF export map lacks narrow raw namespace RTTI patterns")
         if args.ffmpeg_config:
             config = args.ffmpeg_config.read_text()
+            feature_flags = dict(re.findall(r"^#define (CONFIG_[A-Z0-9_]+) ([01])$", config, re.M))
             report["ffmpeg_config"] = {"path": str(args.ffmpeg_config), "sha256": hashlib.sha256(config.encode()).hexdigest(),
                                        "gpl": bool(re.search(r"^#define CONFIG_GPL 1$", config, re.M)),
-                                       "nonfree": bool(re.search(r"^#define CONFIG_NONFREE 1$", config, re.M))}
+                                       "nonfree": bool(re.search(r"^#define CONFIG_NONFREE 1$", config, re.M)),
+                                       "enabled_features": sorted(name for name, value in feature_flags.items() if value == "1"),
+                                       "disabled_features": sorted(name for name, value in feature_flags.items() if value == "0")}
             if not report["ffmpeg_config"]["gpl"] or report["ffmpeg_config"]["nonfree"]:
                 if args.require_acceptance_profile:
                     report["errors"].append("FFmpeg config is not GPL/nonfree-disabled")
@@ -565,6 +625,8 @@ def main():
     except (VerificationError, ValueError, KeyError, OSError, UnicodeError) as exc:
         report["errors"].append(str(exc))
     report["pass"] = not report["errors"]
+    if exports:
+        report["raw_exports_path"] = str(args.report.with_suffix(".exports.txt"))
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     if exports:
