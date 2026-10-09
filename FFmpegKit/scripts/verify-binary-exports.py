@@ -436,8 +436,14 @@ def inspect_xcframework(args):
                             except VerificationError as exc:
                                 item["dependency_signatures"][str(inspected)] = False
                                 item["errors"].append(str(exc))
-                        references = run([tool("xcrun"), "otool", "-L", str(inspected)]).splitlines()[1:]
-                        refs = [line.strip().split(" ", 1)[0] for line in references if line.strip()]
+                        otool_output = run([tool("xcrun"), "otool", "-L", str(inspected)])
+                        # Fat Mach-O output repeats unindented architecture headers;
+                        # only indented lines are actual install/dependency names.
+                        refs = [
+                            line.strip().split(" ", 1)[0]
+                            for line in otool_output.splitlines()
+                            if line[:1].isspace() and line.strip()
+                        ]
                         item["dylib_references"][str(inspected)] = refs
                         for ref in refs:
                             if ref == "@rpath/ffmpegkit.framework/ffmpegkit":
