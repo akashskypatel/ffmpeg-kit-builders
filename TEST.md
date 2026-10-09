@@ -511,14 +511,20 @@ example uses Linux x86_64; repeat with the supported host/arch pairs in
 `scripts/supported.sh`:
 
 ```bash
-sudo ./runner.sh --host=linux --arch=x86_64 --skip -y \
-  --enable-full --gpl --deps --kit --release=local -fk --no-bundle
+sudo env FFMPEGKIT_BUILD_FLAGS='--host=linux --arch=x86_64 --skip -y --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle' \
+  ./runner.sh --host=linux --arch=x86_64 --skip -y \
+  --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle
 sudo cmake -S FFmpegKit -B FFmpegKit/build \
   -DFFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
   -DFFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
   -DFFMPEGKIT_EXPORT_BASELINE="$PWD/export-verification/baseline/linux-x86_64/baseline.json"
 sudo cmake --build FFmpegKit/build --target ffmpegkit -j3
 ```
+
+Set `FFMPEGKIT_BUILD_FLAGS` to the exact positional arguments for the runner or
+package command. Linked-binary and XCFramework JSON reports record the parsed
+tokens in `build_flags`, alongside the effective bundle, license, size, and CMake
+configuration.
 
 For WASM, build `ffmpegkit_wasm`; the verifier reads the linked `.wasm` export
 section and confirms each public loader mapping points to a real module export.
@@ -534,8 +540,9 @@ On the Mac build host, use the same runner flags for each iOS, simulator,
 macOS, and tvOS pair, for example:
 
 ```bash
-sudo ./runner.sh --host=ios --arch=aarch64 --skip -y \
-  --enable-full --gpl --deps --kit --release=local -fk --no-bundle
+sudo env FFMPEGKIT_BUILD_FLAGS='--host=ios --arch=aarch64 --skip -y --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle' \
+  ./runner.sh --host=ios --arch=aarch64 --skip -y \
+  --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle
 ```
 
 The verifier uses ELF dynamic symbols (`readelf` or NDK `llvm-readelf`), the
@@ -554,7 +561,8 @@ bundled dependencies, iOS LZMA names, and code signatures before zipping.
 For the local full-GPL package gate, run:
 
 ```bash
-sudo env FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
+sudo env FFMPEGKIT_BUILD_FLAGS='--platform=ios,macos,appletvos --bundle=full --license=gpl --not-small --local --create-framework --reset' \
+  FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
   FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
   ./scripts/apple/build_xcframework.sh \
   --platform=ios,macos,appletvos --bundle=full --license=gpl \

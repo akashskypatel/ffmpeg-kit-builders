@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -329,6 +330,7 @@ def has_compile_unit(path):
 def inspect_xcframework(args):
     report = {"platform": "apple", "phase": "xcframework", "xcframework": str(args.xcframework),
               "bundle": args.bundle, "license": args.license, "size": args.size,
+              "build_flags": shlex.split(os.environ.get("FFMPEGKIT_BUILD_FLAGS", "")),
               "expected_targets": [], "slices": [], "errors": []}
     try:
         if not args.xcframework.is_absolute() or not args.xcframework.is_dir():
@@ -517,6 +519,7 @@ def main():
     report = {"platform": args.platform, "arch": args.arch, "apple_platform": args.apple_platform,
               "phase": args.phase, "bundle": args.bundle, "license": args.license,
               "size": args.size, "binary": str(args.binary), "checks": {}, "errors": []}
+    report["build_flags"] = shlex.split(os.environ.get("FFMPEGKIT_BUILD_FLAGS", ""))
     exports = {}
     try:
         if not args.binary.is_absolute() or not args.binary.is_file() or args.binary.stat().st_size == 0:
