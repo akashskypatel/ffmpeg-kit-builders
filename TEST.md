@@ -43,6 +43,55 @@ iteration counts. For local stress runs, set
 `FFMPEG_KIT_FFPROBE_CONCURRENCY_ITERATIONS` before running the corresponding
 Google Test filter.
 
+### Cancellation during scheduler graph construction
+
+FFmpegKit publishes its scheduler to the session context after `sch_alloc()`
+and before `ffmpeg_parse_options()` finishes building and connecting the
+transcode graph. A cancellation from another thread can therefore arrive while
+demuxer and filter graph state is incomplete.
+
+Before `start_prepare()` succeeds, cancellation sets the scheduler's terminate
+flag and broadcasts `finish_cond`, but does not traverse demuxer or filter
+waiters. After graph readiness is published, cancellation retains the normal
+waiter wake-up and demux unchoking behavior. This protects FFmpegKit's custom
+cross-thread scheduler stop path; it does not promise that cancellation skips
+option parsing or all task startup.
+
+#### Native Linux
+
+```bash
+cmake --build FFmpegKit/build --target ffmpegkit_tests -j2
+timeout 120s FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter='CancellationRaceTest.*'
+
+FFMPEG_KIT_CANCEL_RACE_ITERATIONS=1000 timeout 300s \
+  FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter='CancellationRaceTest.ConcurrentCancellationDuringExecution'
+```
+
+The focused suite includes a deterministic incomplete-graph stop check and a
+post-readiness waiter check. The real FFmpeg cancellation loop uses concurrent
+cancellers and a filter graph, but does not pause inside the CLI parser; it is
+stress coverage, not proof that every run hit the exact graph-construction
+interleaving. FFmpeg executions are serialized by the CLI's global state, so
+the independent-session cancellation check runs the sessions sequentially.
+Current local coverage is Linux x86_64; other platforms remain unverified by
+these commands.
+
+The current local debug test build uses UndefinedBehaviorSanitizer. Run its
+focused cancellation suite with:
+
+```bash
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 timeout 120s \
+  FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter='CancellationRaceTest.*'
+```
+
+ThreadSanitizer and AddressSanitizer builds are optional but recommended. Build
+them with the commands in “Build commands for debug builds” above, then use the
+same focused filter; do not report sanitizer coverage unless that instrumented
+binary actually ran.
+
 ### Thread Sanitizer
 
 ```bash

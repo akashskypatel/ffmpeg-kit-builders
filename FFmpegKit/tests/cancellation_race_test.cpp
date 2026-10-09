@@ -7,6 +7,9 @@
 #include <cstdlib>
 #include <thread>
 
+extern "C" int ffmpeg_kit_test_cancel_unready_graph(void);
+extern "C" int ffmpeg_kit_test_cancel_ready_graph(void);
+
 TEST(CancellationRaceTest, CancellationBeforeContextPublicationIsRemembered) {
   auto session = ffmpegkit::FFmpegSession::create({"-version"});
   session->requestCancel();
@@ -22,6 +25,10 @@ TEST(CancellationRaceTest, CancellationBeforeContextPublicationIsRemembered) {
   session->requestCancel();
 }
 
+TEST(CancellationRaceTest, CancellationBeforeGraphReadinessSkipsIncompleteGraph) {
+  EXPECT_EQ(ffmpeg_kit_test_cancel_unready_graph(), 0);
+}
+
 TEST(CancellationRaceTest, CancellationBeforeExecutionCompletesSafely) {
   auto session = ffmpegkit::FFmpegSession::create(
       {"-hide_banner", "-loglevel", "fatal", "-f", "lavfi", "-i",
@@ -33,6 +40,10 @@ TEST(CancellationRaceTest, CancellationBeforeExecutionCompletesSafely) {
               session->getState() == ffmpegkit::SessionStateFailed);
   EXPECT_EQ(session->detachContext(), nullptr);
   session->requestCancel();
+}
+
+TEST(CancellationRaceTest, CancellationAfterGraphReadinessStillWakesTasks) {
+  EXPECT_EQ(ffmpeg_kit_test_cancel_ready_graph(), 0);
 }
 
 TEST(CancellationRaceTest, ConcurrentCancellationAndContextDetach) {
@@ -78,7 +89,8 @@ TEST(CancellationRaceTest, ConcurrentCancellationDuringExecution) {
     SCOPED_TRACE(iteration);
     auto session = ffmpegkit::FFmpegSession::create(
         {"-hide_banner", "-loglevel", "fatal", "-f", "lavfi", "-i",
-         "testsrc=duration=1:size=16x16:rate=30", "-f", "null", "-"});
+         "testsrc=duration=1:size=16x16:rate=30", "-filter_complex",
+         "[0:v]null[filtered]", "-map", "[filtered]", "-f", "null", "-"});
     std::atomic<int> ready{0};
     std::atomic<bool> go{false};
     auto start = [&] {
@@ -98,5 +110,36 @@ TEST(CancellationRaceTest, ConcurrentCancellationDuringExecution) {
     second.join();
     EXPECT_NE(session->getReturnCode(), nullptr);
     EXPECT_EQ(session->detachContext(), nullptr);
+    session->requestCancel();
   }
+}
+
+TEST(CancellationRaceTest, CancellationDoesNotLeakToSequentialIndependentSession) {
+  auto cancelledSession = ffmpegkit::FFmpegSession::create(
+      {"-hide_banner", "-loglevel", "fatal", "-f", "lavfi", "-i",
+       "testsrc=duration=2:size=16x16:rate=30", "-f", "null", "-"});
+  cancelledSession->requestCancel();
+  ffmpegkit::FFmpegKitConfig::ffmpegExecute(cancelledSession);
+  ASSERT_NE(cancelledSession->getReturnCode(), nullptr);
+
+  auto independentSession = ffmpegkit::FFmpegSession::create(
+      {"-hide_banner", "-loglevel", "fatal", "-f", "lavfi", "-i",
+       "testsrc=duration=1:size=16x16:rate=1", "-f", "null", "-"});
+  ffmpegkit::FFmpegKitConfig::ffmpegExecute(independentSession);
+
+  ASSERT_NE(independentSession->getReturnCode(), nullptr);
+  EXPECT_EQ(independentSession->getReturnCode()->getValue(), 0);
+  EXPECT_EQ(independentSession->getState(), ffmpegkit::SessionStateCompleted);
+}
+
+TEST(CancellationRaceTest, SuccessfulTranscodeUnchangedByGraphReadinessGuard) {
+  auto session = ffmpegkit::FFmpegSession::create(
+      {"-hide_banner", "-loglevel", "fatal", "-f", "lavfi", "-i",
+       "testsrc=duration=1:size=16x16:rate=1", "-filter_complex",
+       "[0:v]null[filtered]", "-map", "[filtered]", "-f", "null", "-"});
+  ffmpegkit::FFmpegKitConfig::ffmpegExecute(session);
+
+  ASSERT_NE(session->getReturnCode(), nullptr);
+  EXPECT_EQ(session->getReturnCode()->getValue(), 0);
+  EXPECT_EQ(session->getState(), ffmpegkit::SessionStateCompleted);
 }
