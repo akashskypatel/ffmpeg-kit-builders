@@ -38,6 +38,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS_DEBUG ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS_RELEASE ON)
 
 option(BUILD_TESTS "Build tests" OFF)
+option(FFMPEGKIT_VERIFY_BINARY_EXPORTS "Verify final FFmpegKit dynamic exports after linking" OFF)
+option(FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE "Require the full GPL non-small acceptance profile" OFF)
+set(FFMPEGKIT_EXPORT_BASELINE "" CACHE FILEPATH "Approved same-target export baseline JSON")
 option(ENABLE_LIBPLACEBO "Enable libplacebo" OFF)
 option(ENABLE_LIBTENSORFLOW "Enable libtensorflow" OFF)
 option(ENABLE_OPENVINO "Enable openvino" OFF)
@@ -539,8 +542,9 @@ if(BUILD_SHARED_LIBS)
         target_link_libraries(ffmpegkit PRIVATE OpenSLES)
     endif()
 
-    # Linker Script
-    # Ensure JNI symbols are kept global in the version script
+    # Linker Script. Match RTTI owned by FFmpegKit/Json classes with raw ABI
+    # prefixes; demangled wildcards also match STL templates containing them.
+    # Ensure JNI symbols are kept global in the version script.
     set(LINKER_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-linker-script.map")
     file(WRITE ${LINKER_SCRIPT} "
 {
@@ -559,15 +563,15 @@ if(BUILD_SHARED_LIBS)
         JNI_OnLoad;
         ffplay_kit_session_get_video_width;
         ffplay_kit_session_get_video_height;
+        _ZTIN9ffmpegkit*;
+        _ZTSN9ffmpegkit*;
+        _ZTVN9ffmpegkit*;
+        _ZTIN4Json*;
+        _ZTSN4Json*;
+        _ZTVN4Json*;
         extern \"C++\" {
             ffmpegkit::*;
-            typeinfo*for*ffmpegkit::*;
-            typeinfo*name*for*ffmpegkit::*;
-            vtable*for*ffmpegkit::*;
             Json::*;
-            typeinfo*for*Json::*;
-            typeinfo*name*for*Json::*;
-            vtable*for*Json::*;
         };
     local:
         *;
@@ -680,6 +684,129 @@ if(EMSCRIPTEN)
         SUFFIX ".mjs"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
+endif()
+
+# Inspect only the final linked shared object. Emscripten's ffmpegkit target is
+# an intermediate archive; its browser-facing export table is ffmpegkit.wasm.
+if(FFMPEGKIT_VERIFY_BINARY_EXPORTS)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    if(FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE AND BUILD_TESTS)
+        message(FATAL_ERROR "Full-GPL export acceptance requires BUILD_TESTS=OFF")
+    endif()
+
+    file(STRINGS "${FFMPEG_BUILD_DIR}/include/config.h" FFMPEGKIT_GPL_CONFIG
+        REGEX "^#define CONFIG_GPL [01]$")
+    file(STRINGS "${FFMPEG_BUILD_DIR}/include/config.h" FFMPEGKIT_NONFREE_CONFIG
+        REGEX "^#define CONFIG_NONFREE [01]$")
+    if(FFMPEGKIT_NONFREE_CONFIG MATCHES " 1$")
+        set(FFMPEGKIT_EXPORT_LICENSE nonfree)
+    elseif(FFMPEGKIT_GPL_CONFIG MATCHES " 1$")
+        set(FFMPEGKIT_EXPORT_LICENSE gpl)
+    else()
+        set(FFMPEGKIT_EXPORT_LICENSE lgpl)
+    endif()
+    if(CMAKE_INSTALL_PREFIX MATCHES "(^|[-/])small([-./]|$)")
+        set(FFMPEGKIT_EXPORT_SIZE small)
+    else()
+        set(FFMPEGKIT_EXPORT_SIZE not-small)
+    endif()
+
+    if(EMSCRIPTEN)
+        set(FFMPEGKIT_EXPORT_PLATFORM wasm)
+        set(FFMPEGKIT_EXPORT_ARCH wasm32)
+        set(FFMPEGKIT_EXPORT_BINARY "${CMAKE_CURRENT_BINARY_DIR}/ffmpegkit.wasm")
+        set(FFMPEGKIT_EXPORT_TARGET ffmpegkit_wasm)
+    elseif(ANDROID)
+        set(FFMPEGKIT_EXPORT_PLATFORM android)
+        set(FFMPEGKIT_EXPORT_ARCH "${CMAKE_ANDROID_ARCH_ABI}")
+        if(NOT FFMPEGKIT_EXPORT_ARCH)
+            set(FFMPEGKIT_EXPORT_ARCH "${ANDROID_ABI}")
+        endif()
+        if(FFMPEGKIT_EXPORT_ARCH STREQUAL "arm64-v8a")
+            set(FFMPEGKIT_EXPORT_ARCH aarch64)
+        elseif(FFMPEGKIT_EXPORT_ARCH STREQUAL "armeabi-v7a")
+            set(FFMPEGKIT_EXPORT_ARCH armv7a)
+        endif()
+        set(FFMPEGKIT_EXPORT_BINARY "$<TARGET_FILE:ffmpegkit>")
+        set(FFMPEGKIT_EXPORT_TARGET ffmpegkit)
+    elseif(WIN32)
+        set(FFMPEGKIT_EXPORT_PLATFORM windows)
+        set(FFMPEGKIT_EXPORT_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+        set(FFMPEGKIT_EXPORT_BINARY "$<TARGET_FILE:ffmpegkit>")
+        set(FFMPEGKIT_EXPORT_TARGET ffmpegkit)
+    elseif(APPLE)
+        set(FFMPEGKIT_EXPORT_PLATFORM apple)
+        set(FFMPEGKIT_EXPORT_ARCH "${CMAKE_OSX_ARCHITECTURES}")
+        if(FFMPEGKIT_EXPORT_ARCH STREQUAL "arm64")
+            set(FFMPEGKIT_EXPORT_ARCH aarch64)
+        endif()
+        if(CMAKE_OSX_PLATFORM STREQUAL "iphonesimulator")
+            set(FFMPEGKIT_EXPORT_APPLE_PLATFORM ios-simulator)
+        elseif(CMAKE_OSX_PLATFORM STREQUAL "ios")
+            set(FFMPEGKIT_EXPORT_APPLE_PLATFORM ios)
+        elseif(CMAKE_OSX_PLATFORM STREQUAL "appletvsimulator")
+            set(FFMPEGKIT_EXPORT_APPLE_PLATFORM tvos-simulator)
+        elseif(CMAKE_OSX_PLATFORM STREQUAL "appletvos")
+            set(FFMPEGKIT_EXPORT_APPLE_PLATFORM tvos)
+        elseif(CMAKE_OSX_PLATFORM STREQUAL "macos")
+            set(FFMPEGKIT_EXPORT_APPLE_PLATFORM macos)
+        else()
+            message(FATAL_ERROR "Unknown Apple platform for export verification: ${CMAKE_OSX_PLATFORM}")
+        endif()
+        set(FFMPEGKIT_EXPORT_BINARY "$<TARGET_FILE:ffmpegkit>")
+        set(FFMPEGKIT_EXPORT_TARGET ffmpegkit)
+    else()
+        set(FFMPEGKIT_EXPORT_PLATFORM linux)
+        set(FFMPEGKIT_EXPORT_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+        set(FFMPEGKIT_EXPORT_BINARY "$<TARGET_FILE:ffmpegkit>")
+        set(FFMPEGKIT_EXPORT_TARGET ffmpegkit)
+    endif()
+
+    if(NOT FFMPEGKIT_EXPORT_ARCH)
+        message(FATAL_ERROR "Cannot determine the final binary architecture for export verification")
+    endif()
+    if(NOT EMSCRIPTEN AND NOT BUILD_SHARED_LIBS)
+        message(FATAL_ERROR "Binary export verification requires a shared native ffmpegkit target")
+    endif()
+
+    set(FFMPEGKIT_EXPORT_VERIFY_ARGS
+        --platform "${FFMPEGKIT_EXPORT_PLATFORM}"
+        --binary "${FFMPEGKIT_EXPORT_BINARY}"
+        --bundle "${FFMPEG_KIT_BUNDLE_TYPE}"
+        --license "${FFMPEGKIT_EXPORT_LICENSE}"
+        --size "${FFMPEGKIT_EXPORT_SIZE}"
+        --phase linked
+        --arch "${FFMPEGKIT_EXPORT_ARCH}"
+        --report "${CMAKE_CURRENT_BINARY_DIR}/export-verification/linked-${FFMPEGKIT_EXPORT_PLATFORM}-${FFMPEGKIT_EXPORT_ARCH}.json"
+        --ffmpeg-config "${FFMPEG_BUILD_DIR}/include/config.h"
+        --cmake-cache "${CMAKE_CURRENT_BINARY_DIR}/CMakeCache.txt")
+    if(APPLE)
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --apple-platform "${FFMPEGKIT_EXPORT_APPLE_PLATFORM}")
+    endif()
+    if(FFMPEGKIT_EXPORT_BASELINE)
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --baseline-exports "${FFMPEGKIT_EXPORT_BASELINE}")
+    endif()
+    if(FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE)
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --require-acceptance-profile)
+    endif()
+    if(CMAKE_GENERATOR MATCHES "Makefiles")
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --link-command
+            "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${FFMPEGKIT_EXPORT_TARGET}.dir/link.txt")
+    endif()
+    if(FFMPEGKIT_EXPORT_PLATFORM STREQUAL "linux" OR FFMPEGKIT_EXPORT_PLATFORM STREQUAL "android")
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --export-control "${LINKER_SCRIPT}")
+    elseif(FFMPEGKIT_EXPORT_PLATFORM STREQUAL "apple")
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --export-control "${APPLE_EXPORTED_SYMBOLS}")
+    endif()
+    if(NOT EMSCRIPTEN)
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --bundle-manifest "${CMAKE_CURRENT_BINARY_DIR}/bundle_manifest.txt")
+    endif()
+
+    add_custom_command(TARGET ${FFMPEGKIT_EXPORT_TARGET} POST_BUILD
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/verify-binary-exports.py"
+            ${FFMPEGKIT_EXPORT_VERIFY_ARGS}
+        COMMENT "Checking final FFmpegKit dynamic exports"
+        VERBATIM)
 endif()
 
 # Install Hook for Bundled Libs

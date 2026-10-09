@@ -496,3 +496,49 @@ The probe reports FFmpeg completion, logs, statistics, FFprobe completion and lo
 
 The test should report one completion, the expected log and statistics counts,
 the stable session ID, and `"status":"PASS"`.
+
+## Final binary export verification (full GPL)
+
+The opt-in `FFMPEGKIT_VERIFY_BINARY_EXPORTS` CMake option checks the final
+linked native shared library, or the Emscripten `ffmpegkit.wasm` module, after
+linking. The Apple XCFramework builder also checks every final signed slice
+when `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` is set in its environment. These
+checks do not build or run GTests or sanitizers.
+
+Build each supported target with the normal runner's full, GPL, non-small,
+shared-kit options and `--deps` to fetch prebuilt dependencies. The following
+example uses Linux x86_64; repeat with the supported host/arch pairs in
+`scripts/supported.sh`:
+
+```bash
+sudo ./runner.sh --host=linux --arch=x86_64 --skip -y \
+  --enable-full --gpl --deps --kit --release=local -fk --no-bundle
+sudo cmake -S FFmpegKit -B FFmpegKit/build \
+  -DFFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
+  -DFFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
+  -DFFMPEGKIT_EXPORT_BASELINE="$PWD/export-verification/baseline/linux-x86_64/baseline.json"
+sudo cmake --build FFmpegKit/build --target ffmpegkit -j3
+```
+
+For WASM, build `ffmpegkit_wasm`; the verifier reads the linked `.wasm` export
+section and confirms each public loader mapping points to a real module export.
+On cross-build hosts, retain the runner's toolchain environment when
+reconfiguring directly. A nonzero verifier result fails the CMake build.
+Reports and sorted raw export lists are written under
+`FFmpegKit/build/export-verification/`. Use `--baseline-exports` with an
+explicitly captured same-target pristine JSON to reject unreviewed ABI
+removals. `--capture-baseline` is an explicit, overwrite-protected operation;
+verification never updates a baseline automatically.
+
+For Apple packages, set `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` and
+`FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON` when invoking
+`scripts/apple/build_xcframework.sh`. The package hook reads
+`Info.plist`'s `AvailableLibraries`, requires all requested platform/arch
+slices, compares each final symbol set to its pre-package dylib, and checks
+architecture, platform, dSYM UUIDs and compile units, install name, rpaths,
+bundled dependencies, iOS LZMA names, and code signatures before zipping.
+
+The verifier deliberately rejects exported testing-only functions even when
+`BUILD_TESTS=OFF`. A preexisting production export such as
+`ffmpeg_kit_test_emit_unattributed_log` is therefore a failing B08 result;
+do not hide the failure by regenerating the baseline or disabling the hook.
