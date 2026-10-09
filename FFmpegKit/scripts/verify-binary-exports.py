@@ -574,6 +574,17 @@ def main():
             removed = sorted(previous - set(names))
             added = sorted(set(names) - previous)
             permitted = set(forbidden_owned_metadata(removed))
+            # This baseline-only test hook is deliberately removed from all
+            # production binaries under B08; keep the exception exact so no
+            # other public C ABI removal is implicitly approved.
+            permitted.update(
+                name
+                for name in removed
+                if name in {
+                    "ffmpeg_kit_test_emit_unattributed_log",
+                    "_ffmpeg_kit_test_emit_unattributed_log",
+                }
+            )
             report["baseline"] = {"path": str(args.baseline_exports), "sha256": baseline.get("sha256"),
                                   "added": added, "removed": removed, "permitted_removals": sorted(permitted)}
             unexpected = sorted(set(removed) - permitted)

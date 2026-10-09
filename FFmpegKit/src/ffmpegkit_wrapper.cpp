@@ -699,6 +699,7 @@ void DLL_ALIGN ffmpeg_kit_debug_print_stack() {
     printf("[%s] [ffmpeg-kit] [DEBUG] Alignment: %d\n", getCurrentTimeStamp().c_str(), (int)(stack_ptr % 16));
 }
 
+#ifdef FFMPEG_KIT_TEST_HOOKS
 void DLL_ALIGN ffmpeg_kit_test_emit_unattributed_log(const char *message) {
     try {
         av_log(nullptr, AV_LOG_INFO, "%s\n", message ? message : "");
@@ -709,6 +710,7 @@ void DLL_ALIGN ffmpeg_kit_test_emit_unattributed_log(const char *message) {
         PRINT_STACK_TRACE();
     }
 }
+#endif
 
 void DLL_ALIGN ffmpeg_kit_set_log_callback(FFmpegSessionHandle session,
                                  FFmpegKitLogCallback log_cb, void *user_data) {

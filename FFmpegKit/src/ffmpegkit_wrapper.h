@@ -389,6 +389,7 @@ FFMPEG_KIT_C_EXPORT void ffmpeg_kit_close_session(FFmpegSessionHandle handle);
  */
 FFMPEG_KIT_C_EXPORT void ffmpeg_kit_debug_print_stack();
 
+#ifdef FFMPEG_KIT_TEST_HOOKS
 /**
  * Emits a synthetic unattributed log through the shared FFmpeg log callback.
  *
@@ -399,6 +400,7 @@ FFMPEG_KIT_C_EXPORT void ffmpeg_kit_debug_print_stack();
  */
 FFMPEG_KIT_C_EXPORT void
 ffmpeg_kit_test_emit_unattributed_log(const char *message);
+#endif
 /**
  * Sets the log callback for the specified FFmpeg session.
  *
