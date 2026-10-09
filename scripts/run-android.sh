@@ -4738,6 +4738,7 @@ build_libsvtjpegxs() {
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -DBUILD_APPS=OFF \
+  -DJPEGXS_LTO=OFF \
   -DBUILD_TESTING=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"

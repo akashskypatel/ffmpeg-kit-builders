@@ -476,6 +476,7 @@ if(BUILD_SHARED_LIBS)
                 "-Wl,--whole-archive"
                 ${FFMPEG_STATIC_LIBS}
                 "-Wl,--no-whole-archive"
+                "-Wl,-plugin-opt=-emulated-tls=1"
                 ${ANDROID_BUNDLE_LIBRARIES}
                 "${ANDROID_CXX_STATIC_LIBRARY}"
                 "${ANDROID_CXXABI_STATIC_LIBRARY}"
