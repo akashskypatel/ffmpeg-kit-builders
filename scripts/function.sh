@@ -400,6 +400,7 @@ setup_build_environment() {
     case "$host_platform" in
         "windows") setup_windows_environment ;;
         "linux") setup_linux_environment ;;
+        "wasm") setup_wasm_environment ;;
         "android") setup_android_environment ;;
         "macos") setup_macos_environment ;;
         "ios") setup_ios_environment ;;
@@ -442,7 +443,7 @@ setup_build_environment() {
 
 calculate_bits_target() {
     case "$host_arch" in
-        "armv7a"|"armeabi-v7a"|"arm"|"i686") export bits_target=32 ;;
+        "armv7a"|"armeabi-v7a"|"arm"|"i686"|"wasm32") export bits_target=32 ;;
         "x86_64"|"aarch64"|"arm64-v8a"|"arm64") export bits_target=64 ;;
         *) exit_message 1 "calculate_bits_target: Unknown host arch '$host_arch'" ;;
     esac
@@ -863,6 +864,96 @@ setup_linux_environment() {
     create_dir "$install_pkgconfig_dir"
     create_dir "$work_dir/pkgconfig"
     create_dir "$dependency_install_prefix/{bin,lib/pkgconfig,include,usr/include}"
+    setup_default_python
+}
+
+setup_wasm_environment() {
+    local emsdk_root emsdk_cmake_toolchain bootstrap_python
+
+    export EMSDK_ROOT="${EMSDK_ROOT:-${EMSDK:-/usr/local/emsdk}}"
+    export EMSDK="$EMSDK_ROOT"
+    export EMSDK_CMAKE_TOOLCHAIN_FILE="${EMSDK_CMAKE_TOOLCHAIN_FILE:-${EMSDK_ROOT}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake}"
+    emsdk_root="$EMSDK_ROOT"
+    emsdk_cmake_toolchain="$EMSDK_CMAKE_TOOLCHAIN_FILE"
+
+    if [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emcc" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/em++" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emar" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emranlib" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emnm" ]] || \
+        [[ ! -x "${EMSDK_ROOT}/upstream/emscripten/emstrip" ]] || \
+        [[ ! -f "$EMSDK_CMAKE_TOOLCHAIN_FILE" ]] || \
+        ! rust_target_installed wasm32-unknown-emscripten; then
+        run_toolchain_setup "setup-wasm.sh"
+    fi
+
+    if [[ -x "${EMSDK_BOOTSTRAP_PYTHON:-}" ]]; then
+        export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
+    elif [[ -x /opt/python/cp312-cp312/bin/python3 ]]; then
+        export EMSDK_BOOTSTRAP_PYTHON=/opt/python/cp312-cp312/bin/python3
+        export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
+    elif [[ -x /usr/local/bin/python3.12 ]]; then
+        export EMSDK_BOOTSTRAP_PYTHON=/usr/local/bin/python3.12
+        export PATH="$(dirname "$EMSDK_BOOTSTRAP_PYTHON"):$PATH"
+    else
+        exit_message 1 "setup_wasm_environment: Emscripten requires Python 3.10 or newer."
+    fi
+    bootstrap_python="$EMSDK_BOOTSTRAP_PYTHON"
+
+    # shellcheck source=/dev/null
+    export EMSDK_QUIET=1
+    source "${EMSDK_ROOT}/emsdk_env.sh" >/dev/null
+    export EMSDK_ROOT="$emsdk_root"
+    export EMSDK="$emsdk_root"
+    export EMSDK_CMAKE_TOOLCHAIN_FILE="$emsdk_cmake_toolchain"
+    export EMSDK_BOOTSTRAP_PYTHON="$bootstrap_python"
+
+    case "$host_arch" in
+        "wasm32"|"wasm")
+            export host_arch="wasm32"
+            export cmake_host_arch="wasm32"
+            export meson_cpu_family="wasm32"
+            export platform_arch="wasm32"
+            ;;
+        *)
+            exit_message 1 "setup_wasm_environment: Unsupported host arch '$host_arch' for $host_platform"
+            ;;
+    esac
+
+    export PATCHDIR="$SCRIPTDIR/wasm/patches"
+    export toolchain_sys="emscripten"
+    export host_target="wasm32-unknown-emscripten"
+    export rust_target="wasm32-unknown-emscripten"
+    export toolchain_root="$EMSDK_ROOT"
+    export toolchain_root_dir="$EMSDK_ROOT"
+    export toolchain_bin_path="$(dirname "$bootstrap_python"):${EMSDK_ROOT}/upstream/emscripten"
+    export CMAKE_TOOLCHAIN_FILE="$EMSDK_CMAKE_TOOLCHAIN_FILE"
+    export dependency_install_prefix="$work_dir/libraries"
+    export install_pkgconfig_dir="${dependency_install_prefix}/lib/pkgconfig"
+    export PKG_CONFIG_PATH="$install_pkgconfig_dir:$dependency_install_prefix/share/pkgconfig:$work_dir/pkgconfig:$ffmpeg_install_prefix/lib/pkgconfig"
+    export PKG_CONFIG_LIBDIR="$PKG_CONFIG_PATH"
+    unset PKG_CONFIG_SYSROOT_DIR
+    export PATH="$toolchain_bin_path:$ffmpeg_install_prefix/bin:$original_path"
+    export RUSTUP_HOME=/usr/local/rustup
+    export CARGO_HOME=/usr/local/cargo
+    export PATH="$CARGO_HOME/bin:$PATH"
+
+    export cross_prefix=
+    export CROSS_COMPILE=
+    export PREFIX="$dependency_install_prefix"
+    export build_cross_compile=y
+
+    export wasm_cflags="$original_cflags -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions -std=gnu23"
+    export wasm_cxxflags="$original_cxxflags -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+    export wasm_cppflags="$original_cppflags -DWASM -D__EMSCRIPTEN__ -I${dependency_install_prefix}/include -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+    export wasm_ldflags="$original_ldflags -L${dependency_install_prefix}/lib -pthread -sSUPPORT_LONGJMP=wasm -fwasm-exceptions"
+
+    reset_cross_vars
+    reset_allflags
+
+    create_dir "$install_pkgconfig_dir"
+    create_dir "$work_dir/pkgconfig"
+    create_dir "$dependency_install_prefix/{bin,lib/pkgconfig,include,usr/include}"
 }
 
 setup_android_environment() {
@@ -1047,7 +1138,7 @@ setup_macos_environment() {
         run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
-    
+    rustup default nightly
     export macos_cflags="$original_cflags -Wno-pedantic -arch $host_arch -I${dependency_install_prefix}/include -isysroot $SDKROOT $macos_version_flag -target $cflags_target"
     export CFLAGS="$macos_cflags"
     export macos_cppflags="$original_cppflags -arch $host_arch -I${dependency_install_prefix}/include -DMACOS -isysroot $SDKROOT $macos_version_flag -target $cflags_target"
@@ -1125,7 +1216,7 @@ setup_ios_environment() {
         run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
-
+    rustup default nightly
     reset_cross_vars
 
     # Cross-compilation tools
@@ -1217,7 +1308,7 @@ setup_tvos_environment() {
         run_toolchain_setup "setup-apple-rust.sh" "$host_platform" "$platform_arch"
         [[ -f "${HOME}/.cargo/env" ]] && source "${HOME}/.cargo/env"
     fi
-
+    rustup default nightly
     reset_cross_vars
 
     # Cross-compilation tools
@@ -1271,6 +1362,13 @@ islinux() {
 
 isandroid() {
   if [[ "$host_platform" == "android" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+iswasm() {
+  if [[ "$host_platform" == "wasm" ]]; then
     return 0
   fi
   return 1
@@ -1398,7 +1496,19 @@ native_cross_vars() {
 }
 
 reset_cross_vars() {
-  if islinux; then
+  if iswasm; then
+    export CROSS_COMPILE=
+    export CC="${EMSDK_ROOT}/upstream/emscripten/emcc"
+    export CXX="${EMSDK_ROOT}/upstream/emscripten/em++"
+    export AR="${EMSDK_ROOT}/upstream/emscripten/emar"
+    export AS="$CC"
+    export RANLIB="${EMSDK_ROOT}/upstream/emscripten/emranlib"
+    export LD="$CC"
+    export STRIP="${EMSDK_ROOT}/upstream/emscripten/emstrip"
+    export NM="${EMSDK_ROOT}/upstream/emscripten/emnm"
+    export WINDRES=
+    export RC=
+  elif islinux; then
     if [[ "$host_arch" == "aarch64" ]]; then
       export SYSROOT="${SYSROOT:-/opt/sysroots/aarch64-linux-gnu}"
       export CROSS_COMPILE="$host_target-"
@@ -1468,7 +1578,9 @@ reset_cross_vars() {
 }
 
 reset_cflags() {
-	if iswindows; then
+  if iswasm; then
+    export CFLAGS="$wasm_cflags"
+	elif iswindows; then
     export CFLAGS="$windows_cflags"
   elif islinux; then
     export CFLAGS="$linux_cflags"
@@ -1488,7 +1600,9 @@ reset_cflags() {
 }
 
 reset_cxxflags() {
-	if iswindows; then
+  if iswasm; then
+    export CXXFLAGS="$wasm_cxxflags"
+	elif iswindows; then
     export CXXFLAGS="$windows_cxxflags"
   elif islinux; then
     export CXXFLAGS="$linux_cxxflags"
@@ -1508,7 +1622,9 @@ reset_cxxflags() {
 }
 
 reset_cppflags() {
-	if iswindows; then
+  if iswasm; then
+    export CPPFLAGS="$wasm_cppflags"
+	elif iswindows; then
     export CPPFLAGS="$windows_cppflags"
   elif islinux; then
     export CPPFLAGS="$linux_cppflags"
@@ -1528,7 +1644,9 @@ reset_cppflags() {
 }
 
 reset_ldflags() {
-	if iswindows; then
+  if iswasm; then
+    export LDFLAGS="$wasm_ldflags"
+	elif iswindows; then
     export LDFLAGS="$windows_ldflags"
   elif islinux; then
     export LDFLAGS="$linux_ldflags"
@@ -3150,10 +3268,15 @@ do_cargo_install() {
     fi
     local cargo_cmd
     cargo_cmd="$(cargo_command_for_target "$rust_target")"
+    if iswasm; then
+      cinstall_cmd="${cargo_cmd} +nightly cinstall -Z build-std=std,panic_abort"
+    else
+      cinstall_cmd="${cargo_cmd} cinstall"
+    fi
     export RUSTFLAGS+=" -C relocation-model=pic"
 		echo -e "INFO: Running cargo install cargo-c" >>"$LOG_FILE"
-    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cargo_cmd} cinstall --prefix=$dependency_install_prefix --target $rust_target $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
-    eval "${cargo_cmd} cinstall --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args" > >(redirect_output) 2>&1 || {
+    echo -e "INFO: Running cargo cinstall with:\n  DIR=$cur_dir2\n  RUSTFLAGS=$RUSTFLAGS\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cinstall_cmd} --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
+    eval "${cinstall_cmd} --prefix=\"$dependency_install_prefix\" --target \"$rust_target\" $extra_install_args" > >(redirect_output) 2>&1 || {
 			exit_message 1 "do_cargo_install: failed cargo cinstall with $extra_install_args\n see $LOG_FILE for more details"
 		}
 		create_touch_file 0 "$touch_name"
@@ -3469,25 +3592,59 @@ do_configure() {
 # 3. touch_postfix
 # shellcheck disable=2128,2178
 generic_configure() {
-	local extra_configure_options="$1"
+  local extra_configure_options="$1"
   local configure_name="$2"
   local touch_postfix="$3"
+
+  # Autoconf normally supplies an optimization level itself, but our platform
+  # CFLAGS/CXXFLAGS are already non-empty, so that default is suppressed.
+  # Restore a conservative release baseline without overriding library-specific
+  # optimization or debug/test builds.
+  if ! truthy "$do_debug_build" && ! truthy "$build_tests"; then
+    if [[ ! "${CFLAGS:-}" =~ (^|[[:space:]])-O([0-3]|g|s|z|fast)?($|[[:space:]]) ]]; then
+      export CFLAGS="${CFLAGS:+$CFLAGS }-O2"
+    fi
+
+    if [[ ! "${CXXFLAGS:-}" =~ (^|[[:space:]])-O([0-3]|g|s|z|fast)?($|[[:space:]]) ]]; then
+      export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-O2"
+    fi
+  fi
+
   [[ $extra_configure_options != *--host=* ]] && extra_configure_options+=" --host=$host_target "
-	if [[ -n $build_triple ]]; then extra_configure_options+=" --build=$build_triple"; fi
+
+  if [[ -n $build_triple ]]; then
+    extra_configure_options+=" --build=$build_triple"
+  fi
+
   [[ $extra_configure_options != *--prefix=* ]] && extra_configure_options+=" --prefix=\"$dependency_install_prefix\" "
   [[ $extra_configure_options != *--bindir=* ]] && extra_configure_options+=" --bindir=\"$dependency_install_prefix/bin\" "
   [[ $extra_configure_options != *--libdir=* ]] && extra_configure_options+=" --libdir=\"$dependency_install_prefix/lib\" "
   [[ $extra_configure_options != *--with-sysroot=* ]] && extra_configure_options+=" --with-sysroot=\"$dependency_install_prefix\" "
+
   if iswindows; then
     extra_configure_options+=" --disable-windows-manifest --disable-win32-dll "
   fi
+
   extra_configure_options+=" --disable-shared --enable-static "
-  # truthy "$build_cross_compile" && extra_configure_options+=" --cross-prefix=$cross_prefix"
-	do_configure "$extra_configure_options" "$configure_name" "$touch_postfix"
+
+  do_configure "$extra_configure_options" "$configure_name" "$touch_postfix"
 }
 # 1. extra_build_args
 # 2. touch_postfix
 # shellcheck disable=SC2086
+ensure_gettext_tools_sources() {
+  local gettext_src_dir="$1"
+  [[ -f "$gettext_src_dir/gettext-tools/tree-sitter.cfg" ]] && return 0
+  [[ -f "$gettext_src_dir/autopull.sh" ]] || return 1
+
+  local gettext_gnulib_srcdir="${GNULIB_SRCDIR:-$gettext_src_dir/gnulib}"
+  echo "INFO: Fetching gettext-tools auxiliary sources with autopull.sh" >>"$LOG_FILE"
+  (
+    cd "$gettext_src_dir" || exit 1
+    GNULIB_SRCDIR="$gettext_gnulib_srcdir" ./autopull.sh
+  ) > >(redirect_output) 2>&1
+}
+
 do_autogen() {
   [[ -f "no.autogen" ]] && return 0
   [[ ! -f "autogen.sh" ]] && return 0
@@ -3503,6 +3660,13 @@ do_autogen() {
 		reset_touch "$cur_dir2" "${touch_prefix}*.touch"
 	fi
 	if [ ! -f "$touch_name" ]; then
+    [[ -d "gnulib" && -z "$(ls -A "gnulib")" ]] && rm -rf "gnulib"
+    if [[ ! -d "gnulib" ]]; then
+      do_git_checkout "https://github.com/mirror/gnulib" "$(pwd)/gnulib"
+      change_dir "$cur_dir2"
+      local bootstrap_makeflags="${MAKEFLAGS:+$MAKEFLAGS }ACLOCAL=$(command -v aclocal) AUTOMAKE=$(command -v automake) CC=$(command -v gcc) CFLAGS=-O2"
+      export MAKEFLAGS="$bootstrap_makeflags"
+    fi
     echo "INFO: (Re-)do_autogen() because $touch_name not found with \"autogen $extra_build_args\"." >>"$LOG_FILE"
     remove_path -f "${touch_prefix}_autogen"*
 		echo -e "INFO: Running ./autogen.sh with:\n  DIR=$cur_dir2\n  \"./autogen.sh --build-"w$bits_target" $extra_build_args\"" >>"$LOG_FILE"
@@ -3514,6 +3678,7 @@ do_autogen() {
     add_src_dir "$(pwd)"
     find . -maxdepth 1 -name "*_src_state.touch" ! -name "$(basename "$src_touch")" -delete > >(redirect_output) 2>&1 # delete other src_state.touch files
 		echo -e "INFO: Done with ./autogen.sh" >>"$LOG_FILE"
+    unset MAKEFLAGS
 	else
 		echo -e "INFO: ./autogen.sh already ran" >>"$LOG_FILE"
 	fi
@@ -3709,6 +3874,16 @@ do_cmake() {
 		local config_options=""
     local command="${source_dir} -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE"
 		command+=" $extra_args"
+		if [[ "$source_dir" == "$ffmpeg_kit_src_dir" ]]; then
+			if [[ -n "${FFMPEGKIT_VERIFY_BINARY_EXPORTS:-}" ]]; then
+				[[ "$FFMPEGKIT_VERIFY_BINARY_EXPORTS" == ON || "$FFMPEGKIT_VERIFY_BINARY_EXPORTS" == OFF ]] || exit_message 1 "FFMPEGKIT_VERIFY_BINARY_EXPORTS must be ON or OFF"
+				command+=" -DFFMPEGKIT_VERIFY_BINARY_EXPORTS=$FFMPEGKIT_VERIFY_BINARY_EXPORTS"
+			fi
+			if [[ -n "${FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE:-}" ]]; then
+				[[ "$FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE" == ON || "$FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE" == OFF ]] || exit_message 1 "FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE must be ON or OFF"
+				command+=" -DFFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=$FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE"
+			fi
+		fi
 		echo -e "INFO: do_cmake() nice running:\n  DIR=$cur_dir2\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cmake_command} -G\"Unix Makefiles\" $command\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
 		# shellcheck disable=SC2086
 		eval "nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command" > >(redirect_output) 2>&1 || exit_message 1 "do_cmake: could not run nice: \"nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command\""
@@ -3743,7 +3918,10 @@ generic_cmake() {
   fi
   [[ "$extra_args" != *"-DCMAKE_SYSTEM_PROCESSOR"* ]] && extra_args+=" -DCMAKE_SYSTEM_PROCESSOR=\"$cmake_host_arch\""
   [[ "$extra_args" != *"-DCMAKE_BUILD_TYPE"* ]] && extra_args+=" -DCMAKE_BUILD_TYPE=Release"
-  if ismacos; then
+  if iswasm; then
+  [[ "$extra_args" != *"-DCMAKE_TOOLCHAIN_FILE"* ]] && extra_args+=" -DCMAKE_TOOLCHAIN_FILE=$EMSDK_CMAKE_TOOLCHAIN_FILE"
+  [[ "$extra_args" != *"-DEMSCRIPTEN"* ]] && extra_args+=" -DEMSCRIPTEN=ON"
+  elif ismacos; then
   [[ "$extra_args" != *"-DCMAKE_SYSTEM_NAME"* ]] && extra_args+=" -DCMAKE_SYSTEM_NAME=Darwin"
   [[ "$extra_args" != *"-DCMAKE_OSX_ARCHITECTURES"* ]] && extra_args+=" -DCMAKE_OSX_ARCHITECTURES=$host_arch"
   [[ "$extra_args" != *"-DCMAKE_OSX_DEPLOYMENT_TARGET"* ]] && extra_args+=" -DCMAKE_OSX_DEPLOYMENT_TARGET=$MIN_MACOS_VERSION"
@@ -3981,11 +4159,44 @@ do_ninja() {
 # 3. extra_args
 apply_patch() {
   local patch="$1"
-  if git apply --reverse --check --ignore-space-change --ignore-whitespace --verbose "$patch" >/dev/null 2>&1; then
+  local git_prefix
+  git_prefix=$(git rev-parse --show-prefix 2>/dev/null) || git_prefix=""
+  local -a git_apply_args=()
+  local patch_header=""
+  local strip_level
+  local has_patch_command=0
+  local is_git_patch=0
+  local patch_applied=0
+  [[ -n "$git_prefix" ]] && git_apply_args+=(--directory="$git_prefix")
+  IFS= read -r patch_header < "$patch" || true
+  [[ "$patch_header" == "diff --git "* ]] && is_git_patch=1
+  command -v patch >/dev/null 2>&1 && has_patch_command=1
+  if git apply "${git_apply_args[@]}" --reverse --check --ignore-space-change --ignore-whitespace --verbose "$patch" >/dev/null 2>&1; then
+    echo "INFO: Patch already applied. Skipping." >>"$LOG_FILE"
+  elif [[ $has_patch_command -eq 1 && $is_git_patch -eq 0 ]] && {
+    patch --dry-run --reverse --batch --force --silent --ignore-whitespace -p0 -i "$patch" >/dev/null 2>&1 ||
+    patch --dry-run --reverse --batch --force --silent --ignore-whitespace -p1 -i "$patch" >/dev/null 2>&1
+  }; then
     echo "INFO: Patch already applied. Skipping." >>"$LOG_FILE"
   else
     echo "INFO: Applying $patch..." >>"$LOG_FILE"
-    git apply --whitespace=fix --verbose "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
+    if git apply "${git_apply_args[@]}" --check --whitespace=fix "$patch" >/dev/null 2>&1; then
+      git apply "${git_apply_args[@]}" --whitespace=fix --verbose "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
+    elif [[ $has_patch_command -eq 1 && $is_git_patch -eq 0 ]]; then
+      # Some project patches are traditional unified diffs (for example,
+      # `diff -u old-file new-file`) rather than git-formatted patches. Git
+      # cannot parse those, so use patch as a fallback and try common strip levels.
+      for strip_level in 0 1; do
+        if patch --dry-run --forward --batch --silent --ignore-whitespace -p"$strip_level" -i "$patch" >/dev/null 2>&1; then
+          patch --forward --batch --ignore-whitespace -p"$strip_level" -i "$patch" > >(redirect_output) 2>&1 || exit_message 1 "apply_patch: unable to patch $patch"
+          patch_applied=1
+          break
+        fi
+      done
+      [[ $patch_applied -eq 1 ]] || exit_message 1 "apply_patch: unable to patch $patch"
+    else
+      exit_message 1 "apply_patch: unable to patch $patch"
+    fi
   fi
 }
 validate_path() {
@@ -4736,7 +4947,6 @@ configure_ffmpeg() {
   esac
 
 	change_dir "$ffmpeg_source_dir" || exit_message 1 "configure_ffmpeg: could not change to $ffmpeg_source_dir"
-	# iswindows && apply_patch "$PATCHDIR"/frei0r_load-shared-libraries-dynamically.diff
   local postpend_configure_opts=""
 	local init_options=""
   local extra_libs=""
@@ -4752,11 +4962,15 @@ configure_ffmpeg() {
   fi
   # Common compiler flags for Windows    
   if isapple; then
-    get_gas_preprocessor
-    [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
-    export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
-    init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
-    
+  #   get_gas_preprocessor
+  #   [[ ! -f /usr/local/bin/gas-preprocessor.pl ]] && exit_message 1 "configure_ffmpeg: gas-preprocessor.pl not found"
+  #   export AS='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'
+  #   init_options+=" --as='gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)'"
+    init_options+=" --as=$(xcrun --sdk "$toolchain_sys" --find clang)"
+    if [[ "$host_arch" == "arm64" ]]; then
+      init_options+=" --cpu=armv8"
+    fi
+    export AS="$(xcrun --sdk "$toolchain_sys" --find clang)"
   fi
   if iswindows; then
     export LDFLAGS="$LDFLAGS -Wl,-Bstatic -l:libpthreadGC3.a"
@@ -4796,6 +5010,18 @@ configure_ffmpeg() {
       disable_library "libxevd"
       disable_library "libxeve"
     fi
+  elif iswasm; then
+    init_options+=" --disable-programs"
+    init_options+=" --ranlib=$RANLIB"
+    init_options+=" --nm=$NM"
+    init_options+=" --ld=$CXX"
+    init_options+=" --cc=$CC"
+    init_options+=" --cxx=$CXX"
+    init_options+=" --strip=$STRIP"
+    init_options+=" --enable-pthreads"
+    init_options+=" --extra-ldflags='$LDFLAGS -sSUPPORT_LONGJMP=wasm -fwasm-exceptions -sUSE_SDL=0'"
+    init_options+=" --extra-cflags='$CFLAGS -sSUPPORT_LONGJMP=wasm -sUSE_SDL=0'"
+    init_options+=" --extra-cxxflags='$CXXFLAGS -sSUPPORT_LONGJMP=wasm -fwasm-exceptions -sUSE_SDL=0'"
   elif islinux; then
     init_options+=" --enable-pthreads"
     add_extra_libs "-lpthread -lrt -lm -ldl -lstdc++"
@@ -5139,7 +5365,7 @@ configure_ffmpeg() {
   truthy "$enable_vapoursynth" && config_options+=" --enable-vapoursynth"             # enable VapourSynth demuxer [no]
   truthy "$enable_whisper" && { config_options+=" --enable-whisper" \
   && add_extra_libs "-lwhisper -lggml -lggml-cpu -lggml-base"; }                      # enable whisper filter [no]
-  truthy "$enable_whisper" && ! isandroid && ! isapple && add_extra_libs "-lgomp"
+  truthy "$enable_whisper" && ! isandroid && ! isapple && ! iswasm && add_extra_libs "-lgomp"
   truthy "$enable_whisper" && isapple && add_extra_libs "-lomp -lresolv"
 
   # ------------------------------ windows features -------------------------------     
@@ -5203,6 +5429,22 @@ configure_ffmpeg() {
     postpend_configure_opts+=" --extra-cflags=\"-std=gnu17\" --extra-ldflags=\"-Wl,-dead_strip -Wl,-dead_strip\" --extra-libs=\"$extra_libs -lc++\" $ff_flags_values"
   else
     postpend_configure_opts+=" --extra-cflags=\"-std=gnu17\" --extra-libs=\"-Wl,--start-group $extra_libs -Wl,--end-group\" $ff_flags_values"
+  fi
+
+  if truthy "$build_tests" && islinux; then
+    case "$test_type" in
+      tsan|thread|t)
+      postpend_configure_opts+=" --target-exec='setarch x86_64 -R' --toolchain=gcc-tsan"
+      ;;
+      asan|address|a)
+      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=address\" --toolchain=gcc-asan"
+      postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=address\""
+      ;;
+      undefined|ubsan|u)
+      postpend_configure_opts+=" --extra-cflags=\"-fsanitize=undefined\" --toolchain=gcc-ubsan"
+      postpend_configure_opts+=" --extra-ldflags=\"-fsanitize=undefined\""
+      ;;
+    esac
   fi
   
   if iswindows; then
@@ -5290,7 +5532,7 @@ install_ffmpeg() {
   iswindows && export LD=${cross_prefix}gcc # ld weirdness with windows
   isandroid && export AS="$CC" && export LD="$CC"
   if isapple; then 
-    export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
+    # export AS="gas-preprocessor.pl -arch $meson_cpu_family -- $(xcrun --sdk "$toolchain_sys" --find clang)"
     local bin2c_py=$(create_bin2c_py)
     setup_default_python
     gsed -i 's|RUN_BIN2C = $(BIN2C)|RUN_BIN2C = python3 ffbuild/bin2c.py|' "$ffmpeg_source_dir/ffbuild/common.mak"
@@ -5846,6 +6088,10 @@ pick_host_platform() {
     export toolchain_sys="android"
     apply_preset "$CONFIG_ANDROID"
   }
+  set_wasm() {
+    export host_platform="wasm"
+    export toolchain_sys="emscripten"
+  }
   set_macos() {
     export host_platform="macos"
     export toolchain_sys="macosx"
@@ -5876,11 +6122,11 @@ pick_host_platform() {
     return 0
   fi
   unknown_opts=()
-  if [[ ! "$1" =~ ^([1-9]|linux|windows|android|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; then
+  if [[ ! "$1" =~ ^([1-9]|10|linux|windows|android|wasm|wasi|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; then
      unknown_opts+=("$1")
    fi
   export host_platform=${1:-host_platform}
-	while [[ ! "${host_platform,,}" =~ ^([1-9]|linux|windows|android|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; do
+	while [[ ! "${host_platform,,}" =~ ^([1-9]|10|linux|windows|android|wasm|wasi|mac(os)?|iphone(os|simulator)?|ios(-sim(ulator)?)?|iphonesim(ulator)?|tvos(-sim(ulator)?)?|appletvos|appletvsim(ulator)?)$ ]]; do
 		# shellcheck disable=SC2199
 		if [[ -n "${unknown_opts[@]}" ]]; then
 			echo -e -n 'Unknown option(s)'
@@ -5900,9 +6146,10 @@ Which host platform are you trying to build, update, or clean for?
   6. iOS-Simulator
   7. Apple TV
   8. Apple TV-Simulator
-  9. Exit
+  9. WebAssembly
+  10. Exit
 EOF
-		echo -e -n 'Input your choice [1-9]: '
+		echo -e -n 'Input your choice [1-10]: '
 		read -r host_platform
 	done
   if [[ -z "$host_platform" ]] && truthy "$accept_defaults"; then
@@ -5935,7 +6182,10 @@ EOF
   8|tvos-sim*|appletvsim*|appletv-sim*) set_tvos_simulator
   return 0
   ;;
-	9)
+  9|wasm|wasi) set_wasm
+  return 0
+  ;;
+	10)
   exit_message 0 "pick_host_platform: exiting"
   ;;
 	*)
@@ -5968,16 +6218,25 @@ pick_host_arch() {
     export cmake_host_arch="armv7-a"
     export bits_target=32
   }
+  function set_wasm32() {
+    export host_arch="wasm32"
+    export cmake_host_arch="wasm32"
+    export bits_target=32
+  }
 	if truthy "$accept_defaults" && [[ -z "$1" ]]; then
-    set_x86_64
+    if [[ "$host_platform" == "wasm" ]]; then
+      set_wasm32
+    else
+      set_x86_64
+    fi
     return 0
   fi
   unknown_opts=()
-  if [[ ! "$1" =~ ^([1-5]|x86_64|x64|i386|i686|x86|x32|aarch64|arm64|arm64-v8a|armv7a|arm|armeabi-v7a)$ ]]; then
+  if [[ ! "$1" =~ ^([1-6]|x86_64|x64|i386|i686|x86|x32|aarch64|arm64|arm64-v8a|armv7a|arm|armeabi-v7a|wasm32|wasm)$ ]]; then
      unknown_opts+=("$1")
    fi
   export host_arch=${1:-host_arch}
-	while [[ ! "${host_arch,,}" =~ ^([1-5]|"x86_64"|"x64"|"i386"|"i686"|"x86"|"x32"|"aarch64"|"arm64"|"arm64-v8a"|"armv7a"|"arm"|"armeabi-v7a")$ ]]; do
+	while [[ ! "${host_arch,,}" =~ ^([1-6]|"x86_64"|"x64"|"i386"|"i686"|"x86"|"x32"|"aarch64"|"arm64"|"arm64-v8a"|"armv7a"|"arm"|"armeabi-v7a"|"wasm32"|"wasm")$ ]]; do
 		# shellcheck disable=SC2199
 		if [[ -n "${unknown_opts[@]}" ]]; then
 			echo -e -n 'Unknown option(s)'
@@ -5993,14 +6252,20 @@ Which host platform are you trying to build, update, or clean for?
   2. i686 (32-bit AMD/Intel)
   3. aarch64 (64-bit ARM)
   4. armv7a (32-bit ARM)
-  5. Exit
+  5. wasm32 (WebAssembly)
+  6. Exit
 EOF
-		echo -e -n 'Input your choice [1-5]: '
+		echo -e -n 'Input your choice [1-6]: '
 		read -r host_arch
 	done
   if [[ -z "$host_arch" ]] && truthy "$accept_defaults"; then
-      echo "Defaulting to 'x86_64'."
-      set_x86_64
+      if [[ "$host_platform" == "wasm" ]]; then
+        echo "Defaulting to 'wasm32'."
+        set_wasm32
+      else
+        echo "Defaulting to 'x86_64'."
+        set_x86_64
+      fi
       return 0
   fi
 	case "${host_arch,,}" in
@@ -6017,7 +6282,10 @@ EOF
 	4|"armv7a"|"arm"|"armeabi-v7a") set_armv7a
   return 0
   ;;
-	5|"exit")
+	5|"wasm32"|"wasm") set_wasm32
+  return 0
+  ;;
+	6|"exit")
 		exit_message 0 "user picked exit"
 		;;
 	*)
@@ -6497,6 +6765,9 @@ case "${host_platform,,}" in
   ;;
   oh|openharmony|open-harmony|open_harmony|harmony)
   apply_preset "$CONFIG_OH_UNSUPPORTED"
+  ;;
+  wasm|wasm32)
+  apply_preset "$CONFIG_WASM_UNSUPPORTED"
   ;;
   *)
   ;;

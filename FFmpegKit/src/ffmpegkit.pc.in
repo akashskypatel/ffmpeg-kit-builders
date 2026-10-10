@@ -4,9 +4,9 @@ libdir=@libdir@
 includedir=@includedir@
 
 Name: FFmpegKit
-Description: FFmpegKit is a native library that allows programatic access to executing FFmpeg, FFprobe, and FFplay commands for Android, Windows, and Linux using C or C++ API
+Description: FFmpegKit provides programmatic access to FFmpeg, FFprobe, and FFplay from C or C++
 Version: @VERSION@
 Requires: 
-Libs: -L${libdir} -lffmpegkit FFMPEG_KIT_EXT_LIBS
-Libs.private: FFMPEG_KIT_EXT_LIBS_PRIVATE
-Cflags: -I${includedir}
+Libs: -L${libdir} -lffmpegkit @FFMPEG_KIT_PLATFORM_LIBS@ FFMPEG_KIT_EXT_LIBS
+Libs.private:
+Cflags: -I${includedir} @FFMPEG_KIT_PLATFORM_CFLAGS@

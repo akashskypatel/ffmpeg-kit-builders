@@ -1,7 +1,7 @@
 
 <div align="center">
 
-<img src="./assets/banner.png"/>
+<img src="https://github.com/akashskypatel/ffmpeg-kit-builders/blob/master/assets/banner.png?raw=true"/>
 
 [![Stars](https://img.shields.io/github/stars/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/stargazers) [![Watchers](https://img.shields.io/github/watchers/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/watchers) [![Forks](https://img.shields.io/github/forks/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/fork) [![Issues](https://img.shields.io/github/issues/akashskypatel/ffmpeg-kit-builders?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/issues) [![Commit](https://img.shields.io/github/last-commit/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/commits) [![GitHub release](https://img.shields.io/github/v/release/akashskypatel/ffmpeg-kit-builders?color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases) [![License](https://img.shields.io/github/license/akashskypatel/ffmpeg-kit-builders?color=144DB3)](LICENSE)
 
@@ -30,7 +30,7 @@ Cross-platform build system for FFmpeg and FFmpegKit supporting Windows, Linux, 
 
 ## Features
 
-- **Latest FFmpeg API** - [Uses the latest FFmpeg API v9.0.1](https://www.ffmpeg.org/download.html#release_9.0.1).
+- **Latest FFmpeg API** - [Uses the latest FFmpeg API v9.0.2](https://www.ffmpeg.org/download.html).
 - **Both C++ and Pure C API** - Provides both C++ and pure C api to make it easy to use in any language.
 - **FFmpeg, FFprobe, and FFplay** - Full FFmpeg, FFprobe, and FFplay support.
 - **Asynchronous Execution** - Run long-running tasks without blocking the main thread.
@@ -140,13 +140,19 @@ sudo ./runner.sh --host=linux --arch=x86_64 -f --video-hw-bundle
 sudo ./runner.sh --host=linux --arch=x86_64 --full-bundle --release
 
 # Force build Full non-free dependencies for windows 64 bit
-sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-deps-only -f
+sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-deps-only --no-bundle -f
 
 # Force build static Ffmpeg libraries and programs for windows 64 bit
-sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-ffmpeg-only=static -f --programs
+sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-ffmpeg-only=static -f --ff-programs
 
 # Force build shared Ffmpeg-kit library for windows 64 bit
 sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-ffmpeg-kit-only=shared -f
+
+# Build a selected dependency and its prerequisites
+sudo ./runner.sh --host=android --arch=x86_64 -y --build-only=build_libjpeg_turbo
+
+# Also rebuild every direct and transitive dependent of that dependency
+sudo ./runner.sh --host=android --arch=x86_64 -y --build-only=build_libjpeg_turbo --build-dependents
 
 # resume previous failed run
 sudo ./runner.sh --resume
@@ -207,94 +213,112 @@ prebuilt/
 
 ## Command-Line Options
 
-### General & Platform
+### General and target
 
-| Option                         | Description                                                                                                                                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-h, --help`                   | Display help                                                                                                                                       |
-| `-d, --debug`                  | Enable shell command tracing (`set -x`)                                                                                                            |
-| `--debug-build\|--build-debug` | Build with debug symbols (`-g`) and no optimization                                                                                                |
-| `-f, --force`                  | Force rebuild of all dependencies (cleans `already_built` flags)                                                                                   |
-| `-y`                           | Non-interactive mode (accept defaults)                                                                                                             |
-| `--release`                    | create release zip of ffmpeg-kit bundled binaries to be distributed                                                                                |
-| `--release-and-clean`          | create release zip of ffmpeg-kit bundled binaries to be distributed and clean ffmpeg and ffmpeg-kit build artifacts (dependencies are not deleted) |
-| `--host=*`                     | Target platform: `linux`, `windows`, `macos`, `ios`, `iphonesimulator`, `android`                                                                  |
-| `--arch=*`                     | Target architecture: `x86_64`, `arm64`, `armv7`                                                                                                    |
+| Option | Description |
+| --- | --- |
+| `-h, --help` | Show help and exit. |
+| `-v, --version` | Show the builder version and exit. |
+| `-d, --debug` | Trace shell commands. |
+| `-y` | Accept defaults and disable interactive prompts. |
+| `--hide-banner` | Hide the startup banner. |
+| `-f, --force` | Force dependency steps to build locally instead of reusing artifacts. |
+| `-fs, --force-self` | Skip artifact reuse for the requested dependency step. |
+| `-ff, --force-ffmpeg` | Force FFmpeg to build locally. |
+| `-fk, --force-kit` | Force FFmpegKit to build locally. |
+| `--skip` | Skip package checks and build validation. |
+| `--skip-pkg-check, --skip-pkg` | Skip package checks. |
+| `--skip-validation, --skip-val` | Skip build validation. |
+| `--resume` | Resume the last interrupted run. |
+| `--debug-build, --build-debug, --enable-debug` | Build FFmpeg and FFmpegKit with debug settings. |
+| `--host-platform=PLATFORM, --host=PLATFORM, --platform=PLATFORM` | Select linux, windows, macos, ios, iphonesimulator, appletvos, appletvsimulator, android, or wasm. |
+| `--host-arch=ARCH, --arch=ARCH` | Select x86_64, i686, aarch64, armv7a, or wasm32. |
 
-### Licensing
+### Licensing and feature presets
 
-| Option             | Description                                                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `--enable-gpl`     | Enables GPL libraries (x264, xvid, etc.). Resulting binary is **GPLv3**. Cannot be combined with `--enable-nonfree`.                 |
-| `--enable-nonfree` | Enables non-free libraries (fdk-aac, decklink). Resulting binary is **Non-Redistributable**. Cannot be combined with `--enable-gpl`. |
-
-### Feature presets
-
-| Option                       | Description                                                                        |
-| ---------------------------- | ---------------------------------------------------------------------------------- |
-| `--enable-base`              | enable only base built-in ffmpeg libraries (cannot be combined with other presets) |
-| `--enable-full`              | enable all available external libraries (based on gpl/non-gpl selection)           |
-| `--enable-small`             | exclude certain extra libraries from presets to reduce size (see --list-excluded)  |
-| `--enable-https`             | enable https libraries                                                             |
-| `--enable-audio`             | enable all audio processing libraries                                              |
-| `--enable-audio-ai`          | enable all audio processing ai libraries                                           |
-| `--enable-video`             | enable all video processing libraries                                              |
-| `--enable-video-streaming`   | enable all video streaming libraries                                               |
-| `--enable-video-ai-cpu`      | enable all video ai cpu based libraries                                            |
-| `--enable-video-ai-gpu`      | enable all video ai pick gpu based libraries                                       |
-| `--enable-video-ai-gpu-cuda` | enable all video ai gpu cuda based libraries                                       |
-| `--enable-video-ai-gpu-rocm` | enable all video ai gpu rocm based libraries                                       |
-| `--enable-hardware`          | enable all hardware accel libraries                                                |
-| `--enable-ssh`               | enable SSH/SFTP support                                                            |
-| `--enable-smb`               | enable SMB (SAMBA) file sharing protocol support                                   |
-| `--enable-mq`                | enable distributed systems support                                                 |
+| Option | Description |
+| --- | --- |
+| `--enable-gpl, --gpl` | Enable GPL libraries. |
+| `--enable-gpl-all, --gpl-all` | Enable all available GPL libraries. |
+| `--enable-nonfree, --nonfree` | Enable nonfree libraries; resulting binaries are non-redistributable. |
+| `--enable-base, --base` | Enable the base FFmpeg libraries. |
+| `--enable-full, --full` | Enable all external libraries allowed by the selected license options. |
+| `--enable-small, --small` | Exclude selected optional libraries from presets to reduce build size. |
+| `--enable-https` | Enable HTTPS libraries. |
+| `--enable-audio` | Enable audio libraries. |
+| `--enable-audio-ai` | Enable audio AI libraries. |
+| `--enable-video` | Enable video libraries. |
+| `--enable-streaming` | Enable streaming libraries. |
+| `--enable-video-ai-cpu` | Enable CPU video AI libraries. |
+| `--enable-video-ai-gpu` | Enable GPU video AI and select the GPU interactively. |
+| `--enable-video-ai-gpu-cuda` | Enable GPU video AI with CUDA. |
+| `--enable-video-ai-gpu-rocm` | Enable GPU video AI with ROCm. |
+| `--enable-hardware, --enable-hw` | Enable hardware acceleration libraries. |
+| `--enable-ssh` | Enable SSH/SFTP support. |
+| `--enable-smb` | Enable SMB support. |
+| `--enable-mq` | Enable message queue support. |
 
 ### Bundle presets
 
-| Option                          | Description                                                                                               |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `--audio-bundle`                | contains https + audio only libraries in the final bundle                                                 |
-| `--audio-ai-bundle`             | contains https + audio + audio only ai libraries in the final bundle                                      |
-| `--video-bundle`                | contains https + audio + video libraries in the final bundle                                              |
-| `--video-ai-cpu-bundle`         | contains https + audio + video + ai (cpu) libraries in the final bundle                                   |
-| `--video-ai-gpu-bundle`         | contains https + audio + video + ai (pick gpu interactive) libraries in the final bundle                  |
-| `--video-ai-gpu-cuda-bundle`    | contains https + audio + video + ai (gpu:- cuda) libraries in the final bundle                            |
-| `--video-ai-gpu-rocm-bundle`    | contains https + audio + video + ai (gpu:- rocm) libraries in the final bundle                            |
-| `--video-hw-bundle`             | contains https + audio + video + hardware libraries in the final bundle                                   |
-| `--video-hw-ai-cpu-bundle`      | contains https + audio + video + hardware + ai (cpu) libraries in the final bundle                        |
-| `--video-hw-ai-gpu-bundle`      | contains https + audio + video + hardware + ai (pick gpu interactive) libraries in the final bundle       |
-| `--video-hw-ai-gpu-cuda-bundle` | contains https + audio + video + hardware + ai (gpu:- cuda) libraries in the final bundle                 |
-| `--video-hw-ai-gpu-rocm-bundle` | contains https + audio + video + hardware + ai (gpu:- rocm) libraries in the final bundle                 |
-| `--streaming-bundle`            | contains https + audio + video + streaming libraries in the final bundle                                  |
-| `--full-bundle`                 | contains https + audio + video + hardware + ai + streaming + ssh + smb + mq libraries in the final bundle |
+| Option | Description |
+| --- | --- |
+| `--base-bundle` | Include base libraries in the bundle. |
+| `--audio-bundle` | Include HTTPS and audio libraries. |
+| `--audio-ai-bundle` | Include HTTPS, audio, and audio AI libraries. |
+| `--video-bundle` | Include HTTPS, audio, and video libraries. |
+| `--video-ai-cpu-bundle` | Include video AI libraries for CPU. |
+| `--video-ai-gpu-bundle` | Include video AI libraries with interactive GPU selection. |
+| `--video-ai-gpu-cuda-bundle, --video-ai-gpu-rocm-bundle` | Include video AI libraries with CUDA or ROCm. |
+| `--video-hw-bundle` | Include video and hardware libraries. |
+| `--video-hw-ai-cpu-bundle` | Include hardware video and CPU AI libraries. |
+| `--video-hw-ai-gpu-bundle` | Include hardware video and GPU AI libraries with interactive GPU selection. |
+| `--video-hw-ai-gpu-cuda-bundle, --video-hw-ai-gpu-rocm-bundle` | Include hardware video and GPU AI libraries with CUDA or ROCm. |
+| `--full-bundle` | Include all supported feature groups. |
+| `--no-bundle` | Do not create an FFmpegKit bundle. |
 
-### Build Options
+### Build and dependency control
 
-| Option                                                          | Default                                     | Description                                                                                                                                                                                                                                     |
-| --------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--ffmpeg-git-checkout-version=`                                | `release/8.1`                               | Build a particular version of FFmpeg (e.g., n3.1.1 or a specific git hash)                                                                                                                                                                      |
-| `--ffmpeg-git-checkout=`                                        | `https://github.com/FFmpeg/FFmpeg.git`      | Clone FFmpeg from other repositories                                                                                                                                                                                                            |
-| `--ffmpeg-source-dir=`                                          | `[empty]`                                   | Specify the directory of ffmpeg source code. When specified, git will not be used                                                                                                                                                               |
-| `--cflags=`                                                     | `-mtune=generic -O3 -pipe`                  | Compiler flags (default works on any CPU)                                                                                                                                                                                                       |
-| `--cxxflags=`                                                   | `-ffunction-sections -fdata-sections -fPIC` | Compiler flags (default works on any CPU)                                                                                                                                                                                                       |
-| `--cppflags=`                                                   |                                             | Compiler flags (default works on any CPU)                                                                                                                                                                                                       |
-| `--ldflags=`                                                    |                                             | Compiler flags (default works on any CPU)                                                                                                                                                                                                       |
-| `--git-get-latest=`                                             | `y`                                         | Do a git pull for latest code from repositories like FFmpeg                                                                                                                                                                                     |
-| `--prefer-stable=`                                              | `y`                                         | Build a few libraries from releases instead of git master                                                                                                                                                                                       |
-| `--print-total-steps\|--print-all-steps`                        |                                             | print dependency steps and list all step names by index                                                                                                                                                                                         |
-| `--build-only={0..} OR [library_name]`                          |                                             | Build only specific dependency (0.. or step/library name from get-all-steps)                                                                                                                                                                    |
-| `--build-from={0..} OR [library_name]`                          |                                             | Start building dependencies from given step (0.. or step/library name)                                                                                                                                                                          |
-| `--build-deps=[y]`                                              | `y`                                         | Whether or not to skip building dependencies                                                                                                                                                                                                    |
-| `--build-deps-only`                                             |                                             | Only build dependency binaries. Will not build app binaries. (static or shared build only affects ffmpeg and ffmpeg-kit. Dependencies are always built statically.)                                                                             |
-| `--build-ffmpeg-kit-only\|--kit\|--ffmpeg-kit=[shared]\|static` |                                             | build ffmpeg-kit library and bundle only of type [shared] or static. By default ffmpeg-kit always needs a static build of ffmpeg to be present already. Does not (re)build ext-library dependencies. Missing dependencies will cause a failure. |
-| `--build-ffmpeg-only\|--ffmpeg=[shared]\|static`                |                                             | build ffmpeg binaries only of type [shared] or static. Does not (re)build ext-library dependencies. By default ffmpeg-kit always needs a static build of ffmpeg to be present already. Missing dependencies will cause a failure                |
-| `--build-tests\|--test\|--tests`                                |                                             | Build tests. By default tests are not built.                                                                                                                                                                                                    |
-| `--clean-builds=[shared]\|static`                               |                                             | clean ffmpeg and ffmpeg-kit builds of type [shared] or static and exit                                                                                                                                                                          |
-| `--reset-and-clean(=ARG)`                                       |                                             | reset and clean all source directories of touch files and build artifacts. ARG=library src dir name                                                                                                                                             |
-| `--list-libraries`                                              |                                             | Lists ffmpeg configuration including extra libraries and exit                                                                                                                                                                                   |
-| `--enable-[library name]`                                       |                                             | Enable extra ffmpeg libraries. Run --list-libraries and see under "External library support"                                                                                                                                                    |
-| `--ff-*`                                                        |                                             | Pass additional ffmpeg parameters prefixed by ff-* to ffmpeg configure. No additional checks done                                                                                                                                               |
-| `--resume`                                                      |                                             | resume previously inturrupted run (based on ~run.state file)                                                                                                                                                                                    |
+| Option | Description |
+| --- | --- |
+| `--build-deps-only, --build-deps, --deps` | Enable dependency builds; add --no-bundle to skip bundle generation. |
+| `--build-only=STEP[,STEP...], --only=STEP[,STEP...]` | Build one or more named build functions (for example, build_libjpeg_turbo) and their prerequisites. Use function names beginning with build_; comma-separate multiple steps. |
+| `--build-dependents, --build-depts, --depts` | With --build-only, include all direct and transitive dependents in the selected build steps. |
+| `--build-from=STEP, --from=STEP` | Start the dependency build sequence at a named build_ function; earlier steps must already be built. |
+| `--run-only=FUNCTION` | Run one named build function or helper without its dependency sequence. |
+| `--dry-run` | Exit before executing build steps. |
+| `--print-all-steps` | Print the resolved build-step list. Build execution continues. |
+| `--print-total-steps` | Print the number of resolved build steps. Build execution continues. |
+| `--build-ffmpeg-only[=TYPE], --build-ffmpeg[=TYPE], --ffmpeg[=TYPE]` | Build FFmpeg only; TYPE is static or shared and defaults to static. |
+| `--build-ffmpeg-kit-only[=TYPE], --build-ffmpeg-kit[=TYPE], --ffmpeg-kit[=TYPE], --kit[=TYPE]` | Build FFmpegKit; FFmpeg is built if needed. TYPE is shared or static and defaults to shared. |
+| `--build-tests[=TYPE], --build-test[=TYPE], --test[=TYPE], --tests[=TYPE]` | Build tests; TYPE may be tsan, asan, or ubsan. |
+| `--upload-deps` | Upload artifacts for requested dependency builds where workflow upload is configured. |
+
+### FFmpeg configuration
+
+| Option | Description |
+| --- | --- |
+| `--ffmpeg-git-checkout-version=REF` | Select the FFmpeg Git ref to build; default is release/9.0. |
+| `--ffmpeg-git-checkout=URL` | Set the FFmpeg Git repository URL. |
+| `--ffmpeg-source-dir=PATH` | Use an existing FFmpeg source directory instead of checking it out. |
+| `--cflags=FLAGS` | Set C compiler flags. |
+| `--cxxflags=FLAGS` | Set C++ compiler flags. |
+| `--cppflags=FLAGS` | Set preprocessor flags. |
+| `--ldflags=FLAGS` | Set linker flags. |
+| `--git-get-latest=VALUE` | Pull latest Git revisions where supported; VALUE is y or n and defaults to n. |
+| `--prefer-stable=VALUE` | Prefer release sources where supported; VALUE is y or n and defaults to y. |
+| `--enable-LIBRARY` | Enable a specific library, for example --enable-libx264. |
+| `--disable-LIBRARY` | Disable a specific library; disables take precedence over enables. |
+| `--ff-OPTION` | Pass --OPTION through to FFmpeg configure. |
+| `--list-libraries` | Show FFmpeg configure options and exit. |
+
+### Release and cleanup
+
+| Option | Description |
+| --- | --- |
+| `--release[=MODE]` | Create an archive locally or publish it remotely; MODE is local or remote and defaults to local. |
+| `--clean[=COMPONENTS]` | With --release, clean outputs after archiving. COMPONENTS is all, ffmpeg, kit, or bundle; separate multiple values with commas. Bare --clean selects all. |
+| `--clean-builds=TYPE` | Clean FFmpeg and FFmpegKit outputs of TYPE (static or shared) and exit. |
+| `--reset-and-clean[=SOURCE_DIR]` | Reset source build state; optionally limit the operation to one source directory. |
 
 ## Bundle Matrix
 

@@ -596,14 +596,23 @@ build_sndio() {
 build_zlib() {
   # https://github.com/madler/zlib
   local lib="zlib"
-  local repo="https://github.com/madler/zlib"
-  local repo_ver="v1.3.1"
+  local repo="https://github.com/zlib-ng/zlib-ng"
+  local repo_ver="2.3.3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  export CFLAGS="${CFLAGS//-Dnl_langinfo\\(x\\)=NULL/}"
-  export CXXFLAGS="${CXXFLAGS//-Dnl_langinfo\\(x\\)=NULL/}"
-  do_configure "--prefix=$dependency_install_prefix --static"
+  gsed -i 's/if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")/if(CMAKE_SYSTEM_NAME MATCHES "^(Linux|Android)$")/' "$src_dir/$lib/CMakeLists.txt"
+  change_dir "$src_dir/$lib/build" 1
+  if [[ "$host_arch" == "armv7a" ]]; then
+    export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/ -mfpu=neon -DARM_NOCHECK_NEON}"
+    export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/ -mfpu=neon -DARM_NOCHECK_NEON}"
+  fi
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DZLIB_COMPAT=ON \
+-DBUILD_SHARED_LIBS=OFF \
+-DBUILD_TESTING=OFF \
+-DWITH_GTEST=OFF \
+-DWITH_BENCHMARKS=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -777,10 +786,12 @@ build_gcrypt() {
 build_gmp() {
   local lib="gmp"
   local repo="https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
-  local mirror="https://ftpmirror.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
+  local repo="https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '6.3.0\n' > .tarball-version
+  [[ -f .version ]] || printf '6.3.0\n' > .version
   generic_configure "ABI=$bits_target"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -789,10 +800,12 @@ build_gmp() {
 build_libnettle() {
   local lib="nettle"
   local repo="https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
+  local mirror="https://web.archive.org/web/20260520203327/https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '3.10.2\n' > .tarball-version
+  [[ -f .version ]] || printf '3.10.2\n' > .version
   generic_configure "--disable-openssl --disable-documentation --libdir=$dependency_install_prefix/lib" # in case we have both gnutls and openssl, just use gnutls [except that gnutls uses this so...huh?
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -877,32 +890,29 @@ build_lcms2() {
 # build_libaom            # config_options+= --enable-libaom              # enable AV1 video encoding/decoding via libaom [no]
 build_libaom() {
   local lib="libaom"
-    local repo_ver="v3.13.1"
-    local repo="https://aomedia.googlesource.com/aom"
+  local repo_ver="v3.15.1"
+  local repo="https://aomedia.googlesource.com/aom"
+
   change_dir "$src_dir"
-    do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-    change_dir "$src_dir/$lib/build" 1
-    local cmake_params="-DCMAKE_BUILD_TYPE=Release \
--DCONFIG_HIGHWAY=0 \
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+
+  local cmake_params="\
+-DENABLE_APPS=0 \
 -DENABLE_EXAMPLES=0 \
 -DENABLE_TOOLS=0 \
 -DENABLE_TESTS=0 \
--DBUILD_SHARED_LIBS=0 \
--DENABLE_TESTS=0 \
--DENABLE_EXAMPLES=0 \
--DENABLE_TOOLS=0 \
 -DENABLE_DOCS=0"
-    if [[ "$host_arch" == "aarch64" ]]; then
-      cmake_params+=" -DAOM_TARGET_CPU=arm64"
-    elif [[ "$host_arch" == "armv7a" ]]; then
-      cmake_params+=" -DAOM_TARGET_CPU=armv7"
-      export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
-      export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
-    fi
-    do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
-    disable_nonessential "$src_dir/$lib"
-    do_make_and_make_install
-      change_dir "$src_dir"
+
+  if [[ "$host_arch" == "armv7a" ]]; then
+    export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
+    export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
+  fi
+
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
+  disable_nonessential "$src_dir/$lib"
+  do_make_and_make_install
+  change_dir "$src_dir"
 }
 build_libpng() {
   # run_valid_function "build_zlib" 1
@@ -916,7 +926,16 @@ build_libpng() {
   export CPPFLAGS=" $CPPFLAGS -I${dependency_install_prefix}/include"
   export LDFLAGS="$LDFLAGS -L${dependency_install_prefix}/lib -lz"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  generic_configure
+  local config_options="--disable-fast-install"
+  if [[ "$host_arch" == "aarch64" || "$host_arch" == "arm64" ]]; then
+    config_options+=" --enable-hardware-optimizations --enable-arm-neon=yes"
+  elif [[ "$host_arch" == "armv7a" ]]; then
+    CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
+    config_options+=" --enable-hardware-optimizations --enable-arm-neon=yes"
+  elif [[ "$host_arch" == "x86_64" ]]; then
+    config_options+=" --enable-hardware-optimizations --enable-intel-sse=yes"
+  fi
+  generic_configure "$config_options"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cflags
@@ -1778,12 +1797,9 @@ build_libkvazaar() {
   #change_dir "$src_dir/$lib/build" 1
   export ASFLAGS="$ASFLAGS -DPIC"
   local cmake_params="-DCMAKE_BUILD_TESTS=OFF \
--DCMAKE_ASM_NASM_FLAGS=\"-DPIC\"
+-DCMAKE_ASM_NASM_FLAGS=\"-DPIC\" \
 -DBUILD_SHARED_LIBS=OFF"
-  #do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
-  generic_configure "--disable-shared --enable-static --enable-pic --with-pic ASFLAGS=\"$ASFLAGS\""
-  find . -type f -name "Makefile" -exec gsed -i 's/-lrt//g' {} +
-  gsed -i 's/-lrt//g' "$install_pkgconfig_dir/kvazaar.pc"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -1804,13 +1820,14 @@ build_liblc3() {
 build_iconv_minimal() {
   local lib="libiconv-minimal"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://web.archive.org/web/20260926022033/https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   touch "no.autoreconf"
-  
   generic_configure "--enable-static \
 --with-sysroot=${dependency_install_prefix} \
 --enable-pic \
@@ -1849,11 +1866,13 @@ build_iconv() {
   # install full iconv
   local lib="libiconv"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://web.archive.org/web/20260926022033/https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   export CFLAGS="$CFLAGS -fPIC"
   export CXXFLAGS="$CXXFLAGS -fPIC"
   touch "no.autoreconf"
@@ -1895,10 +1914,12 @@ EOF
 build_gettext() {
   local lib="gettext"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://web.archive.org/web/20261003142129/https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.0\n' > .tarball-version
+  [[ -f .version ]] || printf '1.0\n' > .version
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
@@ -1930,10 +1951,8 @@ build_gettext() {
   generic_configure "$config \
 CFLAGS=\"$gettext_cflags\" \
 LDFLAGS=\"${LDFLAGS}\""
-  # disable_nonessential "$src_dir/$lib"
+  disable_nonessential "$src_dir/$lib/gettext-runtime" "man"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
-  do_make_and_make_install "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
-  change_dir "$src_dir/$lib/gettext-runtime"
   do_make_and_make_install "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\"" "CFLAGS=\"$gettext_cflags\" LDFLAGS=\"${LDFLAGS}\""
   cat > "$install_pkgconfig_dir/intl.pc" <<EOF
 prefix=${dependency_install_prefix}
@@ -2250,7 +2269,7 @@ build_libopenh264() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  local meson_options="-Dtests=disabled"
+  local meson_options="-Dtests=disabled -Db_ndebug=true"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
   change_dir "$src_dir"
@@ -3178,10 +3197,12 @@ build_libtiff() {
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
-  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests"
+  export LIBS="-lsharpyuv"
+  generic_configure "--enable-static --disable-shared --disable-docs --disable-tools --disable-tests LIBS=\"$LIBS\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   gsed -i "s/-ltiff.*$/-ltiff -llzma -ljpeg -lz/" "$install_pkgconfig_dir/libtiff-4.pc" # static deps
+  unset LIBS
   change_dir "$src_dir"
 }
 build_libjpeg_turbo() {
@@ -3195,10 +3216,14 @@ build_libjpeg_turbo() {
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_INSTALL_PREFIX=$dependency_install_prefix \
 -DENABLE_SHARED=0 \
+-DWITH_JPEG8=1 \
+-DWITH_TURBOJPEG=0 \
+-DWITH_JAVA=0 \
+-DWITH_SIMD=1 \
+-DREQUIRE_SIMD=1 \
 -DCMAKE_ASM_NASM_COMPILER=yasm"
   if [[ "$host_arch" == "aarch64" ]]; then
     cmake_params+=" -DENABLE_NEON=ON \
--DWITH_SIMD=ON \
 -DNEON_INTRINSICS=ON \
 -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a \
 -DCMAKE_SYSTEM_PROCESSOR=aarch64"
@@ -3216,7 +3241,7 @@ build_giflib() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   export CFLAGS="$CFLAGS -DS_IREAD=S_IRUSR -DS_IWRITE=S_IWUSR"
-  generic_configure
+  generic_configure "--disable-fast-install"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -3234,10 +3259,12 @@ build_libleptonica() {
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
   export CPPFLAGS="$CPPFLAGS -DOPJ_STATIC"
-  generic_configure "--enable-static --disable-shared"
+  export LIBS="-lsharpyuv"
+  generic_configure "--enable-static --disable-shared LIBS=\"$LIBS\""
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   reset_cppflags
+  unset LIBS
   change_dir "$src_dir"
 }
 build_lz4() {
@@ -3351,11 +3378,13 @@ build_libidn2() {
   # run_valid_function "build_libunistring"
   local lib="libidn2"
   local repo="https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+  local mirror="https://web.archive.org/web/20260918060455/https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
   local repo_ver="2.3.8"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '2.3.8\n' > .tarball-version
+  [[ -f .version ]] || printf '2.3.8\n' > .version
   touch "no.autoreconf"
   generic_configure "--enable-static --disable-shared --with-libunistring-prefix=$dependency_install_prefix"
   disable_nonessential "$src_dir/$lib"
@@ -3365,11 +3394,13 @@ build_libidn2() {
 build_libunistring() {
   local lib="libunistring"
   local repo="https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
+  local mirror="https://web.archive.org/web/20260219203533/https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
   local repo_ver="1.4.1"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.4.1\n' > .tarball-version
+  [[ -f .version ]] || printf '1.4.1\n' > .version
   touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
@@ -3677,10 +3708,31 @@ build_libwebp() {
   local repo_ver="v1.6.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  generic_configure "--disable-wic --enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
+	change_dir "$src_dir/$lib/build" 1
+  local toolchain="$(get_generic_cmake_toolchain "libwebp")"
+  local cmake_args="-DCMAKE_BUILD_TYPE=Release \
+-DCMAKE_C_FLAGS_RELEASE=\"-O3 -DNDEBUG\" \
+-DBUILD_SHARED_LIBS=OFF \
+-DWEBP_LINK_STATIC=ON \
+-DWEBP_ENABLE_SIMD=ON \
+-DWEBP_USE_THREAD=ON \
+-DWEBP_NEAR_LOSSLESS=ON \
+-DWEBP_BUILD_ANIM_UTILS=OFF \
+-DWEBP_BUILD_CWEBP=OFF \
+-DWEBP_BUILD_DWEBP=OFF \
+-DWEBP_BUILD_GIF2WEBP=OFF \
+-DWEBP_BUILD_IMG2WEBP=OFF \
+-DWEBP_BUILD_VWEBP=OFF \
+-DWEBP_BUILD_WEBPINFO=OFF \
+-DWEBP_BUILD_LIBWEBPMUX=ON \
+-DWEBP_BUILD_WEBPMUX=OFF \
+-DWEBP_BUILD_EXTRAS=OFF \
+-DWEBP_BUILD_WEBP_JS=OFF \
+-DCMAKE_TOOLCHAIN_FILE=\"$toolchain\" \
+-DANDROID_NDK=\"$ANDROID_NDK_ROOT\" \
+-DWEBP_BUILD_FUZZTEST=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args" "libwebp-cmake"
+  do_make_and_make_install "" "" "libwebp-cmake"
   change_dir "$src_dir"
 }
 # build_libx264           # config_options+= --enable-libx264             # enable H.264 encoding via x264 [no]
@@ -4060,8 +4112,8 @@ build_libzimg() {
 --disable-shared \
 --with-pic"
   if [[ "$host_arch" == "armv7a" ]]; then
-    export CFLAGS="-march=armv7-a -mfpu=neon-fp16 -mfloat-abi=softfp"
-    export CXXFLAGS="-march=armv7-a -mfpu=neon-fp16 -mfloat-abi=softfp"
+    export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/-mfpu=neon-fp16}"
+    export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/-mfpu=neon-fp16}"
   fi
   do_autogen
   touch "no.autoreconf"
@@ -4108,10 +4160,12 @@ build_gettext_native() {
   clear_cross_vars
   local lib="gettext-native"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://web.archive.org/web/20261003142129/https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.0\n' > .tarball-version
+  [[ -f .version ]] || printf '1.0\n' > .version
   do_autogen --skip-gnulib
   change_dir "$src_dir/$lib/gettext-runtime"
   export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
@@ -4132,6 +4186,7 @@ build_gettext_native() {
   touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
+  disable_nonessential "$src_dir/$lib/gettext-runtime" "man"
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
@@ -4142,6 +4197,7 @@ CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/gettext-tools"
+  ensure_gettext_tools_sources "$src_dir/$lib" || exit_message 1 "build_gettext_native: failed to fetch gettext-tools sources"
   config+="--disable-examples \
 --without-libtextstyle-prefix"
   touch "no.autoreconf"
@@ -4149,6 +4205,7 @@ CFLAGS=\"$CFLAGS\""
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LDFLAGS=\"$LDFLAGS\""
+  disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests" "man"
   local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
   do_make
   do_make_install "PREFIX=\"/usr\""
@@ -4681,6 +4738,7 @@ build_libsvtjpegxs() {
   local cmake_params="-DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -DBUILD_APPS=OFF \
+  -DJPEGXS_LTO=OFF \
   -DBUILD_TESTING=OFF"
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"

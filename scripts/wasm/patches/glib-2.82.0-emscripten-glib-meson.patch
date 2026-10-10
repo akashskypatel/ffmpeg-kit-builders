@@ -1,0 +1,14 @@
+diff --git a/glib/meson.build b/glib/meson.build
+index 6c77a831d..9b1c4f41f 100755
+--- a/glib/meson.build
++++ b/glib/meson.build
+@@ -371,6 +371,9 @@ if host_system == 'windows'
+   if cc.get_id() == 'msvc' or cc.get_id() == 'clang-cl'
+     glib_sources += files('dirent/wdirent.c')
+   endif
++elif host_system == 'emscripten'
++  glib_sources += files('glib-unix.c', 'gspawn-emscripten.c', 'giounix.c')
++  platform_deps = []
+ else
+   glib_sources += files('glib-unix.c', 'gspawn-posix.c', 'giounix.c')
+   platform_deps = []

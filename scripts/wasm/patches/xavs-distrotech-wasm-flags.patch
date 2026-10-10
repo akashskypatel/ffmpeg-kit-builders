@@ -1,0 +1,16 @@
+diff --git a/configure b/configure
+index 111b17d..cc27c4b 100755
+--- a/configure
++++ b/configure
+@@ -426,6 +426,10 @@ if [ "$debug" = "yes" ]; then
+     CFLAGS="-O1 -g $CFLAGS"
+ else
+-    CFLAGS="-O4 -ffast-math $CFLAGS"
++    if [ "$SYS" = "EMSCRIPTEN" ]; then
++        CFLAGS="-O3 $CFLAGS"
++    else
++        CFLAGS="-O4 -ffast-math $CFLAGS"
++    fi
+ fi
+ 
+ if cc_check "stdio.h" "" "fseeko(stdin,0,0);" ; then

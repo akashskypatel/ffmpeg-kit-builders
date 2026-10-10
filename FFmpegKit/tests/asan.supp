@@ -1,3 +1,10 @@
+# LSan-only third-party cleanup suppressions.
+# Keep ASan interceptor rules out of this file: LSan rejects them and emits
+# a parser error that would obscure sanitizer evidence.
+# SDL keeps thread-local error buffers alive until process teardown.
+leak:SDL_realloc_REAL
+leak:SDL_SetError_REAL
+leak:SDL_GetErrBuf
 leak:SDL_DBus_Init
 leak:SDL_Init
 leak:SDL_InitSubSystem
@@ -7,7 +14,3 @@ leak:libGL
 leak:libglapi
 leak:libGLX_mesa
 leak:<unknown module>
-# TLS thread cleanup crashes
-interceptor_via_lib:libpthread.so*
-interceptor_via_func:__nptl_deallocate_tsd*
-interceptor_via_func:start_thread*

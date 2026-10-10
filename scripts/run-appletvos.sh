@@ -366,13 +366,21 @@ build_sndio() {
 build_zlib() {
   # https://github.com/madler/zlib
   local lib="zlib"
-  local repo="https://github.com/madler/zlib"
-  local repo_ver="v1.3.1"
+  # local repo="https://github.com/madler/zlib"
+  local repo="https://github.com/zlib-ng/zlib-ng"
+  local repo_ver="2.3.3"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib"
+  gsed -i 's/list(GET CMAKE_OSX_ARCHITECTURES 0 ARCH)/list(GET CMAKE_OSX_ARCHITECTURES 0 ARCH)\n    if(ARCH STREQUAL "arm64")\n        set(ARCH "aarch64")\n    endif()/' "$src_dir/$lib/cmake/detect-arch.cmake"
   change_dir "$src_dir/$lib/build" 1
-  local cmake_args="-DZLIB_BUILD_EXAMPLES=OFF"
-  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DZLIB_COMPAT=ON \
+-DBUILD_SHARED_LIBS=OFF \
+-DZLIB_ENABLE_TESTS=OFF \
+-DWITH_GTEST=OFF \
+-DWITH_BENCHMARKS=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib/build"
   do_make_and_make_install
   copy_path "$src_dir/$lib/build/zlib.pc" "$install_pkgconfig_dir/zlib.pc"
@@ -511,10 +519,12 @@ build_gcrypt() {
 build_gmp() {
   local lib="gmp"
   local repo="https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
-  local mirror="https://ftpmirror.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
+  local repo="https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '6.3.0\n' > .tarball-version
+  [[ -f .version ]] || printf '6.3.0\n' > .version
   generic_configure "ABI=$bits_target"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -523,10 +533,12 @@ build_gmp() {
 build_libnettle() {
   local lib="nettle"
   local repo="https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
+  local mirror="https://web.archive.org/web/20260520203327/https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '3.10.2\n' > .tarball-version
+  [[ -f .version ]] || printf '3.10.2\n' > .version
   generic_configure "--disable-openssl --disable-documentation --libdir=$dependency_install_prefix/lib" # in case we have both gnutls and openssl, just use gnutls [except that gnutls uses this so...huh?
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -615,21 +627,22 @@ build_lcms2() {
 # build_libaom            # config_options+= --enable-libaom              # enable AV1 video encoding/decoding via libaom [no]
 build_libaom() {
   local lib="libaom"
-    local repo_ver="v3.13.1"
+    local repo_ver="v3.15.1"
     local repo="https://aomedia.googlesource.com/aom"
   change_dir "$src_dir"
     do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
     change_dir "$src_dir/$lib/build" 1
-    local cmake_params="-DCMAKE_BUILD_TYPE=Release \
--DCONFIG_HIGHWAY=0 \
+  local cmake_params="\
+-DENABLE_APPS=0 \
 -DENABLE_EXAMPLES=0 \
 -DENABLE_TOOLS=0 \
 -DENABLE_TESTS=0 \
--DBUILD_SHARED_LIBS=0 \
--DENABLE_TESTS=0 \
--DENABLE_EXAMPLES=0 \
--DENABLE_TOOLS=0 \
 -DENABLE_DOCS=0"
+
+  if [[ "$host_arch" == "armv7a" ]]; then
+    export CFLAGS="${CFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
+    export CXXFLAGS="${CXXFLAGS//-mfpu=vfpv3-d16/-mfpu=neon}"
+  fi
     do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
     disable_nonessential "$src_dir/$lib"
     do_make_and_make_install
@@ -657,10 +670,18 @@ build_libpng() {
 -DZLIB_LIBRARY=${dependency_install_prefix}/lib/libz.a \
 -DZLIB_INCLUDE_DIR=${dependency_install_prefix}/include \
 -DPNG_TARGET_ARCHITECTURE=$host_arch"
-  if [[ $host_arch == "arm64" ]]; then
-    cmake_args+=" -DPNG_ARM_NEON=on"
+  if [[ "$host_arch" != "x86_64" ]]; then
+    cmake_args+=" -DPNG_ARM_NEON=on \
+-DPNG_INTEL_SSE=off"
+    CFLAGS+=" -DPNG_ARM_NEON"
+    CXXFLAGS+=" -DPNG_ARM_NEON"
+    CPPFLAGS+=" -DPNG_ARM_NEON"
   else
-    cmake_args+=" -DPNG_ARM_NEON=off"
+    cmake_args+=" -DPNG_ARM_NEON=off \
+-DPNG_INTEL_SSE=on"
+    CFLAGS+=" -DPNG_INTEL_SSE"
+    CXXFLAGS+=" -DPNG_INTEL_SSE"
+    CPPFLAGS+=" -DPNG_INTEL_SSE"
   fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args"
   disable_nonessential "$src_dir/$lib"
@@ -1422,11 +1443,13 @@ build_liblc3() {
 build_iconv_minimal() {
   local lib="libiconv-minimal"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://web.archive.org/web/20260926022033/https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   if istvossimulator; then
   get_config_sub "$src_dir/$lib/build-aux"
   get_config_guess "$src_dir/$lib/build-aux"
@@ -1461,11 +1484,13 @@ build_iconv() {
   # install full iconv
   local lib="libiconv"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://web.archive.org/web/20260926022033/https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   export CFLAGS="$CFLAGS -fPIC"
   export CXXFLAGS="$CXXFLAGS -fPIC"
   local iconv_shim_c="$src_dir/$lib/iconv-compat.c"
@@ -1512,11 +1537,13 @@ EOF
 build_gettext() {
   local lib="gettext"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
+  local mirror="https://web.archive.org/web/20261003142129/https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   local repo_ver="1.0"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.0\n' > .tarball-version
+  [[ -f .version ]] || printf '1.0\n' > .version
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime"
@@ -1549,7 +1576,7 @@ LIBS=-liconv"
   generic_configure "$config \
 CFLAGS=\"$cflags\" \
 LIBS=\"-liconv\""
-  # disable_nonessential "$src_dir/$lib"
+  disable_nonessential "$src_dir/$lib/gettext-runtime" "man"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
   MAKE_INSTALL_JOBS=1 do_make_and_make_install "CFLAGS=\"$cflags\" LIBS=\"-liconv\"" "CFLAGS=\"$cflags\" LIBS=\"-liconv\""
   if istvossimulator; then
@@ -1825,7 +1852,8 @@ build_libopenh264() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  gsed -i "s/'ios',/'ios', 'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
+  gsed -i "s/'ios',/'ios', 'ios-simulator', 'tvos', 'tvos-simulator',/g" "$src_dir/$lib/meson.build"
+  gsed -i "s/\['android', 'ios'\]/['android', 'ios', 'ios-simulator', 'tvos', 'tvos-simulator']/" "$src_dir/$lib/codec/meson.build"
   local meson_options="-Dtests=disabled"
   generic_meson "$meson_options"
   do_ninja_and_ninja_install
@@ -2004,11 +2032,13 @@ build_libdovi() {
   local lib="libdovi"
   local repo="https://github.com/quietvoid/dovi_tool"
   local repo_ver="2.3.1"
+  rustup default stable
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib/dolby_vision"
   cargo_build_and_install "--release" "--package dolby_vision --release --library-type=staticlib"
   change_dir "$src_dir"
+  rustup default nightly
 }
 build_vulkan_loader() {
   local parentlib="vulkan-loader"
@@ -2203,8 +2233,8 @@ build_libexpat() {
   change_dir "$src_dir/$lib/expat"
   [[ -f buildconf.sh ]] && ./buildconf.sh > >(redirect_output) 2>&1
   touch "no.autoreconf"
-  export aclocal="/usr/local/bin/aclocal"
-  export automake="/usr/local/bin/automake"
+  export aclocal="$(which aclocal)"
+  export automake="$(which automake)"
   export ACLOCAL="$aclocal"
   export AUTOMAKE="$automake"
   find "$src_dir/$lib/expat" -type f -name configure -exec gsed -i \
@@ -2216,6 +2246,7 @@ build_libexpat() {
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
+  unset aclocal automake ACLOCAL AUTOMAKE
 }
 build_libdatrie() {
   local lib="libdatrie"
@@ -2673,6 +2704,13 @@ build_libjpeg_turbo() {
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_INSTALL_PREFIX=$dependency_install_prefix \
 -DENABLE_SHARED=0 \
+-DENABLE_NEON=ON \
+-DNEON_INTRINSICS=ON \
+-DWITH_JPEG8=1 \
+-DWITH_SIMD=1 \
+-DREQUIRE_SIMD=1 \
+-DWITH_TURBOJPEG=0 \
+-DWITH_JAVA=0 \
 -DCMAKE_ASM_NASM_COMPILER=yasm"
   generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
@@ -2690,7 +2728,7 @@ build_giflib() {
   if istvossimulator; then
     ffi_host="${host_arch}-apple-darwin"
   fi
-  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\""
+  generic_configure "--host=$ffi_host --with-sysroot=\"$TVOS_SYSROOT\" --disable-fast-install"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
   change_dir "$src_dir"
@@ -2824,6 +2862,10 @@ build_nghttp2() {
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
+  autoreconf_library
+  get_config_sub "$src_dir/$lib"
+  get_config_guess "$src_dir/$lib"
+  touch no.autoreconf
   export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
@@ -2835,11 +2877,15 @@ build_libidn2() {
   # run_valid_function "build_libunistring"
   local lib="libidn2"
   local repo="https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+  local mirror="https://web.archive.org/web/20260918060455/https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
   local repo_ver="2.3.8"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  get_config_sub "$src_dir/$lib/build-aux"
+  get_config_guess "$src_dir/$lib/build-aux"
+  [[ -f .tarball-version ]] || printf '2.3.8\n' > .tarball-version
+  [[ -f .version ]] || printf '2.3.8\n' > .version
   touch "no.autoreconf"
   generic_configure "--enable-static --disable-shared --with-libunistring-prefix=$dependency_install_prefix"
   disable_nonessential "$src_dir/$lib"
@@ -2849,11 +2895,15 @@ build_libidn2() {
 build_libunistring() {
   local lib="libunistring"
   local repo="https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
+  local mirror="https://web.archive.org/web/20260219203533/https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
   local repo_ver="1.4.1"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  get_config_sub "$src_dir/$lib/build-aux"
+  get_config_guess "$src_dir/$lib/build-aux"
+  [[ -f .tarball-version ]] || printf '1.4.1\n' > .tarball-version
+  [[ -f .version ]] || printf '1.4.1\n' > .version
   touch "no.autogen"
   generic_configure "--enable-static --disable-shared"
   disable_nonessential "$src_dir/$lib"
@@ -2880,10 +2930,15 @@ build_curl() {
 -DBUILD_TESTING=OFF \
 -DBUILD_EXAMPLES=OFF \
 -DCURL_USE_LIBSSH=OFF \
+-DOPENSSL_CRYPTO_LIBRARY=$dependency_install_prefix/lib/libcrypto.a \
+-DOPENSSL_SSL_LIBRARY=$dependency_install_prefix/lib/libssl.a \
+-DOPENSSL_INCLUDE_DIR=$dependency_install_prefix/include/openssl \
+-DHAVE_PIPE2:BOOL=OFF \
+-DUSE_APPLE_SECTRUST=ON \
 -DUSE_LIBRTMP=OFF"
-  export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
-  export CPPFLAGS="$CPPFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
-  export CXXFLAGS="$CXXFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC "
+  export CFLAGS="$CFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
+  export CPPFLAGS="$CPPFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
+  export CXXFLAGS="$CXXFLAGS -DNGHTTP2_STATICLIB -DPSL_STATIC"
   export LIBS="$LIBS -lpsl -lidn2 -lunistring -liconv -lbrotlidec -lbrotlicommon -lz"
   change_dir "$src_dir/$lib/build" 1
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_options"
@@ -3156,10 +3211,28 @@ build_libwebp() {
   local repo_ver="v1.6.0"
   change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-  change_dir "$src_dir/$lib"
-  generic_configure "--disable-wic --enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-  do_make_and_make_install
+	change_dir "$src_dir/$lib/build" 1
+  local cmake_args="-DCMAKE_BUILD_TYPE=Release \
+-DCMAKE_C_FLAGS_RELEASE=\"-O3 -DNDEBUG\" \
+-DBUILD_SHARED_LIBS=OFF \
+-DWEBP_LINK_STATIC=ON \
+-DWEBP_ENABLE_SIMD=ON \
+-DWEBP_USE_THREAD=ON \
+-DWEBP_NEAR_LOSSLESS=ON \
+-DWEBP_BUILD_ANIM_UTILS=OFF \
+-DWEBP_BUILD_CWEBP=OFF \
+-DWEBP_BUILD_DWEBP=OFF \
+-DWEBP_BUILD_GIF2WEBP=OFF \
+-DWEBP_BUILD_IMG2WEBP=OFF \
+-DWEBP_BUILD_VWEBP=OFF \
+-DWEBP_BUILD_WEBPINFO=OFF \
+-DWEBP_BUILD_LIBWEBPMUX=ON \
+-DWEBP_BUILD_WEBPMUX=OFF \
+-DWEBP_BUILD_EXTRAS=OFF \
+-DWEBP_BUILD_WEBP_JS=OFF \
+-DWEBP_BUILD_FUZZTEST=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args" "libwebp-cmake"
+  do_make_and_make_install "" "" "libwebp-cmake"
   change_dir "$src_dir"
 }
 # build_libx264           # config_options+= --enable-libx264             # enable H.264 encoding via x264 [no]

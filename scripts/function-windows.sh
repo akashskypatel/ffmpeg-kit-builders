@@ -106,7 +106,7 @@ install_cross_compiler() {
 configure_ffmpeg_kit() {
 	echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
 	local type_postfix="$build_ffmpeg_kit_type"
-	
+	! truthy "$build_tests" && configure_ffmpeg
 	iswindows && fix_pkgconfig_flags
 
 	if truthy "$force_kit"; then
@@ -382,6 +382,8 @@ prefix = '$dependency_install_prefix'
 libdir = '$dependency_install_prefix/lib'
 b_lto = false
 b_staticpic = true
+optimization = '3'
+b_ndebug = 'true'
 c_link_args = ['-static', $meson_stdgcc]
 cpp_link_args = ['-static', $meson_stdcpp, $meson_stdgcc]
 c_args = ['-static-libgcc', '-DGLIB_STATIC_COMPILATION', '-mstackrealign']

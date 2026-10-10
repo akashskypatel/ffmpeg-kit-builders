@@ -1,0 +1,78 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 46bdf89..f2ddc5b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -103,8 +103,13 @@ elseif( UNIX OR MINGW )
+         set(OPT_DBG "-DNDEBUG") # disable assert
+     endif()
+ 
+-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_DBG} -${OPT_LV} -fomit-frame-pointer -Wall -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-variable -Wno-attributes -Werror -Wno-strict-overflow -Wno-unknown-pragmas -Wno-stringop-overflow -std=c99")
+-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-pointer-sign -pthread -Wno-pointer-to-int-cast -Wno-maybe-uninitialized")
++    if(EMSCRIPTEN)
++        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_DBG} -${OPT_LV} -fomit-frame-pointer -Wall -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-variable -Wno-attributes -Wno-strict-overflow -Wno-unknown-pragmas -std=c99")
++        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-pointer-sign -Wno-pointer-to-int-cast")
++    else()
++        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OPT_DBG} -${OPT_LV} -fomit-frame-pointer -Wall -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-variable -Wno-attributes -Werror -Wno-strict-overflow -Wno-unknown-pragmas -Wno-stringop-overflow -std=c99")
++        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-pointer-sign -pthread -Wno-pointer-to-int-cast -Wno-maybe-uninitialized")
++    endif()
+     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lm")
+ endif()
+ 
+diff --git a/src_base/xeve_port.h b/src_base/xeve_port.h
+index 2ee0d67..11bc552 100644
+--- a/src_base/xeve_port.h
++++ b/src_base/xeve_port.h
+@@ -139,8 +139,11 @@
+ #define xeve_assert_gv(x,r,v,g) \
+     {if(!(x)){assert(x); (r)=(v); goto g;}}
+ 
+-#ifndef ARM
++#if defined(__EMSCRIPTEN__) || defined(__wasm__)
++#define X86_SSE                 0
++#define ARM_NEON                0
++#elif !defined(ARM)
+ #define X86_SSE                 1
+ #define ARM_NEON                0
+ #else
+ #define X86_SSE                 0
+diff --git a/src_main/CMakeLists.txt b/src_main/CMakeLists.txt
+index d3a8244..3af4b10 100644
+--- a/src_main/CMakeLists.txt
++++ b/src_main/CMakeLists.txt
+@@ -26,11 +26,16 @@ if("${ARM}" STREQUAL "TRUE")
+   add_library( ${LIB_NAME} STATIC ${LIB_API_MAIN_SRC} ${ETM_INC} ${LIB_BASE_SRC} ${LIB_BASE_INC} ${LIB_MAIN_SRC} ${LIB_MAIN_INC} ${LIB_NEON_INC} ${LIB_NEON_SRC} )
+   add_library( ${LIB_NAME}_dynamic SHARED ${LIB_API_MAIN_SRC} ${ETM_INC} ${LIB_BASE_SRC} ${LIB_BASE_INC} ${LIB_MAIN_SRC} ${LIB_MAIN_INC} ${LIB_NEON_INC} ${LIB_NEON_SRC})
+ else()
++  if(EMSCRIPTEN)
++  add_library( ${LIB_NAME} STATIC ${LIB_API_MAIN_SRC} ${ETM_INC} ${LIB_BASE_SRC} ${LIB_BASE_INC} ${LIB_MAIN_SRC} ${LIB_MAIN_INC} )
++  add_library( ${LIB_NAME}_dynamic SHARED ${LIB_API_MAIN_SRC} ${ETM_INC} ${LIB_BASE_SRC} ${LIB_BASE_INC} ${LIB_MAIN_SRC} ${LIB_MAIN_INC})
++  else()
+   add_library( ${LIB_NAME} STATIC ${LIB_API_MAIN_SRC} ${ETM_INC} ${LIB_BASE_SRC} ${LIB_BASE_INC} ${LIB_MAIN_SRC} ${LIB_MAIN_INC}
+                                   ${LIB_SSE_SRC} ${LIB_SSE_INC} ${LIB_MAIN_SSE_SRC} ${LIB_MAIN_SSE_INC} ${LIB_AVX_SRC} ${LIB_AVX_INC} ${LIB_MAIN_AVX_SRC} ${LIB_MAIN_AVX_INC} )
+   add_library( ${LIB_NAME}_dynamic SHARED ${LIB_API_MAIN_SRC} ${ETM_INC} ${LIB_BASE_SRC} ${LIB_BASE_INC} ${LIB_MAIN_SRC} ${LIB_MAIN_INC}
+                                           ${LIB_SSE_SRC} ${LIB_SSE_INC} ${LIB_MAIN_SSE_SRC} ${LIB_MAIN_SSE_INC} ${LIB_AVX_SRC} ${LIB_AVX_SRC} ${LIB_AVX_INC} ${LIB_MAIN_AVX_SRC} ${LIB_MAIN_AVX_INC})
+ endif()
++endif()
+ 
+ set_target_properties(${LIB_NAME}_dynamic PROPERTIES VERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR} SOVERSION ${LIB_SOVERSION})
+ 
+@@ -70,8 +75,10 @@ source_group("base\\neon\\header" FILES ${LIB_NEON_INC})
+ source_group("base\\neon\\source" FILES ${LIB_NEON_SRC})
+ 
+ if("${ARM}" STREQUAL "TRUE")
+   include_directories( ${LIB_NAME} PUBLIC . .. ../inc ../src_base ../src_base/neon)
+-else()
++elseif(EMSCRIPTEN)
++  include_directories( ${LIB_NAME} PUBLIC . .. ../inc ./sse ./avx ../src_base ../src_base/sse ../src_base/avx)
++else()
+   include_directories( ${LIB_NAME} PUBLIC . .. ../inc ./sse ./avx ../src_base ../src_base/sse ../src_base/avx)
+ endif()
+ 
+@@ -94,5 +101,5 @@ if( MSVC )
+ 
+ elseif( UNIX OR MINGW )
+-    if("${ARM}" STREQUAL "FALSE")
++    if("${ARM}" STREQUAL "FALSE" AND NOT EMSCRIPTEN)
+         set_property( SOURCE ${SSE} APPEND PROPERTY COMPILE_FLAGS "-msse4.1" )
+         set_property( SOURCE ${AVX} APPEND PROPERTY COMPILE_FLAGS " -mavx2" )
+     endif()

@@ -29,6 +29,7 @@ set_toolchain_paths() {
 
 configure_ffmpeg_kit() {
 	echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
+	! truthy "$build_tests" && configure_ffmpeg
 	local type_postfix="$build_ffmpeg_kit_type"
 
 	if truthy "$force_kit"; then
@@ -174,6 +175,8 @@ backend = 'ninja'
 prefix = '$dependency_install_prefix'
 libdir = '$dependency_install_prefix/lib'
 b_staticpic = 'true'
+optimization = '3'
+b_ndebug = 'true'
 
 [binaries]
 c = '$CC'
@@ -281,7 +284,7 @@ create_android_aar() {
   change_dir "${BASEDIR}"
 
   chmod +x "${BASEDIR}/gradlew"
-
+	truthy "$do_build_ffmpeg_kit" && \
   { exec "./gradlew" :tools:android:${GRADLE_COMMAND} \
     --no-daemon --info --warning-mode all --gradle-user-home "${USER_HOME}/.gradle" \
     -PFFMPEG_KIT_NAMESPACE="${FFMPEG_KIT_NAMESPACE}" \

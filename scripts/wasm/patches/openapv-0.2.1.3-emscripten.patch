@@ -1,0 +1,15 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -19,7 +19,10 @@ message("SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
+ 
+ string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" lowercase_CMAKE_SYSTEM_PROCESSOR)
+ 
+-if(${lowercase_CMAKE_SYSTEM_PROCESSOR} MATCHES "^(arm|aarch)")
++if(EMSCRIPTEN)
++  # Emscripten reports an x86 host processor; use the portable C implementation.
++  message("  WebAssembly processor")
++elseif(${lowercase_CMAKE_SYSTEM_PROCESSOR} MATCHES "^(arm|aarch)")
+   message("  ARM processor")
+   #  add_definitions(-mfloat-abi=softfp -mfpu=neon)
+   add_definitions(-DARM=1)

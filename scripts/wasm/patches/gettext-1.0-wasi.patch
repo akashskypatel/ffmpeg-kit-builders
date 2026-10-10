@@ -1,0 +1,92 @@
+diff --git a/gettext-runtime/intl/gnulib-lib/getlocalename_l-unsafe.c b/gettext-runtime/intl/gnulib-lib/getlocalename_l-unsafe.c
+--- a/gettext-runtime/intl/gnulib-lib/getlocalename_l-unsafe.c
++++ b/gettext-runtime/intl/gnulib-lib/getlocalename_l-unsafe.c
+@@ -665,7 +665,10 @@ get_locale_t_name_unsafe (int category, locale_t locale)
+       else
+         /* It's the "C" or "POSIX" locale.  */
+         return (struct string_with_storage) { "C", STORAGE_INDEFINITE };
+ # endif
++#elif defined __wasi__ || defined __EMSCRIPTEN__
++      /* WASM targets only provide the C locale. */
++      return (struct string_with_storage) { "C", STORAGE_INDEFINITE };
+ #elif defined __ANDROID__
+       /* Android API level >= 21 */
+       struct __locale_t {
+diff --git a/gettext-runtime/gnulib-lib/getlocalename_l-unsafe.c b/gettext-runtime/gnulib-lib/getlocalename_l-unsafe.c
+--- a/gettext-runtime/gnulib-lib/getlocalename_l-unsafe.c
++++ b/gettext-runtime/gnulib-lib/getlocalename_l-unsafe.c
+@@ -665,7 +665,10 @@ get_locale_t_name_unsafe (int category, locale_t locale)
+       else
+         /* It's the "C" or "POSIX" locale.  */
+         return (struct string_with_storage) { "C", STORAGE_INDEFINITE };
+ # endif
++#elif defined __wasi__ || defined __EMSCRIPTEN__
++      /* WASM targets only provide the C locale. */
++      return (struct string_with_storage) { "C", STORAGE_INDEFINITE };
+ #elif defined __ANDROID__
+       /* Android API level >= 21 */
+       struct __locale_t {
+diff --git a/gettext-tools/gnulib-lib/getlocalename_l-unsafe.c b/gettext-tools/gnulib-lib/getlocalename_l-unsafe.c
+--- a/gettext-tools/gnulib-lib/getlocalename_l-unsafe.c
++++ b/gettext-tools/gnulib-lib/getlocalename_l-unsafe.c
+@@ -665,7 +665,10 @@ get_locale_t_name_unsafe (int category, locale_t locale)
+       else
+         /* It's the "C" or "POSIX" locale.  */
+         return (struct string_with_storage) { "C", STORAGE_INDEFINITE };
+ # endif
++#elif defined __wasi__ || defined __EMSCRIPTEN__
++      /* WASM targets only provide the C locale. */
++      return (struct string_with_storage) { "C", STORAGE_INDEFINITE };
+ #elif defined __ANDROID__
+       /* Android API level >= 21 */
+       struct __locale_t {
+diff --git a/libtextstyle/lib/getdtablesize.c b/libtextstyle/lib/getdtablesize.c
+--- a/libtextstyle/lib/getdtablesize.c
++++ b/libtextstyle/lib/getdtablesize.c
+@@ -20,7 +20,17 @@
+ /* Specification.  */
+ #include <unistd.h>
+ 
+-#if defined _WIN32 && ! defined __CYGWIN__
++#if defined __wasi__
++
++# include <limits.h>
++
++int
++getdtablesize (void)
++{
++  return INT_MAX;
++}
++
++#elif defined _WIN32 && ! defined __CYGWIN__
+ 
+ # include <stdio.h>
+ 
+diff --git a/libtextstyle/lib/sigaction.c b/libtextstyle/lib/sigaction.c
+--- a/libtextstyle/lib/sigaction.c
++++ b/libtextstyle/lib/sigaction.c
+@@ -51,7 +51,8 @@
+    with this module should stick with only sigaction().  */
+ 
+ /* Check some of our assumptions.  */
+-#if defined SIGCHLD || defined HAVE_SIGALTSTACK || defined HAVE_SIGINTERRUPT
++#if (defined SIGCHLD || defined HAVE_SIGALTSTACK || defined HAVE_SIGINTERRUPT) \
++    && !defined __wasi__
+ # error "Revisit the assumptions made in the sigaction module"
+ #endif
+ 
+diff --git a/libtextstyle/lib/signal.in.h b/libtextstyle/lib/signal.in.h
+--- a/libtextstyle/lib/signal.in.h
++++ b/libtextstyle/lib/signal.in.h
+@@ -52,6 +52,11 @@
+ 
+ #undef _@GUARD_PREFIX@_ALREADY_INCLUDING_SIGNAL_H
+ 
++#if defined __wasi__
++# undef NSIG
++# define NSIG 32
++#endif
++
+ #ifndef _@GUARD_PREFIX@_SIGNAL_H
+ #define _@GUARD_PREFIX@_SIGNAL_H
+ 

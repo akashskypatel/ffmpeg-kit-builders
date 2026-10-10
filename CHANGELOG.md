@@ -1,5 +1,20 @@
 # FFmpegKit Changelog
 
+## Version 0.11.2
+
+- Expanded WebAssembly support for library builds and runtime integration.
+- Improved callback safety across native and WebAssembly execution, including
+  thread-safe callback state, dedicated main-runtime dispatch, and failure
+  handling for logs, statistics, and completion callbacks.
+- Preserved opaque-handle per-session APIs while making FFmpeg, FFprobe, FFplay,
+  and media-information callbacks safe across Wasm pthreads.
+- Added stable session-ID callback transport and JavaScript callback registration
+  with runtime function-table growth support and module-lifetime slot ownership.
+- Added deterministic Wasm load failures, non-interactive browser stdin handling,
+  and headless native/Web callback regression coverage for delivery, lifecycle,
+  ordering, and table behavior.
+- Bump FFmpeg version to v9.0.2
+
 ## Version 0.11.1
 
 - Preserve FFmpeg, FFprobe, and FFplay session arguments as argv all the way into their embedded CLI runtimes to fix argument parsing bug exposed by quotes in commands.

@@ -1,0 +1,21 @@
+diff --git a/Configurations/10-main.conf b/Configurations/10-main.conf
+index 7e9396868..dde69c416 100755
+--- a/Configurations/10-main.conf
++++ b/Configurations/10-main.conf
+@@ -1969,6 +1969,16 @@ my %targets = (
+         multilib         => "64",
+     },
+ 
++    "wasm-wasm32" => {
++        inherit_from     => [ "BASE_unix" ],
++        CC               => "emcc",
++        CXX              => "em++",
++        cflags           => add("--target=wasm32-unknown-emscripten"),
++        cxxflags         => add("--target=wasm32-unknown-emscripten"),
++        lib_cppflags     => add("-DL_ENDIAN"),
++        bn_ops           => "THIRTY_TWO_BIT",
++    },
++
+ #### uClinux
+     "uClinux-dist" => {
+         inherit_from     => [ "BASE_unix" ],

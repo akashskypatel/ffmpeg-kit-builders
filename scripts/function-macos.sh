@@ -17,6 +17,7 @@ fi
 
 configure_ffmpeg_kit() {
   echo -e "INFO: Configuring ffmpeg kit" | tee -a "$LOG_FILE"
+  ! truthy "$build_tests" && configure_ffmpeg
   reset_allflags
   set_toolchain_paths
   
@@ -169,6 +170,8 @@ prefer_static = true
 backend = 'ninja'
 b_lto = false
 b_staticpic = true
+optimization = '3'
+b_ndebug = 'true'
 c_args = ['-I${dependency_install_prefix}/include', '-arch', '$host_arch', '-isysroot', '${SDKROOT}']
 c_link_args = ['-L${dependency_install_prefix}/lib', '-arch', '$host_arch', '-isysroot', '${SDKROOT}']
 cpp_args = ['-I${dependency_install_prefix}/include', '-arch', '$host_arch', '-DGLIB_STATIC_COMPILATION', '-isysroot', '${SDKROOT}']

@@ -106,6 +106,7 @@ is_system_path() {
 		[[ "$p" == "/lib"* ]] ||
 		[[ "$p" == "/lib64"* ]] ||
 		[[ "$p" == "/usr/lib64"* ]] ||
+		[[ "$p" == *"/emscripten/cache/sysroot/lib/"* ]] ||
 		[[ "$p" == *"/sysroot/usr/lib/"* ]]; then
 		return 0
 	fi

@@ -16,10 +16,11 @@ fi
 : "${LOG_FILE:=/dev/null}"
 
 export VALID_BUNDLES=("full" "video_hw" "video" "audio" "base" "debug")
-export VALID_BUILD_ON_LINUX=("linux" "windows" "android")
+export VALID_BUILD_ON_LINUX=("linux" "windows" "android" "wasm")
 export VALID_BUILD_ON_MACOS=("ios" "iphonesimulator" "appletvos" "appletvsimulator" "macos")
-export VALID_ARCHS=("x86_64" "aarch64" "armv7a")
+export VALID_ARCHS=("x86_64" "aarch64" "armv7a" "wasm32")
 export VALID_LINUX_ARCHS=("x86_64") # "aarch64" not functional yet
+export VALID_WASM_ARCHS=("wasm32")
 export VALID_WINDOWS_ARCHS=("x86_64")
 export VALID_ANDROID_ARCHS=("aarch64" "armv7a" "x86_64")
 export VALID_IOS_ARCHS=("aarch64")
@@ -40,6 +41,7 @@ mapfile -t VALID_IPHONESIMULATOR < <(for arch in "${VALID_IPHONESIMULATOR_ARCHS[
 mapfile -t VALID_APPLETVOS < <(for arch in "${VALID_APPLETVOS_ARCHS[@]}"; do echo "appletvos-${arch}"; done)
 mapfile -t VALID_APPLETVSIMULATOR < <(for arch in "${VALID_APPLETVSIMULATOR_ARCHS[@]}"; do echo "appletvsimulator-${arch}"; done)
 mapfile -t VALID_MACOS < <(for arch in "${VALID_MACOS_ARCHS[@]}"; do echo "macos-${arch}"; done)
+mapfile -t VALID_WASM < <(for arch in "${VALID_WASM_ARCHS[@]}"; do echo "wasm-${arch}"; done)
 
 VALID_PLATFORMS=(
   "${VALID_BUILD_ON_LINUX[@]}"
@@ -61,6 +63,7 @@ VALID_PLATFORM_ARCHS=(
   "${VALID_WINDOWS[@]}"
   "${VALID_ANDROID[@]}"
   "${VALID_APPLE[@]}"
+  "${VALID_WASM[@]}"
 )
 
 is_supported_combo() {

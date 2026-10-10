@@ -160,8 +160,10 @@ build_libxavs2() {
 --with-pic \
 --disable-asm \
 --extra-cflags=\"$CFLAGS -Wno-error=incompatible-pointer-types\""
-    wget "https://github.com/pkuvcl/xavs2/compare/master...1480c1:xavs2:gcc14/pointerconversion.patch" > >(redirect_output) 2>&1
-    apply_patch "pointerconversion.patch"
+    change_dir "$src_dir/$lib"
+    wget "https://github.com/pkuvcl/xavs2/compare/master...1480c1:xavs2:gcc14/pointerconversion.diff" > >(redirect_output) 2>&1
+    apply_patch "pointerconversion.diff"
+    change_dir "$src_dir/$lib/build/linux"
     disable_nonessential "$src_dir/$lib/build/linux"
 		do_make_and_make_install "AS= AR=\"$AR rc \" " "AS= AR=\"$AR rc \" "
     reset_cross_vars
@@ -182,19 +184,21 @@ build_mingw_std_threads() {
 }
 # build_zlib              # config_options+= --disable-zlib               # disable zlib [autodetect]
 build_zlib() {
-  local repo="https://github.com/madler/zlib"
   local lib="zlib"
-  local repo_ver="v1.3.1"
-	change_dir "$src_dir"
-	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-	change_dir "$src_dir/$lib"
-	local make_options
+  local repo="https://github.com/zlib-ng/zlib-ng"
+  local repo_ver="2.3.3"
+  change_dir "$src_dir"
+  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  change_dir "$src_dir/$lib/build" 1
+  local make_options
 	export ARFLAGS=rcs # Native can't take ARFLAGS; https://stackoverflow.com/questions/21396988/zlib-build-not-configuring-properly-with-cross-compiler-ignores-ar
-	do_configure "--static \
---prefix=\"$dependency_install_prefix\" \
---libdir=\"$dependency_install_prefix/lib\"
-CFLAGS=\"-O3\" \
-CPPFLAGS=\"\"" #doesnt like host variable
+  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
+-DZLIB_COMPAT=ON \
+-DBUILD_SHARED_LIBS=OFF \
+-DZLIB_ENABLE_TESTS=OFF \
+-DWITH_GTEST=OFF \
+-DWITH_BENCHMARKS=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
 	do_make_and_make_install "$(get_compiler_flags) ARFLAGS=rcs"
 	unset ARFLAGS
@@ -298,11 +302,13 @@ build_lzma() {
 build_iconv_minimal() {
   local lib="libiconv-minimal"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://web.archive.org/web/20260926022033/https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   touch "no.autoreconf"
 	generic_configure "--enable-static \
 --with-sysroot=${dependency_install_prefix} \
@@ -330,11 +336,13 @@ CFLAGS=\"$CFLAGS\"" "" "minimal"
 build_gettext() {
   # run_valid_function "build_iconv_minimal"
 	local lib="gettext"
+  local mirror="https://web.archive.org/web/20261003142129/https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.0\n' > .tarball-version
+  [[ -f .version ]] || printf '1.0\n' > .version
   do_autogen --skip-gnulib
   touch "no.autoreconf"
   change_dir "$src_dir/$lib/gettext-runtime" 1
@@ -365,7 +373,7 @@ CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\""
   touch "no.autogen"
   generic_configure "$config"
   find . -name "Makefile*" -exec gsed -i -E '/=/s/[^ ]+\.res(\.lo)?//g' {} + # otherwise causes issues with static linking
-  disable_nonessential "$src_dir/$lib"
+  disable_nonessential "$src_dir/$lib" "man"
   change_dir "$src_dir/$lib/gettext-runtime/intl"
   do_make_and_make_install "CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\"" "CFLAGS=\"$CFLAGS -Dlibintl_STATIC -Wno-incompatible-pointer-types\""
   change_dir "$src_dir/$lib/gettext-runtime"
@@ -392,7 +400,7 @@ build_iconv() {
   # run_valid_function "build_gettext"
 	local lib="libiconv"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://web.archive.org/web/20260926022033/https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
@@ -628,6 +636,19 @@ build_libpng() {
 -DZLIB_ROOT=\"$dependency_install_prefix\" \
 -DZLIB_INCLUDE_DIR=\"$dependency_install_prefix/include\" \
 -DZLIB_LIBRARY=\"$dependency_install_prefix/lib/libz.a\""
+  if [[ "$host_arch" != "x86_64" ]]; then
+    cmake_params+=" -DPNG_ARM_NEON=on \
+-DPNG_INTEL_SSE=off"
+    CFLAGS+=" -DPNG_ARM_NEON"
+    CXXFLAGS+=" -DPNG_ARM_NEON"
+    CPPFLAGS+=" -DPNG_ARM_NEON"
+  else
+    cmake_params+=" -DPNG_ARM_NEON=off \
+-DPNG_INTEL_SSE=on"
+    CFLAGS+=" -DPNG_INTEL_SSE"
+    CXXFLAGS+=" -DPNG_INTEL_SSE"
+    CPPFLAGS+=" -DPNG_INTEL_SSE"
+  fi
   do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -641,13 +662,31 @@ build_libwebp() {
   local lib="libwebp"
   local repo="https://chromium.googlesource.com/webm/libwebp"
   local repo_ver="v1.6.0"
+  export LIBPNG_CONFIG="$dependency_install_prefix/bin/libpng-config --static" # LibPNG somehow doesn't get autodetected.
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-	change_dir "$src_dir/$lib"
-	export LIBPNG_CONFIG="$dependency_install_prefix/bin/libpng-config --static" # LibPNG somehow doesn't get autodetected.
-	generic_configure "--disable-wic --enable-static --disable-shared"
-  disable_nonessential "$src_dir/$lib"
-	do_make_and_make_install
+	change_dir "$src_dir/$lib/build" 1
+  local cmake_args="-DCMAKE_BUILD_TYPE=Release \
+-DCMAKE_C_FLAGS_RELEASE=\"-O3 -DNDEBUG\" \
+-DBUILD_SHARED_LIBS=OFF \
+-DWEBP_LINK_STATIC=ON \
+-DWEBP_ENABLE_SIMD=ON \
+-DWEBP_USE_THREAD=ON \
+-DWEBP_NEAR_LOSSLESS=ON \
+-DWEBP_BUILD_ANIM_UTILS=OFF \
+-DWEBP_BUILD_CWEBP=OFF \
+-DWEBP_BUILD_DWEBP=OFF \
+-DWEBP_BUILD_GIF2WEBP=OFF \
+-DWEBP_BUILD_IMG2WEBP=OFF \
+-DWEBP_BUILD_VWEBP=OFF \
+-DWEBP_BUILD_WEBPINFO=OFF \
+-DWEBP_BUILD_LIBWEBPMUX=ON \
+-DWEBP_BUILD_WEBPMUX=OFF \
+-DWEBP_BUILD_EXTRAS=OFF \
+-DWEBP_BUILD_WEBP_JS=OFF \
+-DWEBP_BUILD_FUZZTEST=OFF"
+  do_cmake_from_build_dir "$src_dir/$lib" "$cmake_args" "libwebp-cmake"
+  do_make_and_make_install "" "" "libwebp-cmake"
 	unset LIBPNG_CONFIG
 	change_dir "$src_dir"
 }
@@ -813,10 +852,12 @@ build_libfontconfig() {
 build_gmp() {
   local lib="gmp"
   local repo="https://ftp.gnu.org/pub/gnu/gmp/gmp-6.3.0.tar.xz"
-  local mirror="https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz"
+  local repo="https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz"
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '6.3.0\n' > .tarball-version
+  [[ -f .version ]] || printf '6.3.0\n' > .version
 	export CC_FOR_BUILD=/usr/bin/gcc # WSL seems to need this..
 	export CPP_FOR_BUILD=usr/bin/cpp
 	generic_configure "ABI=$bits_target"
@@ -829,10 +870,12 @@ build_gmp() {
 build_libnettle() {
   local lib="nettle"
   local repo="https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
+  local mirror="https://web.archive.org/web/20260520203327/https://ftp.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
 	change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '3.10.2\n' > .tarball-version
+  [[ -f .version ]] || printf '3.10.2\n' > .version
 	local config_options="--disable-openssl --disable-documentation"
 	generic_configure "$config_options"
 	disable_nonessential "$src_dir/$lib"
@@ -843,10 +886,12 @@ build_libnettle() {
 build_libunistring() {
   local lib="libunistring"
   local repo="https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
+  local mirror="https://web.archive.org/web/20260219203533/https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.1.tar.gz"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.4.1\n' > .tarball-version
+  [[ -f .version ]] || printf '1.4.1\n' > .version
   touch "no.autogen"
   generic_configure
   gsed -i -E 's/=[[:space:]]*libunistring\.res\.lo/=/g' "lib/Makefile"
@@ -859,12 +904,14 @@ build_libidn2() {
   # run_valid_function "build_libunistring"
   # run_valid_function "build_iconv"
   local repo="https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+  local mirror="https://web.archive.org/web/20260918060455/https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
   local lib="libidn2"
   local repo_ver="2.3.8"
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" --alt="$mirror"
 	change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '2.3.8\n' > .tarball-version
+  [[ -f .version ]] || printf '2.3.8\n' > .version
   touch "no.autoreconf"
   export LDFLAGS="$LDFLAGS -liconv"
   export CPPFLAGS="$CPPFLAGS -DLIBICONV_STATIC "
@@ -913,6 +960,8 @@ build_gnutls() {
 	change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" # v3.8.10 not found by ffmpeg with identical .pc?
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '3.8.9\n' > .tarball-version
+  [[ -f .version ]] || printf '3.8.9\n' > .version
 	export CFLAGS="-Wno-int-conversion"
 	generic_configure "--disable-cxx \
 --disable-doc \
@@ -1365,7 +1414,6 @@ build_libbs2b() {
   download_and_unpack_file "$repo" "$lib"
   change_dir "$src_dir/$lib"
   touch "no.autoreconf"
-  # apply_patch "$PATCHDIR/libbs2b.patch" # not needed anymore?
 	gsed -i "s/AC_FUNC_MALLOC//" configure.ac # #270
 	generic_configure "--enable-static --disable-shared"
 	disable_nonessential "$src_dir/$lib"
@@ -1402,7 +1450,6 @@ build_libflite() {
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-  # apply_patch "$PATCHDIR/flite-2.1.0_mingw-w64-fixes.patch"
   if grep -Fq -e "cp -pd" Makefile; then
 		gsed -i "s/cp -pd/cp -p/" main/Makefile # friendlier cp for OS X
 	fi
@@ -1525,7 +1572,6 @@ build_librubberband() {
   disable_nonessential "$src_dir/$lib"
 	do_ninja_and_ninja_install
 	change_dir "$src_dir"
-	# apply_patch "$PATCHDIR/rubberband_git_static-lib.diff" # create install-static target
 	# generic_configure "--disable-ladspa"
 	# do_make "install-static AR=${cross_prefix}ar" # No need for 'do_make_install', because 'install-static' already has install-instructions.
 	# gsed -i 's/-lrubberband.*$/-lrubberband -lfftw3 -lsamplerate /' "$install_pkgconfig_dir/rubberband.pc"
@@ -1868,7 +1914,6 @@ build_libvpx() {
 	change_dir "$src_dir"
 	do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
   change_dir "$src_dir/$lib"
-	# apply_patch $PATCHDIR/vpx_160_semaphore.patch -p1 # perhaps someday can remove this after 1.6.0 or mingw fixes it LOL
 	if [[ "$bits_target" = "32" ]]; then
 		local config_options="--target=x86-win32-gcc"
 	else
@@ -1998,7 +2043,7 @@ build_libopenh264() {
 # build_libaom            # config_options+= --enable-libaom              # enable AV1 video encoding/decoding via libaom [no]
 build_libaom() {
   local lib="libaom"
-  local repo_ver="v3.13.1"
+  local repo_ver="v3.15.1"
   local repo="https://aomedia.googlesource.com/aom"
 	change_dir "$src_dir"
   do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
@@ -2009,15 +2054,11 @@ build_libaom() {
 		local config_options="-DCMAKE_TOOLCHAIN_FILE=../build/cmake/toolchains/x86_64-mingw-gcc.cmake -DAOM_TARGET_CPU=x86_64"
 	fi
 	change_dir "$src_dir/$lib/build" 1
-  local cmake_params="-DCMAKE_BUILD_TYPE=Release \
--DCONFIG_HIGHWAY=0 \
+  local cmake_params="\
+-DENABLE_APPS=0 \
 -DENABLE_EXAMPLES=0 \
 -DENABLE_TOOLS=0 \
 -DENABLE_TESTS=0 \
--DBUILD_SHARED_LIBS=0 \
--DENABLE_TESTS=0 \
--DENABLE_EXAMPLES=0 \
--DENABLE_TOOLS=0 \
 -DENABLE_DOCS=0"
 	do_cmake_from_build_dir "$src_dir/$lib" "$cmake_params"
   disable_nonessential "$src_dir/$lib"
@@ -2951,6 +2992,7 @@ build_librabbitmq() {
   change_dir "$src_dir/$lib"
   [[ ! -f "librabbitmq/amqp_socket.c.bak" ]] && copy_path "librabbitmq/amqp_socket.c" "librabbitmq/amqp_socket.c.bak" "-fv" >>"$LOG_FILE" 2>&1
   apply_patch "$PATCHDIR/librabbitmq_amqp_socket.diff"
+  gsed -i '/^static int connect_socket/,/^}/s/^  int one = 1;$/  unsigned long one = 1;/' "$src_dir/$lib/librabbitmq/amqp_socket.c"
   gsed -i 's/set(libs_private "${libs_private} -l${LIBRT}")/if(LIBRT)\n    set(libs_private "${libs_private} -l${LIBRT}")\nendif()/' \
     "$src_dir/$lib/CMakeLists.txt"
   gsed -i 's/OUTPUT_NAME librabbitmq\.\${RMQ_SOVERSION}/OUTPUT_NAME rabbitmq/' \
@@ -3589,10 +3631,10 @@ build_liblc3() {
 build_liblcevc_dec() {
   # https://github.com/v-novaltd/LCEVCdec
 	local lib="liblcevc"
-  local repo="https://github.com/v-novaltd/LCEVCdec"
-  local repo_ver="4.0.4"
+  local repo="https://github.com/v-novaltd/LCEVCdec/archive/refs/tags/4.2.2.tar.gz"
+  local repo_ver="4.2.2"
 	change_dir "$src_dir"
-  do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
+  download_and_unpack_file "$repo" "$src_dir/$lib"
   change_dir "$src_dir/$lib/build" 1
 	local cmake_params="-DCMAKE_BUILD_TYPE=Release \
 -DBUILD_SHARED_LIBS=OFF \
@@ -3765,8 +3807,8 @@ build_vapoursynth() {
 -Denable_vspipe=false \
 -Denable_python_module=false \
 -Dc_args=\"$CFLAGS -I$py_inc -static-libgcc -static-libstdc++\" \
--Dcpp_args=\"$CXXFLAGS -I$py_inc -static-libgcc -static-libstdc++\" \
--Dcpp_link_args=\"$LDFLAGS -L$py_lib_dir -lpython312 -lpython3 -static-libgcc -static-libstdc++\""
+-Dcpp_args=\"$CXXFLAGS -I$py_inc -include $py_inc/Python.h -static-libgcc -static-libstdc++\" \
+-Dcpp_link_args=\"$LDFLAGS -L$py_lib_dir -lpython312 -lpython3 -ldl -static-libgcc -static-libstdc++\""
 	generic_meson "$meson_options"
 	disable_nonessential "$src_dir/$lib"
   do_ninja_and_ninja_install
@@ -3777,7 +3819,7 @@ build_vapoursynth() {
     gsed -i -e 's/^Libs:.*/Libs: -L\${libdir} -lvapoursynth-script/' \
       -e '/^Libs.private:.*/d' \
       "$pkg_file"
-    echo "Libs.private: -L$py_lib_dir -lpython312 -lpython3" >> "$pkg_file"
+    echo "Libs.private: -L$py_lib_dir -lpython312 -lpython3 -ldl" >> "$pkg_file"
   fi
 }
 
@@ -4055,7 +4097,6 @@ build_libopencv() {
     export LDFLAGS="$LDFLAGS -static-libgcc -static-libstdc++"
 	  change_dir "$src_dir"
     do_git_checkout "$repo" "$src_dir/$lib" "$repo_ver"
-    # apply_patch "$PATCHDIR/opencv.detection_based.patch"
     change_dir "$src_dir/$lib"
     # gsed -i '/^[[:space:]]*cmake_parse_arguments(VS_VER/,/^[[:space:]]*configure_file("${OpenCV_SOURCE_DIR}/ s/^/# /' "cmake/OpenCVUtils.cmake"
     gsed -i '/^[[:space:]]*ocv_generate_vs_version_file("${_VS_VERSION_FILE}"/,/)/ s/^/# /' "cmake/OpenCVModule.cmake"
@@ -4592,7 +4633,6 @@ build_libffi() {
 	change_dir "$src_dir"
 	download_and_unpack_file "$repo" "$lib" # also dep
 	change_dir "$src_dir/$lib"
-	apply_patch "$PATCHDIR/libffi.patch"
 	generic_configure "--disable-multi-os-directory"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -4905,7 +4945,19 @@ build_libjpeg_turbo() {
 -DBUILD_SHARED_LIBS=OFF \
 -DCMAKE_INSTALL_PREFIX=$dependency_install_prefix \
 -DENABLE_SHARED=0 \
+-DWITH_JPEG8=1 \
+-DWITH_SIMD=1 \
+-DREQUIRE_SIMD=1 \
+-DWITH_TURBOJPEG=0 \
+-DWITH_JAVA=0 \
 -DCMAKE_ASM_NASM_COMPILER=yasm"
+  if [[ "$host_arch" == "x86_64" ]]; then
+    cmake_params+=" -DENABLE_NEON=OFF \
+-DNEON_INTRINSICS=OFF"
+  else
+    cmake_params+=" -DENABLE_NEON=ON \
+-DNEON_INTRINSICS=ON"
+  fi
 	generic_cmake "$cmake_params" "$src_dir/$lib"
   disable_nonessential "$src_dir/$lib"
   do_make_and_make_install
@@ -4978,11 +5030,13 @@ build_gettext_native() {
   # run_valid_function "build_iconv_minimal_native"
   clear_cross_vars
   local lib="gettext-native"
+  local mirror="https://web.archive.org/web/20261003142129/https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
   local repo="https://ftp.gnu.org/pub/gnu/gettext/gettext-1.0.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.0\n' > .tarball-version
+  [[ -f .version ]] || printf '1.0\n' > .version
   do_autogen --skip-gnulib
   change_dir "$src_dir/$lib/gettext-runtime"
   export CFLAGS=" -Wno-incompatible-pointer-types -ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
@@ -5002,6 +5056,7 @@ build_gettext_native() {
   touch "no.autogen"
   do_configure "$config \
 CFLAGS=\"$CFLAGS\""
+  disable_nonessential "$src_dir/$lib/gettext-runtime" "man"
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/libtextstyle"
@@ -5012,6 +5067,7 @@ CFLAGS=\"$CFLAGS\""
   do_make
   do_make_install "PREFIX=\"/usr\""
   change_dir "$src_dir/$lib/gettext-tools"
+  ensure_gettext_tools_sources "$src_dir/$lib" || exit_message 1 "build_gettext_native: failed to fetch gettext-tools sources"
   config+="--disable-examples \
 --without-libtextstyle-prefix"
   touch "no.autoreconf"
@@ -5019,6 +5075,7 @@ CFLAGS=\"$CFLAGS\""
   do_configure "$config \
 CFLAGS=\"$CFLAGS\" \
 LDFLAGS=\"$LDFLAGS\""
+  disable_nonessential "$src_dir/$lib/gettext-tools" "examples" "tests" "man"
   local make_config="LDFLAGS=\"-L$src_dir/$lib/gettext-tools/.libs -L$src_dir/$lib/gettext-tools/src/.libs ${LDFLAGS}\""
   do_make
   do_make_install "PREFIX=\"/usr\""
@@ -5031,11 +5088,13 @@ build_iconv_minimal_native() {
   clear_cross_vars
   local lib="libiconv-native"
   local repo="https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
-  local mirror="https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
+  local mirror="https://web.archive.org/web/20260926022033/https://ftp.gnu.org/gnu/libiconv/libiconv-1.18.tar.gz"
   local repo_ver="v1.18"
   change_dir "$src_dir"
   download_and_unpack_file "$repo" "$lib" --alt="$mirror"
   change_dir "$src_dir/$lib"
+  [[ -f .tarball-version ]] || printf '1.18\n' > .tarball-version
+  [[ -f .version ]] || printf '1.18\n' > .version
   touch "no.autoreconf"
   export CFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"
   export CXXFLAGS="-ffunction-sections -fdata-sections -fstrict-aliasing -fPIC -I$src_dir/$lib"

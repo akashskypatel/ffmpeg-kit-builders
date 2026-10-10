@@ -39,6 +39,7 @@ extern "C" {
 #include "FFprobeKit.hpp"
 #include "MediaInformation.hpp"
 #include "MediaInformationSession.hpp"
+#include "WasmCallbackDispatcher.h"
 #include "Packages.hpp"
 #include "Statistics.hpp"
 #include "StreamInformation.hpp"
@@ -46,10 +47,17 @@ extern "C" {
 #include <cstdio>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <set>
+#include <stdexcept>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 #include <chrono>
+#include <condition_variable>
 #include <ctime>
 
 static std::string getCurrentTimeStamp() {
@@ -120,6 +128,8 @@ android_unwind_callback(struct _Unwind_Context *context, void *arg) {
   state->count++;
   return (state->count >= 30) ? _URC_END_OF_STACK : _URC_NO_REASON;
 }
+#elif defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
 #else
 #include <execinfo.h>
 #include <unistd.h>
@@ -159,6 +169,9 @@ void internal_print_stack_trace() {
   __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "--- Native Stack Trace ---");
   AndroidUnwindState state = {0};
   _Unwind_Backtrace(android_unwind_callback, &state);
+#elif defined(__EMSCRIPTEN__)
+  emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK | EM_LOG_JS_STACK,
+                 "--- FFmpegKit Stack Trace ---");
 #else
   void *array[20];
   size_t size = backtrace(array, 20);
@@ -168,9 +181,39 @@ void internal_print_stack_trace() {
 
 using namespace ffmpegkit;
 
-// Session registry to keep shared_ptrs alive for the duration of the session
-static std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>> &get_session_registry() {
-    static std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>> *registry = new std::map<void*, std::shared_ptr<ffmpegkit::FFmpegKitObject>>();
+using SessionCompleteCallback = void (*)(void *, void *);
+using SessionLogCallback = void (*)(void *, const char *, void *);
+using SessionStatisticsCallback =
+    void (*)(void *, int64_t, int64_t, int64_t, double, double, int64_t,
+             double, double, int64_t, int64_t, void *);
+
+static bool dispatch_session_complete_callback(
+    SessionCompleteCallback callback, void *session_handle, void *user_data);
+static bool dispatch_session_log_callback(
+    SessionLogCallback callback, void *session_handle, std::string message,
+    void *user_data);
+static bool dispatch_session_statistics_callback(
+    SessionStatisticsCallback callback, void *session_handle,
+    int64_t time_elapsed, int64_t time, int64_t size, double bitrate,
+    double speed, int64_t video_frame_number, double video_fps,
+    double video_quality, int64_t dup_frames, int64_t drop_frames,
+    void *user_data);
+
+// Every exported opaque handle has its own token. The token retains the
+// underlying object independently from other handles that may alias it (for
+// example, a session handle returned by both getSession() and getSessions()).
+struct HandleRecord {
+  explicit HandleRecord(std::shared_ptr<ffmpegkit::FFmpegKitObject> object)
+      : value(std::move(object)) {}
+
+  std::shared_ptr<ffmpegkit::FFmpegKitObject> value;
+};
+
+// Handle registry for all opaque wrapper objects. The map owns each token's
+// lookup entry; the token itself owns one retained shared_ptr to its object.
+static std::map<void*, std::unique_ptr<HandleRecord>> &get_handle_registry() {
+    static std::map<void*, std::unique_ptr<HandleRecord>> *registry =
+        new std::map<void*, std::unique_ptr<HandleRecord>>();
     return *registry;
 }
 
@@ -220,25 +263,18 @@ template <typename T> static std::shared_ptr<T> get_ptr_internal(void *handle) {
     return nullptr;
 
   // 1. Check the unified registry
+  std::shared_ptr<ffmpegkit::FFmpegKitObject> object;
   {
     std::lock_guard<RegistryMutex> lock(get_registry_mutex());
-    auto it = get_session_registry().find(handle);
-    if (it != get_session_registry().end()) {
-      return std::dynamic_pointer_cast<T>(it->second);
+    auto it = get_handle_registry().find(handle);
+    if (it != get_handle_registry().end() && it->second) {
+      object = it->second->value;
     }
+  }
+  if (object) {
+    return std::dynamic_pointer_cast<T>(object);
   }
 
-  // 2. Support "fake" handles (Session IDs passed as pointers from log/stats callbacks)
-  // WARNING: This heuristic relies on the assumption that real heap pointers (handles) 
-  // will be > 1,000,000. It is a necessary bridging hack to pass raw numeric Session IDs 
-  // through the opaque void* fields of C-callbacks without complex allocation tracking.
-  uintptr_t value = (uintptr_t)handle;
-  if (value > 0 && value < 1000000) {
-    auto session = FFmpegKitConfig::getSession((long)value);
-    if (session) {
-      return std::dynamic_pointer_cast<T>(session);
-    }
-  }
 
   return nullptr;
 }
@@ -249,33 +285,41 @@ template <typename T> static std::shared_ptr<T> get_ptr(void *handle) {
 
 template <typename T> static void *create_handle(std::shared_ptr<T> ptr) {
   if (!ptr) return nullptr;
-  
-  void *handle = static_cast<void*>(ptr.get());
-  
+
+  auto record = std::make_unique<HandleRecord>(
+      std::static_pointer_cast<FFmpegKitObject>(ptr));
+  void *handle = static_cast<void *>(record.get());
+
   std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
-  get_session_registry()[handle] = std::static_pointer_cast<FFmpegKitObject>(ptr);
-  
+  if (!get_handle_registry().emplace(handle, std::move(record)).second) {
+    throw std::runtime_error("duplicate opaque handle token");
+  }
   return handle;
 }
 
 template <typename T>
 static void **
 list_to_handle_array(std::shared_ptr<std::list<std::shared_ptr<T>>> list) {
+  void **array = nullptr;
+  size_t created_count = 0;
   try {
     if (!list)
       return nullptr;
     size_t size = list->size();
-    void **array = (void **)malloc((size + 1) * sizeof(void *));
+    array = (void **)malloc((size + 1) * sizeof(void *));
     if (!array)
       return nullptr;
 
-    size_t i = 0;
     for (auto &item : *list) {
-      array[i++] = create_handle(item);
+      array[created_count++] = create_handle(item);
     }
-    array[i] = nullptr;
+    array[created_count] = nullptr;
     return array;
   } catch (const std::exception &e) {
+    for (size_t i = 0; i < created_count; ++i) {
+      ffmpeg_kit_handle_release(array[i]);
+    }
+    free(array);
     std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in list_to_handle_array: " << e.what()
               << std::endl;
     PRINT_STACK_TRACE();
@@ -300,19 +344,34 @@ const char * DLL_ALIGN ffmpeg_kit_get_build_stamp(void) {
 
 void DLL_ALIGN ffmpeg_kit_handle_release(void *handle) {
   if (!handle) return;
-  
+
   std::shared_ptr<Session> session;
-  
+  std::unique_ptr<HandleRecord> record;
+  bool has_other_handles = false;
+
   {
     std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
-    auto it = get_session_registry().find(handle);
-    if (it != get_session_registry().end()) {
-      session = std::dynamic_pointer_cast<Session>(it->second);
-      get_session_registry().erase(it);
+    auto it = get_handle_registry().find(handle);
+    if (it != get_handle_registry().end()) {
+      record = std::move(it->second);
+      session = std::dynamic_pointer_cast<Session>(record->value);
+      get_handle_registry().erase(it);
+
+      if (session) {
+        for (const auto &entry : get_handle_registry()) {
+          if (entry.second && entry.second->value.get() == session.get()) {
+            has_other_handles = true;
+            break;
+          }
+        }
+      }
     }
   }
 
-  if (session) {
+  // Releasing an alias must not cancel the underlying session while another
+  // exported token still owns it. Preserve the historical cancellation
+  // behavior when this is the last token for a running session.
+  if (session && !has_other_handles) {
     const SessionState state = session->getState();
     const bool should_cancel = state == SessionStateRunning;
 
@@ -361,15 +420,19 @@ void DLL_ALIGN ffmpeg_kit_config_clear_sessions() {
   try {
     // First, clear our wrapper registry and collect any lingering sessions
     std::vector<std::shared_ptr<Session>> sessions_to_cancel;
+    std::set<Session *> seen_sessions;
     {
       std::lock_guard<RegistryMutex> registry_lock(get_registry_mutex());
-      for (auto& pair : get_session_registry()) {
-        auto session = std::dynamic_pointer_cast<Session>(pair.second);
-        if (session) {
+      for (auto& pair : get_handle_registry()) {
+        if (!pair.second) {
+          continue;
+        }
+        auto session = std::dynamic_pointer_cast<Session>(pair.second->value);
+        if (session && seen_sessions.insert(session.get()).second) {
           sessions_to_cancel.push_back(session);
         }
       }
-      get_session_registry().clear();
+      get_handle_registry().clear();
     }
 
     // Cancel and safely drain any running sessions locally
@@ -418,7 +481,7 @@ ffmpeg_kit_execute_async(const char *command,
     FFmpegSessionHandle handle = create_handle(session);
     auto lambda =[complete_cb, user_data, handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     session->setCompleteCallback(lambda);
@@ -446,21 +509,23 @@ FFmpegSessionHandle DLL_ALIGN ffmpeg_kit_execute_async_full(
     auto complete = [complete_cb, user_data,
                      handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     auto log =[log_cb, user_data, handle](std::shared_ptr<Log> l) {
       if (log_cb && l) {
         std::string message = l->getMessage();
-        log_cb(handle, message.c_str(), user_data);
+        dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
       }
     };
     auto stats = [stats_cb, user_data, handle](std::shared_ptr<Statistics> s) {
       if (stats_cb && s) {
-        stats_cb(handle, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
-                 s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
-                 s->getVideoQuality(), s->getDupFrames(),
-                 s->getDropFrames(), user_data);
+        dispatch_session_statistics_callback(
+            stats_cb, handle, (int64_t)(s->getTimeElapsed() * 1000),
+            (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
+            s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
+            s->getVideoQuality(), s->getDupFrames(), s->getDropFrames(),
+            user_data);
       }
     };
 
@@ -509,21 +574,23 @@ FFmpegSessionHandle DLL_ALIGN ffmpeg_kit_create_session_with_callbacks(
 
     auto complete =[complete_cb, user_data, handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     auto log =[log_cb, user_data, handle](std::shared_ptr<Log> l) {
       if (log_cb && l) {
         std::string message = l->getMessage();
-        log_cb(handle, message.c_str(), user_data);
+        dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
       }
     };
     auto stats =[stats_cb, user_data, handle](std::shared_ptr<Statistics> s) {
       if (stats_cb && s) {
-        stats_cb(handle, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
-                 s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
-                 s->getVideoQuality(), s->getDupFrames(),
-                 s->getDropFrames(), user_data);
+        dispatch_session_statistics_callback(
+            stats_cb, handle, (int64_t)(s->getTimeElapsed() * 1000),
+            (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
+            s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
+            s->getVideoQuality(), s->getDupFrames(), s->getDropFrames(),
+            user_data);
       }
     };
     session->setCompleteCallback(complete);
@@ -581,21 +648,23 @@ FFmpegSessionHandle DLL_ALIGN ffmpeg_kit_create_session_from_argv_with_callbacks
 
         auto complete = [complete_cb, user_data, handle](std::shared_ptr<Session> s) {
             if (complete_cb) {
-                complete_cb(handle, user_data);
+                dispatch_session_complete_callback(complete_cb, handle, user_data);
             }
         };
         auto log = [log_cb, user_data, handle](std::shared_ptr<Log> l) {
             if (log_cb && l) {
                 std::string message = l->getMessage();
-                log_cb(handle, message.c_str(), user_data);
+                dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
             }
         };
         auto stats = [stats_cb, user_data, handle](std::shared_ptr<Statistics> s) {
             if (stats_cb && s) {
-                stats_cb(handle, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
-                         s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
-                         s->getVideoQuality(), s->getDupFrames(),
-                         s->getDropFrames(), user_data);
+                dispatch_session_statistics_callback(
+            stats_cb, handle, (int64_t)(s->getTimeElapsed() * 1000),
+            (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
+            s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
+            s->getVideoQuality(), s->getDupFrames(), s->getDropFrames(),
+            user_data);
             }
         };
 
@@ -630,6 +699,7 @@ void DLL_ALIGN ffmpeg_kit_debug_print_stack() {
     printf("[%s] [ffmpeg-kit] [DEBUG] Alignment: %d\n", getCurrentTimeStamp().c_str(), (int)(stack_ptr % 16));
 }
 
+#ifdef FFMPEG_KIT_TEST_HOOKS
 void DLL_ALIGN ffmpeg_kit_test_emit_unattributed_log(const char *message) {
     try {
         av_log(nullptr, AV_LOG_INFO, "%s\n", message ? message : "");
@@ -640,6 +710,7 @@ void DLL_ALIGN ffmpeg_kit_test_emit_unattributed_log(const char *message) {
         PRINT_STACK_TRACE();
     }
 }
+#endif
 
 void DLL_ALIGN ffmpeg_kit_set_log_callback(FFmpegSessionHandle session,
                                  FFmpegKitLogCallback log_cb, void *user_data) {
@@ -649,7 +720,7 @@ void DLL_ALIGN ffmpeg_kit_set_log_callback(FFmpegSessionHandle session,
       auto log = [log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       ptr->setLogCallback(log);
@@ -670,10 +741,12 @@ void DLL_ALIGN ffmpeg_kit_set_statistics_callback(FFmpegSessionHandle session,
       auto stats = [stats_cb, user_data,
                     session](std::shared_ptr<Statistics> s) {
         if (stats_cb && s) {
-          stats_cb(session, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
-                   s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
-                   s->getVideoQuality(), s->getDupFrames(),
-                   s->getDropFrames(), user_data);
+          dispatch_session_statistics_callback(
+              stats_cb, session, (int64_t)(s->getTimeElapsed() * 1000),
+              (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
+              s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
+              s->getVideoQuality(), s->getDupFrames(), s->getDropFrames(),
+              user_data);
         }
       };
       ptr->setStatisticsCallback(stats);
@@ -694,7 +767,7 @@ void DLL_ALIGN ffmpeg_kit_set_complete_callback(FFmpegSessionHandle session,
       auto complete = [complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -717,22 +790,24 @@ void DLL_ALIGN ffmpeg_kit_set_callbacks(FFmpegSessionHandle session,
       auto complete =[complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       auto log =[log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       auto stats = [stats_cb, user_data,
                     session](std::shared_ptr<Statistics> s) {
         if (stats_cb && s) {
-          stats_cb(session, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
-                   s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
-                   s->getVideoQuality(), s->getDupFrames(),
-                   s->getDropFrames(), user_data);
+          dispatch_session_statistics_callback(
+              stats_cb, session, (int64_t)(s->getTimeElapsed() * 1000),
+              (int64_t)(s->getTime() * 1000), s->getSize(), s->getBitrate(),
+              s->getSpeed(), s->getVideoFrameNumber(), s->getVideoFps(),
+              s->getVideoQuality(), s->getDupFrames(), s->getDropFrames(),
+              user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -837,7 +912,7 @@ FFprobeSessionHandle DLL_ALIGN ffprobe_kit_execute_async(const char *command,
     FFprobeSessionHandle handle = create_handle(session);
     auto lambda = [complete_cb, user_data, handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     session->setCompleteCallback(lambda);
@@ -904,13 +979,13 @@ FFprobeSessionHandle DLL_ALIGN ffprobe_kit_create_session_with_callbacks(
     auto complete =[complete_cb, user_data,
                      handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     auto log =[log_cb, user_data, handle](std::shared_ptr<Log> l) {
       if (log_cb && l) {
         std::string message = l->getMessage();
-        log_cb(handle, message.c_str(), user_data);
+        dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
       }
     };
     session->setCompleteCallback(complete);
@@ -964,13 +1039,13 @@ FFprobeSessionHandle DLL_ALIGN ffprobe_kit_create_session_from_argv_with_callbac
 
         auto complete =[complete_cb, user_data, handle](std::shared_ptr<Session> s) {
             if (complete_cb) {
-                complete_cb(handle, user_data);
+                dispatch_session_complete_callback(complete_cb, handle, user_data);
             }
         };
         auto log =[log_cb, user_data, handle](std::shared_ptr<Log> l) {
             if (log_cb && l) {
                 std::string message = l->getMessage();
-                log_cb(handle, message.c_str(), user_data);
+                dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
             }
         };
 
@@ -1007,7 +1082,7 @@ void DLL_ALIGN ffprobe_kit_set_log_callback(FFprobeSessionHandle session,
       auto log =[log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       ptr->setLogCallback(log);
@@ -1028,7 +1103,7 @@ void DLL_ALIGN ffprobe_kit_set_complete_callback(FFprobeSessionHandle session,
       auto complete = [complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -1049,13 +1124,13 @@ void DLL_ALIGN ffprobe_kit_set_callbacks(FFprobeSessionHandle session,
       auto complete =[complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       auto log =[log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -1120,7 +1195,7 @@ MediaInformationSessionHandle DLL_ALIGN ffprobe_kit_get_media_information_async(
     if (complete_cb) {
       auto lambda = [complete_cb, user_data,
                      handle](std::shared_ptr<MediaInformationSession> s) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       };
       session->setCompleteCallback(lambda);
     }
@@ -1159,7 +1234,7 @@ FFplaySessionHandle DLL_ALIGN ffplay_kit_execute_async(const char *command,
     FFplaySessionHandle handle = create_handle(session);
     auto lambda = [complete_cb, user_data, handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     session->setCompleteCallback(lambda);
@@ -1201,13 +1276,13 @@ FFplaySessionHandle DLL_ALIGN ffplay_kit_create_session_with_callbacks(
     auto complete =[complete_cb, user_data,
                      handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     auto log =[log_cb, user_data, handle](std::shared_ptr<Log> l) {
       if (log_cb && l) {
         std::string message = l->getMessage();
-        log_cb(handle, message.c_str(), user_data);
+        dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
       }
     };
     session->setCompleteCallback(complete);
@@ -1263,13 +1338,13 @@ FFplaySessionHandle DLL_ALIGN ffplay_kit_create_session_from_argv_with_callbacks
 
         auto complete = [complete_cb, user_data, handle](std::shared_ptr<Session> s) {
             if (complete_cb) {
-                complete_cb(handle, user_data);
+                dispatch_session_complete_callback(complete_cb, handle, user_data);
             }
         };
         auto log =[log_cb, user_data, handle](std::shared_ptr<Log> l) {
             if (log_cb && l) {
                 std::string message = l->getMessage();
-                log_cb(handle, message.c_str(), user_data);
+                dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
             }
         };
 
@@ -1296,7 +1371,7 @@ void DLL_ALIGN ffplay_kit_set_log_callback(FFplaySessionHandle session,
       auto log =[log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       ptr->setLogCallback(log);
@@ -1317,7 +1392,7 @@ void DLL_ALIGN ffplay_kit_set_complete_callback(FFplaySessionHandle session,
       auto complete =[complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -1338,13 +1413,13 @@ void DLL_ALIGN ffplay_kit_set_callbacks(FFplaySessionHandle session,
       auto complete =[complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       auto log =[log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -1779,14 +1854,33 @@ void DLL_ALIGN ffplay_kit_clear_android_surface(void) {}
 
 void DLL_ALIGN ffplay_kit_register_frame_callback(
     FFplayKitFrameCallback callback, void *userdata) {
+#if defined(__EMSCRIPTEN__)
+  (void)callback;
+  (void)userdata;
+#else
   ffplay_set_frame_callback(
       reinterpret_cast<void (*)(void *, const uint8_t *, int, int, int,
                                 const char *)>(callback),
       userdata);
+#endif
 }
 
 void DLL_ALIGN ffplay_kit_unregister_frame_callback(void) {
+#if !defined(__EMSCRIPTEN__)
   ffplay_set_frame_callback(nullptr, nullptr);
+#endif
+}
+
+size_t DLL_ALIGN ffplay_kit_get_frame_buffer_size(void) {
+  return ffplay_get_frame_buffer_size();
+}
+
+int DLL_ALIGN ffplay_kit_copy_frame(uint8_t *destination,
+                                    size_t destination_size, int *width,
+                                    int *height, int *linesize,
+                                    uint64_t *generation) {
+  return ffplay_copy_frame(destination, destination_size, width, height,
+                           linesize, generation);
 }
 
 /* Config */
@@ -2318,13 +2412,13 @@ MediaInformationSessionHandle DLL_ALIGN media_information_create_session_with_ca
     auto complete =[complete_cb, user_data,
                      handle](std::shared_ptr<Session> s) {
       if (complete_cb) {
-        complete_cb(handle, user_data);
+        dispatch_session_complete_callback(complete_cb, handle, user_data);
       }
     };
     auto log =[log_cb, user_data, handle](std::shared_ptr<Log> l) {
       if (log_cb && l) {
         std::string message = l->getMessage();
-        log_cb(handle, message.c_str(), user_data);
+        dispatch_session_log_callback(log_cb, handle, std::move(message), user_data);
       }
     };
     session->setCompleteCallback(complete);
@@ -2348,7 +2442,7 @@ void DLL_ALIGN media_information_kit_set_log_callback(
       auto log = [log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       ptr->setLogCallback(log);
@@ -2369,7 +2463,7 @@ void DLL_ALIGN media_information_kit_set_complete_callback(
       auto complete =[complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -2391,13 +2485,13 @@ void DLL_ALIGN media_information_kit_set_callbacks(
       auto complete = [complete_cb, user_data,
                        session](std::shared_ptr<Session> s) {
         if (complete_cb && s) {
-          complete_cb(session, user_data);
+          dispatch_session_complete_callback(complete_cb, session, user_data);
         }
       };
       auto log =[log_cb, user_data, session](std::shared_ptr<Log> l) {
         if (log_cb && l) {
           std::string message = l->getMessage();
-          log_cb(session, message.c_str(), user_data);
+          dispatch_session_log_callback(log_cb, session, std::move(message), user_data);
         }
       };
       ptr->setCompleteCallback(complete);
@@ -3107,99 +3201,506 @@ void DLL_ALIGN ffmpeg_kit_clear_sessions(void) {
 } /* End extern "C" */
 
 /* Global Callbacks */
-// Static storage for callbacks
-static FFmpegKitLogCallback g_log_callback = nullptr;
+// Static storage for global callbacks
+static FFmpegKitGlobalLogCallback g_log_callback = nullptr;
 static void *g_log_user_data = nullptr;
 
-static FFmpegKitStatisticsCallback g_stats_callback = nullptr;
+static FFmpegKitGlobalStatisticsCallback g_stats_callback = nullptr;
 static void *g_stats_user_data = nullptr;
 
-static FFmpegKitCompleteCallback g_ffmpeg_complete_callback = nullptr;
+static FFmpegKitGlobalCompleteCallback g_ffmpeg_complete_callback = nullptr;
 static void *g_ffmpeg_complete_user_data = nullptr;
 
-static FFprobeKitCompleteCallback g_ffprobe_complete_callback = nullptr;
+static FFprobeKitGlobalCompleteCallback g_ffprobe_complete_callback = nullptr;
 static void *g_ffprobe_complete_user_data = nullptr;
 
-static FFplayKitCompleteCallback g_ffplay_complete_callback = nullptr;
+static FFplayKitGlobalCompleteCallback g_ffplay_complete_callback = nullptr;
 static void *g_ffplay_complete_user_data = nullptr;
 
-static ::MediaInformationSessionCompleteCallback g_media_complete_callback =
-    nullptr;
+static MediaInformationSessionGlobalCompleteCallback g_media_complete_callback = nullptr;
 static void *g_media_complete_user_data = nullptr;
+static std::mutex g_callback_state_mutex;
+static WasmCallbackDispatcher g_wasm_callback_dispatcher;
 
-extern "C" {
-void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(FFmpegKitLogCallback log_cb,
-                                           void *user_data) {
-  try {
-    g_log_callback = log_cb;
-    g_log_user_data = user_data;
-    if (log_cb) {
-      FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
-        if (g_log_callback && log) {
-          const std::string &message = log->getMessage();
+#ifdef FFMPEG_KIT_TEST_HOOKS
+static std::mutex g_log_payload_mutex;
+static std::unordered_set<void *> g_log_payloads;
+#endif
 
-          // Pass ID as pointer (Hack to avoid allocation/threading issues)
-          void *session_handle = (void *)(uintptr_t)log->getSessionId();
+static void track_log_payload(void *payload) {
+#ifdef FFMPEG_KIT_TEST_HOOKS
+  if (payload != nullptr) {
+    std::lock_guard<std::mutex> lock(g_log_payload_mutex);
+    g_log_payloads.insert(payload);
+  }
+#else
+  (void)payload;
+#endif
+}
 
-          g_log_callback(session_handle, message.c_str(), g_log_user_data);
-        }
-      });
-    } else {
-      FFmpegKitConfig::enableLogCallback(nullptr);
+static void release_log_payload(void *payload) {
+  if (payload == nullptr) {
+    return;
+  }
+#ifdef FFMPEG_KIT_TEST_HOOKS
+  {
+    std::lock_guard<std::mutex> lock(g_log_payload_mutex);
+    g_log_payloads.erase(payload);
+  }
+#endif
+  free(payload);
+}
+
+static void report_callback_dispatch_failure(const char *callback_kind);
+
+// Accepted callbacks are counted separately for each session identity. A
+// completion callback waits for earlier log/statistics callbacks for the same
+// session, including callbacks accepted by different producer threads.
+static std::mutex g_pending_callback_mutex;
+static std::condition_variable g_pending_callback_condition;
+static std::unordered_map<void *, size_t> g_pending_handle_callbacks;
+static std::unordered_map<int64_t, size_t> g_pending_id_callbacks;
+
+static void begin_pending_handle_callback(void *session_handle) {
+  std::lock_guard<std::mutex> lock(g_pending_callback_mutex);
+  ++g_pending_handle_callbacks[session_handle];
+}
+
+static void end_pending_handle_callback(void *session_handle) {
+  {
+    std::lock_guard<std::mutex> lock(g_pending_callback_mutex);
+    auto pending = g_pending_handle_callbacks.find(session_handle);
+    if (pending != g_pending_handle_callbacks.end()) {
+      if (--pending->second == 0) {
+        g_pending_handle_callbacks.erase(pending);
+      }
     }
+  }
+  g_pending_callback_condition.notify_all();
+}
+
+static void begin_pending_id_callback(int64_t session_id) {
+  std::lock_guard<std::mutex> lock(g_pending_callback_mutex);
+  ++g_pending_id_callbacks[session_id];
+}
+
+static void end_pending_id_callback(int64_t session_id) {
+  {
+    std::lock_guard<std::mutex> lock(g_pending_callback_mutex);
+    auto pending = g_pending_id_callbacks.find(session_id);
+    if (pending != g_pending_id_callbacks.end()) {
+      if (--pending->second == 0) {
+        g_pending_id_callbacks.erase(pending);
+      }
+    }
+  }
+  g_pending_callback_condition.notify_all();
+}
+
+static void wait_for_pending_handle_callbacks(void *session_handle) {
+#if defined(__EMSCRIPTEN__)
+  if (g_wasm_callback_dispatcher.is_main_runtime_thread()) {
+    return;
+  }
+  std::unique_lock<std::mutex> lock(g_pending_callback_mutex);
+  g_pending_callback_condition.wait(lock, [session_handle] {
+    return g_pending_handle_callbacks.find(session_handle) ==
+           g_pending_handle_callbacks.end();
+  });
+#else
+  (void)session_handle;
+#endif
+}
+
+static void wait_for_pending_id_callbacks(int64_t session_id) {
+#if defined(__EMSCRIPTEN__)
+  if (g_wasm_callback_dispatcher.is_main_runtime_thread()) {
+    return;
+  }
+  std::unique_lock<std::mutex> lock(g_pending_callback_mutex);
+  g_pending_callback_condition.wait(lock, [session_id] {
+    return g_pending_id_callbacks.find(session_id) ==
+           g_pending_id_callbacks.end();
+  });
+#else
+  (void)session_id;
+#endif
+}
+
+struct PendingHandleCallbackGuard {
+  explicit PendingHandleCallbackGuard(void *session_handle)
+      : session_handle(session_handle) {}
+  ~PendingHandleCallbackGuard() {
+    end_pending_handle_callback(session_handle);
+  }
+  void *session_handle;
+};
+
+struct PendingIdCallbackGuard {
+  explicit PendingIdCallbackGuard(int64_t session_id) : session_id(session_id) {}
+  ~PendingIdCallbackGuard() { end_pending_id_callback(session_id); }
+  int64_t session_id;
+};
+
+static bool dispatch_tracked_handle_task(
+    void *session_handle, WasmCallbackDispatcher::Task task,
+    const char *callback_kind, bool allow_sync_fallback = false) {
+  begin_pending_handle_callback(session_handle);
+  WasmCallbackDispatcher::Task tracked_task =
+      [session_handle, task]() mutable {
+        PendingHandleCallbackGuard guard(session_handle);
+        task();
+      };
+  bool accepted = g_wasm_callback_dispatcher.dispatch_task(tracked_task);
+  if (!accepted && allow_sync_fallback) {
+    accepted = g_wasm_callback_dispatcher.dispatch_task_sync(
+        std::move(tracked_task));
+  }
+  if (!accepted) {
+    end_pending_handle_callback(session_handle);
+    report_callback_dispatch_failure(callback_kind);
+  }
+  return accepted;
+}
+
+static bool dispatch_tracked_id_task(
+    int64_t session_id, WasmCallbackDispatcher::Task task,
+    const char *callback_kind, bool allow_sync_fallback = false) {
+  begin_pending_id_callback(session_id);
+  WasmCallbackDispatcher::Task tracked_task =
+      [session_id, task]() mutable {
+        PendingIdCallbackGuard guard(session_id);
+        task();
+      };
+  bool accepted = g_wasm_callback_dispatcher.dispatch_task(tracked_task);
+  if (!accepted && allow_sync_fallback) {
+    accepted = g_wasm_callback_dispatcher.dispatch_task_sync(
+        std::move(tracked_task));
+  }
+  if (!accepted) {
+    end_pending_id_callback(session_id);
+    report_callback_dispatch_failure(callback_kind);
+  }
+  return accepted;
+}
+
+static void report_callback_dispatch_failure(const char *callback_kind) {
+  std::cerr << "[" << getCurrentTimeStamp()
+            << "] [ffmpeg-kit] [Error] failed to enqueue Wasm "
+               "session callback: "
+            << callback_kind << std::endl;
+}
+
+static bool dispatch_session_complete_callback(
+    SessionCompleteCallback callback, void *session_handle, void *user_data) {
+  if (!callback) {
+    return false;
+  }
+  wait_for_pending_handle_callbacks(session_handle);
+  return dispatch_tracked_handle_task(
+      session_handle,
+      [callback, session_handle, user_data]() {
+        callback(session_handle, user_data);
+      },
+      "completion", true);
+}
+
+static bool dispatch_session_log_callback(
+    SessionLogCallback callback, void *session_handle, std::string message,
+    void *user_data) {
+  if (!callback) {
+    return false;
+  }
+  return dispatch_tracked_handle_task(
+      session_handle,
+      [callback, session_handle, message = std::move(message), user_data]() {
+        callback(session_handle, message.c_str(), user_data);
+      },
+      "log");
+}
+
+static bool dispatch_session_statistics_callback(
+    SessionStatisticsCallback callback, void *session_handle,
+    int64_t time_elapsed, int64_t time, int64_t size, double bitrate,
+    double speed, int64_t video_frame_number, double video_fps,
+    double video_quality, int64_t dup_frames, int64_t drop_frames,
+    void *user_data) {
+  if (!callback) {
+    return false;
+  }
+  return dispatch_tracked_handle_task(
+      session_handle,
+      [callback, session_handle, time_elapsed, time, size, bitrate, speed,
+       video_frame_number, video_fps, video_quality, dup_frames, drop_frames,
+       user_data]() {
+        callback(session_handle, time_elapsed, time, size, bitrate, speed,
+                 video_frame_number, video_fps, video_quality, dup_frames,
+                 drop_frames, user_data);
+      },
+      "statistics");
+}
+
+template <typename Callback>
+static void set_global_callback_state(Callback &callback_slot,
+                                      void *&user_data_slot,
+                                      Callback callback, void *user_data) {
+  std::lock_guard<std::mutex> lock(g_callback_state_mutex);
+  callback_slot = callback;
+  user_data_slot = user_data;
+}
+
+template <typename Callback>
+static std::pair<Callback, void *> snapshot_global_callback_state(
+    const Callback &callback_slot, void *const &user_data_slot) {
+  std::lock_guard<std::mutex> lock(g_callback_state_mutex);
+  return {callback_slot, user_data_slot};
+}
+
+static void dispatch_log_callback(int64_t session_id, int64_t sequence,
+                                   int32_t level, const char *message) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_log_callback, g_log_user_data);
+  if (!callback_state.first) {
+    return;
+  }
+
+  struct OwnedLogMessage {
+    char *value{nullptr};
+    ~OwnedLogMessage() { release_log_payload(value); }
+  };
+  auto owned_message = std::make_shared<OwnedLogMessage>();
+  if (message != nullptr) {
+    owned_message->value = strdup_cpp(message);
+    if (owned_message->value == nullptr) {
+      std::cerr << "[" << getCurrentTimeStamp()
+                << "] [ffmpeg-kit] [Error] failed to allocate log payload"
+                << std::endl;
+      return;
+    }
+    track_log_payload(owned_message->value);
+  }
+  dispatch_tracked_id_task(
+      session_id,
+      [session_id, sequence, level,
+       callback = callback_state.first, user_data = callback_state.second,
+       owned_message]() mutable {
+        char *payload = owned_message->value;
+        owned_message->value = nullptr;
+        callback(session_id, sequence, level, payload, user_data);
+      },
+      "log");
+}
+
+static void dispatch_statistics_callback(
+    int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
+    double bitrate, double speed, int64_t video_frame_number,
+    double video_fps, double video_quality, int64_t dup_frames,
+    int64_t drop_frames) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_stats_callback, g_stats_user_data);
+  if (callback_state.first) {
+    dispatch_tracked_id_task(
+        session_id,
+        [session_id, time_elapsed, time, size, bitrate, speed,
+         video_frame_number, video_fps, video_quality, dup_frames, drop_frames,
+         callback = callback_state.first, user_data = callback_state.second]() {
+          callback(session_id, time_elapsed, time, size, bitrate, speed,
+                   video_frame_number, video_fps, video_quality, dup_frames,
+                   drop_frames, user_data);
+        },
+        "statistics");
+  }
+}
+
+template <typename Callback>
+static bool dispatch_global_completion(int64_t session_id, Callback callback,
+                                       void *user_data) {
+  if (!callback) {
+    return false;
+  }
+  wait_for_pending_id_callbacks(session_id);
+  return dispatch_tracked_id_task(
+      session_id,
+      [session_id, callback, user_data]() {
+        callback(session_id, user_data);
+      },
+      "completion", true);
+}
+
+static void dispatch_ffmpeg_complete_callback_with_id(int64_t session_id) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_ffmpeg_complete_callback, g_ffmpeg_complete_user_data);
+  dispatch_global_completion(session_id, callback_state.first,
+                             callback_state.second);
+}
+
+static void dispatch_ffmpeg_complete_callback(
+    const std::shared_ptr<FFmpegSession> &session) {
+  dispatch_ffmpeg_complete_callback_with_id(
+      session ? static_cast<int64_t>(session->getSessionId()) : 0);
+}
+
+static void dispatch_ffprobe_complete_callback(
+    const std::shared_ptr<FFprobeSession> &session) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_ffprobe_complete_callback, g_ffprobe_complete_user_data);
+  const int64_t session_id =
+      session ? static_cast<int64_t>(session->getSessionId()) : 0;
+  dispatch_global_completion(session_id, callback_state.first,
+                             callback_state.second);
+}
+
+static void dispatch_ffplay_complete_callback(
+    const std::shared_ptr<FFplaySession> &session) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_ffplay_complete_callback, g_ffplay_complete_user_data);
+  const int64_t session_id =
+      session ? static_cast<int64_t>(session->getSessionId()) : 0;
+  dispatch_global_completion(session_id, callback_state.first,
+                             callback_state.second);
+}
+
+static void dispatch_media_information_complete_callback(
+    const std::shared_ptr<MediaInformationSession> &session) {
+  const auto callback_state = snapshot_global_callback_state(
+      g_media_complete_callback, g_media_complete_user_data);
+  const int64_t session_id =
+      session ? static_cast<int64_t>(session->getSessionId()) : 0;
+  dispatch_global_completion(session_id, callback_state.first,
+                             callback_state.second);
+}
+
+
+
+static void install_log_callback() {
+  const auto callback_state = snapshot_global_callback_state(
+      g_log_callback, g_log_user_data);
+  if (callback_state.first) {
+    FFmpegKitConfig::enableLogCallback([](std::shared_ptr<Log> log) {
+      if (log) {
+        dispatch_log_callback(static_cast<int64_t>(log->getSessionId()),
+                              log->getSequence(),
+                              static_cast<int32_t>(log->getLevel()),
+                                 log->getMessage().c_str());
+      }
+    });
+  } else {
+    FFmpegKitConfig::enableLogCallback(nullptr);
+  }
+}
+
+static void install_statistics_callback() {
+  if (snapshot_global_callback_state(g_stats_callback, g_stats_user_data).first) {
+    FFmpegKitConfig::enableStatisticsCallback(
+        [](std::shared_ptr<Statistics> statistics) {
+          if (statistics) {
+            dispatch_statistics_callback(
+                static_cast<int64_t>(statistics->getSessionId()),
+                static_cast<int64_t>(statistics->getTimeElapsed() * 1000),
+                static_cast<int64_t>(statistics->getTime() * 1000),
+                statistics->getSize(), statistics->getBitrate(),
+                statistics->getSpeed(), statistics->getVideoFrameNumber(),
+                statistics->getVideoFps(), statistics->getVideoQuality(),
+                statistics->getDupFrames(), statistics->getDropFrames());
+          }
+        });
+  } else {
+    FFmpegKitConfig::enableStatisticsCallback(nullptr);
+  }
+}
+
+static void install_ffmpeg_complete_callback() {
+  if (snapshot_global_callback_state(g_ffmpeg_complete_callback,
+                                     g_ffmpeg_complete_user_data)
+          .first) {
+    FFmpegKitConfig::enableFFmpegSessionCompleteCallback(
+        [](std::shared_ptr<FFmpegSession> session) {
+          dispatch_ffmpeg_complete_callback(session);
+        });
+  } else {
+    FFmpegKitConfig::enableFFmpegSessionCompleteCallback(nullptr);
+  }
+}
+
+static void install_ffprobe_complete_callback() {
+  if (snapshot_global_callback_state(g_ffprobe_complete_callback,
+                                     g_ffprobe_complete_user_data)
+          .first) {
+    FFmpegKitConfig::enableFFprobeSessionCompleteCallback(
+        [](std::shared_ptr<FFprobeSession> session) {
+          dispatch_ffprobe_complete_callback(session);
+        });
+  } else {
+    FFmpegKitConfig::enableFFprobeSessionCompleteCallback(nullptr);
+  }
+}
+
+static void install_ffplay_complete_callback() {
+  if (snapshot_global_callback_state(g_ffplay_complete_callback,
+                                     g_ffplay_complete_user_data)
+          .first) {
+    FFmpegKitConfig::enableFFplaySessionCompleteCallback(
+        [](std::shared_ptr<FFplaySession> session) {
+          dispatch_ffplay_complete_callback(session);
+        });
+  } else {
+    FFmpegKitConfig::enableFFplaySessionCompleteCallback(nullptr);
+  }
+}
+
+static void install_media_information_complete_callback() {
+  if (snapshot_global_callback_state(g_media_complete_callback,
+                                     g_media_complete_user_data)
+          .first) {
+    FFmpegKitConfig::enableMediaInformationSessionCompleteCallback(
+        [](std::shared_ptr<MediaInformationSession> session) {
+          dispatch_media_information_complete_callback(session);
+        });
+  } else {
+    FFmpegKitConfig::enableMediaInformationSessionCompleteCallback(nullptr);
+  }
+}
+extern "C" {
+void DLL_ALIGN ffmpeg_kit_config_enable_log_callback(
+    FFmpegKitGlobalLogCallback log_cb, void *user_data) {
+  try {
+    set_global_callback_state(g_log_callback, g_log_user_data, log_cb,
+                              user_data);
+    install_log_callback();
   } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in ffmpeg_kit_config_enable_log_callback: "
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
+                 "ffmpeg_kit_config_enable_log_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
 void DLL_ALIGN ffmpeg_kit_config_enable_statistics_callback(
-    FFmpegKitStatisticsCallback stats_cb, void *user_data) {
+    FFmpegKitGlobalStatisticsCallback stats_cb, void *user_data) {
   try {
-    g_stats_callback = stats_cb;
-    g_stats_user_data = user_data;
-    if (stats_cb) {
-      FFmpegKitConfig::enableStatisticsCallback([](std::shared_ptr<Statistics> s) {
-            if (g_stats_callback && s) {
-              // Pass ID as pointer (Hack to avoid allocation/threading issues)
-              void *session_handle = (void *)(uintptr_t)s->getSessionId();
-
-              g_stats_callback(session_handle, (int64_t)(s->getTimeElapsed() * 1000), (int64_t)(s->getTime() * 1000), s->getSize(),
-                               s->getBitrate(), s->getSpeed(),
-                               s->getVideoFrameNumber(), s->getVideoFps(),
-                               s->getVideoQuality(), s->getDupFrames(),
-                               s->getDropFrames(), g_stats_user_data);
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableStatisticsCallback(nullptr);
-    }
+    set_global_callback_state(g_stats_callback, g_stats_user_data,
+                              stats_cb, user_data);
+    install_statistics_callback();
   } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in ffmpeg_kit_config_enable_statistics_callback: "
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
+                 "ffmpeg_kit_config_enable_statistics_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
 void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
-    FFmpegKitCompleteCallback complete_cb, void *user_data) {
+    FFmpegKitGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    g_ffmpeg_complete_callback = complete_cb;
-    g_ffmpeg_complete_user_data = user_data;
-    if (complete_cb) {
-      FFmpegKitConfig::enableFFmpegSessionCompleteCallback([](std::shared_ptr<FFmpegSession> title) {
-            if (g_ffmpeg_complete_callback) {
-              auto handle = create_handle(title);
-              g_ffmpeg_complete_callback(handle, g_ffmpeg_complete_user_data);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableFFmpegSessionCompleteCallback(nullptr);
-    }
+    set_global_callback_state(g_ffmpeg_complete_callback,
+                              g_ffmpeg_complete_user_data, complete_cb,
+                              user_data);
+    install_ffmpeg_complete_callback();
   } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
                  "ffmpeg_kit_config_enable_ffmpeg_session_complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
@@ -3207,23 +3708,15 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffmpeg_session_complete_callback(
 }
 
 void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
-    FFprobeKitCompleteCallback complete_cb, void *user_data) {
+    FFprobeKitGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    g_ffprobe_complete_callback = complete_cb;
-    g_ffprobe_complete_user_data = user_data;
-    if (complete_cb) {
-      FFmpegKitConfig::enableFFprobeSessionCompleteCallback([](std::shared_ptr<FFprobeSession> title) {
-            if (g_ffprobe_complete_callback) {
-              auto handle = create_handle(title);
-              g_ffprobe_complete_callback(handle, g_ffprobe_complete_user_data);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableFFprobeSessionCompleteCallback(nullptr);
-    }
+    set_global_callback_state(g_ffprobe_complete_callback,
+                              g_ffprobe_complete_user_data, complete_cb,
+                              user_data);
+    install_ffprobe_complete_callback();
   } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
                  "ffmpeg_kit_config_enable_ffprobe_session_complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
@@ -3231,53 +3724,80 @@ void DLL_ALIGN ffmpeg_kit_config_enable_ffprobe_session_complete_callback(
 }
 
 void DLL_ALIGN ffmpeg_kit_config_enable_ffplay_session_complete_callback(
-    FFplayKitCompleteCallback complete_cb, void *user_data) {
+    FFplayKitGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    g_ffplay_complete_callback = complete_cb;
-    g_ffplay_complete_user_data = user_data;
-    if (complete_cb) {
-      FFmpegKitConfig::enableFFplaySessionCompleteCallback([](std::shared_ptr<FFplaySession> title) {
-            if (g_ffplay_complete_callback) {
-              auto handle = create_handle(title);
-              g_ffplay_complete_callback(handle, g_ffplay_complete_user_data);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableFFplaySessionCompleteCallback(nullptr);
-    }
+    set_global_callback_state(g_ffplay_complete_callback,
+                              g_ffplay_complete_user_data, complete_cb,
+                              user_data);
+    install_ffplay_complete_callback();
   } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
                  "ffmpeg_kit_config_enable_ffplay_session_complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
 
-void DLL_ALIGN ffmpeg_kit_config_enable_media_information_session_complete_callback(
-    ::MediaInformationSessionCompleteCallback complete_cb, void *user_data) {
+void DLL_ALIGN
+ffmpeg_kit_config_enable_media_information_session_complete_callback(
+    MediaInformationSessionGlobalCompleteCallback complete_cb, void *user_data) {
   try {
-    g_media_complete_callback = complete_cb;
-    g_media_complete_user_data = user_data;
-    if (complete_cb) {
-      FFmpegKitConfig::enableMediaInformationSessionCompleteCallback([](std::shared_ptr<MediaInformationSession> title) {
-            if (g_media_complete_callback) {
-              auto handle = create_handle(title);
-              g_media_complete_callback(handle, g_media_complete_user_data);
-              // Handle ownership transferred to Dart callback
-            }
-          });
-    } else {
-      FFmpegKitConfig::enableMediaInformationSessionCompleteCallback(nullptr);
-    }
+    set_global_callback_state(g_media_complete_callback,
+                              g_media_complete_user_data, complete_cb,
+                              user_data);
+    install_media_information_complete_callback();
   } catch (const std::exception &e) {
-    std::cerr << "[" << getCurrentTimeStamp() << "] [ffmpeg-kit] [Exception] in "
-                 "ffmpeg_kit_config_enable_media_information_session_complete_"
-                 "callback: "
+    std::cerr << "[" << getCurrentTimeStamp()
+              << "] [ffmpeg-kit] [Exception] in "
+                 "ffmpeg_kit_config_enable_media_information_session_"
+                 "complete_callback: "
               << e.what() << std::endl;
     PRINT_STACK_TRACE();
   }
 }
+
+#ifdef FFMPEG_KIT_TEST_HOOKS
+void DLL_ALIGN ffmpeg_kit_test_process_wasm_callback_queue(void) {
+  g_wasm_callback_dispatcher.process_pending();
+}
+
+void DLL_ALIGN ffmpeg_kit_test_set_wasm_callback_enqueue_failures(int count) {
+  g_wasm_callback_dispatcher.set_enqueue_failures_for_testing(count);
+}
+
+int64_t DLL_ALIGN ffmpeg_kit_test_get_log_payload_outstanding(void) {
+  std::lock_guard<std::mutex> lock(g_log_payload_mutex);
+  return static_cast<int64_t>(g_log_payloads.size());
+}
+
+void DLL_ALIGN ffmpeg_kit_test_emit_log_with_session_id(
+    int64_t session_id, const char *message) {
+  dispatch_log_callback(session_id, -1, FFMPEG_KIT_LOG_LEVEL_INFO, message);
+}
+
+void DLL_ALIGN ffmpeg_kit_test_emit_log_event_with_session_id(
+    int64_t session_id, int64_t sequence, int32_t level,
+    const char *message) {
+  dispatch_log_callback(session_id, sequence, level, message);
+}
+
+void DLL_ALIGN ffmpeg_kit_test_emit_statistics_with_session_id(
+    int64_t session_id, int64_t time_elapsed, int64_t time, int64_t size,
+    double bitrate, double speed, int64_t video_frame_number,
+    double video_fps, double video_quality, int64_t dup_frames,
+    int64_t drop_frames) {
+  dispatch_statistics_callback(
+      session_id, time_elapsed, time, size, bitrate, speed,
+      video_frame_number, video_fps, video_quality, dup_frames, drop_frames);
+}
+
+void DLL_ALIGN ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id(
+    int64_t session_id) {
+  dispatch_ffmpeg_complete_callback_with_id(session_id);
+}
+#endif
+
 
 /* Utils */
 char * DLL_ALIGN ffmpeg_kit_config_register_new_ffmpeg_pipe(void) {
@@ -3923,9 +4443,7 @@ bool DLL_ALIGN session_is_media_information_session(void *session) {
 }
 
 void DLL_ALIGN ffmpeg_kit_free(void *ptr) {
-  if (ptr) {
-    free(ptr);
-  }
+  release_log_payload(ptr);
 }
 
 void DLL_ALIGN session_enable_debug_log(void *session) {

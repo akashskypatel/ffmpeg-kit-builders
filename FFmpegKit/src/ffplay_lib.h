@@ -21,6 +21,7 @@
 #define FFPLAY_LIB_H
 
 #include "ffmpeg_tls.h"
+#include <stddef.h>
 #include <stdint.h>
 
 #if defined(_WIN32)
@@ -232,9 +233,14 @@ FFMPEG_API void ffplay_set_android_window(ANativeWindow *window);
 #endif /* __ANDROID__ */
 
 /**
- * Frame-ready callback for desktop video output. Fired inside ffplay_step().
+ * Frame-ready callback for the composed native video output. Unsupported on
+ * WebAssembly. On native desktop and Apple it is fired after FFplay has drawn
+ * the current video/background/subtitle composition into the software SDL
+ * renderer and the renderer has been read back. Android uses the same packed
+ * RGBA callback for its wrapper-owned ANativeWindow bridge.
  * Pixel format: RGBA8888 ([R][G][B][A] on little-endian), linesize == width * 4.
- * The pixel buffer is freed after the callback returns — copy if you need to retain it.
+ * The pixel buffer is reused for later frames; copy it before returning if it
+ * must be retained.
  *
  * @param userdata  opaque pointer from ffplay_set_frame_callback()
  * @param pixels    RGBA8888 rows, tightly packed
@@ -247,7 +253,10 @@ typedef void (*FFplayFrameCallback)(void *userdata, const uint8_t *pixels,
                                     const char *pixel_format);
 
 /**
- * Registers a frame-ready callback for desktop video output. Call before ffplay_init().
+ * Registers a frame-ready callback for native non-WebAssembly video output.
+ * The callback receives composed, tightly packed RGBA renderer frames. This
+ * is a no-op on WebAssembly, whose hosts must use the pull API instead. Call
+ * before ffplay_init().
  *
  * @param callback  frame callback, or NULL to clear
  * @param userdata  forwarded to every callback invocation
@@ -255,10 +264,27 @@ typedef void (*FFplayFrameCallback)(void *userdata, const uint8_t *pixels,
 FFMPEG_API void ffplay_set_frame_callback(FFplayFrameCallback callback,
                                            void *userdata) ;
 
+/** Returns the byte size required to copy the latest composed RGBA frame. */
+FFMPEG_API size_t ffplay_get_frame_buffer_size(void);
+
+/**
+ * Copies the latest composed RGBA frame into caller-owned memory.
+ *
+ * This pull API is intended for WebAssembly hosts, where retaining a pointer
+ * into the Wasm heap or invoking a native function-pointer callback is unsafe.
+ * Returns 1 when a frame was copied, 0 before the first frame, and -1 when the
+ * destination is too small. Metadata is returned even when no copy occurs.
+ */
+FFMPEG_API int ffplay_copy_frame(uint8_t *destination, size_t destination_size,
+                                 int *width, int *height, int *linesize,
+                                 uint64_t *generation);
+
 
 /**
  * Internal helper to invoke the global frame callback (if set).
- * Called from ffplay_step() after each video frame is decoded.
+ * Native wrapper bridges use this helper for a frame that is ready for the
+ * platform surface; composed desktop/Apple frames are captured by the SDL
+ * renderer readback path before the callback is delivered.
  *
  * @param pixels    RGBA8888 rows, tightly packed
  * @param width     frame width in pixels

@@ -3643,12 +3643,20 @@ end:
     av_freep(&input_filename);
     av_freep(&print_input_filename);
     av_freep(&read_intervals);
+    av_freep(&stream_specifier);
+    av_freep(&show_data_hash);
+    av_freep(&data_dump_format);
+    av_freep(&audio_codec_name);
+    av_freep(&data_codec_name);
+    av_freep(&subtitle_codec_name);
+    av_freep(&video_codec_name);
 
     uninit_opts();
     for (size_t i = 0; i < FF_ARRAY_ELEMS(selected_entries); ++i)
         av_dict_free(&selected_entries[i].entries_to_show);
 
     avformat_network_deinit();
+    ffprobe_reset_internal_state();
 
     return ret < 0;
 }

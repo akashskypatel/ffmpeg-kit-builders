@@ -1,0 +1,83 @@
+name: builder_image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: builder-image
+  # A newer immutable image build supersedes an older one. This also prevents
+  # an unresponsive BuildKit process from blocking the replacement run.
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: Publish Linux builder image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout dispatched source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and publish builder image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/ffmpeg-kit-builders-dev:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/ffmpeg-kit-builders-dev:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record immutable builder image reference
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER}/ffmpeg-kit-builders-dev"
+          test -n "$IMAGE_DIGEST"
+          {
+            echo "image=${image}"
+            echo "source_sha=${GITHUB_SHA}"
+            echo "digest=${IMAGE_DIGEST}"
+            echo "immutable_ref=${image}@${IMAGE_DIGEST}"
+          } | tee builder-image-provenance.txt
+          {
+            echo '### Builder image'
+            echo
+            echo 'Use this digest as the `builder_image_digest` input for the Android AAR workflows:'
+            echo
+            echo '```text'
+            echo "$IMAGE_DIGEST"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload builder image provenance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ffmpeg-kit-builder-image-${{ github.run_number }}-${{ github.run_attempt }}
+          path: builder-image-provenance.txt
+          if-no-files-found: error
+          retention-days: 90

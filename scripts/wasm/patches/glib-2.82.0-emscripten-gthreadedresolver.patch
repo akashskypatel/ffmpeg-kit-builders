@@ -1,0 +1,19 @@
+diff --git a/gio/gthreadedresolver.c b/gio/gthreadedresolver.c
+index 19c1f2f3d..e76af32d2 100755
+--- a/gio/gthreadedresolver.c
++++ b/gio/gthreadedresolver.c
+@@ -1275,7 +1275,13 @@ do_lookup_records (const gchar          *rrname,
+ {
+   GList *records;
+ 
+-#if defined(G_OS_UNIX)
++#if defined(__EMSCRIPTEN__)
++  g_set_error_literal (error,
++                       G_IO_ERROR,
++                       G_IO_ERROR_NOT_SUPPORTED,
++                       "DNS record lookups are not supported on Emscripten");
++  return NULL;
++#elif defined(G_OS_UNIX)
+   gint len = 512;
+   gint herr;
+   GByteArray *answer;

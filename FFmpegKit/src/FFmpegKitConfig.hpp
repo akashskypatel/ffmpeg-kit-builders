@@ -82,6 +82,11 @@ public:
    */
   static void disableRedirection();
 
+#ifdef FFMPEG_KIT_TEST_HOOKS
+  static void setPthreadCreateFailuresForTesting(int count);
+  static bool isRedirectionEnabledForTesting();
+#endif
+
   /**
    * <p>Sets and overrides <code>fontconfig</code> configuration directory.
    *
