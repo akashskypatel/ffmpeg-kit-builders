@@ -501,9 +501,11 @@ the stable session ID, and `"status":"PASS"`.
 
 The opt-in `FFMPEGKIT_VERIFY_BINARY_EXPORTS` CMake option checks the final
 linked native shared library, or the Emscripten `ffmpegkit.wasm` module, after
-linking. The Apple XCFramework builder also checks every final signed slice
-when `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` is set in its environment. These
-checks do not build or run GTests or sanitizers.
+linking. Set `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` and
+`FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON` in the runner environment; the shared
+runner forwards them only to FFmpegKit's CMake configure step. The Apple
+XCFramework builder also checks every final signed slice when those variables
+are set. These checks do not build or run GTests or sanitizers.
 
 Build each supported target with the normal runner's full, GPL, non-small,
 shared-kit options and `--deps` to fetch prebuilt dependencies. The following
@@ -511,14 +513,11 @@ example uses Linux x86_64; repeat with the supported host/arch pairs in
 `scripts/supported.sh`:
 
 ```bash
-sudo env FFMPEGKIT_BUILD_FLAGS='--host=linux --arch=x86_64 --skip -y --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle' \
+sudo env FFMPEGKIT_BUILD_FLAGS='--host=linux --arch=x86_64 --skip -y --enable-full --gpl --gpl-all --deps --kit=shared --release=local -fk' \
+  FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
+  FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
   ./runner.sh --host=linux --arch=x86_64 --skip -y \
-  --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle
-sudo cmake -S FFmpegKit -B FFmpegKit/build \
-  -DFFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
-  -DFFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
-  -DFFMPEGKIT_EXPORT_BASELINE="$PWD/export-verification/baseline/linux-x86_64/baseline.json"
-sudo cmake --build FFmpegKit/build --target ffmpegkit -j3
+  --enable-full --gpl --gpl-all --deps --kit=shared --release=local -fk
 ```
 
 Set `FFMPEGKIT_BUILD_FLAGS` to the exact positional arguments for the runner or
@@ -569,7 +568,9 @@ sudo env FFMPEGKIT_BUILD_FLAGS='--platform=ios,macos,appletvos --bundle=full --l
   --not-small --local --create-framework --reset
 ```
 
-The verifier deliberately rejects exported testing-only functions even when
-`BUILD_TESTS=OFF`. A preexisting production export such as
-`ffmpeg_kit_test_emit_unattributed_log` is therefore a failing B08 result;
-do not hide the failure by regenerating the baseline or disabling the hook.
+The unattributed-log helper's declaration and definition are guarded by
+`FFMPEG_KIT_TEST_HOOKS`. CMake defines this macro for FFmpegKit only when
+`BUILD_TESTS=ON`, and production acceptance builds require `BUILD_TESTS=OFF`.
+The verifier rejects any test-only export in the final binary; its baseline
+allowance for `ffmpeg_kit_test_emit_unattributed_log` permits only that exact
+intentional removal while preserving checks for every other public API.

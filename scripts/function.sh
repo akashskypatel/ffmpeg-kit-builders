@@ -3874,6 +3874,16 @@ do_cmake() {
 		local config_options=""
     local command="${source_dir} -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE"
 		command+=" $extra_args"
+		if [[ "$source_dir" == "$ffmpeg_kit_src_dir" ]]; then
+			if [[ -n "${FFMPEGKIT_VERIFY_BINARY_EXPORTS:-}" ]]; then
+				[[ "$FFMPEGKIT_VERIFY_BINARY_EXPORTS" == ON || "$FFMPEGKIT_VERIFY_BINARY_EXPORTS" == OFF ]] || exit_message 1 "FFMPEGKIT_VERIFY_BINARY_EXPORTS must be ON or OFF"
+				command+=" -DFFMPEGKIT_VERIFY_BINARY_EXPORTS=$FFMPEGKIT_VERIFY_BINARY_EXPORTS"
+			fi
+			if [[ -n "${FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE:-}" ]]; then
+				[[ "$FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE" == ON || "$FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE" == OFF ]] || exit_message 1 "FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE must be ON or OFF"
+				command+=" -DFFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=$FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE"
+			fi
+		fi
 		echo -e "INFO: do_cmake() nice running:\n  DIR=$cur_dir2\n  PATH=$PATH\n  PKG_CONFIG_PATH=$PKG_CONFIG_PATH\n  CFLAGS:$CFLAGS\n  CXXFLAGS:$CXXFLAGS\n  CPPFLAGS:$CPPFLAGS\n  LDFLAGS:$LDFLAGS\n  \"${cmake_command} -G\"Unix Makefiles\" $command\"\n  $(get_compiler_flags)" >>"$LOG_FILE"
 		# shellcheck disable=SC2086
 		eval "nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command" > >(redirect_output) 2>&1 || exit_message 1 "do_cmake: could not run nice: \"nice -n 5 ${cmake_command} -G\"Unix Makefiles\" $command\""
