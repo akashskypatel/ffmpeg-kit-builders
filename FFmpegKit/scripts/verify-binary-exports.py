@@ -246,18 +246,25 @@ WASM_API = (
 )
 
 
+def wasm_loader_api_mappings(loader):
+    source = loader.read_text()
+    mappings = {}
+    for name in WASM_API:
+        match = re.search(r'Module\["_' + re.escape(name) + r'"\]=_' + re.escape(name) + r'=wasmExports\["([^"]+)"\]', source)
+        mappings[name] = match.group(1) if match else None
+    test_exports = sorted(set(re.findall(r'Module\["_([^"]*test_(?:emit|process)[^"]*)"\]', source)))
+    return mappings, test_exports
+
+
 def wasm_api_checks(binary, names):
     # Emscripten minifies WASM export names. Verify the loader's public-name
     # mapping points to real entries in the module's Export section.
     loader = binary.with_suffix(".mjs")
     if not loader.is_file():
         raise VerificationError(f"WASM loader missing beside module: {loader}")
-    source = loader.read_text()
-    checks = {}
-    for name in WASM_API:
-        match = re.search(r'Module\["_' + re.escape(name) + r'"\]=_' + re.escape(name) + r'=wasmExports\["([^"]+)"\]', source)
-        checks[name] = match.group(1) if match and match.group(1) in names else None
-    return checks, sorted(set(re.findall(r'Module\["_([^\"]*test_(?:emit|process)[^\"]*)"\]', source)))
+    mappings, test_exports = wasm_loader_api_mappings(loader)
+    checks = {name: target if target in names else None for name, target in mappings.items()}
+    return checks, test_exports
 
 
 def apple_target_from_plist(entry):
@@ -571,25 +578,68 @@ def main():
         if args.baseline_exports:
             baseline = json.loads(args.baseline_exports.read_text())
             previous = set(baseline["exports"])
-            removed = sorted(previous - set(names))
-            added = sorted(set(names) - previous)
-            permitted = set(forbidden_owned_metadata(removed))
-            # This baseline-only test hook is deliberately removed from all
-            # production binaries under B08; keep the exception exact so no
-            # other public C ABI removal is implicitly approved.
-            permitted.update(
-                name
-                for name in removed
-                if name in {
-                    "ffmpeg_kit_test_emit_unattributed_log",
-                    "_ffmpeg_kit_test_emit_unattributed_log",
+            raw_removed = sorted(previous - set(names))
+            raw_added = sorted(set(names) - previous)
+            if args.platform == "wasm":
+                baseline_loader = args.baseline_exports.parent / "ffmpegkit.mjs"
+                if not baseline_loader.is_file():
+                    raise VerificationError(f"WASM baseline loader missing for semantic export comparison: {baseline_loader}")
+                baseline_mapping, _ = wasm_loader_api_mappings(baseline_loader)
+                unmapped_baseline = sorted(
+                    name for name, target in baseline_mapping.items()
+                    if not target or target not in previous
+                )
+                if unmapped_baseline:
+                    raise VerificationError(
+                        "WASM baseline is missing stable public API mappings: "
+                        f"{unmapped_baseline[:12]}"
+                    )
+                current_mapping = report["checks"]["wasm_public_api_to_export"]
+                previous_public = {
+                    name for name, target in baseline_mapping.items()
+                    if target and target in previous
                 }
-            )
-            report["baseline"] = {"path": str(args.baseline_exports), "sha256": baseline.get("sha256"),
-                                  "added": added, "removed": removed, "permitted_removals": sorted(permitted)}
-            unexpected = sorted(set(removed) - permitted)
-            if unexpected:
-                report["errors"].append(f"unreviewed baseline removals: {len(unexpected)}: {unexpected[:12]}")
+                current_public = {
+                    name for name, target in current_mapping.items()
+                    if target
+                }
+                removed = sorted(previous_public - current_public)
+                added = sorted(current_public - previous_public)
+                alias_changes = {
+                    name: {"baseline": baseline_mapping[name], "current": current_mapping[name]}
+                    for name in sorted(previous_public & current_public)
+                    if baseline_mapping[name] != current_mapping[name]
+                }
+                report["baseline"] = {
+                    "path": str(args.baseline_exports),
+                    "sha256": baseline.get("sha256"),
+                    "comparison": "stable WASM public API mappings",
+                    "added": added,
+                    "removed": removed,
+                    "alias_changes": alias_changes,
+                    "raw_added": raw_added,
+                    "raw_removed": raw_removed,
+                }
+                if removed:
+                    report["errors"].append(f"unreviewed baseline public API removals: {len(removed)}: {removed[:12]}")
+            else:
+                permitted = set(forbidden_owned_metadata(raw_removed))
+                # This baseline-only test hook is deliberately removed from all
+                # production binaries under B08; keep the exception exact so no
+                # other public C ABI removal is implicitly approved.
+                permitted.update(
+                    name
+                    for name in raw_removed
+                    if name in {
+                        "ffmpeg_kit_test_emit_unattributed_log",
+                        "_ffmpeg_kit_test_emit_unattributed_log",
+                    }
+                )
+                report["baseline"] = {"path": str(args.baseline_exports), "sha256": baseline.get("sha256"),
+                                      "added": raw_added, "removed": raw_removed, "permitted_removals": sorted(permitted)}
+                unexpected = sorted(set(raw_removed) - permitted)
+                if unexpected:
+                    report["errors"].append(f"unreviewed baseline removals: {len(unexpected)}: {unexpected[:12]}")
         if args.capture_baseline:
             if args.capture_baseline.exists():
                 raise VerificationError("baseline capture refuses to overwrite an existing file")

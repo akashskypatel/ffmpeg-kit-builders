@@ -527,6 +527,8 @@ configuration.
 
 For WASM, build `ffmpegkit_wasm`; the verifier reads the linked `.wasm` export
 section and confirms each public loader mapping points to a real module export.
+Baseline checks compare stable public API names across the baseline and current
+loaders, while retaining minified alias additions/removals as diagnostics.
 On cross-build hosts, retain the runner's toolchain environment when
 reconfiguring directly. A nonzero verifier result fails the CMake build.
 Reports and sorted raw export lists are written under
