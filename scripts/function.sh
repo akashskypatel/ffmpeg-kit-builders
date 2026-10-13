@@ -4983,6 +4983,7 @@ configure_ffmpeg() {
     init_options+=" --extra-cflags=\" -DPTW32_STATIC_LIB \""
     init_options+=" --disable-filter=gfxcapture"
     init_options+=" --extra-ldflags=\" -L${deps_install_prefix}/lib \""
+    init_options+=" --disable-programs"
   elif isandroid; then
     # unset PKG_CONFIG_PATH
     export PKG_CONFIG_SYSROOT_DIR="/"
@@ -5053,6 +5054,8 @@ configure_ffmpeg() {
     init_options+=" --ranlib=$(xcrun --sdk "$toolchain_sys" --find ranlib)"
     init_options+=" --extra-cflags='-isysroot $(xcrun --sdk "$toolchain_sys" --show-sdk-path)'"
     init_options+=" --extra-ldflags='-isysroot $(xcrun --sdk "$toolchain_sys" --show-sdk-path)'"
+  elif truthy "$do_build_ffmpeg_kit"; then
+    init_options+=" --disable-programs"
   fi
   if ! isapple; then
     init_options+=" --extra-ldflags=\" -Wl,--allow-multiple-definition \""
