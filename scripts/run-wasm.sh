@@ -2876,7 +2876,6 @@ build_librtmp() {
   do_make "-C librtmp \
 SHARED= \
 SYS=posix \
-XDEF=-DNO_SSL \
 INC=\"-I${dependency_install_prefix}/include\" \
 XCFLAGS=\"$CFLAGS\" \
 prefix=\"${dependency_install_prefix}\""
@@ -2884,7 +2883,6 @@ prefix=\"${dependency_install_prefix}\""
   do_make_install "-C librtmp \
 SHARED= \
 SYS=posix \
-XDEF=-DNO_SSL \
 prefix=\"${dependency_install_prefix}\""
   change_dir "$src_dir"
   unset LIBS
@@ -4472,19 +4470,8 @@ build_openssl() {
 --openssldir=$dependency_install_prefix/ssl \
 --libdir=lib \
 no-asm \
-no-async \
-no-egd \
-no-ktls \
-no-module \
-no-posix-io \
-no-secure-memory \
 no-shared \
-no-sock \
-no-stdio \
-no-thread-pool \
-no-threads \
 no-ui-console \
-no-weak-ssl-ciphers \
 no-tests \
 no-docs \
 no-demos \
