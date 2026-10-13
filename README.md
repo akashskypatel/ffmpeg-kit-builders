@@ -124,35 +124,46 @@ The `runner.sh` script is the unified entry point for all builds. It can be used
 ### Common Build Scenarios
 
 ```bash
+# Replace ${platform} and ${arch} with your desired platform and architecture
+
 # Interactive mode - prompts for platform and architecture
 sudo ./runner.sh
 
 # Non-interactive mode: Build GPL version with audio libraries for Linux x86_64
-sudo ./runner.sh --host=linux --arch=x86_64 -y --enable-gpl --enable-audio
+sudo ./runner.sh --host=${platform} --arch=${arch} -y --enable-gpl --enable-audio
 
 # Build for Linux with specific additional libraries
-sudo ./runner.sh --host=linux --arch=x86_64 --enable-fontconfig --enable-freetype
+sudo ./runner.sh --host=${platform} --arch=${arch} --enable-fontconfig --enable-freetype
 
 # Force re-build for Linux (all libraries + FFmpegKit) with hardware acceleration
-sudo ./runner.sh --host=linux --arch=x86_64 -f --video-hw-bundle
+sudo ./runner.sh --host=${platform} --arch=${arch} -f --video-hw-bundle
 
 # Create a redistributable release zip
-sudo ./runner.sh --host=linux --arch=x86_64 --full-bundle --release
+sudo ./runner.sh --host=${platform} --arch=${arch} --full-bundle --release
 
 # Force build Full non-free dependencies for windows 64 bit
-sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-deps-only --no-bundle -f
+sudo ./runner.sh --host=${platform} --arch=${arch} --enable-full --enable-nonfree -y --build-deps-only --no-bundle -f
 
 # Force build static Ffmpeg libraries and programs for windows 64 bit
-sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-ffmpeg-only=static -f --ff-programs
+sudo ./runner.sh --host=${platform} --arch=${arch} --enable-full --enable-nonfree -y --build-ffmpeg-only=static -f --ff-programs
 
 # Force build shared Ffmpeg-kit library for windows 64 bit
-sudo ./runner.sh --host=windows --arch=x86_64 --enable-full --enable-nonfree -y --build-ffmpeg-kit-only=shared -f
+sudo ./runner.sh --host=${platform} --arch=${arch} --enable-full --enable-nonfree -y --build-ffmpeg-kit-only=shared -f
 
 # Build a selected dependency and its prerequisites
-sudo ./runner.sh --host=android --arch=x86_64 -y --build-only=build_libjpeg_turbo
+sudo ./runner.sh --host=${platform} --arch=${arch} -y --build-only=build_libjpeg_turbo -f
+
+# Build a selected dependency but fetch prebuilt dependencies
+sudo ./runner.sh --host=${platform} --arch=${arch} -y --build-only=build_libjpeg_turbo --fs
 
 # Also rebuild every direct and transitive dependent of that dependency
-sudo ./runner.sh --host=android --arch=x86_64 -y --build-only=build_libjpeg_turbo --build-dependents
+sudo ./runner.sh --host=${platform} --arch=${arch} -y --build-only=build_libjpeg_turbo --build-dependents
+
+# Build all dependencies from source + FFmpegKit + local release (everything will be rebuilt from scratch)
+sudo ./runner.sh --host=${platform} --arch=${arch} --skip -y --enable-full --gpl --deps -f --ffmpeg -ff --kit -fk --release=local
+
+# Fetch pre-built dependencies published remotely + build FFmpegKit + local release (only ffmpeg-kit will be rebuilt, everything else will be fetched)
+sudo ./runner.sh --host=${platform} --arch=${arch} --skip -y --enable-full --gpl --deps --kit -fk --release=local
 
 # resume previous failed run
 sudo ./runner.sh --resume
@@ -231,8 +242,8 @@ prebuilt/
 | `--skip-validation, --skip-val` | Skip build validation. |
 | `--resume` | Resume the last interrupted run. |
 | `--debug-build, --build-debug, --enable-debug` | Build FFmpeg and FFmpegKit with debug settings. |
-| `--host-platform=PLATFORM, --host=PLATFORM, --platform=PLATFORM` | Select linux, windows, macos, ios, iphonesimulator, appletvos, appletvsimulator, android, or wasm. |
-| `--host-arch=ARCH, --arch=ARCH` | Select x86_64, i686, aarch64, armv7a, or wasm32. |
+| `--host-platform=PLATFORM, --host=${platform}, --platform=PLATFORM` | Select linux, windows, macos, ios, iphonesimulator, appletvos, appletvsimulator, android, or wasm. |
+| `--host-arch=ARCH, --arch=${arch}` | Select x86_64, i686, aarch64, armv7a, or wasm32. |
 
 ### Licensing and feature presets
 
