@@ -504,6 +504,8 @@ def parse_args():
     parser.add_argument("--prepackage-root", type=Path)
     parser.add_argument("--apple-platform", choices=("macos", "ios", "ios-simulator", "tvos", "tvos-simulator"))
     parser.add_argument("--baseline-exports", type=Path)
+    parser.add_argument("--baseline-loader", type=Path,
+                        help="WASM loader paired with --baseline-exports")
     parser.add_argument("--capture-baseline", type=Path)
     parser.add_argument("--expected-policy", type=Path)
     parser.add_argument("--link-command", type=Path)
@@ -581,10 +583,20 @@ def main():
             raw_removed = sorted(previous - set(names))
             raw_added = sorted(set(names) - previous)
             if args.platform == "wasm":
-                baseline_loader = args.baseline_exports.parent / "ffmpegkit.mjs"
-                if not baseline_loader.is_file():
-                    raise VerificationError(f"WASM baseline loader missing for semantic export comparison: {baseline_loader}")
-                baseline_mapping, _ = wasm_loader_api_mappings(baseline_loader)
+                baseline_mapping = baseline.get("public_api_to_export")
+                mapping_source = "embedded baseline export manifest"
+                if baseline_mapping is None:
+                    baseline_loader = args.baseline_loader or (
+                        args.baseline_exports.parent / "ffmpegkit.mjs")
+                    if not baseline_loader.is_file():
+                        raise VerificationError(
+                            "WASM baseline loader missing for semantic export "
+                            f"comparison: {baseline_loader}")
+                    baseline_mapping, _ = wasm_loader_api_mappings(baseline_loader)
+                    mapping_source = str(baseline_loader)
+                if not isinstance(baseline_mapping, dict):
+                    raise VerificationError(
+                        "WASM baseline public_api_to_export must be an object")
                 unmapped_baseline = sorted(
                     name for name, target in baseline_mapping.items()
                     if not target or target not in previous
@@ -614,6 +626,7 @@ def main():
                     "path": str(args.baseline_exports),
                     "sha256": baseline.get("sha256"),
                     "comparison": "stable WASM public API mappings",
+                    "public_api_mapping_source": mapping_source,
                     "added": added,
                     "removed": removed,
                     "alias_changes": alias_changes,

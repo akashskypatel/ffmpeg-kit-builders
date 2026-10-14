@@ -413,6 +413,8 @@ async function inspectBinary() {
     '_ffmpeg_kit_config_set_log_level', '_ffprobe_kit_cancel',
     '_ffplay_kit_session_stop', '_ffplay_kit_session_get_position', '_free',
     '_ffplay_kit_session_get_video_width', '_ffplay_kit_session_get_video_height',
+    '_ffplay_kit_session_pause', '_ffplay_kit_session_resume',
+    '_ffplay_kit_session_is_paused',
   ];
   const candidate = await createFFmpegKit({
     canvas: document.getElementById('canvas'),
@@ -1428,6 +1430,182 @@ async function runTransportMatrix() {
     }
   }));
 
+  outcomes.push(await runCase('AUDIO-RES S03 audio-only FFplay stop midstream closes once', async () => {
+    await resetRequests();
+    const result = await runFfplayToStop(
+      `-nodisp ${mediaUrl('/media/full-response.wav?token=audio-s03', base)}`, 0.05);
+    check(result.position < 0.8,
+      `Audio-only playback reached ${result.position}s before stop; expected stop within the 1s fixture.`);
+    check(result.width === 0 && result.height === 0,
+      `The audio-only fixture unexpectedly opened video (${result.width}x${result.height}).`);
+    return { detail: `stopped at ${result.position.toFixed(2)}s; audio generation=${result.lifecycle.audioGeneration}; terminal state=${result.result.state}` };
+  }));
+
+  outcomes.push(await runCase('AUDIO-RES S04 ten audio-only FFplay play-stop cycles', async () => {
+    await resetRequests();
+    const playbackGenerations = [];
+    const audioGenerations = [];
+    for (let index = 0; index < 10; index++) {
+      const token = `audio-s04-${index + 1}`;
+      const result = await runFfplayToStop(
+        `-nodisp ${mediaUrl(`/media/full-response.wav?token=${token}`, base)}`, 0.03);
+      check(result.position < 0.8,
+        `Cycle ${index + 1} reached ${result.position}s before stop; expected the 1s fixture to remain active.`);
+      playbackGenerations.push(result.lifecycle.playbackGeneration);
+      audioGenerations.push(result.lifecycle.audioGeneration);
+    }
+    check(new Set(playbackGenerations).size === 10,
+      `Expected ten distinct playback generations, got ${playbackGenerations.join(', ')}.`);
+    check(new Set(audioGenerations).size === 10,
+      `Expected ten distinct SDL audio generations, got ${audioGenerations.join(', ')}.`);
+    const requests = await getRequests();
+    for (let index = 0; index < 10; index++) {
+      const token = `audio-s04-${index + 1}`;
+      check(requests.some((request) => request.path === '/media/full-response.wav' &&
+        request.query === `?token=${token}` && request.status === 200),
+      `No full-response WAV request was observed for cycle ${index + 1}.`);
+    }
+    return { detail: `10/10 cycles closed; distinct playback/audio generations=${new Set(playbackGenerations).size}/${new Set(audioGenerations).size}` };
+  }));
+
+  outcomes.push(await runCase('AUDIO-RES S05 PCM 8 kHz and HLS AAC 48 kHz playback reopen', async () => {
+    const sources = [
+      { url: mediaUrl('/media/full-response.wav?token=audio-s05-pcm', base), codec: 'pcm_s16le', sampleRate: 8000 },
+      { url: mediaUrl('/hls/one-segment.m3u8?token=audio-s05-aac', base), codec: 'aac', sampleRate: 48000 },
+    ];
+    const results = [];
+    const playbackGenerations = [];
+    const audioGenerations = [];
+    for (const source of sources) {
+      const probeResult = await execute('ffprobe',
+        `-v error -select_streams a:0 -show_entries stream=codec_name,sample_rate ` +
+        `-of json ${source.url}`, { timeoutMs: 30000 });
+      check(probeResult.state === STATUS_COMPLETED && probeResult.returnCode === 0,
+        `Audio source probe state=${probeResult.state}, return=${probeResult.returnCode}.`);
+      const stream = parseProbeJson(probeResult.output).streams?.[0];
+      check(stream?.codec_name === source.codec && Number(stream.sample_rate) === source.sampleRate,
+        `Expected ${source.codec}/${source.sampleRate} Hz, got ${JSON.stringify(stream)}.`);
+      const playback = await runFfplayToEof(`-nodisp -autoexit ${source.url}`);
+      playbackGenerations.push(playback.lifecycle.playbackGeneration);
+      audioGenerations.push(playback.lifecycle.audioGeneration);
+      results.push(`${source.codec}/${source.sampleRate} Hz audio generation=${playback.lifecycle.audioGeneration}`);
+    }
+    check(new Set(playbackGenerations).size === 2,
+      `Expected two playback generations for the codec transition, got ${playbackGenerations.join(', ')}.`);
+    check(new Set(audioGenerations).size === 2,
+      `Expected two SDL audio generations for the sample-rate transition, got ${audioGenerations.join(', ')}.`);
+    return { detail: results.join('; ') };
+  }));
+
+  outcomes.push(await runCase('AUDIO-RES S06 FFplay and browser AudioContext pause-resume', async () => {
+    await resetRequests();
+    const logStart = runtimeLines.length;
+    const errorsBefore = browserErrors.length;
+    const cleanupBefore = cleanupErrors.length;
+    const handle = startSession('ffplay',
+      mediaUrl('/hls/live.m3u8?token=audio-s06-pause-resume', base));
+    let audioContext = null;
+    let result;
+    let positionBeforePause = 0;
+    let positionAfterPause = 0;
+    let positionAfterResume = 0;
+    let positionAfterContextResume = 0;
+    let audioContextAfterResume = 'unknown';
+
+    try {
+      positionBeforePause = await waitForFfplayAudioOpen(handle, logStart, 0.25);
+      audioContext = Module.SDL2?.audioContext;
+      check(audioContext && typeof audioContext.suspend === 'function' &&
+        typeof audioContext.resume === 'function',
+      'Generated SDL did not expose a suspendable AudioContext.');
+      if (audioContext.state === 'suspended') await audioContext.resume();
+      check(audioContext.state === 'running',
+        `AudioContext was not running before pause (${audioContext.state}).`);
+
+      const pauseCountBefore = ffplayAudioEventsSince(logStart)
+        .filter((event) => event.event === 'audio_pause').length;
+      ccall('ffplay_kit_session_pause', 'void', ['number'], [handle]);
+      const pauseDeadline = Date.now() + 2000;
+      while (!ccall('ffplay_kit_session_is_paused', 'number', ['number'], [handle]) &&
+          Date.now() < pauseDeadline)
+        await delay(20);
+      check(ccall('ffplay_kit_session_is_paused', 'number', ['number'], [handle]) === 1,
+        'FFplay did not enter its paused state.');
+      check(ffplayAudioEventsSince(logStart)
+        .filter((event) => event.event === 'audio_pause').length === pauseCountBefore + 1,
+      'FFplay pause did not produce exactly one SDL audio pause event.');
+      positionAfterPause = ccall('ffplay_kit_session_get_position', 'number', ['number'], [handle]);
+      await delay(350);
+      const pausedPositionLater = ccall('ffplay_kit_session_get_position', 'number', ['number'], [handle]);
+      check(ccall('ffplay_kit_session_is_paused', 'number', ['number'], [handle]) === 1,
+        'FFplay left its paused state without a resume request.');
+      check(Math.abs(pausedPositionLater - positionAfterPause) <= 0.25,
+        `FFplay position advanced while paused (${positionAfterPause}s to ${pausedPositionLater}s).`);
+
+      const resumeCountBefore = ffplayAudioEventsSince(logStart)
+        .filter((event) => event.event === 'audio_resume').length;
+      ccall('ffplay_kit_session_resume', 'void', ['number'], [handle]);
+      const resumeDeadline = Date.now() + 3000;
+      while ((ccall('ffplay_kit_session_is_paused', 'number', ['number'], [handle]) === 1 ||
+          ccall('ffplay_kit_session_get_position', 'number', ['number'], [handle]) <= pausedPositionLater + 0.15) &&
+          Date.now() < resumeDeadline)
+        await delay(30);
+      check(ccall('ffplay_kit_session_is_paused', 'number', ['number'], [handle]) === 0,
+        'FFplay did not leave its paused state after resume.');
+      positionAfterResume = ccall('ffplay_kit_session_get_position', 'number', ['number'], [handle]);
+      check(positionAfterResume > pausedPositionLater + 0.15,
+        `FFplay position did not advance after resume (${pausedPositionLater}s to ${positionAfterResume}s).`);
+      const resumedEvents = ffplayAudioEventsSince(logStart);
+      check(resumedEvents.filter((event) => event.event === 'audio_resume').length > resumeCountBefore,
+        'SDL audio did not report resuming after FFplay resume.');
+
+      await audioContext.suspend();
+      check(audioContext.state === 'suspended',
+        `AudioContext did not suspend (${audioContext.state}).`);
+      await delay(250);
+      check(sessionState(handle) === STATUS_RUNNING,
+        'The FFplay session stopped while the browser AudioContext was suspended.');
+      await audioContext.resume();
+      check(audioContext.state === 'running',
+        `AudioContext did not resume (${audioContext.state}).`);
+      audioContextAfterResume = audioContext.state;
+      positionAfterContextResume = ccall('ffplay_kit_session_get_position', 'number', ['number'], [handle]);
+      await delay(300);
+      check(sessionState(handle) === STATUS_RUNNING,
+        'The FFplay live session did not remain usable after AudioContext resume.');
+      ccall('ffplay_kit_session_stop', 'void', ['number'], [handle]);
+      result = await waitForSession(handle, 15000);
+    } finally {
+      if (audioContext?.state === 'suspended') await audioContext.resume().catch(() => {});
+      await finishSession('ffplay', handle);
+    }
+    await delay(300);
+
+    check(result.state === STATUS_COMPLETED || result.state === STATUS_FAILED,
+      `FFplay did not terminate after the pause/resume scenario (state=${result.state}).`);
+    const lifecycle = assertFfplayAudioClosed(logStart);
+    check(browserErrors.length === errorsBefore,
+      `Browser errors during pause/resume: ${browserErrors.slice(errorsBefore).join(' | ')}`);
+    check(cleanupErrors.length === cleanupBefore,
+      `Pause/resume cleanup errors: ${cleanupErrors.slice(cleanupBefore).map((entry) => entry.error.string).join(' | ')}`);
+    return { detail: `position ${positionBeforePause.toFixed(2)}s → paused ${positionAfterPause.toFixed(2)}s → ` +
+      `${positionAfterResume.toFixed(2)}s; AudioContext after resume=${audioContextAfterResume}; ` +
+      `post-context-resume position=${positionAfterContextResume.toFixed(2)}s; audio generation=${lifecycle.audioGeneration}` };
+  }));
+
+  outcomes.push(await runCase('AUDIO-RES A13 audio-only EOF and A/V stop', async () => {
+    const audio = await runFfplayToEof(
+      `-nodisp -autoexit ${mediaUrl('/media/full-response.wav?token=audio-a13-eof', base)}`);
+    await resetRequests();
+    const av = await runFfplayToStop(
+      `-autoexit ${mediaUrl('/media/progressive.mp4?token=audio-a13-stop', base)}`, 0.25);
+    check(av.width > 0 && av.height > 0,
+      `A/V stop fixture reported no video (${av.width}x${av.height}).`);
+    return { detail: `audio EOF generation=${audio.lifecycle.audioGeneration}; ` +
+      `A/V stopped at ${av.position.toFixed(2)}s with video=${av.width}x${av.height}; ` +
+      `terminal state=${av.result.state}` };
+  }));
+
   outcomes.push(await runCase('N15b imported MEMFS MPEG-TS', async () => {
     const tsResponse = await fetch(mediaUrl('/hls/segment-1.ts', base));
     check(tsResponse.ok, `TS import failed with HTTP ${tsResponse.status}.`);
@@ -1706,6 +1884,114 @@ async function runFfplay(command, timeoutMs = 90000) {
   } finally {
     await finishSession('ffplay', handle);
   }
+}
+
+function ffplayAudioEventsSince(startIndex) {
+  return runtimeLines.slice(startIndex).flatMap((line) => {
+    const match = /\[ffplay-wasm\] event=([a-z_]+) playback=(\d+) audio=(\d+) device=(\d+) result=(-?\d+)/.exec(line);
+    if (!match) return [];
+    return [{
+      event: match[1],
+      playback: Number(match[2]),
+      audio: Number(match[3]),
+      device: Number(match[4]),
+      result: Number(match[5]),
+      line,
+    }];
+  });
+}
+
+async function waitForFfplayAudioOpen(handle, logStart, minPositionSeconds, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  let position = 0;
+  while (Date.now() < deadline) {
+    const state = sessionState(handle);
+    position = ccall('ffplay_kit_session_get_position', 'number', ['number'], [handle]);
+    const opened = ffplayAudioEventsSince(logStart).some((event) => event.event === 'audio_open');
+    if (state === STATUS_COMPLETED || state === STATUS_FAILED)
+      throw new Error(`FFplay ended before audio became active (state=${state}, position=${position}).`);
+    if (state === STATUS_RUNNING && opened && position >= minPositionSeconds)
+      return position;
+    await delay(40);
+  }
+  throw new Error(`FFplay audio did not become active within ${timeoutMs} ms ` +
+    `(position=${position}, state=${sessionState(handle)}).`);
+}
+
+function assertFfplayAudioClosed(logStart) {
+  const events = ffplayAudioEventsSince(logStart);
+  const starts = events.filter((event) => event.event === 'playback_start');
+  const opens = events.filter((event) => event.event === 'audio_open');
+  const closes = events.filter((event) => event.event === 'audio_close');
+  const terminals = events.filter((event) => event.event === 'playback_terminal');
+  check(starts.length === 1, `Expected one playback_start event, got ${starts.length}.`);
+  check(opens.length === 1, `Expected one audio_open event, got ${opens.length}.`);
+  check(closes.length === 1, `Expected one audio_close event, got ${closes.length}.`);
+  check(terminals.length === 1, `Expected one playback_terminal event, got ${terminals.length}.`);
+  check(opens[0].playback > 0 && opens[0].audio > 0 && opens[0].device > 0,
+    `Invalid audio generations/device in open event: ${opens[0].line}.`);
+  check(starts[0].playback === opens[0].playback &&
+    closes[0].playback === opens[0].playback &&
+    terminals[0].playback === opens[0].playback,
+  'Audio open, close, and terminal events did not belong to one playback generation.');
+  check(closes[0].audio === opens[0].audio && closes[0].device === opens[0].device,
+    'Audio close did not match the opened device generation.');
+  check(!events.some((event) => event.event === 'audio_gate_unavailable'),
+    'Generated SDL did not expose the ScriptProcessor callback gate.');
+  return { playbackGeneration: opens[0].playback, audioGeneration: opens[0].audio };
+}
+
+async function runFfplayToEof(command, timeoutMs = 30000) {
+  const logStart = runtimeLines.length;
+  const errorsBefore = browserErrors.length;
+  const cleanupBefore = cleanupErrors.length;
+  const handle = startSession('ffplay', command);
+  let result;
+  try {
+    result = await waitForSession(handle, timeoutMs);
+  } finally {
+    await finishSession('ffplay', handle);
+  }
+  await delay(300);
+  check(result.state === STATUS_COMPLETED && result.returnCode === 0,
+    `FFplay EOF state=${result.state}, return=${result.returnCode}.`);
+  const lifecycle = assertFfplayAudioClosed(logStart);
+  check(browserErrors.length === errorsBefore,
+    `Browser errors during FFplay EOF: ${browserErrors.slice(errorsBefore).join(' | ')}`);
+  check(cleanupErrors.length === cleanupBefore,
+    `FFplay EOF cleanup errors: ${cleanupErrors.slice(cleanupBefore).map((entry) => entry.error.string).join(' | ')}`);
+  return { result, lifecycle };
+}
+
+async function runFfplayToStop(command, minPositionSeconds, timeoutMs = 15000) {
+  const logStart = runtimeLines.length;
+  const errorsBefore = browserErrors.length;
+  const cleanupBefore = cleanupErrors.length;
+  const handle = startSession('ffplay', command);
+  let result;
+  let position = 0;
+  let width = 0;
+  let height = 0;
+  try {
+    position = await waitForFfplayAudioOpen(handle, logStart, minPositionSeconds, timeoutMs);
+    width = ccall('ffplay_kit_session_get_video_width', 'number', ['number'], [handle]);
+    height = ccall('ffplay_kit_session_get_video_height', 'number', ['number'], [handle]);
+    check(sessionState(handle) === STATUS_RUNNING,
+      'FFplay was not running when stop was requested.');
+    ccall('ffplay_kit_session_stop', 'void', ['number'], [handle]);
+    result = await waitForSession(handle, 15000);
+  } finally {
+    await finishSession('ffplay', handle);
+  }
+  await delay(300);
+  check(result.state === STATUS_COMPLETED || result.state === STATUS_FAILED,
+    `FFplay stop did not reach a terminal state (state=${result.state}).`);
+  const lifecycle = assertFfplayAudioClosed(logStart);
+  check(browserErrors.length === errorsBefore,
+    `Browser errors during FFplay stop: ${browserErrors.slice(errorsBefore).join(' | ')}`);
+  check(cleanupErrors.length === cleanupBefore,
+    `FFplay stop cleanup errors: ${cleanupErrors.slice(cleanupBefore).map((entry) => entry.error.string).join(' | ')}`);
+  return { result, position, width, height, lifecycle };
 }
 
 async function runVod() {
