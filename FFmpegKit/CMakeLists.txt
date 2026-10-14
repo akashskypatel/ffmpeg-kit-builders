@@ -673,9 +673,11 @@ endif()
 
 if(EMSCRIPTEN)
     set(FFMPEGKIT_WASM_HTTP_TEST_EXPORTS "")
+    set_property(SOURCE src/ffmpegkit_wasm_http_io.c APPEND PROPERTY
+        COMPILE_OPTIONS -Wframe-larger-than=2048 -Werror=frame-larger-than)
     if(FFMPEGKIT_WASM_HTTP_TEST_HOOKS)
         set(FFMPEGKIT_WASM_HTTP_TEST_EXPORTS
-            ",_ffmpeg_kit_test_http_io_heap_start,_ffmpeg_kit_test_http_io_heap_status,_ffmpeg_kit_test_http_io_heap_snapshot")
+            ",_ffmpeg_kit_test_http_io_heap_start,_ffmpeg_kit_test_http_io_heap_status,_ffmpeg_kit_test_http_io_heap_snapshot,_ffmpeg_kit_test_http_io_wait_start,_ffmpeg_kit_test_http_io_wait_status,_ffmpeg_kit_test_http_io_wait_elapsed,_ffmpeg_kit_test_http_io_stream_start,_ffmpeg_kit_test_http_io_stream_status,_ffmpeg_kit_test_http_io_stream_eio")
         set_property(SOURCE src/ffmpegkit_wasm_http_io.c APPEND PROPERTY
             COMPILE_DEFINITIONS FFMPEG_KIT_TEST_HOOKS)
     endif()
