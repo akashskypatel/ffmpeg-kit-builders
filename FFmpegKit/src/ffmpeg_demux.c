@@ -23,6 +23,9 @@
 #include "ffmpeg_lib.h"
 #include "ffmpeg_sched.h"
 #include "ffmpegkit_session_context.h"
+#if defined(__EMSCRIPTEN__)
+#include "ffmpegkit_wasm_http_io.h"
+#endif
 #include "ffmpeg_utils.h"
 
 #include "libavutil/avassert.h"
@@ -915,9 +918,15 @@ void ifile_close(InputFile **pf)
 {
     InputFile *f = *pf;
     Demuxer   *d = demuxer_from_ifile(f);
+#if defined(__EMSCRIPTEN__)
+    FFmpegKitWasmHttpSession *wasm_http_session = NULL;
+#endif
 
     if (!f)
         return;
+#if defined(__EMSCRIPTEN__)
+    wasm_http_session = f->ctx ? f->ctx->opaque : NULL;
+#endif
 
     if (d->read_started)
         demux_final_stats(d);
@@ -933,6 +942,9 @@ void ifile_close(InputFile **pf)
     if (f->ctx)
         ffmpegkit_unregister_root_context(f->ctx);
     avformat_close_input(&f->ctx);
+#if defined(__EMSCRIPTEN__)
+    ffmpegkit_wasm_http_session_free(wasm_http_session);
+#endif
 
     av_packet_free(&d->pkt_heartbeat);
 
@@ -2039,6 +2051,11 @@ int ifile_open(const OptionsContext *o, const char *filename, Scheduler *sch)
     const char* subtitle_codec_name = NULL;
     const char*     data_codec_name = NULL;
     int scan_all_pmts_set = 0;
+#if defined(__EMSCRIPTEN__)
+    FFmpegKitWasmHttpSession *wasm_http_session = NULL;
+    AVFormatContext *root_input_ctx = NULL;
+    long session_id = 0;
+#endif
 
     int64_t start_time     = o->start_time;
     int64_t start_time_eof = o->start_time_eof;
@@ -2096,9 +2113,14 @@ int ifile_open(const OptionsContext *o, const char *filename, Scheduler *sch)
         return AVERROR(ENOMEM);
     {
         FFmpegContext *wrapper_ctx = ffmpeg_get_current_context();
-        const long session_id = ffmpeg_get_session_id(wrapper_ctx);
-        if (session_id != 0)
-            ffmpegkit_register_root_context(ic, session_id);
+        const long current_session_id = ffmpeg_get_session_id(wrapper_ctx);
+#if defined(__EMSCRIPTEN__)
+        root_input_ctx = ic;
+        session_id = current_session_id;
+#else
+        if (current_session_id != 0)
+            ffmpegkit_register_root_context(ic, current_session_id);
+#endif
     }
     ic->name = av_strdup(d->log_name);
     if (o->audio_sample_rate.nb_opt) {
@@ -2176,6 +2198,15 @@ int ifile_open(const OptionsContext *o, const char *filename, Scheduler *sch)
         scan_all_pmts_set = 1;
     }
     /* open the input file with generic avformat function */
+#if defined(__EMSCRIPTEN__)
+    ret = ffmpegkit_wasm_http_install(ic, session_id, &wasm_http_session);
+    if (ret < 0) {
+        avformat_free_context(ic);
+        return ret;
+    }
+    if (session_id != 0)
+        ffmpegkit_register_root_context(root_input_ctx, session_id);
+#endif
     err = avformat_open_input(&ic, filename, file_iformat, &o->g->format_opts);
     if (err < 0) {
         if (err != AVERROR_EXIT)
@@ -2183,8 +2214,18 @@ int ifile_open(const OptionsContext *o, const char *filename, Scheduler *sch)
                    "Error opening input: %s\n", av_err2str(err));
         if (err == AVERROR_PROTOCOL_NOT_FOUND)
             av_log(d, AV_LOG_ERROR, "Did you mean file:%s?\n", filename);
-        if (ic)
+        if (ic) {
+#if !defined(__EMSCRIPTEN__)
             ffmpegkit_unregister_root_context(ic);
+#endif
+#if defined(__EMSCRIPTEN__)
+            avformat_close_input(&ic);
+#endif
+        }
+#if defined(__EMSCRIPTEN__)
+        ffmpegkit_unregister_root_context(root_input_ctx);
+        ffmpegkit_wasm_http_session_free(wasm_http_session);
+#endif
         return err;
     }
     f->ctx = ic;

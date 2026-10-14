@@ -38,8 +38,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS_DEBUG ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS_RELEASE ON)
 
 option(BUILD_TESTS "Build tests" OFF)
-option(FFMPEGKIT_VERIFY_BINARY_EXPORTS "Verify final FFmpegKit dynamic exports after linking" OFF)
 option(FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE "Require the full GPL non-small acceptance profile" OFF)
+option(FFMPEGKIT_WASM_HTTP_TEST_HOOKS
+    "Build test-only HTTP AVIO heap lifecycle hooks into the Wasm module" OFF)
 set(FFMPEGKIT_EXPORT_BASELINE "" CACHE FILEPATH "Approved same-target export baseline JSON")
 option(ENABLE_LIBPLACEBO "Enable libplacebo" OFF)
 option(ENABLE_LIBTENSORFLOW "Enable libtensorflow" OFF)
@@ -49,8 +50,31 @@ set(FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE "4" CACHE STRING
     "Number of Emscripten pthread workers created when the WASM module starts")
 set(FFMPEG_KIT_WASM_INITIAL_MEMORY "67108864" CACHE STRING
     "Initial memory size in bytes for the final Emscripten module")
+# Emscripten's 64 KiB default pthread stack has no guard page, so FFmpeg's
+# MPEG-TS input open overflowed it and silently corrupted adjacent heap memory.
+set(FFMPEG_KIT_WASM_PTHREAD_STACK_SIZE "1048576" CACHE STRING
+    "Default stack size in bytes for Emscripten pthreads")
 set(FFMPEG_KIT_WASM_ENVIRONMENT "web,worker" CACHE STRING
     "Emscripten runtime environments for the generated Wasm module")
+
+if(EMSCRIPTEN AND NOT FFMPEGKIT_EXPORT_BASELINE AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/docs/wasm-streaming-baseline-exports.json")
+    set(FFMPEGKIT_EXPORT_BASELINE
+        "${CMAKE_CURRENT_SOURCE_DIR}/docs/wasm-streaming-baseline-exports.json"
+        CACHE FILEPATH "Approved same-target export baseline JSON" FORCE)
+endif()
+
+set(FFMPEGKIT_EXPORT_BASELINE_LOADER "" CACHE FILEPATH
+    "WASM loader paired with the approved same-target export baseline")
+
+set(_FFMPEGKIT_VERIFY_BINARY_EXPORTS_DEFAULT OFF)
+if(EMSCRIPTEN AND FFMPEGKIT_EXPORT_BASELINE AND
+   EXISTS "${FFMPEGKIT_EXPORT_BASELINE}")
+    set(_FFMPEGKIT_VERIFY_BINARY_EXPORTS_DEFAULT ON)
+endif()
+option(FFMPEGKIT_VERIFY_BINARY_EXPORTS
+    "Verify final FFmpegKit dynamic exports after linking"
+    ${_FFMPEGKIT_VERIFY_BINARY_EXPORTS_DEFAULT})
 
 # CMAKE_BUILD_TYPE is a CMake built-in string variable, not a boolean option.
 # Using option() on it silently converts it to OFF. Use set() instead.
@@ -100,6 +124,12 @@ if(NOT FFMPEG_KIT_BUNDLE_TYPE)
 endif()
 
 ffmpegkit_prepare_sources(KIT_SOURCES KIT_HEADERS)
+
+# Keep the browser-only Fetch transport out of native target source lists.
+if(NOT EMSCRIPTEN)
+    list(REMOVE_ITEM KIT_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ffmpegkit_wasm_http_io.c")
+endif()
 
 # =============================================================================
 # 4. DEPENDENCY MANAGEMENT: Library Resolution & Linking
@@ -642,6 +672,13 @@ else()
 endif()
 
 if(EMSCRIPTEN)
+    set(FFMPEGKIT_WASM_HTTP_TEST_EXPORTS "")
+    if(FFMPEGKIT_WASM_HTTP_TEST_HOOKS)
+        set(FFMPEGKIT_WASM_HTTP_TEST_EXPORTS
+            ",_ffmpeg_kit_test_http_io_heap_start,_ffmpeg_kit_test_http_io_heap_status,_ffmpeg_kit_test_http_io_heap_snapshot")
+        set_property(SOURCE src/ffmpegkit_wasm_http_io.c APPEND PROPERTY
+            COMPILE_DEFINITIONS FFMPEG_KIT_TEST_HOOKS)
+    endif()
     if(BUILD_TESTS)
         set(FFMPEGKIT_WASM_TEST_EXPORTS ",_ffmpeg_kit_test_emit_log_with_session_id,_ffmpeg_kit_test_emit_statistics_with_session_id,_ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id,_ffmpeg_kit_test_process_wasm_callback_queue")
     else()
@@ -664,6 +701,7 @@ if(EMSCRIPTEN)
     target_link_options(ffmpegkit_wasm PRIVATE
         --no-entry
         -pthread
+        "-sFETCH=1"
         -fwasm-exceptions
         "-Wl,--allow-multiple-definition"
         "-sSUPPORT_LONGJMP=wasm"
@@ -675,8 +713,9 @@ if(EMSCRIPTEN)
         "-sALLOW_MEMORY_GROWTH=1"
         "-sALLOW_TABLE_GROWTH=1"
         "-sPTHREAD_POOL_SIZE=${FFMPEG_KIT_WASM_PTHREAD_POOL_SIZE}"
+        "-sDEFAULT_PTHREAD_STACK_SIZE=${FFMPEG_KIT_WASM_PTHREAD_STACK_SIZE}"
         "-sFORCE_FILESYSTEM=1"
-        "-sEXPORTED_FUNCTIONS=_malloc,_free,_ffmpeg_kit_initialize,_ffplay_kit_execute_async,_ffplay_kit_create_session,_ffplay_kit_close_session,_ffplay_kit_session_execute_async,_ffplay_kit_session_seek,_ffplay_kit_session_start,_ffplay_kit_session_pause,_ffplay_kit_session_resume,_ffplay_kit_session_stop,_ffplay_kit_session_get_position,_ffplay_kit_session_get_duration,_ffplay_kit_session_is_playing,_ffplay_kit_session_is_paused,_ffplay_kit_session_set_volume,_ffplay_kit_session_get_volume,_ffplay_kit_session_get_video_width,_ffplay_kit_session_get_video_height,_ffplay_kit_get_frame_buffer_size,_ffplay_kit_copy_frame${FFMPEGKIT_WASM_TEST_EXPORTS}"
+        "-sEXPORTED_FUNCTIONS=_malloc,_free,_ffmpeg_kit_initialize,_ffplay_kit_execute_async,_ffplay_kit_create_session,_ffplay_kit_close_session,_ffplay_kit_session_execute_async,_ffplay_kit_session_seek,_ffplay_kit_session_start,_ffplay_kit_session_pause,_ffplay_kit_session_resume,_ffplay_kit_session_stop,_ffplay_kit_session_get_position,_ffplay_kit_session_get_duration,_ffplay_kit_session_is_playing,_ffplay_kit_session_is_paused,_ffplay_kit_session_set_volume,_ffplay_kit_session_get_video_width,_ffplay_kit_session_get_video_height,_ffplay_kit_get_frame_buffer_size,_ffplay_kit_copy_frame${FFMPEGKIT_WASM_TEST_EXPORTS}${FFMPEGKIT_WASM_HTTP_TEST_EXPORTS}"
         "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,UTF8ToString,stringToNewUTF8,HEAPU8,HEAPU32,HEAPF32,getValue,setValue,lengthBytesUTF8,stringToUTF8,writeArrayToMemory,FS"
     )
     set_target_properties(ffmpegkit_wasm PROPERTIES
@@ -785,6 +824,10 @@ if(FFMPEGKIT_VERIFY_BINARY_EXPORTS)
     endif()
     if(FFMPEGKIT_EXPORT_BASELINE)
         list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --baseline-exports "${FFMPEGKIT_EXPORT_BASELINE}")
+    endif()
+    if(FFMPEGKIT_EXPORT_BASELINE_LOADER)
+        list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS
+            --baseline-loader "${FFMPEGKIT_EXPORT_BASELINE_LOADER}")
     endif()
     if(FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE)
         list(APPEND FFMPEGKIT_EXPORT_VERIFY_ARGS --require-acceptance-profile)

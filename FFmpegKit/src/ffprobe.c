@@ -1,4 +1,7 @@
 #include "ffmpeg_tls.h"
+#if defined(__EMSCRIPTEN__)
+#include "ffmpegkit_wasm_http_io.h"
+#endif
 /*
  * Copyright (c) 2007-2010 Stefano Sabatini
  *
@@ -2596,6 +2599,10 @@ static int open_input_file(InputFile *ifile, const char *filename,
     AVFormatContext *fmt_ctx = NULL;
     const AVDictionaryEntry *t = NULL;
     int scan_all_pmts_set = 0;
+#if defined(__EMSCRIPTEN__)
+    FFmpegKitWasmHttpSession *wasm_http_session = NULL;
+    AVFormatContext *root_fmt_ctx = NULL;
+#endif
 
     fmt_ctx = avformat_alloc_context();
     if (!fmt_ctx)
@@ -2607,6 +2614,19 @@ static int open_input_file(InputFile *ifile, const char *filename,
     err = set_decoders(fmt_ctx);
     if (err < 0)
         return err;
+#if defined(__EMSCRIPTEN__)
+    {
+        long session_id = ffprobe_get_session_id(ffprobe_get_current_context());
+        root_fmt_ctx = fmt_ctx;
+        err = ffmpegkit_wasm_http_install(fmt_ctx, session_id,
+                                          &wasm_http_session);
+        if (err < 0) {
+            avformat_free_context(fmt_ctx);
+            return err;
+        }
+        ffmpegkit_register_root_context(fmt_ctx, session_id);
+    }
+#endif
     if (!av_dict_get(format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
         av_dict_set(&format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
         scan_all_pmts_set = 1;
@@ -2614,6 +2634,12 @@ static int open_input_file(InputFile *ifile, const char *filename,
     if ((err = avformat_open_input(&fmt_ctx, filename,
                                    iformat, &format_opts)) < 0) {
         print_error(filename, err);
+#if defined(__EMSCRIPTEN__)
+        ffmpegkit_unregister_root_context(root_fmt_ctx);
+        if (fmt_ctx)
+            avformat_close_input(&fmt_ctx);
+        ffmpegkit_wasm_http_session_free(wasm_http_session);
+#endif
         return err;
     }
     if (print_filename) {
@@ -2621,8 +2647,10 @@ static int open_input_file(InputFile *ifile, const char *filename,
         fmt_ctx->url = av_strdup(print_filename);
     }
     ifile->fmt_ctx = fmt_ctx;
+#if !defined(__EMSCRIPTEN__)
     ffmpegkit_register_root_context(fmt_ctx,
                                     ffprobe_get_session_id(ffprobe_get_current_context()));
+#endif
     if (scan_all_pmts_set)
         av_dict_set(&format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE);
     while ((t = av_dict_iterate(format_opts, t)))
@@ -2714,6 +2742,10 @@ static int open_input_file(InputFile *ifile, const char *filename,
 
 static void close_input_file(InputFile *ifile)
 {
+#if defined(__EMSCRIPTEN__)
+    FFmpegKitWasmHttpSession *wasm_http_session =
+        ifile->fmt_ctx ? ifile->fmt_ctx->opaque : NULL;
+#endif
 
     /* close decoder for each stream */
     for (int i = 0; i < ifile->nb_streams; i++)
@@ -2724,6 +2756,9 @@ static void close_input_file(InputFile *ifile)
 
     ffmpegkit_unregister_root_context(ifile->fmt_ctx);
     avformat_close_input(&ifile->fmt_ctx);
+#if defined(__EMSCRIPTEN__)
+    ffmpegkit_wasm_http_session_free(wasm_http_session);
+#endif
 }
 
 static int probe_file(AVTextFormatContext *tfc, const char *filename,
