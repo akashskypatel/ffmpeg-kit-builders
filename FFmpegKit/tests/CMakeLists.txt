@@ -2,6 +2,7 @@ add_executable(ffmpegkit_tests
     main_test.cpp
     wrapper_test.cpp
     callback_test.cpp
+    global_callback_registration_test.cpp
     stress_test.cpp
     config_test.cpp
     runtime_reuse_test.cpp
