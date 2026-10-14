@@ -796,6 +796,57 @@ async function runTransportMatrix() {
       `the same module completed two valid requests afterward` };
   }));
 
+  outcomes.push(await runCase('HTTP-IO-10 decodes URL credentials and separates queue/request timeouts', async () => {
+    if (typeof Module._ffmpeg_kit_test_http_io_session_magic !== 'function' ||
+        typeof Module._ffmpeg_kit_test_http_io_admission_start !== 'function' ||
+        typeof Module._ffmpeg_kit_test_http_io_admission_status !== 'function' ||
+        typeof Module._ffmpeg_kit_test_http_io_admission_elapsed !== 'function')
+      return { skip: 'requires the opt-in HTTP-IO-10 diagnostic hooks' };
+
+    const magicResult = ccall('ffmpeg_kit_test_http_io_session_magic', 'number');
+    check(magicResult === 0,
+      `Invalid session magic changed the reference count or cleanup failed (return=${magicResult}).`);
+
+    await resetRequests();
+    const authUrl = `http://alice%40wasm:secret%3Apass@${new URL(base).host}/media/basic-auth.mp4`;
+    const authResult = await probe(authUrl, '-v error', { timeoutMs: 10000 });
+    check(authResult.returnCode === 0,
+      `Percent-encoded Basic credentials were rejected (return=${authResult.returnCode}).`);
+    const authRequests = (await getRequests()).filter((request) =>
+      request.path === '/media/basic-auth.mp4');
+    check(authRequests.some((request) => request.authenticated === true &&
+      request.range && request.status === 206),
+    'The fixture did not receive the decoded username/password on a ranged request.');
+
+    await resetRequests();
+    const timeoutMs = 500;
+    const slotHoldMs = 400;
+    const started = ccall('ffmpeg_kit_test_http_io_admission_start', 'number',
+      ['string', 'number', 'number'],
+      [mediaUrl('/media/progressive-queue.mp4', base), timeoutMs, slotHoldMs]);
+    check(started === 0, `Admission diagnostic did not start (return=${started}).`);
+    let status = 1;
+    const deadline = Date.now() + 2500;
+    while (status === 1 && Date.now() < deadline) {
+      await delay(20);
+      status = ccall('ffmpeg_kit_test_http_io_admission_status', 'number');
+    }
+    const elapsedMs = ccall('ffmpeg_kit_test_http_io_admission_elapsed', 'number');
+    check(status === 0,
+      `Request timed out or failed after admission (return=${status}, elapsed=${elapsedMs} ms).`);
+    check(Number.isFinite(elapsedMs) && elapsedMs >= slotHoldMs + 250 && elapsedMs < 2500,
+      `Queued request elapsed ${elapsedMs} ms; expected queue plus response delay within the fresh request deadline.`);
+    const queuedRequests = await getRequests();
+    check(queuedRequests.some((request) =>
+      request.path === '/media/progressive-queue.mp4' && request.range &&
+      request.status === 206),
+    'The request did not reach the delayed ranged-response fixture.');
+    check(browserErrors.length === 0,
+      `HTTP-IO-10 raised a browser error: ${browserErrors.join(' | ')}`);
+    return { detail: `encoded Basic userinfo accepted; invalid magic ignored; ` +
+      `queue=${slotHoldMs} ms, response=300 ms, timeout=${timeoutMs} ms, elapsed=${Math.round(elapsedMs)} ms` };
+  }));
+
   outcomes.push(await runCase('HTTP-IO-2 release AVIO buffers across 500 HTTP lifecycles', async () => {
     if (typeof Module._ffmpeg_kit_test_http_io_heap_start !== 'function' ||
         typeof Module._ffmpeg_kit_test_http_io_heap_status !== 'function')

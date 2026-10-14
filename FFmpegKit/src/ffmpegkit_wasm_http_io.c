@@ -297,8 +297,6 @@ static int map_http_status(unsigned short status)
         return AVERROR(ENOENT);
     if (status == 416)
         return AVERROR(ERANGE);
-    if (status >= 400)
-        return AVERROR(EIO);
     return AVERROR(EIO);
 }
 
@@ -647,11 +645,57 @@ static int request_add_option_headers(FetchRequest *request,
     return ret;
 }
 
+static int decode_url_userinfo_component(const char *value, size_t value_size,
+                                         char **decoded_out)
+{
+    char *decoded;
+    size_t source = 0, destination = 0;
+
+    *decoded_out = NULL;
+    if (value_size == SIZE_MAX)
+        return AVERROR(EINVAL);
+    decoded = av_malloc(value_size + 1);
+    if (!decoded)
+        return AVERROR(ENOMEM);
+
+    while (source < value_size) {
+        unsigned char byte = (unsigned char)value[source++];
+        if (byte == '%') {
+            int high, low;
+            if (source + 1 >= value_size) {
+                av_free(decoded);
+                return AVERROR(EINVAL);
+            }
+            high = av_tolower(value[source]);
+            low = av_tolower(value[source + 1]);
+            high = high >= '0' && high <= '9' ? high - '0' :
+                   high >= 'a' && high <= 'f' ? high - 'a' + 10 : -1;
+            low = low >= '0' && low <= '9' ? low - '0' :
+                  low >= 'a' && low <= 'f' ? low - 'a' + 10 : -1;
+            if (high < 0 || low < 0) {
+                av_free(decoded);
+                return AVERROR(EINVAL);
+            }
+            byte = (unsigned char)((high << 4) | low);
+            source += 2;
+            if (!byte) {
+                av_free(decoded);
+                return AVERROR(EINVAL);
+            }
+        }
+        decoded[destination++] = (char)byte;
+    }
+    decoded[destination] = '\0';
+    *decoded_out = decoded;
+    return 0;
+}
+
 static int split_url_credentials(FetchRequest *request, const char *url)
 {
     const char *authority, *authority_end, *at, *colon;
     size_t prefix_size, suffix_size, authority_size;
     char *sanitized;
+    int ret;
 
     request->request_url = av_strdup(url);
     if (!request->request_url)
@@ -668,13 +712,17 @@ static int split_url_credentials(FetchRequest *request, const char *url)
         return 0;
 
     colon = memchr(authority, ':', (size_t)(at - authority));
-    request->username = av_strndup(authority,
-                                   colon ? (size_t)(colon - authority) :
-                                           (size_t)(at - authority));
+    ret = decode_url_userinfo_component(
+        authority, colon ? (size_t)(colon - authority) :
+                           (size_t)(at - authority),
+        &request->username);
+    if (ret < 0)
+        return ret;
     if (colon)
-        request->password = av_strndup(colon + 1, (size_t)(at - colon - 1));
-    if (!request->username || (colon && !request->password))
-        return AVERROR(ENOMEM);
+        ret = decode_url_userinfo_component(
+            colon + 1, (size_t)(at - colon - 1), &request->password);
+    if (ret < 0)
+        return ret;
 
     prefix_size = (size_t)(authority - url);
     suffix_size = strlen(at + 1);
@@ -1103,6 +1151,7 @@ static void request_release(FetchRequest *request)
 static int wasm_http_budget_create(long session_id, WasmHttpBudget **budget_out)
 {
     WasmHttpBudget *budget;
+    pthread_condattr_t condition_attributes;
     int ret;
 
     *budget_out = NULL;
@@ -1114,7 +1163,16 @@ static int wasm_http_budget_create(long session_id, WasmHttpBudget **budget_out)
         av_free(budget);
         return AVERROR(ret);
     }
-    ret = pthread_cond_init(&budget->cond, NULL);
+    ret = pthread_condattr_init(&condition_attributes);
+    if (ret) {
+        pthread_mutex_destroy(&budget->mutex);
+        av_free(budget);
+        return AVERROR(ret);
+    }
+    ret = pthread_condattr_setclock(&condition_attributes, CLOCK_MONOTONIC);
+    if (!ret)
+        ret = pthread_cond_init(&budget->cond, &condition_attributes);
+    pthread_condattr_destroy(&condition_attributes);
     if (ret) {
         pthread_mutex_destroy(&budget->mutex);
         av_free(budget);
@@ -1218,7 +1276,7 @@ static int session_acquire_request(FFmpegKitWasmHttpSession *session,
         admitted_range_size > WASM_HTTP_RANGE_MAX_SIZE)
         return AVERROR(EINVAL);
 
-    clock_gettime(CLOCK_REALTIME, &deadline);
+    clock_gettime(CLOCK_MONOTONIC, &deadline);
     deadline.tv_sec += timeout_ms / 1000;
     deadline.tv_nsec += (timeout_ms % 1000) * 1000000L;
     if (deadline.tv_nsec >= 1000000000L) {
@@ -1233,7 +1291,7 @@ static int session_acquire_request(FFmpegKitWasmHttpSession *session,
             ret = AVERROR_EXIT;
             break;
         }
-        clock_gettime(CLOCK_REALTIME, &short_deadline);
+        clock_gettime(CLOCK_MONOTONIC, &short_deadline);
         short_deadline.tv_nsec += 100000000L;
         if (short_deadline.tv_nsec >= 1000000000L) {
             short_deadline.tv_sec++;
@@ -1247,7 +1305,7 @@ static int session_acquire_request(FFmpegKitWasmHttpSession *session,
                                      &short_deadline);
         if (ret == ETIMEDOUT) {
             struct timespec now;
-            clock_gettime(CLOCK_REALTIME, &now);
+            clock_gettime(CLOCK_MONOTONIC, &now);
             if (now.tv_sec > deadline.tv_sec ||
                 (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec)) {
                 ret = AVERROR(ETIMEDOUT);
@@ -1400,11 +1458,11 @@ static int fetch_range(WasmHttpIO *io, int64_t start, size_t length,
     if (ret < 0)
         goto end;
 
-    started_ms = (uint64_t)emscripten_get_now();
     ret = session_acquire_request(io->session, &io->interrupt_callback,
                                   io->timeout_ms, &length);
     if (ret < 0)
         goto end;
+    started_ms = (uint64_t)emscripten_get_now();
     request->range_limit = length;
     request->fetch_buffer_reserved = 1;
     request->fetch_buffer_reserved_size = length;
@@ -2073,9 +2131,12 @@ int ffmpegkit_wasm_http_install(AVFormatContext *context, long session_id,
 
 void ffmpegkit_wasm_http_session_free(FFmpegKitWasmHttpSession *session)
 {
-    if (!session || __atomic_sub_fetch(&session->references, 1, __ATOMIC_ACQ_REL))
+    if (!session ||
+        __atomic_load_n(&session->magic, __ATOMIC_ACQUIRE) != WASM_HTTP_MAGIC)
         return;
-    session->magic = 0;
+    if (__atomic_sub_fetch(&session->references, 1, __ATOMIC_ACQ_REL))
+        return;
+    __atomic_store_n(&session->magic, 0, __ATOMIC_RELEASE);
     session_budget_release(session);
     av_free(session);
 }
@@ -2280,6 +2341,201 @@ double ffmpeg_kit_test_http_io_wait_elapsed(void)
     double elapsed;
     __atomic_load(&wasm_http_wait_probe_elapsed, &elapsed, __ATOMIC_ACQUIRE);
     return elapsed;
+}
+
+typedef struct WasmHttpAdmissionRelease {
+    WasmHttpBudget *budget;
+    unsigned int hold_ms;
+} WasmHttpAdmissionRelease;
+
+typedef struct WasmHttpAdmissionProbe {
+    char *url;
+    unsigned int timeout_ms;
+    unsigned int slot_hold_ms;
+} WasmHttpAdmissionProbe;
+
+static int wasm_http_admission_probe_state;
+static int wasm_http_admission_probe_result;
+static double wasm_http_admission_probe_elapsed;
+
+static void *wasm_http_admission_release_worker(void *opaque)
+{
+    WasmHttpAdmissionRelease *release = opaque;
+    struct timespec remaining = {
+        .tv_sec = release->hold_ms / 1000,
+        .tv_nsec = (long)(release->hold_ms % 1000) * 1000000L,
+    };
+
+    while (nanosleep(&remaining, &remaining) && errno == EINTR) {
+    }
+    pthread_mutex_lock(&release->budget->mutex);
+    if (release->budget->active_requests >= WASM_HTTP_MAX_INFLIGHT)
+        release->budget->active_requests -= WASM_HTTP_MAX_INFLIGHT;
+    pthread_cond_broadcast(&release->budget->cond);
+    pthread_mutex_unlock(&release->budget->mutex);
+    return NULL;
+}
+
+static void *wasm_http_admission_probe_worker(void *opaque)
+{
+    WasmHttpAdmissionProbe *probe = opaque;
+    WasmHttpAdmissionRelease release;
+    FFmpegKitWasmHttpSession *session = NULL;
+    AVFormatContext *context = avformat_alloc_context();
+    AVIOContext *pb = NULL;
+    AVDictionary *options = NULL;
+    pthread_t release_thread;
+    int release_started = 0;
+    int ret = context ? 0 : AVERROR(ENOMEM);
+    double started_ms = 0;
+
+    if (ret >= 0)
+        ret = ffmpegkit_wasm_http_install(context, 0, &session);
+    if (ret >= 0) {
+        pthread_mutex_lock(&session->budget->mutex);
+        if (session->budget->active_requests) {
+            ret = AVERROR_BUG;
+        } else {
+            session->budget->active_requests = WASM_HTTP_MAX_INFLIGHT;
+        }
+        pthread_mutex_unlock(&session->budget->mutex);
+    }
+    if (ret >= 0) {
+        release.budget = session->budget;
+        release.hold_ms = probe->slot_hold_ms;
+        ret = pthread_create(&release_thread, NULL,
+                             wasm_http_admission_release_worker, &release);
+        if (ret) {
+            pthread_mutex_lock(&session->budget->mutex);
+            session->budget->active_requests = 0;
+            pthread_cond_broadcast(&session->budget->cond);
+            pthread_mutex_unlock(&session->budget->mutex);
+            ret = AVERROR(ret);
+        } else {
+            release_started = 1;
+            ret = av_dict_set_int(&options, "rw_timeout",
+                                  (int64_t)probe->timeout_ms * 1000, 0);
+            started_ms = emscripten_get_now();
+            if (ret >= 0)
+                ret = context->io_open(context, &pb, probe->url,
+                                       AVIO_FLAG_READ, &options);
+            if (pb)
+                context->io_close2(context, pb);
+        }
+    }
+
+    if (release_started)
+        pthread_join(release_thread, NULL);
+    if (context) {
+        context->opaque = NULL;
+        avformat_free_context(context);
+    }
+    ffmpegkit_wasm_http_session_free(session);
+    if (started_ms)
+        wasm_http_admission_probe_elapsed = emscripten_get_now() - started_ms;
+    av_dict_free(&options);
+    av_freep(&probe->url);
+    av_free(probe);
+    __atomic_store_n(&wasm_http_admission_probe_result, ret, __ATOMIC_RELEASE);
+    __atomic_store_n(&wasm_http_admission_probe_state, 2, __ATOMIC_RELEASE);
+    return NULL;
+}
+
+int ffmpeg_kit_test_http_io_admission_start(const char *url, int timeout_ms,
+                                            int slot_hold_ms)
+{
+    WasmHttpAdmissionProbe *probe;
+    pthread_t thread;
+    int state = __atomic_load_n(&wasm_http_admission_probe_state,
+                                __ATOMIC_ACQUIRE);
+    int ret;
+
+    if (!url || !is_http_url(url) || invalid_http_url_character(url) ||
+        timeout_ms < 1 || timeout_ms > 10000 || slot_hold_ms < 1 ||
+        slot_hold_ms >= timeout_ms)
+        return AVERROR(EINVAL);
+    do {
+        if (state == 1)
+            return AVERROR(EBUSY);
+    } while (!__atomic_compare_exchange_n(&wasm_http_admission_probe_state,
+                                          &state, 1, 0, __ATOMIC_ACQ_REL,
+                                          __ATOMIC_ACQUIRE));
+
+    probe = av_mallocz(sizeof(*probe));
+    if (!probe) {
+        __atomic_store_n(&wasm_http_admission_probe_state, 0,
+                         __ATOMIC_RELEASE);
+        return AVERROR(ENOMEM);
+    }
+    probe->url = av_strdup(url);
+    if (!probe->url) {
+        av_free(probe);
+        __atomic_store_n(&wasm_http_admission_probe_state, 0,
+                         __ATOMIC_RELEASE);
+        return AVERROR(ENOMEM);
+    }
+    probe->timeout_ms = timeout_ms;
+    probe->slot_hold_ms = slot_hold_ms;
+    __atomic_store_n(&wasm_http_admission_probe_result, AVERROR(EAGAIN),
+                     __ATOMIC_RELEASE);
+    __atomic_store(&wasm_http_admission_probe_elapsed, &(double){ 0 },
+                   __ATOMIC_RELEASE);
+    ret = pthread_create(&thread, NULL, wasm_http_admission_probe_worker,
+                         probe);
+    if (ret) {
+        av_freep(&probe->url);
+        av_free(probe);
+        __atomic_store_n(&wasm_http_admission_probe_state, 0,
+                         __ATOMIC_RELEASE);
+        return AVERROR(ret);
+    }
+    pthread_detach(thread);
+    return 0;
+}
+
+int ffmpeg_kit_test_http_io_admission_status(void)
+{
+    int state = __atomic_load_n(&wasm_http_admission_probe_state,
+                                __ATOMIC_ACQUIRE);
+    if (state == 1)
+        return 1;
+    return state == 2
+        ? __atomic_load_n(&wasm_http_admission_probe_result, __ATOMIC_ACQUIRE)
+        : AVERROR(EINVAL);
+}
+
+double ffmpeg_kit_test_http_io_admission_elapsed(void)
+{
+    double elapsed;
+    __atomic_load(&wasm_http_admission_probe_elapsed, &elapsed,
+                  __ATOMIC_ACQUIRE);
+    return elapsed;
+}
+
+int ffmpeg_kit_test_http_io_session_magic(void)
+{
+    AVFormatContext *context = avformat_alloc_context();
+    FFmpegKitWasmHttpSession *session = NULL;
+    unsigned int references;
+    uint64_t magic;
+    int ret = context ? ffmpegkit_wasm_http_install(context, 0, &session)
+                      : AVERROR(ENOMEM);
+
+    if (ret < 0) {
+        avformat_free_context(context);
+        return ret;
+    }
+    references = __atomic_load_n(&session->references, __ATOMIC_ACQUIRE);
+    magic = __atomic_load_n(&session->magic, __ATOMIC_ACQUIRE);
+    __atomic_store_n(&session->magic, 0, __ATOMIC_RELEASE);
+    ffmpegkit_wasm_http_session_free(session);
+    if (__atomic_load_n(&session->references, __ATOMIC_ACQUIRE) != references)
+        ret = AVERROR_BUG;
+    __atomic_store_n(&session->magic, magic, __ATOMIC_RELEASE);
+    context->opaque = NULL;
+    avformat_free_context(context);
+    ffmpegkit_wasm_http_session_free(session);
+    return ret;
 }
 
 typedef struct WasmHttpStreamProbe {

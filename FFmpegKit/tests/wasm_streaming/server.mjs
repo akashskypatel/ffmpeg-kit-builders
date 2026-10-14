@@ -559,6 +559,28 @@ export function createStreamingFixtureServer({
       });
       return;
     }
+    if (url.pathname === '/media/progressive-queue.mp4') {
+      sendBuffer(req, res, asset('progressive.mp4'), {
+        type: 'video/mp4', delayMs: 300,
+      });
+      return;
+    }
+    if (url.pathname === '/media/basic-auth.mp4') {
+      const expectedAuthorization = `Basic ${Buffer.from('alice@wasm:secret:pass').toString('base64')}`;
+      const authenticated = req.headers.authorization === expectedAuthorization;
+      requestRecord.authenticated = authenticated;
+      if (!authenticated) {
+        res.writeHead(401, {
+          ...corsHeaders(),
+          'WWW-Authenticate': 'Basic realm="wasm-streaming-fixture"',
+          'Content-Type': 'text/plain',
+        });
+        res.end('basic authentication required\n');
+        return;
+      }
+      sendBuffer(req, res, asset('progressive.mp4'), { type: 'video/mp4' });
+      return;
+    }
     if (/^\/range\/changing-(size|etag|last-modified)\.mp4$/.test(url.pathname)) {
       const kind = /^\/range\/changing-(size|etag|last-modified)\.mp4$/.exec(url.pathname)[1];
       const requestedStart = Number(/^bytes=(\d+)-/.exec(req.headers.range ?? '')?.[1] ?? 0);
