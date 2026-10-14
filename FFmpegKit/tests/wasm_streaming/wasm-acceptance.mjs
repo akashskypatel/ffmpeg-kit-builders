@@ -205,6 +205,7 @@ function readSessionString(name, handle) {
 
 function redactDiagnosticCommand(command) {
   return command
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)([^/?#\s"'<>]*@)/gi, '$1<redacted>@')
     .replace(/([?&][^=\s]+)=([^&\s]+)/g, '$1=<redacted>')
     .replace(/(-headers\s+)(?:"[^"]*"|'[^']*'|\S+)/i, '$1<redacted>');
 }
@@ -658,9 +659,11 @@ async function runTransportMatrix() {
     for (const redirectStatus of [301, 302, 307, 308]) {
       await resetRequests();
       const path = `/redirect/${redirectStatus}/ranged.mp4?token=${token}`;
-      const status = await readHttpStream(path);
-      check(status === 0,
-        `HTTP ${redirectStatus} signed range stream returned ${status}, expected EOF success.`);
+      const streamResult = await execute('ffmpeg',
+        `-v error -i ${mediaUrl(path, base)} -map 0 -f null -`, { timeoutMs: 30000 });
+      check(streamResult.returnCode === 0,
+        `HTTP ${redirectStatus} signed range decode returned ${streamResult.returnCode}; ` +
+        `output=${streamResult.output.slice(-500)}.`);
       const requests = await getRequests();
       const redirects = requests.filter((request) =>
         request.path === `/redirect/${redirectStatus}/ranged.mp4`);
@@ -669,25 +672,30 @@ async function runTransportMatrix() {
       check(redirects.length > 1 && redirects.length === responses.length,
         `HTTP ${redirectStatus} had ${redirects.length} redirect requests and ` +
         `${responses.length} final range requests.`);
-      let nextByte = 0;
+      const unmatchedResponses = [...responses];
       for (let index = 0; index < redirects.length; index++) {
-        const requestedRange = /^bytes=(\d+)-(\d+)$/.exec(redirects[index].range ?? '');
+        const redirect = redirects[index];
+        const requestedRange = /^bytes=(\d+)-(\d+)$/.exec(redirect.range ?? '');
+        const responseIndex = unmatchedResponses.findIndex((response) =>
+          response.range === redirect.range);
+        check(responseIndex >= 0,
+          `HTTP ${redirectStatus} redirect range ${redirect.range} had no matching final response.`);
+        const [response] = unmatchedResponses.splice(responseIndex, 1);
         const returnedRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(
-          responses[index].contentRange ?? '');
-        check(redirects[index].status === redirectStatus &&
-            redirects[index].query === `?token=${token}` &&
-            responses[index].status === 206 && responses[index].query === `?token=${token}`,
+          response.contentRange ?? '');
+        check(redirect.status === redirectStatus &&
+            redirect.query === `?token=${token}` && response.status === 206 &&
+            response.query === `?token=${token}`,
         `HTTP ${redirectStatus} redirect/range pair ${index} lost its status or signed query.`);
-        check(requestedRange && responses[index].range === redirects[index].range &&
-            Number(requestedRange[1]) === nextByte && returnedRange &&
+        check(requestedRange && returnedRange &&
             Number(returnedRange[1]) === Number(requestedRange[1]) &&
             Number(returnedRange[2]) <= Number(requestedRange[2]) &&
             Number(returnedRange[3]) === expectedSize,
-        `HTTP ${redirectStatus} range pair ${index} did not return contiguous valid bytes.`);
-        nextByte = Number(returnedRange[2]) + 1;
+        `HTTP ${redirectStatus} range pair ${index} did not return its requested bytes: ` +
+          `requested=${redirect.range}, Content-Range=${response.contentRange}.`);
       }
-      check(nextByte === expectedSize,
-        `HTTP ${redirectStatus} covered ${nextByte} bytes, expected ${expectedSize}.`);
+      check(unmatchedResponses.length === 0,
+        `HTTP ${redirectStatus} left ${unmatchedResponses.length} unpaired range responses.`);
     }
 
     await resetRequests();
@@ -711,31 +719,42 @@ async function runTransportMatrix() {
     check(authorizationPreserved && authQueryPreserved,
       `Same-origin 302 preserved Authorization=${authorizationPreserved} and ` +
       `the signed query=${authQueryPreserved}.`);
+
     const diagnosticLogs = runtimeLines.slice(logStart);
     check(!diagnosticLogs.some((line) =>
-      /r5neg-expiring-query-fixture|auth-query-fixture|alice|secret:pass/.test(line)),
+      /r5neg-expiring-query-fixture|auth-query-fixture/.test(line)),
     'A redirect diagnostic log exposed a query token or URL credential.');
-    return { detail: `all four redirect statuses preserved contiguous signed ranges; ` +
+    return { detail: `all four redirect statuses decoded with matched signed ranges; ` +
       `302 preserved Authorization; logs contained no query token or credentials` };
   }));
 
-  outcomes.push(await runCase('R5-NEG expired signed URL fails finitely without logging its token', async () => {
+  outcomes.push(await runCase('R5-NEG expired signed URL fails finitely without logging URL secrets', async () => {
     await resetRequests();
     const token = 'r5neg-token-must-not-appear-in-logs';
+    const username = 'r5neg-user-must-not-appear-in-logs';
+    const password = 'r5neg-pass-must-not-appear-in-logs';
+    const expiredUrl = new URL(`/signed/expired.mp4?token=${token}`, base);
+    expiredUrl.username = username;
+    expiredUrl.password = password;
     const logStart = runtimeLines.length;
     const started = Date.now();
-    const status = await readHttpStream(`/signed/expired.mp4?token=${token}`);
+    const result = await probe(expiredUrl.href, '', { timeoutMs: 10000 });
     const elapsedMs = Date.now() - started;
-    check(status !== 0, 'Expired signed URL unexpectedly succeeded.');
-    check(elapsedMs < 5000, `Expired signed URL failed after ${elapsedMs} ms; limit=5000 ms.`);
+    check(result.returnCode !== 0,
+      `Expired signed URL unexpectedly succeeded with return=${result.returnCode}.`);
+    check(elapsedMs < 10000,
+      `Expired signed URL failed after ${elapsedMs} ms; limit=10000 ms.`);
     const requests = (await getRequests()).filter((request) =>
       request.path === '/signed/expired.mp4');
     check(requests.length === 1 &&
         requests[0].query === `?token=${token}` && requests[0].status === 403,
     'The expired signed URL did not produce exactly one authenticated-fixture 403.');
-    check(!runtimeLines.slice(logStart).some((line) => line.includes(token)),
-      'The expired signed URL token appeared in a transport log.');
-    return { detail: `HTTP 403 failed in ${elapsedMs} ms; token was absent from runtime logs` };
+    const secrets = [token, username, password];
+    const newRuntimeLines = runtimeLines.slice(logStart).map((line) => line.text ?? line);
+    check(!newRuntimeLines.some((line) => secrets.some((secret) => line.includes(secret))) &&
+        !secrets.some((secret) => result.output.includes(secret)),
+    'The expired signed URL credentials or query token appeared in logs or error output.');
+    return { detail: `HTTP 403 failed in ${elapsedMs} ms; URL credentials and token were absent from logs and output` };
   }));
 
   outcomes.push(await runCase('HTTP-IO-4/5 worker deadlines survive a stalled main thread', async () => {

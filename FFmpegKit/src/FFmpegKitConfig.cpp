@@ -55,6 +55,7 @@ extern "C" {
 #include <atomic>
 #include <condition_variable>
 #include <cctype>
+#include <cstring>
 #include <cstdlib>
 #include <ctime>
 #include <cerrno>
@@ -869,6 +870,73 @@ static void avutil_log_sanitize(char *line) {
   }
 }
 
+static bool avutil_log_url_boundary(unsigned char value) {
+  return value == 0 || value == ' ' || value == '\t' || value == '\n' ||
+         value == '\r' || value == '\'' || value == '"' || value == '<' ||
+         value == '>' || value == ')' || value == ']' || value == '}';
+}
+
+static bool avutil_log_url_scheme_character(unsigned char value) {
+  return std::isalnum(value) || value == '+' || value == '-' || value == '.';
+}
+
+static void avutil_log_redact_url_secrets(char *line) {
+  if (line == nullptr) {
+    return;
+  }
+
+  char *cursor = line;
+
+  while (*cursor) {
+    char *separator = std::strstr(cursor, "://");
+    if (separator == nullptr) {
+      return;
+    }
+
+    char *scheme = separator;
+    while (scheme > line && avutil_log_url_scheme_character(
+                                 static_cast<unsigned char>(scheme[-1]))) {
+      scheme--;
+    }
+    if (scheme == separator ||
+        !std::isalpha(static_cast<unsigned char>(*scheme))) {
+      cursor = separator + 3;
+      continue;
+    }
+
+    char *authority = separator + 3;
+    char *url_end = authority;
+    while (!avutil_log_url_boundary(static_cast<unsigned char>(*url_end))) {
+      url_end++;
+    }
+
+    char *authority_end = authority;
+    while (authority_end < url_end && *authority_end != '/' &&
+           *authority_end != '?' && *authority_end != '#') {
+      authority_end++;
+    }
+
+    char *userinfo_end = nullptr;
+    for (char *part = authority; part < authority_end; part++) {
+      if (*part == '@') {
+        userinfo_end = part;
+      }
+    }
+    if (userinfo_end != nullptr) {
+      std::memset(authority, '*', static_cast<size_t>(userinfo_end - authority));
+    }
+
+    for (char *part = authority_end; part < url_end; part++) {
+      if (*part == '?' || *part == '#') {
+        std::memset(part + 1, '*', static_cast<size_t>(url_end - part - 1));
+        break;
+      }
+    }
+
+    cursor = url_end;
+  }
+}
+
 /**
  * Adds log data to the end of callback data list.
  *
@@ -1123,6 +1191,7 @@ void ffmpegkit_log_callback_function(void *ptr, int level, const char *format,
   // COMBINE ALL 4 LOG PARTS
   av_bprintf(&fullLine, "%s%s%s%s", part[0].str, part[1].str, part[2].str,
              part[3].str);
+  avutil_log_redact_url_secrets(fullLine.str);
 
   if (fullLine.len > 0) {
     logCallbackDataAdd(level, &fullLine);
