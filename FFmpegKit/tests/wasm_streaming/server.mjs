@@ -464,6 +464,18 @@ export function createStreamingFixtureServer({
       res.end();
       return;
     }
+    const rangedRedirect = /^\/redirect\/(301|302|307|308)\/(ranged|basic-auth)\.mp4$/.exec(url.pathname);
+    if (rangedRedirect) {
+      const destination = rangedRedirect[2] === 'basic-auth'
+        ? '/media/basic-auth.mp4' : '/media/progressive.mp4';
+      res.writeHead(Number(rangedRedirect[1]), {
+        ...corsHeaders(),
+        Location: `${destination}${url.search}`,
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return;
+    }
     if (url.pathname === '/hls/master.m3u8') {
       const token = url.searchParams.get('token');
       const suffix = token ? `?token=${encodeURIComponent(token)}` : '';
@@ -581,6 +593,43 @@ export function createStreamingFixtureServer({
       sendBuffer(req, res, asset('progressive.mp4'), { type: 'video/mp4' });
       return;
     }
+    if (url.pathname === '/range/malformed-206') {
+      const body = asset('progressive.mp4').subarray(0, 65536);
+      res.writeHead(206, {
+        ...corsHeaders(),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-store',
+        'Content-Length': body.length,
+        'Content-Range': `bytes 1-${body.length}/${body.length + 1}`,
+        'Content-Type': 'application/octet-stream',
+      });
+      res.end(body);
+      return;
+    }
+    if (url.pathname === '/range/empty-416') {
+      res.writeHead(416, {
+        ...corsHeaders(),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-store',
+        'Content-Range': 'bytes */0',
+      });
+      res.end();
+      return;
+    }
+    if (url.pathname === '/range/empty-416-hidden') {
+      res.writeHead(416, {
+        ...corsHeaders(),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return;
+    }
+    if (url.pathname === '/signed/expired.mp4') {
+      res.writeHead(403, { ...corsHeaders(), 'Content-Type': 'text/plain' });
+      res.end('signed URL expired\n');
+      return;
+    }
     if (/^\/range\/changing-(size|etag|last-modified)\.mp4$/.test(url.pathname)) {
       const kind = /^\/range\/changing-(size|etag|last-modified)\.mp4$/.exec(url.pathname)[1];
       const requestedStart = Number(/^bytes=(\d+)-/.exec(req.headers.range ?? '')?.[1] ?? 0);
@@ -637,6 +686,10 @@ export function createStreamingFixtureServer({
     }
     if (url.pathname === '/slow') {
       sendSlowBuffer(req, res, payload('slow', 1024 * 1024));
+      return;
+    }
+    if (/^\/slow\/independent-(left|right)$/.test(url.pathname)) {
+      sendSlowBuffer(req, res, payload(url.pathname, 1024 * 1024));
       return;
     }
     if (url.pathname === '/offline') {

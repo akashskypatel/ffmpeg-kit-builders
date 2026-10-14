@@ -596,6 +596,148 @@ async function runTransportMatrix() {
     return { detail: `read ${expectedSize} bytes; ${redirects.length} original-URL redirects matched the ranges` };
   }));
 
+  outcomes.push(await runCase('R5-NEG 416 at EOF requires exposed Content-Range', async () => {
+    if (typeof Module._ffmpeg_kit_test_http_io_stream_eof !== 'function' ||
+        typeof Module._ffmpeg_kit_test_http_io_stream_erange !== 'function')
+      return { skip: 'requires the opt-in HTTP stream diagnostic error hooks' };
+
+    await resetRequests();
+    const eofStatus = await readHttpStream('/range/empty-416');
+    const expectedEof = ccall('ffmpeg_kit_test_http_io_stream_eof', 'number');
+    check(eofStatus === expectedEof,
+      `Exposed bytes */0 returned ${eofStatus}, expected AVERROR_EOF=${expectedEof}.`);
+    const eofRequests = (await getRequests()).filter((request) =>
+      request.path === '/range/empty-416');
+    check(eofRequests.length === 1 && eofRequests[0].status === 416 &&
+        eofRequests[0].range === 'bytes=0-65535' &&
+        eofRequests[0].contentRange === 'bytes */0',
+    'The EOF fixture did not return one initial 416 with Content-Range: bytes */0.');
+
+    await resetRequests();
+    const hiddenStatus = await readHttpStream('/range/empty-416-hidden');
+    const expectedRange = ccall('ffmpeg_kit_test_http_io_stream_erange', 'number');
+    check(hiddenStatus === expectedRange,
+      `416 without exposed range metadata returned ${hiddenStatus}, expected ERANGE=${expectedRange}.`);
+    const hiddenRequests = (await getRequests()).filter((request) =>
+      request.path === '/range/empty-416-hidden');
+    check(hiddenRequests.length === 1 && hiddenRequests[0].status === 416 &&
+        hiddenRequests[0].contentRange === null,
+    'The missing-Content-Range fixture did not return the intended 416 response.');
+    return { detail: 'valid bytes */0 became EOF; a 416 without Content-Range failed with ERANGE' };
+  }));
+
+  outcomes.push(await runCase('R5-NEG malformed 206 is rejected before bytes are read', async () => {
+    if (typeof Module._ffmpeg_kit_test_http_io_stream_invaliddata !== 'function')
+      return { skip: 'requires the opt-in HTTP stream diagnostic error hook' };
+    await resetRequests();
+    const logStart = runtimeLines.length;
+    const status = await readHttpStream('/range/malformed-206');
+    const expected = ccall('ffmpeg_kit_test_http_io_stream_invaliddata', 'number');
+    check(status === expected,
+      `Malformed 206 returned ${status}, expected AVERROR_INVALIDDATA=${expected}.`);
+    const requests = (await getRequests()).filter((request) =>
+      request.path === '/range/malformed-206');
+    check(requests.length === 1 && requests[0].status === 206 &&
+        requests[0].range === 'bytes=0-65535' &&
+        /^bytes 1-\d+\/\d+$/.test(requests[0].contentRange ?? ''),
+    'The malformed-206 fixture did not return its deliberately shifted Content-Range.');
+    check(runtimeLines.slice(logStart).some((line) =>
+      line.includes('WASM HTTP 206 response has an invalid or hidden Content-Range')),
+    'The transport did not report rejecting the malformed Content-Range.');
+    return { detail: 'shifted Content-Range returned AVERROR_INVALIDDATA; no response bytes were accepted' };
+  }));
+
+  outcomes.push(await runCase('R5-NEG 301/302/307/308 preserve signed ranges and same-origin Authorization', async () => {
+    const head = await fetch(mediaUrl('/media/progressive.mp4', base), { method: 'HEAD' });
+    check(head.ok, `Progressive MP4 HEAD returned HTTP ${head.status}.`);
+    const expectedSize = Number(head.headers.get('content-length'));
+    check(Number.isSafeInteger(expectedSize) && expectedSize > 65536,
+      `Invalid progressive MP4 size: ${head.headers.get('content-length')}.`);
+    const token = 'r5neg-expiring-query-fixture';
+    const logStart = runtimeLines.length;
+    for (const redirectStatus of [301, 302, 307, 308]) {
+      await resetRequests();
+      const path = `/redirect/${redirectStatus}/ranged.mp4?token=${token}`;
+      const status = await readHttpStream(path);
+      check(status === 0,
+        `HTTP ${redirectStatus} signed range stream returned ${status}, expected EOF success.`);
+      const requests = await getRequests();
+      const redirects = requests.filter((request) =>
+        request.path === `/redirect/${redirectStatus}/ranged.mp4`);
+      const responses = requests.filter((request) =>
+        request.path === '/media/progressive.mp4');
+      check(redirects.length > 1 && redirects.length === responses.length,
+        `HTTP ${redirectStatus} had ${redirects.length} redirect requests and ` +
+        `${responses.length} final range requests.`);
+      let nextByte = 0;
+      for (let index = 0; index < redirects.length; index++) {
+        const requestedRange = /^bytes=(\d+)-(\d+)$/.exec(redirects[index].range ?? '');
+        const returnedRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(
+          responses[index].contentRange ?? '');
+        check(redirects[index].status === redirectStatus &&
+            redirects[index].query === `?token=${token}` &&
+            responses[index].status === 206 && responses[index].query === `?token=${token}`,
+        `HTTP ${redirectStatus} redirect/range pair ${index} lost its status or signed query.`);
+        check(requestedRange && responses[index].range === redirects[index].range &&
+            Number(requestedRange[1]) === nextByte && returnedRange &&
+            Number(returnedRange[1]) === Number(requestedRange[1]) &&
+            Number(returnedRange[2]) <= Number(requestedRange[2]) &&
+            Number(returnedRange[3]) === expectedSize,
+        `HTTP ${redirectStatus} range pair ${index} did not return contiguous valid bytes.`);
+        nextByte = Number(returnedRange[2]) + 1;
+      }
+      check(nextByte === expectedSize,
+        `HTTP ${redirectStatus} covered ${nextByte} bytes, expected ${expectedSize}.`);
+    }
+
+    await resetRequests();
+    const authUrl = new URL('/redirect/302/basic-auth.mp4?token=auth-query-fixture', base);
+    const authorization = `Basic ${btoa('alice@wasm:secret:pass')}`;
+    const authResult = await probe(authUrl.href,
+      `-v error -headers 'Authorization: ${authorization}'`, { timeoutMs: 10000 });
+    check(authResult.state === STATUS_COMPLETED && authResult.returnCode === 0,
+      `Same-origin 302 with an allowed Authorization header returned ${authResult.returnCode}.`);
+    const authTrace = await getRequests();
+    const authRedirects = authTrace.filter((request) =>
+      request.method === 'GET' && request.path === '/redirect/302/basic-auth.mp4');
+    const authRequests = authTrace.filter((request) =>
+      request.method === 'GET' && request.path === '/media/basic-auth.mp4');
+    const authorizationPreserved = authRequests.length > 0 && authRequests.every((request) =>
+      request.status === 206 && request.authenticated === true);
+    const authQueryPreserved = authRedirects.length > 0 &&
+      authRedirects.every((request) => request.query === '?token=auth-query-fixture') &&
+      authRequests.length > 0 &&
+      authRequests.every((request) => request.query === '?token=auth-query-fixture');
+    check(authorizationPreserved && authQueryPreserved,
+      `Same-origin 302 preserved Authorization=${authorizationPreserved} and ` +
+      `the signed query=${authQueryPreserved}.`);
+    const diagnosticLogs = runtimeLines.slice(logStart);
+    check(!diagnosticLogs.some((line) =>
+      /r5neg-expiring-query-fixture|auth-query-fixture|alice|secret:pass/.test(line)),
+    'A redirect diagnostic log exposed a query token or URL credential.');
+    return { detail: `all four redirect statuses preserved contiguous signed ranges; ` +
+      `302 preserved Authorization; logs contained no query token or credentials` };
+  }));
+
+  outcomes.push(await runCase('R5-NEG expired signed URL fails finitely without logging its token', async () => {
+    await resetRequests();
+    const token = 'r5neg-token-must-not-appear-in-logs';
+    const logStart = runtimeLines.length;
+    const started = Date.now();
+    const status = await readHttpStream(`/signed/expired.mp4?token=${token}`);
+    const elapsedMs = Date.now() - started;
+    check(status !== 0, 'Expired signed URL unexpectedly succeeded.');
+    check(elapsedMs < 5000, `Expired signed URL failed after ${elapsedMs} ms; limit=5000 ms.`);
+    const requests = (await getRequests()).filter((request) =>
+      request.path === '/signed/expired.mp4');
+    check(requests.length === 1 &&
+        requests[0].query === `?token=${token}` && requests[0].status === 403,
+    'The expired signed URL did not produce exactly one authenticated-fixture 403.');
+    check(!runtimeLines.slice(logStart).some((line) => line.includes(token)),
+      'The expired signed URL token appeared in a transport log.');
+    return { detail: `HTTP 403 failed in ${elapsedMs} ms; token was absent from runtime logs` };
+  }));
+
   outcomes.push(await runCase('HTTP-IO-4/5 worker deadlines survive a stalled main thread', async () => {
     if (typeof Module._ffmpeg_kit_test_http_io_wait_start !== 'function')
       return { skip: 'requires the opt-in HTTP wait diagnostic hooks' };
@@ -1161,6 +1303,96 @@ async function runTransportMatrix() {
       return { detail: `interrupt observed; cancelled in ${cancelElapsed} ms after request start; streams released` };
     } finally {
       await finishSession('ffprobe', handle);
+    }
+  }));
+
+  outcomes.push(await runCase('R5-NEG concurrent sessions cancel independently', async () => {
+    await resetRequests();
+    const logStart = runtimeLines.length;
+    let priorHandle = 0;
+    let leftHandle = 0;
+    let rightHandle = 0;
+    try {
+      priorHandle = startSession('ffprobe', ffprobeCommand(mediaUrl('/slow', base)));
+      const priorId = ccall('ffmpeg_kit_session_get_session_id', 'bigint',
+        ['number'], [priorHandle]);
+      let priorOpen = false;
+      for (let attempt = 0; attempt < 125; attempt++) {
+        priorOpen = runtimeLines.some((line) => line.includes('WASM HTTP open') &&
+          line.includes(`session=${priorId} `) && line.includes('/slow'));
+        if (priorOpen) break;
+        await delay(40);
+      }
+      check(priorOpen && sessionState(priorHandle) === STATUS_RUNNING,
+        'The cancellation-recovery request did not become active.');
+      ccall('ffprobe_kit_cancel_session', 'void', ['bigint'], [priorId]);
+      const priorResult = await waitForSession(priorHandle, 12000);
+      check(priorResult.returnCode !== 0,
+        'The cancellation-recovery FFprobe unexpectedly succeeded.');
+      await finishSession('ffprobe', priorHandle);
+      priorHandle = 0;
+
+      leftHandle = startSession('ffprobe',
+        ffprobeCommand(mediaUrl('/slow/independent-left', base)));
+      rightHandle = startSession('ffprobe',
+        ffprobeCommand(mediaUrl('/slow/independent-right', base)));
+      const leftId = ccall('ffmpeg_kit_session_get_session_id', 'bigint',
+        ['number'], [leftHandle]);
+      const rightId = ccall('ffmpeg_kit_session_get_session_id', 'bigint',
+        ['number'], [rightHandle]);
+      check(leftId > 0n && rightId > 0n && leftId !== rightId,
+        'Concurrent FFprobe sessions did not receive distinct IDs.');
+
+      let leftRequestSeen = false;
+      let rightRequestSeen = false;
+      for (let attempt = 0; attempt < 125; attempt++) {
+        leftRequestSeen = runtimeLines.some((line) => line.includes('WASM HTTP open') &&
+          line.includes(`session=${leftId} `) && line.includes('/slow/independent-left'));
+        rightRequestSeen = runtimeLines.some((line) => line.includes('WASM HTTP open') &&
+          line.includes(`session=${rightId} `) && line.includes('/slow/independent-right'));
+        if (leftRequestSeen && rightRequestSeen) break;
+        await delay(40);
+      }
+      check(leftRequestSeen && rightRequestSeen,
+        'Both independent slow HTTP requests did not start concurrently.');
+      check(sessionState(leftHandle) === STATUS_RUNNING &&
+          sessionState(rightHandle) === STATUS_RUNNING,
+      'Both FFprobe sessions were not still running before cancellation.');
+      write(`R5-NEG concurrent: both HTTP streams opened; cancelling session ${leftId}.`);
+
+      ccall('ffprobe_kit_cancel_session', 'void', ['bigint'], [leftId]);
+      const leftResult = await waitForSession(leftHandle, 12000);
+      check(leftResult.returnCode !== 0,
+        'The explicitly cancelled left FFprobe session returned success.');
+      await delay(200);
+      check(sessionState(rightHandle) === STATUS_RUNNING,
+        'Cancelling the left FFprobe session also stopped the independent right session.');
+      write(`R5-NEG concurrent: session ${leftId} ended; session ${rightId} remains running.`);
+
+      ccall('ffprobe_kit_cancel_session', 'void', ['bigint'], [rightId]);
+      const rightResult = await waitForSession(rightHandle, 12000);
+      check(rightResult.returnCode !== 0,
+        'The explicitly cancelled right FFprobe session returned success.');
+
+      const logs = runtimeLines.slice(logStart);
+      for (const id of [priorId, leftId, rightId]) {
+        const budget = logs.find((line) =>
+          line.includes(`WASM HTTP budget complete session=${id} `));
+        check(budget && /cached=0 pending=0 open_streams=0 active_requests=0/.test(budget),
+          `Session ${id} did not release its independent HTTP budget after cancellation.`);
+      }
+      for (const [id, path] of [[priorId, '/slow'], [leftId, '/slow/independent-left'],
+        [rightId, '/slow/independent-right']]) {
+        check(logs.some((line) => line.includes('WASM HTTP request interrupted') &&
+          line.includes(path)),
+        `Session ${id} did not log its own request interruption.`);
+      }
+      return { detail: `sessions=${leftId}/${rightId}; left cancellation left right running; ` +
+        'both later cancelled with zeroed independent HTTP budgets after prior cancellation recovery' };
+    } finally {
+      if (priorHandle) await finishSession('ffprobe', priorHandle);
+      if (leftHandle) await finishSession('ffprobe', leftHandle);
+      if (rightHandle) await finishSession('ffprobe', rightHandle);
     }
   }));
 

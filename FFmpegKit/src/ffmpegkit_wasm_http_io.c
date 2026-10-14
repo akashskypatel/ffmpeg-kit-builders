@@ -859,12 +859,16 @@ static void request_schedule_close(FetchRequest *request)
     if (!request->close_enqueued && !request->fetch_closed &&
         !request->fetch_close_complete) {
         request->close_enqueued = 1;
-        if (emscripten_is_main_runtime_thread()) {
-            close_inline = 1;
-        } else if (request_proxy(request, request_close_fetch_on_main) < 0) {
+        /* Fetch callbacks run on the main runtime thread. Closing their XHR
+         * inline can re-enter Emscripten's readystatechange handler while it
+         * is freeing the Fetch object, underflowing the runtime keepalive
+         * count. Queue closure so the callback can return first. */
+        if (request_proxy(request, request_close_fetch_on_main) < 0) {
             /* Publish enqueue failure before a callback can observe the flag.
              * The queued start or next Fetch callback then closes inline. */
             request->close_enqueued = 0;
+            if (emscripten_is_main_runtime_thread())
+                close_inline = 1;
         }
     }
     pthread_mutex_unlock(&request->mutex);
@@ -2635,6 +2639,21 @@ int ffmpeg_kit_test_http_io_stream_status(void)
 int ffmpeg_kit_test_http_io_stream_eio(void)
 {
     return AVERROR(EIO);
+}
+
+int ffmpeg_kit_test_http_io_stream_eof(void)
+{
+    return AVERROR_EOF;
+}
+
+int ffmpeg_kit_test_http_io_stream_erange(void)
+{
+    return AVERROR(ERANGE);
+}
+
+int ffmpeg_kit_test_http_io_stream_invaliddata(void)
+{
+    return AVERROR_INVALIDDATA;
 }
 
 typedef struct WasmHttpHeapTest {
