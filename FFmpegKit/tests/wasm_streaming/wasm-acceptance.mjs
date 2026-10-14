@@ -1286,6 +1286,148 @@ async function runTransportMatrix() {
       `signed segments=${segments.length}; HTTP budgets settled` };
   }));
 
+  outcomes.push(await runCase('R2-RES one- and three-segment FFprobe-only HLS natural close', async () => {
+    const results = [];
+    for (const { count, path } of [
+      { count: 1, path: '/hls/one-segment.m3u8' },
+      { count: 3, path: '/hls/three-segment.m3u8' },
+    ]) {
+      await resetRequests();
+      const token = `r2-hls-${count}`;
+      const logStart = runtimeLines.length;
+      const url = mediaUrl(`${path}?token=${token}`, base);
+      const result = await execute('ffprobe',
+        `-v debug -count_packets -show_entries ` +
+        `format=format_name:stream=codec_name,nb_read_packets -of json ${url}`,
+        { timeoutMs: 60000 });
+      check(result.state === STATUS_COMPLETED && result.returnCode === 0,
+        `${count}-segment HLS state=${result.state}, return=${result.returnCode}; ` +
+        `output=${result.output.slice(-700)}`);
+
+      const metadata = parseProbeJson(result.output);
+      check(metadata.format?.format_name?.split(',').includes('hls'),
+        `${count}-segment input did not report HLS format: ${JSON.stringify(metadata.format)}.`);
+      const video = metadata.streams?.find((stream) => stream.codec_name === 'h264');
+      const audio = metadata.streams?.find((stream) => stream.codec_name === 'aac');
+      check(video && Number.parseInt(video.nb_read_packets, 10) > 0,
+        `${count}-segment HLS did not count H.264 packets: ${JSON.stringify(metadata.streams)}.`);
+      check(audio && Number.parseInt(audio.nb_read_packets, 10) > 0,
+        `${count}-segment HLS did not count AAC packets: ${JSON.stringify(metadata.streams)}.`);
+
+      const requests = await getRequests();
+      check(requests.some((request) => request.path === path &&
+        request.query === `?token=${token}` && request.status === 206),
+      `${count}-segment standalone playlist was not fetched with its signed query.`);
+      const segments = [...new Set(requests.filter((request) =>
+        /^\/hls\/segment-[1-3]\.ts$/.test(request.path) &&
+        request.query === `?token=${token}` && request.status === 206)
+        .map((request) => request.path))].sort();
+      check(segments.length === count,
+        `${count}-segment playlist fetched ${segments.length} distinct segments: ${segments.join(', ')}.`);
+
+      const budgets = runtimeLines.slice(logStart)
+        .filter((line) => line.includes('WASM HTTP budget complete'));
+      check(budgets.length === 1 &&
+        /cached=0 pending=0 open_streams=0 active_requests=0/.test(budgets[0]),
+      `${count}-segment HLS did not close exactly one clean HTTP session: ${budgets.join(' | ')}`);
+      results.push(`${count} segment(s), packets=${video.nb_read_packets}/${audio.nb_read_packets}`);
+    }
+    return { detail: `${results.join('; ')}; natural close and request budgets settled` };
+  }));
+
+  outcomes.push(await runCase('R2-RES foreign AVIO close callback handles null and duplicate close', async () => {
+    if (typeof Module._ffmpeg_kit_test_http_io_close_callback_contract !== 'function')
+      return { skip: 'requires the opt-in HTTP close-callback diagnostic hook' };
+    const result = ccall('ffmpeg_kit_test_http_io_close_callback_contract', 'number');
+    check(result === 0,
+      `Foreign AVIO close callback contract returned ${result}; expected 0.`);
+    check(!wasmRuntimePoisoned,
+      'Foreign or duplicate close poisoned the Wasm runtime.');
+    return { detail: 'NULL close is a no-op; foreign AVIO close delegates twice without freeing it' };
+  }));
+
+  outcomes.push(await runCase('R2-RES ten sequential single-segment HLS sessions close cleanly', async () => {
+    await resetRequests();
+    const logStart = runtimeLines.length;
+    const sessionTokens = [];
+    for (let index = 0; index < 10; index++) {
+      const token = `r2-sequential-${index + 1}`;
+      sessionTokens.push(token);
+      const result = await probe(mediaUrl(`/hls/one-segment.m3u8?token=${token}`, base), '',
+        { timeoutMs: 30000 });
+      check(result.state === STATUS_COMPLETED && result.returnCode === 0,
+        `HLS session ${index + 1} state=${result.state}, return=${result.returnCode}.`);
+      const metadata = parseProbeJson(result.output);
+      check(metadata.format?.format_name?.split(',').includes('hls'),
+        `HLS session ${index + 1} did not report HLS format.`);
+    }
+
+    const budgets = runtimeLines.slice(logStart)
+      .filter((line) => line.includes('WASM HTTP budget complete'));
+    const cleanBudgets = budgets.filter((line) =>
+      /cached=0 pending=0 open_streams=0 active_requests=0/.test(line));
+    check(cleanBudgets.length === 10,
+      `Expected 10 clean HLS close summaries; observed ${cleanBudgets.length}/${budgets.length}.`);
+    const requests = await getRequests();
+    for (const token of sessionTokens) {
+      check(requests.some((request) => request.path === '/hls/one-segment.m3u8' &&
+        request.query === `?token=${token}` && request.status === 206),
+      `No playlist request was observed for HLS session ${token}.`);
+      check(requests.some((request) => request.path === '/hls/segment-1.ts' &&
+        request.query === `?token=${token}` && request.status === 206),
+      `No segment request was observed for HLS session ${token}.`);
+    }
+    check(!wasmRuntimePoisoned, 'The runtime was poisoned by repeated HLS natural close.');
+    return { detail: `10/10 FFprobe HLS sessions completed; clean budgets=${cleanBudgets.length}` };
+  }));
+
+  outcomes.push(await runCase('R2-RES wrong and duplicate FFprobe handle close is harmless', async () => {
+    await resetRequests();
+    const logStart = runtimeLines.length;
+    const token = 'r2-wrong-duplicate-close';
+    const handle = startSession('ffprobe',
+      ffprobeCommand(mediaUrl(`/hls/one-segment.m3u8?token=${token}`, base)));
+    let handleReleased = false;
+    try {
+      const result = await waitForSession(handle, 30000);
+      check(result.state === STATUS_COMPLETED && result.returnCode === 0,
+        `HLS session state=${result.state}, return=${result.returnCode}.`);
+      check(parseProbeJson(result.output).format?.format_name?.split(',').includes('hls'),
+        'The HLS session did not produce parseable HLS metadata before close checks.');
+
+      const invalidHandle = 0x7fffffff;
+      ccall('ffprobe_kit_close_session', 'void', ['number'], [invalidHandle]);
+      ccall('ffprobe_kit_close_session', 'void', ['number'], [handle]);
+      ccall('ffprobe_kit_close_session', 'void', ['number'], [handle]);
+      check(sessionState(handle) === STATUS_COMPLETED,
+        'Wrong or duplicate close changed the completed HLS session state.');
+
+      const budgets = runtimeLines.slice(logStart)
+        .filter((line) => line.includes('WASM HTTP budget complete'));
+      check(budgets.length === 1 &&
+        /cached=0 pending=0 open_streams=0 active_requests=0/.test(budgets[0]),
+      `HLS natural close did not settle before the duplicate-close checks: ${budgets.join(' | ')}`);
+
+      finishCommandTiming(handle);
+      ccall('ffmpeg_kit_handle_release', 'void', ['number'], [invalidHandle]);
+      ccall('ffmpeg_kit_handle_release', 'void', ['number'], [handle]);
+      handleReleased = true;
+      if (activeSession?.handle === handle) activeSession = null;
+      ccall('ffmpeg_kit_handle_release', 'void', ['number'], [handle]);
+      updateButtons();
+
+      const recovery = await probe(mediaUrl('/hls/one-segment.m3u8?token=r2-close-recovery', base), '',
+        { timeoutMs: 30000 });
+      check(recovery.state === STATUS_COMPLETED && recovery.returnCode === 0,
+        `The module did not survive wrong/duplicate close (state=${recovery.state}, ` +
+        `return=${recovery.returnCode}).`);
+      return { detail: 'unknown and duplicate session handles ignored; later HLS probe succeeded' };
+    } finally {
+      if (handleReleased) finishCommandTiming(handle);
+      else await finishSession('ffprobe', handle);
+    }
+  }));
+
   outcomes.push(await runCase('N15b imported MEMFS MPEG-TS', async () => {
     const tsResponse = await fetch(mediaUrl('/hls/segment-1.ts', base));
     check(tsResponse.ok, `TS import failed with HTTP ${tsResponse.status}.`);

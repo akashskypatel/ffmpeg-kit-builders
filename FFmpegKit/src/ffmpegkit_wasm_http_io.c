@@ -2067,6 +2067,85 @@ void ffmpegkit_wasm_http_session_free(FFmpegKitWasmHttpSession *session)
 }
 
 #if defined(FFMPEG_KIT_TEST_HOOKS)
+typedef struct WasmHttpCloseCallbackProbe {
+    AVIOContext *pb;
+    int close_calls;
+} WasmHttpCloseCallbackProbe;
+
+static int wasm_http_close_probe_read(void *opaque, uint8_t *buffer,
+                                      int buffer_size)
+{
+    (void)opaque;
+    (void)buffer;
+    (void)buffer_size;
+    return AVERROR_EOF;
+}
+
+static int wasm_http_close_probe_previous(AVFormatContext *context,
+                                          AVIOContext *pb)
+{
+    WasmHttpCloseCallbackProbe *probe = pb ? pb->opaque : NULL;
+
+    (void)context;
+    if (!probe || probe->pb != pb)
+        return AVERROR(EINVAL);
+    probe->close_calls++;
+    return 0;
+}
+
+int ffmpeg_kit_test_http_io_close_callback_contract(void)
+{
+    WasmHttpCloseCallbackProbe probe = { 0 };
+    FFmpegKitWasmHttpSession *session = NULL;
+    AVFormatContext *context = avformat_alloc_context();
+    AVIOContext *pb = NULL;
+    uint8_t *buffer = NULL;
+    int ret = context ? 0 : AVERROR(ENOMEM);
+
+    if (ret >= 0) {
+        context->io_close2 = wasm_http_close_probe_previous;
+        ret = ffmpegkit_wasm_http_install(context, 0, &session);
+    }
+    if (ret >= 0) {
+        buffer = av_malloc(1024);
+        if (!buffer)
+            ret = AVERROR(ENOMEM);
+    }
+    if (ret >= 0) {
+        pb = avio_alloc_context(buffer, 1024, 0, &probe,
+                                wasm_http_close_probe_read, NULL, NULL);
+        if (!pb) {
+            av_freep(&buffer);
+            ret = AVERROR(ENOMEM);
+        } else {
+            probe.pb = pb;
+        }
+    }
+    if (ret >= 0)
+        ret = context->io_close2(context, NULL);
+    if (ret >= 0)
+        ret = context->io_close2(context, pb);
+    if (ret >= 0)
+        ret = context->io_close2(context, pb);
+    if (ret >= 0 && probe.close_calls != 2)
+        ret = AVERROR_BUG;
+
+    if (pb) {
+        av_freep(&pb->buffer);
+        avio_context_free(&pb);
+    }
+    if (context) {
+        if (session) {
+            context->io_open = session->previous_io_open;
+            context->io_close2 = session->previous_io_close2;
+        }
+        context->opaque = NULL;
+        avformat_free_context(context);
+    }
+    ffmpegkit_wasm_http_session_free(session);
+    return ret;
+}
+
 typedef struct WasmHttpWaitProbe {
     char *url;
     unsigned int timeout_ms;

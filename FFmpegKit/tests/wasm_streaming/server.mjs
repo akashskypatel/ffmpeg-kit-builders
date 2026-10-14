@@ -290,11 +290,27 @@ export function createStreamingFixtureServer({
     return payload(name);
   }
 
-  function vodPlaylist(token = null) {
+  function vodPlaylist(token = null, segmentCount = 3) {
     const playlistPath = resolve(mediaRoot ?? defaultH264AacFixtureDir, 'vod.m3u8');
     const suffix = token ? `?token=${encodeURIComponent(token)}` : '';
-    return readFileSync(playlistPath, 'utf8')
-      .replace(/^(segment-\d+\.ts)$/gm, `$1${suffix}`);
+    const lines = readFileSync(playlistPath, 'utf8').trimEnd().split(/\r?\n/);
+    const output = [];
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index];
+      if (line.startsWith('#EXTINF:')) {
+        const segment = lines[index + 1];
+        const match = /^(segment-(\d+)\.ts)$/.exec(segment ?? '');
+        if (match) {
+          if (Number(match[2]) <= segmentCount) {
+            output.push(line, `${segment}${suffix}`);
+          }
+          index++;
+          continue;
+        }
+      }
+      output.push(line);
+    }
+    return `${output.join('\n')}\n`;
   }
 
   function getLiveSegmentTemplate() {
@@ -465,6 +481,14 @@ export function createStreamingFixtureServer({
     if (url.pathname === '/hls/variant.m3u8') {
       const token = url.searchParams.get('token');
       const playlist = vodPlaylist(token);
+      sendBuffer(req, res, Buffer.from(playlist), { type: 'application/vnd.apple.mpegurl' });
+      return;
+    }
+    if (url.pathname === '/hls/one-segment.m3u8' ||
+        url.pathname === '/hls/three-segment.m3u8') {
+      const token = url.searchParams.get('token');
+      const segmentCount = url.pathname === '/hls/one-segment.m3u8' ? 1 : 3;
+      const playlist = vodPlaylist(token, segmentCount);
       sendBuffer(req, res, Buffer.from(playlist), { type: 'application/vnd.apple.mpegurl' });
       return;
     }

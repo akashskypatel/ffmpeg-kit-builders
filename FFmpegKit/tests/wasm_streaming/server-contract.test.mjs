@@ -141,6 +141,22 @@ test('serves the native-probed three-segment VOD playlist and preserves the old 
     [2.021333, 2, 2]);
   const segmentNames = [...playlist.matchAll(/^(segment-\d+\.ts)$/gm)].map((match) => match[1]);
   assert.deepEqual(segmentNames, ['segment-1.ts', 'segment-2.ts', 'segment-3.ts']);
+
+  for (const { path, token, expected } of [
+    { path: 'one-segment.m3u8', token: 'contract-one', expected: ['segment-1.ts'] },
+    { path: 'three-segment.m3u8', token: 'contract-three',
+      expected: ['segment-1.ts', 'segment-2.ts', 'segment-3.ts'] },
+  ]) {
+    const response = await fetch(`${baseUrl}/hls/${path}?token=${token}`);
+    assert.equal(response.status, 200);
+    const standalone = await response.text();
+    const entries = [...standalone.matchAll(/^(segment-\d+\.ts(?:\?token=[^\n]+)?)$/gm)]
+      .map((match) => match[1]);
+    assert.deepEqual(entries, expected.map((name) => `${name}?token=${token}`));
+    assert.equal([...standalone.matchAll(/^#EXTINF:/gm)].length, expected.length);
+    assert.match(standalone, /#EXT-X-ENDLIST\s*$/);
+  }
+
   const hashes = [];
   for (const name of segmentNames) {
     const response = await fetch(`${baseUrl}/hls/${name}`);
