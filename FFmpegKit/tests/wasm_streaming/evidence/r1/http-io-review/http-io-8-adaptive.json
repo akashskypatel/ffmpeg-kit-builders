@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-10-14T19:30:51.002Z",
+  "pageUrl": "http://127.0.0.1:41915/wasm-acceptance.html?case=HTTP-IO-8&bundle=http-io-8-adaptive&wasmSha256=c6b570b0e9aded2e261790730a0fc268220909e59574cced07f63d0c0c4f8b48&loaderSha256=df7effc73bc5270aa6f2446e1d0895a63f9d9eb378eb9caec563ca216705bca1",
+  "httpStatus": 200,
+  "browserVersion": "155.0.8059.39",
+  "isolation": {
+    "crossOriginIsolated": true,
+    "sharedArrayBuffer": true
+  },
+  "transportStatus": "Transport matrix: 1 passed, 0 failed, 24 skipped.",
+  "harnessLog": "[2026-10-14T19:30:48.991Z] Loaded local Wasm loader; crossOriginIsolated=true; SharedArrayBuffer=true.\n[2026-10-14T19:30:49.022Z] RUN HTTP-IO-8 adaptive ranges halve progressive MP4 round trips\n[2026-10-14T19:30:50.666Z] stdout: [2026-10-14 12:30:50.666] [ffmpeg-kit] DEBUG: [AVFormatContext @ 0x28e93a0] WASM HTTP open generation=1 session=0 worker=42621656 range=1 size=880930 url=http://127.0.0.1:41915/media/progressive-latency.mp4\n[2026-10-14T19:30:50.977Z] stdout: [2026-10-14 12:30:50.976] [ffmpeg-kit] DEBUG: WASM HTTP budget complete session=0 requests=4 peak_retained=1048576 cached=0 pending=0 open_streams=0 active_requests=0\n[2026-10-14T19:30:50.985Z] HTTP-IO-8 measurement bytes=880930; direct 64 KiB reference=1427 ms/14 ranges; raw Wasm AVIO=423 ms/4 ranges [65536,131072,262144,524288 bytes]; speedup=3.37x; peak=1048576\n[2026-10-14T19:30:50.985Z] PASS HTTP-IO-8 adaptive ranges halve progressive MP4 round trips — bytes=880930; baseline=1427 ms/14 ranges; Wasm=423 ms/4 ranges (65536,131072,262144,524288 bytes); speedup=3.37x; peak=1048576 bytes\n[2026-10-14T19:30:50.986Z] Wasm transport emitted 1 budget summaries; latest: stdout: [2026-10-14 12:30:50.976] [ffmpeg-kit] DEBUG: WASM HTTP budget complete session=0 requests=4 peak_retained=1048576 cached=0 pending=0 open_streams=0 active_requests=0\n",
+  "pageErrors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

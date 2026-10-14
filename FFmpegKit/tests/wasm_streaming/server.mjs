@@ -283,6 +283,8 @@ export function createStreamingFixtureServer({
       return readFileSync(resolve(defaultH264AacFixtureDir, 'segment-1.ts'));
     if (name === 'live-template.ts')
       return readFileSync(resolve(defaultH264AacFixtureDir, 'live-template.ts'));
+    if (name === 'live-template-packets.json')
+      return readFileSync(resolve(defaultH264AacFixtureDir, 'live-template-packets.json'));
     if (/^segment-\d+\.ts$/.test(name))
       return readFileSync(resolve(defaultH264AacFixtureDir, name));
     return payload(name);

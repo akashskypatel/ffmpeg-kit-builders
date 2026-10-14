@@ -1230,6 +1230,62 @@ async function runTransportMatrix() {
     return { detail: `nested requests=${nested.length}` };
   }));
 
+  outcomes.push(await runCase('N10 FFprobe reads HLS master, variant, and all segment metadata', async () => {
+    await resetRequests();
+    const logStart = runtimeLines.length;
+    const token = 'wasm-n10';
+    const url = mediaUrl(`/redirect/master.m3u8?token=${token}`, base);
+    const result = await execute('ffprobe',
+      `-v debug -count_packets ` +
+      `-show_entries format=format_name,duration:` +
+      `stream=index,codec_name,width,height,sample_rate,channels,nb_read_packets ` +
+      `-of json ${url}`, { timeoutMs: 60000 });
+    check(result.state === STATUS_COMPLETED && result.returnCode === 0,
+      `HLS FFprobe state=${result.state}, return=${result.returnCode}; ` +
+      `output=${result.output.slice(-1000)}`);
+
+    const metadata = parseProbeJson(result.output);
+    check(metadata.format?.format_name?.split(',').includes('hls'),
+      `Expected HLS format metadata, got ${JSON.stringify(metadata.format)}.`);
+    const video = metadata.streams?.find((stream) => stream.codec_name === 'h264');
+    const audio = metadata.streams?.find((stream) => stream.codec_name === 'aac');
+    check(video?.width === 320 && video.height === 240,
+      `Expected 320x240 H.264 metadata, got ${JSON.stringify(video)}.`);
+    check(audio?.sample_rate === '48000' && audio.channels === 2,
+      `Expected 48 kHz stereo AAC metadata, got ${JSON.stringify(audio)}.`);
+    for (const stream of [video, audio])
+      check(Number.parseInt(stream.nb_read_packets, 10) > 0,
+        `FFprobe did not count packets for ${stream.codec_name}: ${stream.nb_read_packets}.`);
+
+    const requests = await getRequests();
+    check(requests.some((request) => request.path === '/redirect/master.m3u8' &&
+      request.query === `?token=${token}` && request.status === 302),
+    'The signed HLS master redirect was not followed.');
+    check(requests.some((request) => request.path === '/hls/master.m3u8' &&
+      request.query === `?token=${token}` && request.status === 206),
+    'The signed master playlist was not fetched.');
+    check(requests.some((request) => request.path === '/hls/variant.m3u8' &&
+      request.query === `?token=${token}` && request.status === 206),
+    'The signed variant playlist was not fetched.');
+    const segmentRequests = requests.filter((request) =>
+      /^\/hls\/segment-[1-3]\.ts$/.test(request.path) &&
+      request.query === `?token=${token}` && request.status === 206);
+    const segments = [...new Set(segmentRequests.map((request) => request.path))].sort();
+    check(segments.length === 3,
+      `Expected all 3 signed HLS segments; observed ${segments.join(', ') || 'none'}.`);
+
+    const cleanBudget = runtimeLines.slice(logStart).some((line) =>
+      line.includes('WASM HTTP budget complete') &&
+      /cached=0 pending=0 open_streams=0 active_requests=0/.test(line));
+    check(cleanBudget,
+      'HLS FFprobe completed without a clean HTTP stream/request budget summary.');
+    return { detail: `format=${metadata.format.format_name}; ` +
+      `video=${video.codec_name}/${video.width}x${video.height}; ` +
+      `audio=${audio.codec_name}/${audio.sample_rate}Hz/${audio.channels}ch; ` +
+      `packets=${video.nb_read_packets}/${audio.nb_read_packets}; ` +
+      `signed segments=${segments.length}; HTTP budgets settled` };
+  }));
+
   outcomes.push(await runCase('N15b imported MEMFS MPEG-TS', async () => {
     const tsResponse = await fetch(mediaUrl('/hls/segment-1.ts', base));
     check(tsResponse.ok, `TS import failed with HTTP ${tsResponse.status}.`);

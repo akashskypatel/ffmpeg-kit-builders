@@ -1,0 +1,19 @@
+✔ serves bounded 200 and 206 responses with exposed range metadata (45.895085ms)
+✔ serves the native live-packet reference without a custom fixture directory (6.343281ms)
+✔ serves the native-probed three-segment VOD playlist and preserves the old confound fixture (10.958166ms)
+✔ range-ignoring endpoint returns a finite 200 body (3.030513ms)
+✔ redirect and playlist keep the signed query while resolving nested URLs (4.464776ms)
+✔ live playlist advances timestamps and continuity across three distinct segments (14.630414ms)
+✔ status and CORS cases are deterministic (3.719726ms)
+✔ serves the standalone audio close harness and its module (6.071699ms)
+✔ serves the configured Wasm bundle with its required MIME type (5.735099ms)
+✔ slow endpoint accepts an abort and records the Range request (43.376021ms)
+✔ slow HLS segment accepts an abort and the truncated route fails finitely (33.777449ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3243.660252
