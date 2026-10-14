@@ -306,6 +306,7 @@ export function createStreamingFixtureServer({
     cors = true,
     cache = 'no-store',
     extraHeaders = {},
+    delayMs = 0,
   } = {}) {
     const headers = {
       ...corsHeaders(cors),
@@ -315,25 +316,30 @@ export function createStreamingFixtureServer({
       ...extraHeaders,
     };
     const requested = range ? parseRange(req.headers.range, body.length) : null;
-    if (requested?.invalid) {
-      res.writeHead(416, { ...headers, 'Content-Range': `bytes */${body.length}` });
-      res.end();
-      return;
-    }
-    if (requested) {
-      const chunk = body.subarray(requested.start, requested.end + 1);
-      res.writeHead(206, {
-        ...headers,
-        'Content-Length': chunk.length,
-        'Content-Range': `bytes ${requested.start}-${requested.end}/${body.length}`,
-      });
+    const respond = () => {
+      if (res.destroyed) return;
+      if (requested?.invalid) {
+        res.writeHead(416, { ...headers, 'Content-Range': `bytes */${body.length}` });
+        res.end();
+        return;
+      }
+      if (requested) {
+        const chunk = body.subarray(requested.start, requested.end + 1);
+        res.writeHead(206, {
+          ...headers,
+          'Content-Length': chunk.length,
+          'Content-Range': `bytes ${requested.start}-${requested.end}/${body.length}`,
+        });
+        if (req.method === 'HEAD') res.end();
+        else res.end(chunk);
+        return;
+      }
+      res.writeHead(200, { ...headers, 'Content-Length': body.length });
       if (req.method === 'HEAD') res.end();
-      else res.end(chunk);
-      return;
-    }
-    res.writeHead(200, { ...headers, 'Content-Length': body.length });
-    if (req.method === 'HEAD') res.end();
-    else res.end(body);
+      else res.end(body);
+    };
+    if (delayMs > 0) setTimeout(respond, delayMs);
+    else respond();
   }
 
   const server = http.createServer((req, res) => {
@@ -519,6 +525,12 @@ export function createStreamingFixtureServer({
     }
     if (url.pathname === '/media/progressive.mp4' || url.pathname === '/progressive.mp4') {
       sendBuffer(req, res, asset('progressive.mp4'), { type: 'video/mp4' });
+      return;
+    }
+    if (url.pathname === '/media/progressive-latency.mp4') {
+      sendBuffer(req, res, asset('progressive.mp4'), {
+        type: 'video/mp4', delayMs: 100,
+      });
       return;
     }
     if (/^\/range\/changing-(size|etag|last-modified)\.mp4$/.test(url.pathname)) {

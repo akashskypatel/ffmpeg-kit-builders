@@ -38,7 +38,8 @@
 
 #define WASM_HTTP_MAGIC 0x5741534d48545450ULL
 #define WASM_HTTP_READ_BUFFER_SIZE (16 * 1024)
-#define WASM_HTTP_RANGE_SIZE (64 * 1024)
+#define WASM_HTTP_RANGE_INITIAL_SIZE (64 * 1024)
+#define WASM_HTTP_RANGE_MAX_SIZE (512 * 1024)
 #define WASM_HTTP_MAX_BUFFERED_BYTES (1024 * 1024)
 #define WASM_HTTP_MAX_OPEN_STREAMS 8
 #define WASM_HTTP_MAX_INFLIGHT 4
@@ -47,6 +48,9 @@
 #define WASM_HTTP_URL_SIZE 8192
 #define WASM_HTTP_LOG_URL_SIZE 512
 #define WASM_HTTP_MAX_HEADERS 24
+
+_Static_assert(2 * WASM_HTTP_RANGE_MAX_SIZE <= WASM_HTTP_MAX_BUFFERED_BYTES,
+               "one maximum range and its response copy must fit in the session budget");
 
 typedef struct WasmHttpIO WasmHttpIO;
 
@@ -82,6 +86,8 @@ typedef struct FetchRequest {
     int has_content_length;
     uint64_t content_length;
     size_t pending_size;
+    size_t range_limit;
+    size_t fetch_buffer_reserved_size;
     char *headers;
     char *response_url;
     char *username;
@@ -138,6 +144,7 @@ struct WasmHttpIO {
     int64_t rw_timeout;
     uint8_t *cache;
     size_t cache_size;
+    size_t range_size;
     int64_t cache_start;
     int64_t position;
     int64_t length;
@@ -170,8 +177,6 @@ static void request_start_fetch_on_main(void *opaque);
 static void request_close_fetch_on_main(void *opaque);
 static void request_release(FetchRequest *request);
 static void session_release_request(FFmpegKitWasmHttpSession *session);
-static int session_reserve_pending(FFmpegKitWasmHttpSession *session,
-                                  size_t size);
 static void session_release_pending(FFmpegKitWasmHttpSession *session,
                                    size_t size);
 
@@ -770,8 +775,10 @@ static void request_close_fetch(FetchRequest *request)
 
     pthread_mutex_lock(&request->mutex);
     if (request->fetch_buffer_reserved) {
-        session_release_pending(request->session, WASM_HTTP_RANGE_SIZE);
+        session_release_pending(request->session,
+                                request->fetch_buffer_reserved_size);
         request->fetch_buffer_reserved = 0;
+        request->fetch_buffer_reserved_size = 0;
     }
     if (request->request_acquired) {
         session_release_request(request->session);
@@ -943,7 +950,7 @@ static void request_onreadystatechange(emscripten_fetch_t *fetch)
         should_abort = 1;
     } else if (request->headers_seen &&
                request->has_content_length &&
-               request->content_length > WASM_HTTP_RANGE_SIZE) {
+               request->content_length > request->range_limit) {
         request->abort_reason = FETCH_ABORT_LIMIT;
         should_abort = 1;
     }
@@ -968,9 +975,9 @@ static void request_onprogress(emscripten_fetch_t *fetch)
         should_abort = 1;
     } else if (request->status >= 400) {
         should_abort = 1;
-    } else if (fetch->totalBytes > WASM_HTTP_RANGE_SIZE ||
-               fetch->dataOffset > WASM_HTTP_RANGE_SIZE ||
-               fetch->numBytes > WASM_HTTP_RANGE_SIZE) {
+    } else if (fetch->totalBytes > request->range_limit ||
+               fetch->dataOffset > request->range_limit ||
+               fetch->numBytes > request->range_limit) {
         if (request->abort_reason == FETCH_ABORT_NONE)
             request->abort_reason = FETCH_ABORT_LIMIT;
         should_abort = 1;
@@ -995,28 +1002,34 @@ static void request_onsuccess(emscripten_fetch_t *fetch)
     request_capture_headers(request, fetch);
     valid = request->abort_reason == FETCH_ABORT_NONE && !request->close_requested;
     if (request->has_content_length &&
-        request->content_length > WASM_HTTP_RANGE_SIZE) {
+        request->content_length > request->range_limit) {
         request->abort_reason = FETCH_ABORT_LIMIT;
         valid = 0;
     }
-    if (valid && (fetch->numBytes > WASM_HTTP_RANGE_SIZE ||
+    if (valid && (fetch->numBytes > request->range_limit ||
                   fetch->numBytes > SIZE_MAX ||
                   (fetch->numBytes && !fetch->data))) {
         request->abort_reason = FETCH_ABORT_LIMIT;
         valid = 0;
     } else if (valid && fetch->numBytes) {
         size_t data_size = (size_t)fetch->numBytes;
-        size_t reserve_size = data_size;
-        int ret = session_reserve_pending(request->session, reserve_size);
-        if (ret < 0) {
+        if (!request->pending_reserved || !request->fetch_buffer_reserved ||
+            data_size > request->pending_size ||
+            data_size > request->fetch_buffer_reserved_size) {
             request->abort_reason = FETCH_ABORT_LIMIT;
             valid = 0;
         } else {
-            request->pending_reserved = 1;
-            request->pending_size = reserve_size;
+            if (request->pending_size > data_size)
+                session_release_pending(request->session,
+                                        request->pending_size - data_size);
+            if (request->fetch_buffer_reserved_size > data_size)
+                session_release_pending(request->session,
+                                        request->fetch_buffer_reserved_size - data_size);
+            request->pending_size = data_size;
+            request->fetch_buffer_reserved_size = data_size;
             data = av_memdup(fetch->data, data_size);
             if (!data) {
-                session_release_pending(request->session, reserve_size);
+                session_release_pending(request->session, request->pending_size);
                 request->pending_reserved = 0;
                 request->pending_size = 0;
                 request->abort_reason = FETCH_ABORT_MEMORY;
@@ -1070,7 +1083,8 @@ static void request_release(FetchRequest *request)
     if (request->pending_reserved)
         session_release_pending(request->session, request->pending_size);
     if (request->fetch_buffer_reserved)
-        session_release_pending(request->session, WASM_HTTP_RANGE_SIZE);
+        session_release_pending(request->session,
+                                request->fetch_buffer_reserved_size);
     if (request->request_acquired)
         session_release_request(request->session);
     av_freep(&request->headers);
@@ -1192,11 +1206,17 @@ static void session_budget_release(FFmpegKitWasmHttpSession *session)
 
 static int session_acquire_request(FFmpegKitWasmHttpSession *session,
                                    const AVIOInterruptCB *interrupt,
-                                   unsigned int timeout_ms)
+                                   unsigned int timeout_ms,
+                                   size_t *range_size)
 {
     WasmHttpBudget *budget = session->budget;
     struct timespec deadline;
+    size_t admitted_range_size = *range_size;
     int ret = 0;
+
+    if (admitted_range_size < WASM_HTTP_RANGE_INITIAL_SIZE ||
+        admitted_range_size > WASM_HTTP_RANGE_MAX_SIZE)
+        return AVERROR(EINVAL);
 
     clock_gettime(CLOCK_REALTIME, &deadline);
     deadline.tv_sec += timeout_ms / 1000;
@@ -1242,19 +1262,29 @@ static int session_acquire_request(FFmpegKitWasmHttpSession *session,
     if (!ret) {
         if (budget->buffered_bytes > WASM_HTTP_MAX_BUFFERED_BYTES ||
             budget->pending_bytes > WASM_HTTP_MAX_BUFFERED_BYTES -
-                                    budget->buffered_bytes ||
-            WASM_HTTP_RANGE_SIZE > WASM_HTTP_MAX_BUFFERED_BYTES -
-                                   budget->buffered_bytes -
-                                   budget->pending_bytes) {
+                                    budget->buffered_bytes) {
             ret = AVERROR(ENOBUFS);
         } else {
-            budget->active_requests++;
-            budget->request_count++;
-            budget->pending_bytes += WASM_HTTP_RANGE_SIZE;
-            if (budget->buffered_bytes + budget->pending_bytes >
-                budget->peak_retained_bytes)
-                budget->peak_retained_bytes = budget->buffered_bytes +
-                                              budget->pending_bytes;
+            size_t available = WASM_HTTP_MAX_BUFFERED_BYTES -
+                               budget->buffered_bytes - budget->pending_bytes;
+
+            while (admitted_range_size > WASM_HTTP_RANGE_INITIAL_SIZE &&
+                   admitted_range_size > available / 2)
+                admitted_range_size /= 2;
+            if (admitted_range_size < WASM_HTTP_RANGE_INITIAL_SIZE ||
+                admitted_range_size > available / 2) {
+                ret = AVERROR(ENOBUFS);
+            } else {
+                size_t reservation_size = admitted_range_size * 2;
+                budget->active_requests++;
+                budget->request_count++;
+                budget->pending_bytes += reservation_size;
+                if (budget->buffered_bytes + budget->pending_bytes >
+                    budget->peak_retained_bytes)
+                    budget->peak_retained_bytes = budget->buffered_bytes +
+                                                  budget->pending_bytes;
+                *range_size = admitted_range_size;
+            }
         }
     }
     pthread_mutex_unlock(&budget->mutex);
@@ -1269,30 +1299,6 @@ static void session_release_request(FFmpegKitWasmHttpSession *session)
         budget->active_requests--;
     pthread_cond_broadcast(&budget->cond);
     pthread_mutex_unlock(&budget->mutex);
-}
-
-static int session_reserve_pending(FFmpegKitWasmHttpSession *session,
-                                  size_t size)
-{
-    WasmHttpBudget *budget = session->budget;
-    int ret = 0;
-
-    pthread_mutex_lock(&budget->mutex);
-    if (budget->buffered_bytes > WASM_HTTP_MAX_BUFFERED_BYTES ||
-        budget->pending_bytes > WASM_HTTP_MAX_BUFFERED_BYTES -
-                                budget->buffered_bytes ||
-        size > WASM_HTTP_MAX_BUFFERED_BYTES - budget->buffered_bytes -
-               budget->pending_bytes) {
-        ret = AVERROR(ENOBUFS);
-    } else {
-        budget->pending_bytes += size;
-        if (budget->buffered_bytes + budget->pending_bytes >
-            budget->peak_retained_bytes)
-            budget->peak_retained_bytes = budget->buffered_bytes +
-                                          budget->pending_bytes;
-    }
-    pthread_mutex_unlock(&budget->mutex);
-    return ret;
 }
 
 static int session_transfer_pending_to_cache(
@@ -1393,17 +1399,21 @@ static int fetch_range(WasmHttpIO *io, int64_t start, size_t length,
     ret = request_add_option_headers(request, io->options, io);
     if (ret < 0)
         goto end;
-    ret = request_add_range(request, start, length);
-    if (ret < 0)
-        goto end;
 
     started_ms = (uint64_t)emscripten_get_now();
     ret = session_acquire_request(io->session, &io->interrupt_callback,
-                                  io->timeout_ms);
+                                  io->timeout_ms, &length);
     if (ret < 0)
         goto end;
+    request->range_limit = length;
     request->fetch_buffer_reserved = 1;
+    request->fetch_buffer_reserved_size = length;
+    request->pending_reserved = 1;
+    request->pending_size = length;
     request->request_acquired = 1;
+    ret = request_add_range(request, start, length);
+    if (ret < 0)
+        goto end;
     ret = request_proxy(request, request_start_fetch_on_main);
     if (ret < 0)
         goto end;
@@ -1716,6 +1726,8 @@ static int load_range(WasmHttpIO *io, int64_t start, size_t length)
         return AVERROR(ENOMEM);
     request->references = 1;
     ret = fetch_range(io, start, length, request);
+    if (request->range_limit)
+        io->range_size = request->range_limit;
     if (ret >= 0)
         ret = install_response(io, start, request);
     request_release(request);
@@ -1743,8 +1755,15 @@ static int wasm_http_read(void *opaque, uint8_t *buffer, int buffer_size)
         io->position >= cache_end) {
         if (io->full_response_cached)
             return AVERROR_EOF;
+        if (io->cache && io->position == cache_end &&
+            io->cache_size == io->range_size) {
+            io->range_size = FFMIN(io->range_size * 2,
+                                   WASM_HTTP_RANGE_MAX_SIZE);
+        } else {
+            io->range_size = WASM_HTTP_RANGE_INITIAL_SIZE;
+        }
         cache_clear(io);
-        ret = load_range(io, io->position, WASM_HTTP_RANGE_SIZE);
+        ret = load_range(io, io->position, io->range_size);
         if (ret < 0)
             return ret;
         cache_end = io->cache_start + (int64_t)io->cache_size;
@@ -1920,6 +1939,7 @@ static int wasm_http_io_open(AVFormatContext *context, AVIOContext **pb,
     io->url = av_strdup(url);
     io->location = av_strdup(url);
     io->length = -1;
+    io->range_size = WASM_HTTP_RANGE_INITIAL_SIZE;
     io->allow_seek = 1;
     if (options && *options && av_dict_copy(&io->options, *options, 0) < 0) {
         wasm_http_io_free(io);
@@ -1969,7 +1989,7 @@ static int wasm_http_io_open(AVFormatContext *context, AVIOContext **pb,
     }
     wasm_http_options_consume(options);
 
-    ret = load_range(io, 0, WASM_HTTP_RANGE_SIZE);
+    ret = load_range(io, 0, io->range_size);
     if (ret < 0) {
         wasm_http_io_free(io);
         return ret;

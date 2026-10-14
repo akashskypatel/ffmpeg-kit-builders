@@ -834,6 +834,94 @@ async function runTransportMatrix() {
       `worker IDs=${[...new Set(workers)].join(',')}` };
   }));
 
+  outcomes.push(await runCase('HTTP-IO-8 adaptive ranges halve progressive MP4 round trips', async () => {
+    if (!hasHttpStreamProbe)
+      return { skip: 'requires the opt-in raw HTTP AVIO diagnostic hook' };
+    const url = mediaUrl('/media/progressive-latency.mp4', base);
+    const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    check(head.ok, `Latency fixture HEAD returned HTTP ${head.status}.`);
+    const size = Number(head.headers.get('content-length'));
+    check(Number.isSafeInteger(size) && size > 0, `Invalid latency fixture size ${size}.`);
+
+    const baselineChunkSize = 64 * 1024;
+    const baselineRequestCount = Math.ceil(size / baselineChunkSize);
+    check(baselineRequestCount >= 6,
+      `The progressive fixture is too small for a meaningful latency comparison (${size} bytes).`);
+    await resetRequests();
+    const baselineStart = performance.now();
+    let baselineBytes = 0;
+    for (let start = 0; start < size; start += baselineChunkSize) {
+      const end = Math.min(start + baselineChunkSize, size) - 1;
+      const response = await fetch(url, {
+        headers: { Range: `bytes=${start}-${end}` },
+        cache: 'no-store',
+      });
+      check(response.status === 206,
+        `64 KiB baseline range ${start}-${end} returned HTTP ${response.status}.`);
+      const contentRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(
+        response.headers.get('content-range') ?? '',
+      );
+      check(contentRange && Number(contentRange[1]) === start &&
+        Number(contentRange[2]) === end && Number(contentRange[3]) === size,
+      `64 KiB baseline range ${start}-${end} returned an invalid Content-Range.`);
+      baselineBytes += (await response.arrayBuffer()).byteLength;
+    }
+    const baselineElapsed = Math.round(performance.now() - baselineStart);
+    check(baselineBytes === size,
+      `64 KiB baseline read ${baselineBytes} of ${size} bytes.`);
+    const baselineRequests = await getRequests();
+    const observedBaselineRanges = baselineRequests.filter((request) =>
+      request.path === '/media/progressive-latency.mp4' && request.range &&
+      request.status === 206);
+    check(observedBaselineRanges.length === baselineRequestCount,
+      `Expected ${baselineRequestCount} delayed baseline ranges; observed ${observedBaselineRanges.length}.`);
+
+    await resetRequests();
+    const logStart = runtimeLines.length;
+    const previousLogLevel = ccall('ffmpeg_kit_config_get_log_level', 'number');
+    ccall('ffmpeg_kit_config_set_log_level', 'void', ['number'], [48]);
+    const readStart = performance.now();
+    try {
+      const status = await readHttpStream('/media/progressive-latency.mp4');
+      const readElapsed = Math.round(performance.now() - readStart);
+      check(status === 0, `Raw progressive MP4 AVIO read returned ${status}, expected EOF success.`);
+      const readRequests = await getRequests();
+      const adaptiveRanges = readRequests.filter((request) =>
+        request.path === '/media/progressive-latency.mp4' && request.range &&
+        request.status === 206);
+      const adaptiveRangeSizes = adaptiveRanges.map((request) => {
+        const match = /^bytes=(\d+)-(\d+)$/.exec(request.range);
+        return match ? Number(match[2]) - Number(match[1]) + 1 : 0;
+      });
+      const peak = lastBudgetPeak(logStart);
+      const speedup = baselineElapsed / readElapsed;
+      write(`HTTP-IO-8 measurement bytes=${size}; direct 64 KiB reference=` +
+        `${baselineElapsed} ms/${observedBaselineRanges.length} ranges; ` +
+        `raw Wasm AVIO=${readElapsed} ms/${adaptiveRanges.length} ranges ` +
+        `[${adaptiveRangeSizes.join(',')} bytes]; speedup=${speedup.toFixed(2)}x; peak=${peak}`);
+      check(adaptiveRanges.length > 0, 'The Wasm read issued no successful MP4 ranges.');
+      check(adaptiveRangeSizes.some((rangeSize) => rangeSize > baselineChunkSize),
+        `No adaptive range grew beyond ${baselineChunkSize} bytes.`);
+      check(adaptiveRangeSizes.every((rangeSize) => rangeSize <= 512 * 1024),
+        `An adaptive range exceeded 512 KiB: ${adaptiveRangeSizes.join(', ')}.`);
+      check(adaptiveRanges.length * 2 <= observedBaselineRanges.length,
+        `Adaptive Wasm read used ${adaptiveRanges.length} ranges versus ` +
+        `${observedBaselineRanges.length} 64 KiB baseline ranges.`);
+      check(readElapsed * 2 <= baselineElapsed,
+        `Raw Wasm AVIO read took ${readElapsed} ms; the 64 KiB reference took ` +
+        `${baselineElapsed} ms, below the required 2x throughput gain.`);
+      check(peak !== null, 'No session response-memory peak was emitted.');
+      check(peak <= 1024 * 1024,
+        `Adaptive response-memory peak exceeded 1 MiB (${peak} bytes).`);
+      return { detail: `bytes=${size}; baseline=${baselineElapsed} ms/` +
+        `${observedBaselineRanges.length} ranges; Wasm=${readElapsed} ms/` +
+        `${adaptiveRanges.length} ranges (${adaptiveRangeSizes.join(',')} bytes); ` +
+        `speedup=${speedup.toFixed(2)}x; peak=${peak} bytes` };
+    } finally {
+      ccall('ffmpeg_kit_config_set_log_level', 'void', ['number'], [previousLogLevel]);
+    }
+  }));
+
   outcomes.push(await runCase('N02 range seek and size behavior', async () => {
     await resetRequests();
     const head = await fetch(mediaUrl('/media/progressive.mp4', base), { method: 'HEAD' });
