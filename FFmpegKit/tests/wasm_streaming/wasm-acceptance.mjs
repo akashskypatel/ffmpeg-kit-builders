@@ -491,6 +491,31 @@ async function runTransportMatrix() {
     return { status, ranges: ranges.length };
   }
 
+  outcomes.push(await runCase('HTTP-IO-7 AES-128 HLS rejects the encrypted segment explicitly', async () => {
+    await resetRequests();
+    const logRingStart = runtimeLogRing.length;
+    const startedElapsedMs = diagnosticElapsedMs();
+    const result = await probe(mediaUrl('/hls/aes128.m3u8', base));
+    check(result.state === STATUS_COMPLETED && result.returnCode !== 0,
+      `Encrypted HLS FFprobe state=${result.state}, return=${result.returnCode}.`);
+    const unsupportedErrors = runtimeLogRing.slice(logRingStart).filter((entry) =>
+      entry.text.includes('AES-128 HLS is not supported in the Wasm build'));
+    check(unsupportedErrors.length === 1,
+      `Expected one explicit unsupported AES-128 HLS message, got ${unsupportedErrors.length}.`);
+    const errorElapsedMs = unsupportedErrors[0].elapsedMs - startedElapsedMs;
+    check(errorElapsedMs >= 0 && errorElapsedMs <= 1000,
+      `AES-128 rejection was logged after ${errorElapsedMs} ms; limit=1000 ms.`);
+    const requests = await getRequests();
+    check(requests.some((request) => request.path === '/hls/aes128.m3u8'),
+      'The AES-128 playlist was not fetched.');
+    const keyRequests = requests.filter((request) => request.path === '/hls/key.bin');
+    check(keyRequests.length === 1,
+      `Expected HLS to read its key before the encrypted-segment open, got ${keyRequests.length} requests.`);
+    check(!requests.some((request) => request.path === '/hls/segment-1.ts'),
+      'The encrypted media segment was fetched after the transport rejected AES-128.');
+    return { detail: `read one HLS key; logged the unsupported scheme in ${Math.round(errorElapsedMs)} ms; fetched no encrypted segment` };
+  }));
+
   outcomes.push(await runCase('HTTP-IO-6 changing total length returns EIO', async () => {
     if (!hasHttpStreamProbe) return { skip: 'requires the opt-in HTTP consistency diagnostic hook' };
     const previousLogLevel = ccall('ffmpeg_kit_config_get_log_level', 'number');

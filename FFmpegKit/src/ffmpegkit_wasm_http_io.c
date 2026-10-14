@@ -221,6 +221,12 @@ static int is_http_url(const char *url)
                    av_stristart(url, "https://", NULL));
 }
 
+static int is_crypto_http_url(const char *url)
+{
+    return url && (av_stristart(url, "crypto+http://", NULL) ||
+                   av_stristart(url, "crypto+https://", NULL));
+}
+
 static int is_local_url(const char *url)
 {
     const char *colon;
@@ -1864,6 +1870,12 @@ static int wasm_http_io_open(AVFormatContext *context, AVIOContext **pb,
     session = context->opaque;
     if (!session || session->magic != WASM_HTTP_MAGIC)
         return AVERROR(EINVAL);
+
+    if (is_crypto_http_url(url)) {
+        av_log(context, AV_LOG_ERROR,
+               "AES-128 HLS is not supported in the Wasm build\n");
+        return AVERROR(ENOSYS);
+    }
 
     if (is_http_url(url) && invalid_http_url_character(url)) {
         av_log(context, AV_LOG_ERROR,

@@ -447,6 +447,13 @@ export function createStreamingFixtureServer({
       sendBuffer(req, res, Buffer.from(playlist), { type: 'application/vnd.apple.mpegurl' });
       return;
     }
+    if (url.pathname === '/hls/aes128.m3u8') {
+      const playlist = '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:3\n' +
+        '#EXT-X-MEDIA-SEQUENCE:1\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\n' +
+        '#EXTINF:2.0,\nsegment-1.ts\n#EXT-X-ENDLIST\n';
+      sendBuffer(req, res, Buffer.from(playlist), { type: 'application/vnd.apple.mpegurl' });
+      return;
+    }
     if (url.pathname === '/hls/variant.m3u8') {
       const token = url.searchParams.get('token');
       const playlist = vodPlaylist(token);
