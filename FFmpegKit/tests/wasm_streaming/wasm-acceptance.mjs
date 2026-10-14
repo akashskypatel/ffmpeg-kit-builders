@@ -754,6 +754,39 @@ async function runTransportMatrix() {
     check(browserErrors.length === errorsBefore,
       'A dropped browser-controlled header raised an uncaught browser error.');
 
+    const ignoredOptionStart = runtimeLines.length;
+    const ignoredOptions = await probe(mediaUrl('/media/progressive.mp4', base),
+      "-v warning -user_agent 'private-agent-value' " +
+      "-referer 'https://private.invalid/private-path' -cookies 'private-cookie=value'");
+    check(ignoredOptions.returnCode === 0,
+      `Ignored browser-controlled options prevented a valid request (return=${ignoredOptions.returnCode}).`);
+    const ignoredOptionLogs = runtimeLines.slice(ignoredOptionStart).join('\n');
+    const ignoredOptionWarnings = ignoredOptionLogs.match(
+      /WASM browser transport ignored browser-controlled option\(s\):[^\n]*/g) || [];
+    check(ignoredOptionWarnings.length === 1 &&
+      ignoredOptionWarnings[0].includes('user_agent') &&
+      ignoredOptionWarnings[0].includes('referer') &&
+      ignoredOptionWarnings[0].includes('cookies'),
+    'Ignored browser-controlled options did not produce one warning listing each option.');
+    check(!ignoredOptionLogs.includes('private-agent-value') &&
+      !ignoredOptionLogs.includes('private.invalid') &&
+      !ignoredOptionLogs.includes('private-cookie=value'),
+    'An ignored browser-controlled option value leaked into runtime logs.');
+    check(browserErrors.length === errorsBefore,
+      'Ignored browser-controlled options raised an uncaught browser error.');
+
+    await resetRequests();
+    const nonSeekable = await probe(mediaUrl('/media/progressive.mp4', base),
+      '-v error -seekable 0');
+    check(nonSeekable.returnCode === 0,
+      `seekable=0 prevented a valid ranged read (return=${nonSeekable.returnCode}).`);
+    const nonSeekableRequests = await getRequests();
+    check(nonSeekableRequests.some((request) =>
+      request.path === '/media/progressive.mp4' && request.range),
+    'seekable=0 unexpectedly suppressed the browser Range request.');
+    check(browserErrors.length === errorsBefore,
+      'The seekable=0 ranged read raised an uncaught browser error.');
+
     const followup = await probe(mediaUrl('/media/progressive.mp4', base), '-v error');
     check(followup.returnCode === 0,
       `A valid request did not work on the same module after rejections (return=${followup.returnCode}).`);

@@ -1619,16 +1619,30 @@ static int check_response_consistency(WasmHttpIO *io,
     return 0;
 }
 
-static void wasm_http_options_consume(AVDictionary **options)
+static void wasm_http_options_consume(AVDictionary **options,
+                                     AVFormatContext *log_context)
 {
+    static const char *const browser_controlled[] = {
+        "user_agent", "referer", "cookies", NULL
+    };
     static const char *consumed[] = {
         "headers", "rw_timeout", "seekable", "withCredentials",
         "user_agent", "referer", "cookies", NULL
     };
+    char ignored_options[128] = { 0 };
     int i;
 
     if (!options || !*options)
         return;
+    for (i = 0; browser_controlled[i]; i++) {
+        if (av_dict_get(*options, browser_controlled[i], NULL, 0))
+            append_ignored_header(ignored_options, sizeof(ignored_options),
+                                  browser_controlled[i]);
+    }
+    if (ignored_options[0])
+        av_log(log_context, AV_LOG_WARNING,
+               "WASM browser transport ignored browser-controlled option(s): %s; browser cookie credentials are controlled by withCredentials\n",
+               ignored_options);
     for (i = 0; consumed[i]; i++)
         av_dict_set(options, consumed[i], NULL, 0);
 }
@@ -1987,7 +2001,7 @@ static int wasm_http_io_open(AVFormatContext *context, AVIOContext **pb,
         wasm_http_io_free(io);
         return AVERROR(ENOMEM);
     }
-    wasm_http_options_consume(options);
+    wasm_http_options_consume(options, context);
 
     ret = load_range(io, 0, io->range_size);
     if (ret < 0) {
