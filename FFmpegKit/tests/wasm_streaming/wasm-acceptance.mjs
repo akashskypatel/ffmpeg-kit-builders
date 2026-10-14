@@ -957,7 +957,31 @@ async function runTransportMatrix() {
       `the same module completed two valid requests afterward` };
   }));
 
-  outcomes.push(await runCase('HTTP-IO-10 decodes URL credentials and separates queue/request timeouts', async () => {
+  outcomes.push(await runCase('HTTP-IO-10 percent-decodes URL Basic credentials', async () => {
+    await resetRequests();
+    const authUrl = `http://alice%40wasm:secret%3Apass@${new URL(base).host}/media/basic-auth.mp4`;
+    const logStart = runtimeLines.length;
+    const authResult = await probe(authUrl, '-v error', { timeoutMs: 10000 });
+    check(authResult.state === STATUS_COMPLETED && authResult.returnCode === 0,
+      `Percent-encoded Basic credentials were rejected (return=${authResult.returnCode}).`);
+    const authRequests = (await getRequests()).filter((request) =>
+      request.method === 'GET' && request.path === '/media/basic-auth.mp4');
+    const acceptedRanges = authRequests.filter((request) =>
+      request.range && request.status === 206);
+    check(acceptedRanges.length > 0 && acceptedRanges.every((request) =>
+      request.authenticated === true),
+    `The fixture did not accept decoded credentials on every successful range response: ${JSON.stringify(
+      authRequests.map(({ status, range, authenticated }) => ({ status, range, authenticated })))}.`);
+    const secrets = ['alice@wasm', 'secret:pass', 'alice%40wasm', 'secret%3Apass'];
+    const newRuntimeLines = runtimeLines.slice(logStart).map((line) => line.text ?? line);
+    check(!newRuntimeLines.some((line) => secrets.some((secret) => line.includes(secret))) &&
+        !secrets.some((secret) => authResult.output.includes(secret)),
+    'The credentialed URL appeared in runtime logs or FFprobe output.');
+    return { detail: `percent-decoded Basic credentials authenticated ${acceptedRanges.length} ranged request(s); ` +
+      `credentials were absent from runtime logs and FFprobe output` };
+  }));
+
+  outcomes.push(await runCase('HTTP-IO-10 validates session and separates queue/request timeouts', async () => {
     if (typeof Module._ffmpeg_kit_test_http_io_session_magic !== 'function' ||
         typeof Module._ffmpeg_kit_test_http_io_admission_start !== 'function' ||
         typeof Module._ffmpeg_kit_test_http_io_admission_status !== 'function' ||
@@ -967,17 +991,6 @@ async function runTransportMatrix() {
     const magicResult = ccall('ffmpeg_kit_test_http_io_session_magic', 'number');
     check(magicResult === 0,
       `Invalid session magic changed the reference count or cleanup failed (return=${magicResult}).`);
-
-    await resetRequests();
-    const authUrl = `http://alice%40wasm:secret%3Apass@${new URL(base).host}/media/basic-auth.mp4`;
-    const authResult = await probe(authUrl, '-v error', { timeoutMs: 10000 });
-    check(authResult.returnCode === 0,
-      `Percent-encoded Basic credentials were rejected (return=${authResult.returnCode}).`);
-    const authRequests = (await getRequests()).filter((request) =>
-      request.path === '/media/basic-auth.mp4');
-    check(authRequests.some((request) => request.authenticated === true &&
-      request.range && request.status === 206),
-    'The fixture did not receive the decoded username/password on a ranged request.');
 
     await resetRequests();
     const timeoutMs = 500;
@@ -1004,8 +1017,8 @@ async function runTransportMatrix() {
     'The request did not reach the delayed ranged-response fixture.');
     check(browserErrors.length === 0,
       `HTTP-IO-10 raised a browser error: ${browserErrors.join(' | ')}`);
-    return { detail: `encoded Basic userinfo accepted; invalid magic ignored; ` +
-      `queue=${slotHoldMs} ms, response=300 ms, timeout=${timeoutMs} ms, elapsed=${Math.round(elapsedMs)} ms` };
+    return { detail: `invalid magic ignored; queue=${slotHoldMs} ms, response=300 ms, ` +
+      `timeout=${timeoutMs} ms, elapsed=${Math.round(elapsedMs)} ms` };
   }));
 
   outcomes.push(await runCase('HTTP-IO-2 release AVIO buffers across 500 HTTP lifecycles', async () => {
