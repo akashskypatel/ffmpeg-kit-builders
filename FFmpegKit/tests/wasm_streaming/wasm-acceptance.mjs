@@ -496,6 +496,9 @@ async function runTransportMatrix() {
     const expectedEio = ccall('ffmpeg_kit_test_http_io_stream_eio', 'number');
     check(status === expectedEio,
       `Expected AVERROR(EIO)=${expectedEio} for ${path}, got ${status}.`);
+    const logDeadline = performance.now() + 5000;
+    while (!runtimeLines.slice(logStart).some((line) => logPattern.test(line)) &&
+           performance.now() < logDeadline) await delay(25);
     check(runtimeLines.slice(logStart).some((line) => logPattern.test(line)),
       `No clear resource-consistency error was logged for ${path}.`);
     const requests = await getRequests();
