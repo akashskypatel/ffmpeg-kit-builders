@@ -1125,6 +1125,9 @@ void cancel_operation(long id) {
  *
  * @param sessionId session id
  */
+// Wasm counters are initialized once and balanced by enqueue/drain. Resetting
+// during execution loses queued logs, including registration and aliased IDs.
+#ifndef __EMSCRIPTEN__
 static void resetMessagesInTransmit(long sessionId) {
   if (sessionId == 0) {
     std::atomic_store(&unattributedMessagesInTransitCount, 0);
@@ -1136,6 +1139,7 @@ static void resetMessagesInTransmit(long sessionId) {
       &sessionInTransitMessageCountMap[sessionId % SESSION_MAP_SIZE], 0);
   notifySessionMessageDrain();
 }
+#endif
 
 /**
  * Callback function for FFmpeg/FFprobe logs.
@@ -1458,7 +1462,9 @@ executeFFmpeg(const std::shared_ptr<ffmpegkit::FFmpegSession> &session,
   bindSessionToThread(session);
 
   registerSessionId(sessionId);
+#ifndef __EMSCRIPTEN__
   resetMessagesInTransmit(sessionId);
+#endif
 
   std::vector<const char *> argv;
   argv.reserve(arguments->size() + 1);
@@ -1523,7 +1529,9 @@ int executeFFprobe(const std::shared_ptr<ffmpegkit::AbstractSession> &session,
   bindSessionToThread(session);
 
   registerSessionId(sessionId);
+#ifndef __EMSCRIPTEN__
   resetMessagesInTransmit(sessionId);
+#endif
 
   // Preserve the session argument vector end-to-end. Rebuilding a
   // command string here loses literal quote characters in filenames.
@@ -1614,7 +1622,9 @@ int executeFFplay(const long sessionId,
     tlsSession->debugLog("FFmpegKitConfig::executeFFplay sessionId: %ld tls Bound", sessionId);
   }
   registerSessionId(sessionId);
+#ifndef __EMSCRIPTEN__
   resetMessagesInTransmit(sessionId);
+#endif
 
   std::vector<const char *> argv;
   argv.reserve(arguments->size() + 1);

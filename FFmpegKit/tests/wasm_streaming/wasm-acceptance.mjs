@@ -346,6 +346,106 @@ async function execute(kind, command, options = {}) {
   }
 }
 
+
+
+async function waitForMessageCounterDrain(sessionId, sampleCounter, timeoutMs = 8000, rejectNegative = true) {
+  const deadline = performance.now() + timeoutMs;
+  while (performance.now() < deadline) {
+    const count = sampleCounter(rejectNegative);
+    if (count === 0) return count;
+    await delay(25);
+  }
+  const lastCount = sampleCounter(rejectNegative);
+  if (lastCount === 0) return lastCount;
+  throw new Error('Session ' + sessionId + ' message counter did not drain to zero; last=' + lastCount + '.');
+}
+
+async function runSessionCounterAcceptance(kind, command, timeoutMs) {
+  const runtimeStart = runtimeLines.length;
+  const observations = [];
+  let handle;
+  let sessionId;
+  let result;
+  let registrationLog = false;
+  let released = false;
+  let primaryError = null;
+  const sampleCounter = (rejectNegative = true) => {
+    check(sessionId !== undefined, kind + ' session ID is unavailable for counter sampling.');
+    const count = Number(ccall('ffmpeg_kit_config_messages_in_transmit', 'bigint',
+      ['bigint'], [sessionId]));
+    observations.push(count);
+    if (rejectNegative && count < 0)
+      throw new Error(kind + ' session ' + sessionId + ' message counter became negative: ' + count + '.');
+    return count;
+  };
+
+  try {
+    handle = startSession(kind, command);
+    sessionId = ccall('ffmpeg_kit_session_get_session_id', 'bigint', ['number'], [handle]);
+    check(sessionId > 0n, kind + ' session ID is invalid.');
+    result = await waitForSession(handle, timeoutMs, { onPoll: () => sampleCounter() });
+    sampleCounter();
+    check(result.state === STATUS_COMPLETED && result.returnCode === 0,
+      kind + ' session ' + sessionId + ' did not succeed (state=' + result.state +
+      ', return=' + result.returnCode + ').');
+    const drained = await waitForMessageCounterDrain(sessionId, sampleCounter);
+    check(drained === 0, kind + ' session ' + sessionId + ' counter was not zero before release.');
+    registrationLog = runtimeLines.slice(runtimeStart).some((line) =>
+      line.includes('registerSessionId session_id=' + sessionId));
+    check(registrationLog, kind + ' session ' + sessionId +
+      ' did not emit the Debug registration log.');
+  } catch (error) {
+    primaryError = error;
+  } finally {
+    if (handle) finishCommandTiming(handle);
+    if (handle && !wasmRuntimePoisoned && activeSession?.handle === handle) {
+      try {
+        const state = sessionState(handle);
+        if (state !== STATUS_COMPLETED && state !== STATUS_FAILED) {
+          cancelSession({ kind, handle });
+          await waitForSession(handle, 8000, { onPoll: () => sampleCounter(false) });
+        }
+        if (sessionId === undefined)
+          throw new Error(kind + ' session ID is unavailable; retaining the handle without release.');
+        const drained = await waitForMessageCounterDrain(
+          sessionId, () => sampleCounter(false), 8000, false);
+        if (drained === 0) {
+          const cleanupStart = cleanupErrors.length;
+          await finishSession(kind, handle);
+          check(cleanupErrors.length === cleanupStart,
+            kind + ' session ' + sessionId + ' cleanup reported an error.');
+          released = activeSession?.handle !== handle;
+        }
+      } catch (error) {
+        cleanupErrors.push({
+          timestamp: new Date().toISOString(),
+          elapsedMs: diagnosticElapsedMs(),
+          caseName: currentCaseName,
+          requestedCommand: requestedCommand ? { ...requestedCommand } : null,
+          error: serializeError(error),
+        });
+        write(kind + ' counter-probe cleanup retained its handle: ' +
+          (error?.message || String(error)));
+      }
+    }
+  }
+  if (primaryError) throw primaryError;
+  check(released, kind + ' session ' + sessionId +
+    ' was not released after its message counter drained to zero.');
+  const peak = observations.length ? Math.max(...observations) : 0;
+  return {
+    kind,
+    sessionId: String(sessionId),
+    state: result.state,
+    returnCode: result.returnCode,
+    counterSamples: observations.length,
+    counterPeak: peak,
+    counterFinal: 0,
+    debugRegistrationLog: registrationLog,
+    releasedAfterDrain: released,
+  };
+}
+
 async function runCase(name, callback) {
   if (selectedTransportCase && !name.startsWith(selectedTransportCase)) return 'skip';
   if (wasmRuntimePoisoned || browserErrors.length) {
@@ -414,7 +514,7 @@ async function inspectBinary() {
     '_ffprobe_kit_execute_async', '_ffplay_kit_execute_async',
     '_ffmpeg_kit_session_get_state', '_ffmpeg_kit_session_get_return_code',
     '_ffmpeg_kit_session_get_output', '_ffmpeg_kit_session_get_session_id',
-    '_ffmpeg_kit_handle_release', '_ffprobe_kit_cancel_session',
+    '_ffmpeg_kit_handle_release', '_ffmpeg_kit_config_messages_in_transmit', '_ffprobe_kit_cancel_session',
     '_ffmpeg_kit_config_set_log_level', '_ffprobe_kit_cancel',
     '_ffplay_kit_session_stop', '_ffplay_kit_session_get_position', '_free',
     '_ffplay_kit_session_get_video_width', '_ffplay_kit_session_get_video_height',
@@ -2367,6 +2467,37 @@ async function runTransportMatrix() {
       return { detail: `outputBytes=${size}; inputBytes=${fixture.bytes.byteLength}; inputSha256=${fixture.sha256}` };
     }));
   }
+
+
+  outcomes.push(await runCase('Native callback message counters remain balanced in Debug sessions', async () => {
+    const sessions = [
+      {
+        kind: 'ffmpeg',
+        command: '-hide_banner -loglevel debug -debug_ts -re -f lavfi ' +
+          '-i testsrc2=size=64x64:rate=20 -t 1 -f null -',
+        timeoutMs: 20000,
+      },
+      {
+        kind: 'ffprobe',
+        command: ffprobeCommand(mediaUrl('/media/progressive.mp4', base)),
+        timeoutMs: 30000,
+      },
+      {
+        kind: 'ffplay',
+        command: '-autoexit ' +
+          mediaUrl('/redirect/master.m3u8?token=callback-counter-regression', base),
+        timeoutMs: 30000,
+      },
+    ];
+    const results = [];
+    for (const session of sessions) {
+      results.push(await runSessionCounterAcceptance(
+        session.kind, session.command, session.timeoutMs));
+    }
+    return { detail: results.map((result) =>
+      result.kind + ' session=' + result.sessionId + ' samples=' + result.counterSamples +
+      ' peak=' + result.counterPeak + ' drained=0 before release').join('; ') };
+  }));
 
   const passed = outcomes.filter((value) => value === 'pass').length;
   const failed = outcomes.filter((value) => value === 'fail').length;
