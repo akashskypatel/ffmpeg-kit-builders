@@ -167,6 +167,15 @@ static em_proxying_queue *request_queue;
 #if defined(FFMPEG_KIT_TEST_HOOKS)
 static int wasm_http_wait_probe_fail_close_proxy;
 static int wasm_http_wait_probe_forced_close_failures;
+static int wasm_http_wait_probe_forced_main_close_failures;
+static int wasm_http_wait_probe_stall_after_success_ms;
+static int wasm_http_ready_callback_depth;
+static int wasm_http_callback_closes;
+
+EM_JS(void, ffkit_test_http_block_main, (int milliseconds), {
+    var started = performance.now();
+    while (performance.now() - started < milliseconds) {}
+});
 #endif
 
 static void request_onsuccess(emscripten_fetch_t *fetch);
@@ -584,7 +593,10 @@ EM_JS(uintptr_t, ffkit_emscripten_fetch_catching_exceptions,
     try {
         return getWasmTableEntry(fetch_function)(attributes, url);
     } catch (error) {
-        return 0;
+        if (error instanceof DOMException || error instanceof TypeError ||
+            error instanceof SyntaxError)
+            return 0;
+        throw error;
     }
 });
 
@@ -774,12 +786,22 @@ static int request_proxy(FetchRequest *request, void (*function)(void *))
     if (!queue)
         return AVERROR(ENOMEM);
 #if defined(FFMPEG_KIT_TEST_HOOKS)
-    if (function == request_close_fetch_on_main &&
-        __atomic_exchange_n(&wasm_http_wait_probe_fail_close_proxy, 0,
-                             __ATOMIC_ACQ_REL)) {
-        __atomic_add_fetch(&wasm_http_wait_probe_forced_close_failures, 1,
-                           __ATOMIC_RELAXED);
-        return AVERROR(ENOMEM);
+    if (function == request_close_fetch_on_main) {
+        int forced = __atomic_load_n(&wasm_http_wait_probe_fail_close_proxy,
+                                      __ATOMIC_ACQUIRE);
+        /* Mode 2 keeps worker retries from winning before the callback's
+         * main-thread enqueue failure can be exercised deterministically. */
+        if (forced == 2 && !emscripten_is_main_runtime_thread())
+            return AVERROR(ENOMEM);
+        if (forced && __atomic_exchange_n(&wasm_http_wait_probe_fail_close_proxy,
+                                           0, __ATOMIC_ACQ_REL)) {
+            __atomic_add_fetch(&wasm_http_wait_probe_forced_close_failures, 1,
+                               __ATOMIC_RELAXED);
+            if (forced == 2)
+                __atomic_add_fetch(&wasm_http_wait_probe_forced_main_close_failures,
+                                   1, __ATOMIC_RELAXED);
+            return AVERROR(ENOMEM);
+        }
     }
 #endif
     request_retain(request);
@@ -818,8 +840,13 @@ static void request_close_fetch(FetchRequest *request)
     }
     pthread_mutex_unlock(&request->mutex);
 
-    if (fetch)
+    if (fetch) {
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+        if (__atomic_load_n(&wasm_http_ready_callback_depth, __ATOMIC_ACQUIRE))
+            __atomic_add_fetch(&wasm_http_callback_closes, 1, __ATOMIC_RELAXED);
+#endif
         emscripten_fetch_close(fetch);
+    }
 
     pthread_mutex_lock(&request->mutex);
     if (request->fetch_buffer_reserved) {
@@ -852,7 +879,7 @@ static void request_close_fetch_on_main(void *opaque)
 
 static void request_schedule_close(FetchRequest *request)
 {
-    int close_inline = 0;
+    int defer_close = 0;
 
     pthread_mutex_lock(&request->mutex);
     request->close_requested = 1;
@@ -864,17 +891,21 @@ static void request_schedule_close(FetchRequest *request)
          * is freeing the Fetch object, underflowing the runtime keepalive
          * count. Queue closure so the callback can return first. */
         if (request_proxy(request, request_close_fetch_on_main) < 0) {
-            /* Publish enqueue failure before a callback can observe the flag.
-             * The queued start or next Fetch callback then closes inline. */
+            /* A worker can retry from pending main-thread work. On main,
+             * retain a timer task so even allocation-failure cleanup waits
+             * for the XHR callback to return before destroying Fetch. */
             request->close_enqueued = 0;
-            if (emscripten_is_main_runtime_thread())
-                close_inline = 1;
+            if (emscripten_is_main_runtime_thread()) {
+                request_retain(request);
+                request->close_enqueued = 1;
+                defer_close = 1;
+            }
         }
     }
     pthread_mutex_unlock(&request->mutex);
 
-    if (close_inline)
-        request_close_fetch(request);
+    if (defer_close)
+        emscripten_async_call(request_close_fetch_on_main, request, 0);
 }
 
 static void request_start_fetch_on_main(void *opaque)
@@ -993,6 +1024,9 @@ static void request_onreadystatechange(emscripten_fetch_t *fetch)
     if (!request)
         return;
     request_retain(request);
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+    __atomic_add_fetch(&wasm_http_ready_callback_depth, 1, __ATOMIC_RELAXED);
+#endif
     pthread_mutex_lock(&request->mutex);
     request_capture_headers(request, fetch);
     if (request->abort_reason != FETCH_ABORT_NONE || request->close_requested) {
@@ -1010,6 +1044,9 @@ static void request_onreadystatechange(emscripten_fetch_t *fetch)
 
     if (should_abort)
         request_schedule_close(request);
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+    __atomic_sub_fetch(&wasm_http_ready_callback_depth, 1, __ATOMIC_RELAXED);
+#endif
     request_release(request);
 }
 
@@ -1096,6 +1133,14 @@ static void request_onsuccess(emscripten_fetch_t *fetch)
     request->done = 1;
     pthread_cond_broadcast(&request->cond);
     pthread_mutex_unlock(&request->mutex);
+#if defined(FFMPEG_KIT_TEST_HOOKS)
+    {
+        int stall_ms = __atomic_exchange_n(&wasm_http_wait_probe_stall_after_success_ms,
+                                            0, __ATOMIC_ACQ_REL);
+        if (stall_ms)
+            ffkit_test_http_block_main(stall_ms);
+    }
+#endif
     request_schedule_close(request);
     request_release(request);
 }
@@ -1289,10 +1334,42 @@ static int session_acquire_request(FFmpegKitWasmHttpSession *session,
     }
 
     pthread_mutex_lock(&budget->mutex);
-    while (budget->active_requests >= WASM_HTTP_MAX_INFLIGHT) {
+    for (;;) {
         struct timespec short_deadline;
+        size_t available;
+        size_t stream_count = FFMAX(budget->open_streams, 1);
+        size_t reservation_size;
+
         if (interrupt_requested(interrupt)) {
             ret = AVERROR_EXIT;
+            break;
+        }
+        if (budget->buffered_bytes > WASM_HTTP_MAX_BUFFERED_BYTES ||
+            budget->pending_bytes > WASM_HTTP_MAX_BUFFERED_BYTES -
+                                    budget->buffered_bytes) {
+            ret = AVERROR(ENOBUFS);
+            break;
+        }
+        available = WASM_HTTP_MAX_BUFFERED_BYTES - budget->buffered_bytes -
+                    budget->pending_bytes;
+        admitted_range_size = *range_size;
+        /* Leave room for other open streams' caches and response copies.
+         * Byte pressure is temporary admission backpressure, not EOF. */
+        while (admitted_range_size > WASM_HTTP_RANGE_INITIAL_SIZE &&
+               (admitted_range_size > WASM_HTTP_RANGE_MAX_SIZE / stream_count ||
+                admitted_range_size > available / 2))
+            admitted_range_size /= 2;
+        if (budget->active_requests < WASM_HTTP_MAX_INFLIGHT &&
+            admitted_range_size <= available / 2) {
+            reservation_size = admitted_range_size * 2;
+            budget->active_requests++;
+            budget->request_count++;
+            budget->pending_bytes += reservation_size;
+            if (budget->buffered_bytes + budget->pending_bytes >
+                budget->peak_retained_bytes)
+                budget->peak_retained_bytes = budget->buffered_bytes +
+                                              budget->pending_bytes;
+            *range_size = admitted_range_size;
             break;
         }
         clock_gettime(CLOCK_MONOTONIC, &short_deadline);
@@ -1319,34 +1396,6 @@ static int session_acquire_request(FFmpegKitWasmHttpSession *session,
         } else if (ret) {
             ret = AVERROR(ret);
             break;
-        }
-    }
-    if (!ret) {
-        if (budget->buffered_bytes > WASM_HTTP_MAX_BUFFERED_BYTES ||
-            budget->pending_bytes > WASM_HTTP_MAX_BUFFERED_BYTES -
-                                    budget->buffered_bytes) {
-            ret = AVERROR(ENOBUFS);
-        } else {
-            size_t available = WASM_HTTP_MAX_BUFFERED_BYTES -
-                               budget->buffered_bytes - budget->pending_bytes;
-
-            while (admitted_range_size > WASM_HTTP_RANGE_INITIAL_SIZE &&
-                   admitted_range_size > available / 2)
-                admitted_range_size /= 2;
-            if (admitted_range_size < WASM_HTTP_RANGE_INITIAL_SIZE ||
-                admitted_range_size > available / 2) {
-                ret = AVERROR(ENOBUFS);
-            } else {
-                size_t reservation_size = admitted_range_size * 2;
-                budget->active_requests++;
-                budget->request_count++;
-                budget->pending_bytes += reservation_size;
-                if (budget->buffered_bytes + budget->pending_bytes >
-                    budget->peak_retained_bytes)
-                    budget->peak_retained_bytes = budget->buffered_bytes +
-                                                  budget->pending_bytes;
-                *range_size = admitted_range_size;
-            }
         }
     }
     pthread_mutex_unlock(&budget->mutex);
@@ -1391,6 +1440,7 @@ static void session_release_pending(FFmpegKitWasmHttpSession *session,
         budget->pending_bytes -= size;
     else
         budget->pending_bytes = 0;
+    pthread_cond_broadcast(&budget->cond);
     pthread_mutex_unlock(&budget->mutex);
 }
 
@@ -1403,6 +1453,7 @@ static void session_release_cache(FFmpegKitWasmHttpSession *session,
         budget->buffered_bytes -= size;
     else
         budget->buffered_bytes = 0;
+    pthread_cond_broadcast(&budget->cond);
     pthread_mutex_unlock(&budget->mutex);
 }
 
@@ -1426,6 +1477,7 @@ static void session_close_stream(FFmpegKitWasmHttpSession *session)
     pthread_mutex_lock(&budget->mutex);
     if (budget->open_streams > 0)
         budget->open_streams--;
+    pthread_cond_broadcast(&budget->cond);
     pthread_mutex_unlock(&budget->mutex);
 }
 
@@ -1487,6 +1539,10 @@ static int fetch_range(WasmHttpIO *io, int64_t start, size_t length,
         int wait_ret;
         int should_abort = 0;
 
+        /* Successful bytes have already been copied into request-owned
+         * storage. Pending main-thread cleanup owns independent references. */
+        if (request->done && request->success)
+            break;
         if (interrupt_requested(&io->interrupt_callback)) {
             request->abort_reason = FETCH_ABORT_INTERRUPT;
             should_abort = 1;
@@ -2146,6 +2202,20 @@ void ffmpegkit_wasm_http_session_free(FFmpegKitWasmHttpSession *session)
 }
 
 #if defined(FFMPEG_KIT_TEST_HOOKS)
+static emscripten_fetch_t *wasm_http_fetch_trap_probe(
+    emscripten_fetch_attr_t *attributes, const char *url)
+{
+    (void)attributes;
+    (void)url;
+    __builtin_trap();
+}
+
+uintptr_t ffmpeg_kit_test_http_io_fetch_trap(void)
+{
+    return ffkit_emscripten_fetch_catching_exceptions(
+        NULL, NULL, (uintptr_t)wasm_http_fetch_trap_probe);
+}
+
 typedef struct WasmHttpCloseCallbackProbe {
     AVIOContext *pb;
     int close_calls;
@@ -2229,6 +2299,7 @@ typedef struct WasmHttpWaitProbe {
     char *url;
     unsigned int timeout_ms;
     unsigned int interrupt_after_ms;
+    int close_probe_mode;
     double started_ms;
 } WasmHttpWaitProbe;
 
@@ -2251,7 +2322,9 @@ static void *wasm_http_wait_probe_worker(void *opaque)
     AVIOContext *pb = NULL;
     AVDictionary *options = NULL;
     int ret = context ? 0 : AVERROR(ENOMEM);
-    int expected = probe->interrupt_after_ms ? AVERROR_EXIT : AVERROR(ETIMEDOUT);
+    int expected = probe->close_probe_mode == 3 ? 0 :
+        probe->close_probe_mode == 2 ? AVERROR(ENOBUFS) :
+        probe->interrupt_after_ms ? AVERROR_EXIT : AVERROR(ETIMEDOUT);
     double elapsed;
 
     if (!ret) {
@@ -2274,9 +2347,11 @@ static void *wasm_http_wait_probe_worker(void *opaque)
     ffmpegkit_wasm_http_session_free(session);
     elapsed = emscripten_get_now() - probe->started_ms;
     av_log(NULL, AV_LOG_WARNING,
-           "WASM HTTP TEST wait timeout_ms=%u interrupt_after_ms=%u elapsed_ms=%.3f result=%d expected=%d forced_close_failures=%d\n",
+           "WASM HTTP TEST wait timeout_ms=%u interrupt_after_ms=%u elapsed_ms=%.3f result=%d expected=%d forced_close_failures=%d forced_main_close_failures=%d callback_closes=%d\n",
            probe->timeout_ms, probe->interrupt_after_ms, elapsed, ret, expected,
-           __atomic_load_n(&wasm_http_wait_probe_forced_close_failures, __ATOMIC_ACQUIRE));
+           __atomic_load_n(&wasm_http_wait_probe_forced_close_failures, __ATOMIC_ACQUIRE),
+           __atomic_load_n(&wasm_http_wait_probe_forced_main_close_failures, __ATOMIC_ACQUIRE),
+           __atomic_load_n(&wasm_http_callback_closes, __ATOMIC_ACQUIRE));
     __atomic_store(&wasm_http_wait_probe_elapsed, &elapsed, __ATOMIC_RELEASE);
     av_freep(&probe->url);
     av_free(probe);
@@ -2286,7 +2361,7 @@ static void *wasm_http_wait_probe_worker(void *opaque)
 }
 
 int ffmpeg_kit_test_http_io_wait_start(const char *url, int timeout_ms,
-                                     int interrupt_after_ms, int fail_close_proxy)
+                                     int interrupt_after_ms, int probe_mode)
 {
     WasmHttpWaitProbe *probe;
     pthread_t thread;
@@ -2296,7 +2371,8 @@ int ffmpeg_kit_test_http_io_wait_start(const char *url, int timeout_ms,
     if (!url || !is_http_url(url) || invalid_http_url_character(url) ||
         timeout_ms < 1 || timeout_ms > 10000 || interrupt_after_ms < 0 ||
         interrupt_after_ms >= timeout_ms ||
-        (fail_close_proxy != 0 && fail_close_proxy != 1))
+        probe_mode < 0 || probe_mode > 3 ||
+        (probe_mode >= 2 && interrupt_after_ms))
         return AVERROR(EINVAL);
     do {
         if (state == 1)
@@ -2312,8 +2388,14 @@ int ffmpeg_kit_test_http_io_wait_start(const char *url, int timeout_ms,
     probe->url = av_strdup(url);
     probe->timeout_ms = timeout_ms;
     probe->interrupt_after_ms = interrupt_after_ms;
-    __atomic_store_n(&wasm_http_wait_probe_fail_close_proxy, fail_close_proxy, __ATOMIC_RELEASE);
+    probe->close_probe_mode = probe_mode >= 2 ? probe_mode : 0;
+    __atomic_store_n(&wasm_http_wait_probe_fail_close_proxy,
+                     probe_mode == 3 ? 0 : probe_mode, __ATOMIC_RELEASE);
     __atomic_store_n(&wasm_http_wait_probe_forced_close_failures, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&wasm_http_wait_probe_forced_main_close_failures, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&wasm_http_callback_closes, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&wasm_http_wait_probe_stall_after_success_ms,
+                     probe_mode == 3 ? timeout_ms * 2 : 0, __ATOMIC_RELEASE);
     if (!probe->url) {
         av_free(probe);
         __atomic_store_n(&wasm_http_wait_probe_state, 0, __ATOMIC_RELEASE);
@@ -2682,6 +2764,19 @@ static int wasm_http_heap_test_cycles(AVFormatContext *context,
     return 0;
 }
 
+static int wasm_http_heap_test_drain(FFmpegKitWasmHttpSession *session)
+{
+    double deadline = emscripten_get_now() + 10000;
+    /* Successful reads can finish before main-thread Fetch destruction.
+     * Measure retained memory only after all request references drain. */
+    while (__atomic_load_n(&session->references, __ATOMIC_ACQUIRE) != 1) {
+        if (emscripten_get_now() >= deadline)
+            return AVERROR(ETIMEDOUT);
+        emscripten_thread_sleep(1);
+    }
+    return 0;
+}
+
 static void *wasm_http_heap_test_worker(void *opaque)
 {
     WasmHttpHeapTest *test = opaque;
@@ -2698,10 +2793,14 @@ static void *wasm_http_heap_test_worker(void *opaque)
         ret = wasm_http_heap_test_cycles(context, test->url,
                                          test->warmup_cycles);
     if (ret >= 0)
+        ret = wasm_http_heap_test_drain(session);
+    if (ret >= 0)
         heap_before = mallinfo().uordblks;
     if (ret >= 0)
         ret = wasm_http_heap_test_cycles(context, test->url,
                                          test->measured_cycles);
+    if (ret >= 0)
+        ret = wasm_http_heap_test_drain(session);
     if (ret >= 0)
         heap_after = mallinfo().uordblks;
     if (context) {

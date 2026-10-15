@@ -676,10 +676,13 @@ if(EMSCRIPTEN)
     set_property(SOURCE src/ffmpegkit_wasm_http_io.c APPEND PROPERTY
         COMPILE_OPTIONS -Wframe-larger-than=2048 -Werror=frame-larger-than)
     if(FFMPEGKIT_WASM_HTTP_TEST_HOOKS)
+        target_sources(ffmpegkit PRIVATE tests/wasm_streaming/completion-callback-probe.c)
         set(FFMPEGKIT_WASM_HTTP_TEST_EXPORTS
-            ",_ffmpeg_kit_test_http_io_heap_start,_ffmpeg_kit_test_http_io_heap_status,_ffmpeg_kit_test_http_io_heap_snapshot,_ffmpeg_kit_test_http_io_wait_start,_ffmpeg_kit_test_http_io_wait_status,_ffmpeg_kit_test_http_io_wait_elapsed,_ffmpeg_kit_test_http_io_admission_start,_ffmpeg_kit_test_http_io_admission_status,_ffmpeg_kit_test_http_io_admission_elapsed,_ffmpeg_kit_test_http_io_session_magic,_ffmpeg_kit_test_http_io_stream_start,_ffmpeg_kit_test_http_io_stream_status,_ffmpeg_kit_test_http_io_stream_eio,_ffmpeg_kit_test_http_io_stream_eof,_ffmpeg_kit_test_http_io_stream_erange,_ffmpeg_kit_test_http_io_stream_invaliddata,_ffmpeg_kit_test_http_io_close_callback_contract")
+            ",_ffmpeg_kit_test_http_io_heap_start,_ffmpeg_kit_test_http_io_heap_status,_ffmpeg_kit_test_http_io_heap_snapshot,_ffmpeg_kit_test_http_io_wait_start,_ffmpeg_kit_test_http_io_wait_status,_ffmpeg_kit_test_http_io_wait_elapsed,_ffmpeg_kit_test_http_io_admission_start,_ffmpeg_kit_test_http_io_admission_status,_ffmpeg_kit_test_http_io_admission_elapsed,_ffmpeg_kit_test_http_io_session_magic,_ffmpeg_kit_test_http_io_stream_start,_ffmpeg_kit_test_http_io_stream_status,_ffmpeg_kit_test_http_io_stream_eio,_ffmpeg_kit_test_http_io_stream_eof,_ffmpeg_kit_test_http_io_stream_erange,_ffmpeg_kit_test_http_io_stream_invaliddata,_ffmpeg_kit_test_http_io_close_callback_contract,_ffmpeg_kit_test_http_io_fetch_trap")
         set_property(SOURCE src/ffmpegkit_wasm_http_io.c APPEND PROPERTY
             COMPILE_DEFINITIONS FFMPEG_KIT_TEST_HOOKS)
+        string(APPEND FFMPEGKIT_WASM_HTTP_TEST_EXPORTS
+            ",_ffmpeg_kit_test_completion_start,_ffmpeg_kit_test_completion_count")
     endif()
     if(BUILD_TESTS)
         set(FFMPEGKIT_WASM_TEST_EXPORTS ",_ffmpeg_kit_test_emit_log_with_session_id,_ffmpeg_kit_test_emit_statistics_with_session_id,_ffmpeg_kit_test_emit_ffmpeg_completion_with_session_id,_ffmpeg_kit_test_process_wasm_callback_queue")

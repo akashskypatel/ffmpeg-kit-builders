@@ -233,7 +233,7 @@ function parseProbeJson(output) {
   throw new Error(`FFprobe session output contained incomplete JSON: ${output.slice(start, start + 240)}`);
 }
 
-function startSession(kind, command) {
+function startSession(kind, command, { observeCompletion = false } = {}) {
   requestedCommand = {
     kind,
     command: redactDiagnosticCommand(command),
@@ -244,7 +244,11 @@ function startSession(kind, command) {
     elapsedMs: null,
   };
   let handle;
-  if (kind === 'ffprobe') {
+  if (observeCompletion) {
+    check(kind === 'ffprobe' || kind === 'ffmpeg', 'Unsupported completion probe kind.');
+    handle = ccall('ffmpeg_kit_test_completion_start', 'number',
+      ['number', 'string'], [kind === 'ffprobe' ? 0 : 1, command]);
+  } else if (kind === 'ffprobe') {
     handle = ccall('ffprobe_kit_execute_async', 'number',
       ['string', 'number', 'number'], [command, 0, 0]);
   } else if (kind === 'ffmpeg') {
@@ -460,6 +464,15 @@ async function runTransportMatrix() {
   check(Module, 'Load the local Wasm bundle first.');
   const base = baseUrl();
   const outcomes = [];
+  outcomes.push(await runCase('A15 frozen FFmpegKit runtime version', async () => {
+    const pointer = ccall('ffmpeg_kit_config_get_version', 'number');
+    check(pointer, 'The runtime version export returned no value.');
+    let version;
+    try { version = Module.UTF8ToString(pointer); }
+    finally { Module._free(pointer); }
+    check(version === '0.11.2', `Expected the frozen 0.11.2 runtime, got ${version}.`);
+    return { detail: `runtime version=${version}` };
+  }));
   const hasHttpStreamProbe = typeof Module._ffmpeg_kit_test_http_io_stream_start === 'function' &&
     typeof Module._ffmpeg_kit_test_http_io_stream_status === 'function' &&
     typeof Module._ffmpeg_kit_test_http_io_stream_eio === 'function';
@@ -821,6 +834,76 @@ async function runTransportMatrix() {
       ccall('ffmpeg_kit_config_set_log_level', 'void', ['number'], [previousLogLevel]);
     }
   }));
+  outcomes.push(await runCase('HTTP-IO-14 fetch-start wrapper propagates Wasm traps', async () => {
+    if (!selectedTransportCase?.startsWith('HTTP-IO-14'))
+      return { skip: 'run this intentional trap probe on a fresh page with ?case=HTTP-IO-14' };
+    if (typeof Module._ffmpeg_kit_test_http_io_fetch_trap !== 'function')
+      return { skip: 'requires the private diagnostic fetch-trap probe' };
+    let trap;
+    try {
+      // The probe intentionally traps before allocating any request resources.
+      // Call directly so an expected test trap does not poison unrelated C calls.
+      Module.ccall('ffmpeg_kit_test_http_io_fetch_trap', 'number');
+    } catch (error) {
+      if (!(error instanceof WebAssembly.RuntimeError)) throw error;
+      trap = error;
+    }
+    check(trap, 'The fetch-start wrapper swallowed the deliberate Wasm trap.');
+    return { detail: `WebAssembly.RuntimeError propagated: ${trap.message}` };
+  }));
+
+  for (const [name, mode] of [
+    ['HTTP-IO-15 main-thread close enqueue failure avoids callback reentrancy', 2],
+    ['HTTP-IO-16 completed response survives a stalled main-thread close', 3],
+  ]) {
+    outcomes.push(await runCase(name, async () => {
+      if (typeof Module._ffmpeg_kit_test_http_io_wait_start !== 'function')
+        return { skip: 'requires the private diagnostic wait probe' };
+      const logStart = runtimeLines.length;
+      const timeoutMs = 500;
+      const started = ccall('ffmpeg_kit_test_http_io_wait_start', 'number',
+        ['string', 'number', 'number', 'number'],
+        [mediaUrl(mode === 2 ? '/range/ignored' : '/media/full-response.wav', base), timeoutMs, 0, mode]);
+      check(started === 0, `Success-close worker did not start (return=${started}).`);
+      const deadline = Date.now() + 10000;
+      let status;
+      do {
+        status = ccall('ffmpeg_kit_test_http_io_wait_status', 'number');
+        if (status !== 1) break;
+        await delay(20);
+      } while (Date.now() < deadline);
+      check(mode === 2 ? status < 0 : status === 0,
+        `Response returned ${status}, expected ${mode === 2 ? 'a bounded buffer-limit error' : 'success'}.`);
+      const elapsedMs = ccall('ffmpeg_kit_test_http_io_wait_elapsed', 'number');
+      if (mode === 3)
+        check(elapsedMs > 0 && elapsedMs < timeoutMs,
+          `Completed response waited ${elapsedMs} ms despite its copied bytes being available.`);
+      let report;
+      let budget;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const logs = runtimeLines.slice(logStart);
+        report = logs.find((line) => line.includes('WASM HTTP TEST wait timeout_ms='));
+        budget = logs.find((line) => line.includes('WASM HTTP budget complete'));
+        if (report && budget) break;
+        await delay(25);
+      }
+      const reported = report && /result=(-?\d+) expected=(-?\d+)/.exec(report);
+      check(reported && Number(reported[1]) === status && Number(reported[2]) === status,
+        `Worker returned the wrong response result: ${report}.`);
+      if (mode === 2) {
+        check(report.includes('forced_main_close_failures=1'),
+          'The main-thread enqueue failure was not actually exercised.');
+        check(report.includes('callback_closes=0'),
+          `Fetch closed before its ready-state callback returned: ${report}.`);
+        check(runtimeLines.slice(logStart).filter((line) => line.includes('WASM HTTP response exceeded')).length === 1,
+          'The ignored-Range response did not report exactly one buffer-limit failure.');
+      }
+      check(budget && /cached=0 pending=0 open_streams=0 active_requests=0/.test(budget),
+        `Deferred successful-response cleanup did not settle: ${budget}.`);
+      return { detail: `worker returned ${status} in ${elapsedMs.toFixed(1)} ms; ` +
+        `${mode === 2 ? 'forced main-thread enqueue failure' : 'main stalled 1000 ms after response'}; cleanup settled` };
+    }));
+  }
   outcomes.push(await runCase('N01 full 200 WAV response reaches EOF within budget', async () => {
     await resetRequests();
     const logStart = runtimeLines.length;
@@ -1182,6 +1265,44 @@ async function runTransportMatrix() {
     }
   }));
 
+  outcomes.push(await runCase('HTTP-IO-13 two inputs share byte admission without truncation', async () => {
+    const previousLogLevel = ccall('ffmpeg_kit_config_get_log_level', 'number');
+    ccall('ffmpeg_kit_config_set_log_level', 'void', ['number'], [48]);
+    try {
+      for (let run = 0; run < 20; run++) {
+        const logStart = runtimeLines.length;
+        const left = mediaUrl(`/media/progressive.mp4?input=left&run=${run}`, base);
+        const right = mediaUrl(`/media/progressive.mp4?input=right&run=${run}`, base);
+        const result = await execute('ffmpeg',
+          `-nostdin -i ${left} -i ${right} -map 0 -map 1 -c copy -f null -`,
+          { timeoutMs: 60000 });
+        check(result.state === STATUS_COMPLETED && result.returnCode === 0,
+          `Dual-input run ${run + 1} state=${result.state}, return=${result.returnCode}.`);
+        const logs = runtimeLines.slice(logStart).join('\n');
+        const counts = [...logs.matchAll(/Input stream #(\d+):(\d+) \((video|audio)\):[^\n]*\n[^\n]*?(\d+) packets read/g)];
+        check(counts.length === 4, `Run ${run + 1} did not report four input packet counts.`);
+        for (let input = 0; input < 2; input++) {
+          for (const [stream, codecType, expected] of [[0, 'video', 450], [1, 'audio', 647]]) {
+            const count = counts.filter((match) => Number(match[1]) === input && Number(match[2]) === stream);
+            check(count.length === 1 && count[0][3] === codecType && Number(count[0][4]) === expected,
+              `Run ${run + 1} input ${input}:${stream} did not read all ${expected} ${codecType} packets.`);
+          }
+        }
+        check(!/could not fit|Error during demuxing|partial file/.test(logs),
+          `Dual-input run ${run + 1} reported a demux/admission failure despite returning zero.`);
+        const peaks = runtimeLines.slice(logStart).filter((line) => line.includes('WASM HTTP budget complete'));
+        check(peaks.length > 0 && peaks.every((line) =>
+          /cached=0 pending=0 open_streams=0 active_requests=0/.test(line) &&
+          Number(/peak_retained=(\d+)/.exec(line)?.[1]) <= 1024 * 1024),
+        `Run ${run + 1} did not settle its shared HTTP budget.`);
+        write(`Dual-input run ${run + 1}/20: each input read 450 video / 647 audio packets; return=0.`);
+      }
+    } finally {
+      ccall('ffmpeg_kit_config_set_log_level', 'void', ['number'], [previousLogLevel]);
+    }
+    return { detail: '20/20 same-session dual-input runs; each input read all 450 video / 647 audio packets; zero exit codes and settled budgets' };
+  }));
+
   outcomes.push(await runCase('N02 range seek and size behavior', async () => {
     await resetRequests();
     const head = await fetch(mediaUrl('/media/progressive.mp4', base), { method: 'HEAD' });
@@ -1338,6 +1459,69 @@ async function runTransportMatrix() {
     }
   }));
 
+  outcomes.push(await runCase('A11 HTTP cancellation preserves the web app and completion contract', async () => {
+    const observeCompletion = typeof Module._ffmpeg_kit_test_completion_start === 'function' &&
+      typeof Module._ffmpeg_kit_test_completion_count === 'function';
+    const observations = [];
+    for (const [kindIndex, kind] of ['ffprobe', 'ffmpeg'].entries()) {
+      await resetRequests();
+      const logStart = runtimeLines.length;
+      const command = kind === 'ffprobe'
+        ? ffprobeCommand(mediaUrl('/slow', base))
+        : `-nostdin -i ${mediaUrl('/slow', base)} -map 0 -c copy -f null -`;
+      const handle = startSession(kind, command, { observeCompletion });
+      try {
+        const id = ccall('ffmpeg_kit_session_get_session_id', 'bigint', ['number'], [handle]);
+        const requestDeadline = Date.now() + 5000;
+        let requestSeen = false;
+        while (Date.now() < requestDeadline) {
+          requestSeen = (await getRequests()).some((request) => request.path === '/slow');
+          if (requestSeen) break;
+          await delay(40);
+        }
+        check(requestSeen && sessionState(handle) === STATUS_RUNNING,
+          `${kind} did not start its HTTP request before cancellation.`);
+        const count = () => ccall('ffmpeg_kit_test_completion_count', 'number',
+          ['number', 'number'], [kindIndex, handle]);
+        if (observeCompletion) check(count() === 0, `${kind} completed before cancellation.`);
+        ccall(`${kind}_kit_cancel_session`, 'void', ['bigint'], [id]);
+        ccall(`${kind}_kit_cancel_session`, 'void', ['bigint'], [id]);
+        const result = await waitForSession(handle, 12000);
+        if (kind === 'ffprobe')
+          check(result.returnCode !== 0, 'FFprobe returned success after cancellation.');
+        else
+          check(result.returnCode === 0,
+            `FFmpeg cancellation changed the host-safe AVERROR_EXIT mapping: ${result.returnCode}.`);
+        check(runtimeLines.slice(logStart).some((line) =>
+          line.includes('WASM HTTP request interrupted') && line.includes('/slow')),
+        `${kind} HTTP interruption was not observed.`);
+        if (observeCompletion) {
+          const callbackDeadline = Date.now() + 5000;
+          while (count() === 0 && Date.now() < callbackDeadline) await delay(25);
+          check(count() === 1, `${kind} completion callback count=${count()}, expected 1.`);
+        }
+        await delay(500);
+        if (observeCompletion)
+          check(count() === 1, `${kind} delivered a duplicate completion callback after settling.`);
+        const summary = runtimeLines.slice(logStart).find((line) =>
+          line.includes(`WASM HTTP budget complete session=${id} `));
+        check(summary && /cached=0 pending=0 open_streams=0 active_requests=0/.test(summary),
+          `${kind} HTTP resources did not drain after its completion callback.`);
+        observations.push(`${kind}: session=${id}, return=${result.returnCode}, ` +
+          `callbacks=${observeCompletion ? count() : 'not instrumented in production'}`);
+      } finally {
+        await finishSession(kind, handle);
+      }
+      const recovery = await execute(kind, kind === 'ffprobe'
+        ? ffprobeCommand(mediaUrl('/media/progressive.mp4', base))
+        : `-nostdin -i ${mediaUrl('/media/progressive.mp4', base)} -map 0 -c copy -f null -`);
+      check(recovery.state === STATUS_COMPLETED && recovery.returnCode === 0,
+        `${kind} could not execute a valid command in the same web app after cancellation.`);
+    }
+    return { detail: `${observations.join('; ')}; repeated targeted cancellation; ` +
+      'settled 500 ms; both kits completed subsequent commands in the same web app' };
+  }));
+
   outcomes.push(await runCase('R5-NEG concurrent sessions cancel independently', async () => {
     await resetRequests();
     const logStart = runtimeLines.length;
@@ -1406,6 +1590,10 @@ async function runTransportMatrix() {
       check(rightResult.returnCode !== 0,
         'The explicitly cancelled right FFprobe session returned success.');
 
+      const cleanupDeadline = Date.now() + 5000;
+      while (Date.now() < cleanupDeadline && ![priorId, leftId, rightId].every((id) =>
+        runtimeLines.slice(logStart).some((line) =>
+          line.includes(`WASM HTTP budget complete session=${id} `)))) await delay(25);
       const logs = runtimeLines.slice(logStart);
       for (const id of [priorId, leftId, rightId]) {
         const budget = logs.find((line) =>
@@ -1946,6 +2134,67 @@ async function runTransportMatrix() {
       `terminal state=${av.result.state}` };
   }));
 
+  outcomes.push(await runCase('AUDIO-RES S07/S08 rapid audio reopen rejects stale generated callbacks', async () => {
+    if (!selectedTransportCase?.startsWith('AUDIO-RES S07/S08'))
+      return { skip: 'run this case on a fresh page with ?case=AUDIO-RES S07/S08; eleven device generations exceed the remaining bounded lifecycle-marker budget in the full matrix' };
+    const logStart = runtimeLines.length;
+    const errorsBefore = browserErrors.length;
+    const staleCallbacks = [];
+    let audioContext;
+    const handle = startSession('ffplay', `-autoexit ${mediaUrl('/hls/variant.m3u8', base)}`);
+    const assertSilent = (callback) => {
+      const outputBuffer = audioContext.createBuffer(2, 256, 48000);
+      for (let channel = 0; channel < 2; channel++) outputBuffer.getChannelData(channel).fill(0.75);
+      callback({ outputBuffer });
+      for (let channel = 0; channel < 2; channel++)
+        check(outputBuffer.getChannelData(channel).every((sample) => sample === 0),
+          'A stale generated-SDL callback accessed audio instead of returning silence.');
+    };
+    try {
+      await waitForFfplayAudioOpen(handle, logStart, 0.05);
+      audioContext = Module.SDL2.audioContext;
+      check(audioContext, 'Generated SDL AudioContext is unavailable.');
+      for (let index = 0; index < 10; index++) {
+        const node = Module.SDL2?.audio?.scriptProcessorNode;
+        check(typeof node?.onaudioprocess === 'function', 'Generated SDL audio callback is unavailable.');
+        staleCallbacks.push(node.onaudioprocess);
+        ccall('ffmpeg_kit_config_set_audio_output_device', 'void', ['number'], [0]);
+        const reopenedNode = Module.SDL2?.audio?.scriptProcessorNode;
+        check(reopenedNode && reopenedNode !== node, 'Audio output change did not reopen the SDL node.');
+        assertSilent(staleCallbacks[index]);
+        check(sessionState(handle) === STATUS_RUNNING, 'Playback ended during rapid audio reopen.');
+        await delay(40);
+      }
+      staleCallbacks.push(Module.SDL2.audio.scriptProcessorNode.onaudioprocess);
+      ccall('ffplay_kit_session_stop', 'void', ['number'], [handle]);
+      ccall('ffplay_kit_session_stop', 'void', ['number'], [handle]);
+      const result = await waitForSession(handle, 15000);
+      check(result.state === STATUS_COMPLETED || result.state === STATUS_FAILED,
+        'Duplicate stop did not reach a terminal state.');
+    } finally {
+      await finishSession('ffplay', handle);
+    }
+    for (const callback of staleCallbacks) assertSilent(callback);
+    await delay(300);
+    const events = ffplayAudioEventsSince(logStart);
+    const opens = events.filter((event) => event.event === 'audio_open');
+    const closes = events.filter((event) => event.event === 'audio_close');
+    check(opens.length === 11 && closes.length === 11,
+      `Expected eleven audio opens/closes, got ${opens.length}/${closes.length}.`);
+    check(new Set(opens.map((event) => event.audio)).size === 11,
+      'A rapid reopen reused an audio generation.');
+    for (const opened of opens)
+      check(closes.filter((closed) => closed.audio === opened.audio &&
+        closed.device === opened.device && closed.playback === opened.playback).length === 1,
+      `Audio generation ${opened.audio} did not close exactly once.`);
+    check(events.filter((event) => event.event === 'playback_terminal').length === 1,
+      'Duplicate stop produced multiple playback terminal events.');
+    check(!events.some((event) => event.event === 'audio_gate_unavailable'),
+      'Generated SDL callback gate was unavailable.');
+    check(browserErrors.length === errorsBefore, 'Rapid reopen raised a browser error.');
+    return { detail: '11 distinct audio generations closed once; duplicate stop settled; 11 retained generated callbacks returned silence after close' };
+  }));
+
   outcomes.push(await runCase('N15b imported MEMFS MPEG-TS', async () => {
     const tsResponse = await fetch(mediaUrl('/hls/segment-1.ts', base));
     check(tsResponse.ok, `TS import failed with HTTP ${tsResponse.status}.`);
@@ -2068,7 +2317,7 @@ async function runTransportMatrix() {
 
     outcomes.push(await runCase('D2-GV video-only TS MEMFS probe', async () => {
       const path = '/wasm-streaming-d2-video-only.ts';
-      const fixture = await importFixtureToMemfs('/hls/segment-d2-video-only.ts', path, 'D2-GV');
+      const fixture = await importFixtureToMemfs('/hls/segment-video-only.ts', path, 'D2-GV');
       const command = `-v debug -show_entries format=format_name:stream=codec_name -of json ${path}`;
       const result = await execute('ffprobe', command, { timeoutMs: 15000 });
       requireProbeSuccess(result, 'D2-GV');
@@ -2082,7 +2331,7 @@ async function runTransportMatrix() {
 
     outcomes.push(await runCase('D2-GA audio-only TS MEMFS probe', async () => {
       const path = '/wasm-streaming-d2-audio-only.ts';
-      const fixture = await importFixtureToMemfs('/hls/segment-d2-audio-only.ts', path, 'D2-GA');
+      const fixture = await importFixtureToMemfs('/hls/segment-audio-only.ts', path, 'D2-GA');
       const command = `-v debug -show_entries format=format_name:stream=codec_name -of json ${path}`;
       const result = await execute('ffprobe', command, { timeoutMs: 15000 });
       requireProbeSuccess(result, 'D2-GA');

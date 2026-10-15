@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FFmpegKit WebAudio close contract</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 48rem; }
+      pre { background: #f3f4f6; padding: 1rem; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>WebAudio close contract</h1>
+    <p>This standalone harness models the per-module Phase 2 close helper with a real browser ScriptProcessorNode.</p>
+    <p>It does not load FFmpegKit or SDL's generated module.</p>
+    <button id="run">Run harness</button>
+    <pre id="output">Waiting for user gesture.</pre>
+    <script type="module">
+      import { AudioCloseCoordinator } from './audio-close-contract.mjs';
+
+      const button = document.querySelector('#run');
+      const output = document.querySelector('#output');
+
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        const log = [];
+        let context;
+        let insideCallback = false;
+        let closePromise;
+        let callbackCount = 0;
+        const generation = 1;
+        const deviceId = 9;
+
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass)
+            throw new Error('Web Audio is unavailable in this browser');
+
+          context = new AudioContextClass();
+          await context.resume();
+          const node = context.createScriptProcessor(256, 0, 1);
+          node.onaudioprocess = (event) => {
+            insideCallback = true;
+            callbackCount++;
+            event.outputBuffer.getChannelData(0).fill(0);
+            log.push('callback-enter');
+            if (!closePromise) {
+              closePromise = coordinator.beginClose(generation, async (closedDevice, closedGeneration) => {
+                if (insideCallback)
+                  throw new Error('native close ran before callback exit');
+                if (closedDevice !== deviceId || closedGeneration !== generation)
+                  throw new Error('close completed for the wrong device generation');
+                log.push('native-close');
+                node.disconnect();
+                await context.close();
+                return;
+              });
+            }
+            log.push('callback-exit');
+            insideCallback = false;
+          };
+
+          const module = { SDL2: { audio: { scriptProcessorNode: node } } };
+          const coordinator = new AudioCloseCoordinator(module);
+          const wrapped = coordinator.observeOpen(generation, deviceId);
+          node.connect(context.destination);
+
+          await Promise.race([
+            new Promise((_, reject) => setTimeout(
+              () => reject(new Error('audio callback did not run within 5 seconds')),
+              5000,
+            )),
+            (async () => {
+              while (!closePromise)
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              await closePromise;
+            })(),
+          ]);
+
+          wrapped({});
+          if (callbackCount !== 1)
+            throw new Error(`expected one callback, got ${callbackCount}`);
+          if (log.join(',') !== 'callback-enter,callback-exit,native-close')
+            throw new Error(`unexpected event order: ${log.join(',')}`);
+          output.textContent = `PASS\n${log.join(' → ')}\ncallbackCount=${callbackCount}`;
+        } catch (error) {
+          if (context && context.state !== 'closed')
+            await context.close().catch(() => {});
+          output.textContent = `FAIL\n${error.stack || error}`;
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

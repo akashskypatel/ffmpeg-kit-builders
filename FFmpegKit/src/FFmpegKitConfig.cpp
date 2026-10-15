@@ -870,6 +870,7 @@ static void avutil_log_sanitize(char *line) {
   }
 }
 
+#if defined(__EMSCRIPTEN__)
 static bool avutil_log_url_boundary(unsigned char value) {
   return value == 0 || value == ' ' || value == '\t' || value == '\n' ||
          value == '\r' || value == '\'' || value == '"' || value == '<' ||
@@ -936,6 +937,7 @@ static void avutil_log_redact_url_secrets(char *line) {
     cursor = url_end;
   }
 }
+#endif
 
 /**
  * Adds log data to the end of callback data list.
@@ -1191,7 +1193,9 @@ void ffmpegkit_log_callback_function(void *ptr, int level, const char *format,
   // COMBINE ALL 4 LOG PARTS
   av_bprintf(&fullLine, "%s%s%s%s", part[0].str, part[1].str, part[2].str,
              part[3].str);
+#if defined(__EMSCRIPTEN__)
   avutil_log_redact_url_secrets(fullLine.str);
+#endif
 
   if (fullLine.len > 0) {
     logCallbackDataAdd(level, &fullLine);
