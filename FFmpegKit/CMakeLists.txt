@@ -102,6 +102,8 @@ endif()
 set(FFMPEG_KIT_BUILD_DATE "" CACHE STRING "Build date override")
 set(FFMPEG_KIT_BUNDLE_TYPE "" CACHE STRING "Bundle type override")
 set(FFMPEG_KIT_VERSION "" CACHE STRING "FFmpegKit version override")
+# Used verbatim as SemVer build metadata when set (e.g. g1a2b3c4); default is git HEAD.
+set(FFMPEG_KIT_SOURCE_REVISION "" CACHE STRING "Short source revision override (default: git HEAD)")
 
 # Define Paths
 set(FFMPEG_BUILD_DIR "" CACHE PATH "Path to FFmpeg build directory (libs)")
@@ -116,8 +118,60 @@ if(NOT FFMPEG_BUILD_DIR OR NOT EXISTS "${FFMPEG_BUILD_DIR}/include/config_compon
 endif()
 
 if(NOT FFMPEG_KIT_BUILD_DATE)
-    string(TIMESTAMP FFMPEG_KIT_BUILD_DATE "%Y%m%d")
+    string(TIMESTAMP FFMPEG_KIT_BUILD_DATE "%Y%m%dT%H%M%SZ" UTC)
 endif()
+
+# Distinguish builds that share a numeric version with SemVer build metadata
+# (+g<short-hash>[.dirty]); build metadata does not affect version ordering.
+# Runtime-only: used for the compiled-in getVersion() string. Release tags,
+# titles, artifact names and package versions use the numeric version.
+set(FFMPEG_KIT_FULL_VERSION "${FFMPEG_KIT_VERSION}")
+if(FFMPEG_KIT_VERSION AND NOT FFMPEG_KIT_VERSION MATCHES "\\+")
+    set(_ffmpeg_kit_revision "${FFMPEG_KIT_SOURCE_REVISION}")
+    if(NOT _ffmpeg_kit_revision)
+        find_package(Git QUIET)
+        if(GIT_FOUND)
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" rev-parse --short=7 HEAD
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                OUTPUT_VARIABLE _ffmpeg_kit_revision
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+                RESULT_VARIABLE _ffmpeg_kit_git_result)
+            if(_ffmpeg_kit_git_result EQUAL 0 AND _ffmpeg_kit_revision)
+                set(_ffmpeg_kit_revision "g${_ffmpeg_kit_revision}")
+                # File-mode-only changes (common on WSL/Windows checkouts) are not content changes.
+                execute_process(
+                    COMMAND "${GIT_EXECUTABLE}" -c core.fileMode=false diff --quiet HEAD --
+                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                    RESULT_VARIABLE _ffmpeg_kit_dirty
+                    ERROR_QUIET)
+                if(NOT _ffmpeg_kit_dirty EQUAL 0)
+                    string(APPEND _ffmpeg_kit_revision ".dirty")
+                endif()
+                # Re-run configure after commits or checkouts so the revision does not go stale.
+                execute_process(
+                    COMMAND "${GIT_EXECUTABLE}" rev-parse --absolute-git-dir
+                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                    OUTPUT_VARIABLE _ffmpeg_kit_git_dir
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+                if(_ffmpeg_kit_git_dir AND EXISTS "${_ffmpeg_kit_git_dir}/logs/HEAD")
+                    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                        "${_ffmpeg_kit_git_dir}/logs/HEAD")
+                endif()
+            else()
+                set(_ffmpeg_kit_revision "")
+            endif()
+        endif()
+    endif()
+    if(_ffmpeg_kit_revision)
+        set(FFMPEG_KIT_FULL_VERSION "${FFMPEG_KIT_VERSION}+${_ffmpeg_kit_revision}")
+    else()
+        message(STATUS "FFmpegKit source revision unavailable; version has no build metadata")
+    endif()
+endif()
+message(STATUS "FFmpegKit version: ${FFMPEG_KIT_FULL_VERSION}, build date: ${FFMPEG_KIT_BUILD_DATE}")
 
 if(NOT FFMPEG_KIT_BUNDLE_TYPE)
     set(FFMPEG_KIT_BUNDLE_TYPE "custom")
@@ -197,9 +251,9 @@ target_compile_definitions(ffmpegkit PRIVATE
 )
 
 target_compile_definitions(ffmpegkit PUBLIC
-    FFMPEG_KIT_BUILD_DATE=${FFMPEG_KIT_BUILD_DATE}
+    FFMPEG_KIT_BUILD_DATE="${FFMPEG_KIT_BUILD_DATE}"
     FFMPEG_KIT_BUNDLE_TYPE="${FFMPEG_KIT_BUNDLE_TYPE}"
-    FFMPEG_KIT_VERSION="${FFMPEG_KIT_VERSION}"
+    FFMPEG_KIT_VERSION="${FFMPEG_KIT_FULL_VERSION}"
 )
 
 if(EMSCRIPTEN)
@@ -915,6 +969,7 @@ else()
     set(exec_prefix "\${prefix}")
     set(libdir "\${exec_prefix}/lib")
     set(includedir "\${prefix}/include")
+    # Numeric core version only: pkg-config constraints must not see build metadata.
     set(VERSION "${FFMPEG_KIT_VERSION}")
     set(FFMPEG_KIT_PLATFORM_CFLAGS "")
     set(FFMPEG_KIT_PLATFORM_LIBS "")

@@ -14,6 +14,7 @@
   and headless native/Web callback regression coverage for delivery, lifecycle,
   ordering, and table behavior.
 - Bump FFmpeg version to v9.0.2
+- **Build identity**: `getVersion()` now appends SemVer build metadata with the short source revision (`0.11.2+g<hash>`, plus `.dirty` for uncommitted changes), and `getBuildDate()` returns a UTC timestamp (`YYYYMMDDTHHMMSSZ`, honoring `SOURCE_DATE_EPOCH`). The hash appears only in the runtime version; release tags, titles, artifact names, pkg-config and platform package versions keep the numeric version (e.g. `0.11.2`).
 
 ## Version 0.11.1
 

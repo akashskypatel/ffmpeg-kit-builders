@@ -2097,9 +2097,7 @@ std::string ffmpegkit::FFmpegKitConfig::getVersion() {
 }
 
 std::string ffmpegkit::FFmpegKitConfig::getBuildDate() {
-  char buildDate[10];
-  sprintf(buildDate, "%d", FFMPEG_KIT_BUILD_DATE);
-  return std::string(buildDate);
+  return FFMPEG_KIT_BUILD_DATE;
 }
 
 int ffmpegkit::FFmpegKitConfig::setEnvironmentVariable(
