@@ -97,6 +97,9 @@ CONFIG_ANDROID=" \
 --enable-openssl \
 --enable-mediacodec"
 
+CONFIG_WASM=" \
+--enable-openssl"
+
 CONFIG_WINDOWS="\
 --enable-d3d11va \
 --enable-d3d12va \
@@ -127,7 +130,8 @@ CONFIG_GENERAL="\
 --enable-lzma \
 --enable-zlib"
 
-CONFIG_BASE="--enable-libjsoncpp \
+CONFIG_BASE="\
+--enable-libjsoncpp \
 --enable-sdl2"
 
 # must pick crypto type for streaming support
