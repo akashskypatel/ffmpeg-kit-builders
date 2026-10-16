@@ -126,30 +126,67 @@ contains_csv_value() {
   return 1
 }
 
-parse_build_only_steps() {
-  local build_only_csv="${WORKFLOW_BUILD_ONLY:-}"
-  local raw_step step
-  local -a raw_build_only_steps=()
+get_platform_deps_file() {
+  local platform="$1"
+  case "$platform" in
+    android) echo "$script_dir/deps-android.sh" ;;
+    ios|iphonesimulator) echo "$script_dir/deps-ios.sh" ;;
+    appletvos|appletvsimulator) echo "$script_dir/deps-appletvos.sh" ;;
+    macos) echo "$script_dir/deps-macos.sh" ;;
+    linux) echo "$script_dir/deps-linux.sh" ;;
+    windows) echo "$script_dir/deps-windows.sh" ;;
+    wasm) echo "$script_dir/deps-wasm.sh" ;;
+    *) echo "Unknown platform: $platform" >&2; return 1 ;;
+  esac
+}
 
-  build_only_enabled=false
+get_transitive_deps() {
+  local platform="$1"
+  shift
+  local deps_file steps
+
+  if [[ $# -eq 0 ]]; then
+    echo "::error::At least one build_step is required" >&2
+    return 1
+  fi
+
+  if ! deps_file="$(get_platform_deps_file "$platform")"; then
+    return 1
+  fi
+  if [[ ! -f "$deps_file" ]]; then
+    echo "::error::Dependencies file not found: $deps_file" >&2
+    return 1
+  fi
+
+  if ! steps="$(run_with_runner_shell ./scripts/transitive-deps.sh "$deps_file" "$@")"; then
+    return 1
+  fi
+  printf '%s\n' "$steps"
+}
+
+parse_build_only_steps() {
+  local platform="$1"
+  local step transitive_steps
+  local -a transitive_steps_array=()
+
   build_only_steps=()
   build_only_seen_steps=()
 
-  if [[ -z "$build_only_csv" || "$build_only_csv" == "false" ]]; then
+  if [[ "$build_only_requested" != "true" ]]; then
     return 0
   fi
 
-  if [[ "$build_only_csv" == "true" ]]; then
-    echo "::error::build_only must be a comma-separated list of build_* steps, not a boolean"
+  if ! transitive_steps="$(get_transitive_deps "$platform" "${build_only_requested_steps[@]}")"; then
+    echo "::error::Failed to resolve build_only targets for $platform" >&2
     exit 1
   fi
 
-  IFS=',' read -ra raw_build_only_steps <<< "$build_only_csv"
-  for raw_step in "${raw_build_only_steps[@]}"; do
-    step="$(trim "$raw_step")"
+  IFS=',' read -ra transitive_steps_array <<< "$transitive_steps"
+  for step in "${transitive_steps_array[@]}"; do
+    step="$(trim "$step")"
     [[ -z "$step" ]] && continue
     if [[ "$step" != build_* ]]; then
-      echo "::error::build_only entries must be build_* steps, got: $step" >&2
+      echo "::error::Dependency resolver returned a non-build step: $step" >&2
       exit 1
     fi
     if [[ -z "${build_only_seen_steps[$step]:-}" ]]; then
@@ -159,7 +196,10 @@ parse_build_only_steps() {
   done
 
   if [[ ${#build_only_steps[@]} -gt 0 ]]; then
-    build_only_enabled=true
+    return 0
+  else
+    echo "::error::No build steps were resolved for WORKFLOW_BUILD_ONLY" >&2
+    exit 1
   fi
 }
 
@@ -399,6 +439,12 @@ ensure_target_toolchain() {
           [[ -f /etc/profile.d/linux-arm64-toolchain.sh ]] && source /etc/profile.d/linux-arm64-toolchain.sh
         fi
         ;;
+      wasm)
+        if [[ "$arch" == "wasm32" ]]; then
+          sudo -E "${GITHUB_WORKSPACE}/scripts/toolchain/setup-wasm.sh"
+          [[ -f /etc/profile.d/emsdk.sh ]] && source /etc/profile.d/emsdk.sh
+        fi
+        ;;
     esac
   fi
 
@@ -565,10 +611,33 @@ workflow_step_test() {
 
 declare -a build_only_steps=()
 declare -A build_only_seen_steps=()
-build_only_enabled=false
-parse_build_only_steps
+declare -a build_only_requested_steps=()
+build_only_requested=false
 
-if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$build_only_enabled" == "true" ]]; then
+build_only_csv="${WORKFLOW_BUILD_ONLY:-}"
+if [[ -n "$build_only_csv" && "$build_only_csv" != "false" ]]; then
+  if [[ "$build_only_csv" == "true" ]]; then
+    echo "::error::build_only must be a comma-separated list of build_* steps, not a boolean" >&2
+    exit 1
+  fi
+
+  IFS=',' read -ra raw_build_only_steps <<< "$build_only_csv"
+  for raw_step in "${raw_build_only_steps[@]}"; do
+    step="$(trim "$raw_step")"
+    [[ -z "$step" ]] && continue
+    if [[ "$step" != build_* ]]; then
+      echo "::error::build_only entries must be build_* steps, got: $step" >&2
+      exit 1
+    fi
+    build_only_requested_steps+=("$step")
+  done
+
+  if [[ ${#build_only_requested_steps[@]} -gt 0 ]]; then
+    build_only_requested=true
+  fi
+fi
+
+if [[ -n "${WORKFLOW_BUILD_FROM:-}" && "$build_only_requested" == "true" ]]; then
   echo "::error::WORKFLOW_BUILD_ONLY and WORKFLOW_BUILD_FROM cannot both be defined" >&2
   exit 1
 fi
@@ -580,7 +649,7 @@ if [[ -n "${WORKFLOW_BUILD_FROM:-}" ]]; then
   fi
 fi
 
-if [[ ( "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ) && ( -n "${WORKFLOW_BUILD_FROM:-}" || "$build_only_enabled" == "true" ) ]]; then
+if [[ ( "${WORKFLOW_BUILD_FFMPEG}" == "true" || "${WORKFLOW_BUILD_BUNDLE}" == "true" ) && ( -n "${WORKFLOW_BUILD_FROM:-}" || "$build_only_requested" == "true" ) ]]; then
   echo "::error::WORKFLOW_BUILD_FFMPEG/WORKFLOW_BUILD_BUNDLE cannot be combined with WORKFLOW_BUILD_FROM or WORKFLOW_BUILD_ONLY" >&2
   exit 1
 fi
@@ -594,7 +663,7 @@ if [[ "${RUN_TESTS}" == "true" ]]; then
 fi
 
 workflow_mode="default"
-if [[ "$build_only_enabled" == "true" ]]; then
+if [[ "$build_only_requested" == "true" ]]; then
   workflow_mode="build_only"
 elif [[ -n "${WORKFLOW_BUILD_FROM:-}" ]]; then
   workflow_mode="build_from"
@@ -656,6 +725,7 @@ for combo in "${workflow_target_combos[@]}"; do
     build_runner_args "$platform" "$arch"
 
     if [[ "$workflow_mode" == "build_only" ]]; then
+      parse_build_only_steps "$platform"
       WORKFLOW_BUILD_STEPS="${build_only_steps[*]}"
     else
       steps_cmd="./runner.sh ${runner_args[*]} --hide-banner --print-all-steps"

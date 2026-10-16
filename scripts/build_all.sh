@@ -66,13 +66,6 @@ p_args=""
 deps=""
 bundles=""
 reset_state=false
-# now imported from supported.sh
-# VALID_BUNDLES=("full" "video_hw" "video" "audio" "base" "debug")
-# VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
-# VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
-# VALID_BUILDS=("ffmpeg" "kit" "bundle")
-# VALID_LICENSES=("lgpl" "gpl")
-# VALID_SMALL_FLAGS=("small" "")
 SMALL_FLAGS=("small" "")
 ANDROID_PLATFORM_ARCHS=()
 APPLE_PLATFORM_ARCHS=()
@@ -85,6 +78,7 @@ build_bundle=false
 no_clean=true
 REMOTE_RELEASE=false
 build_commands=""
+SNAPSHOT=false
 
 # Check if value is truthy
 # Returns 0 (success) for truthy values, 1 (failure) for falsey values
@@ -104,6 +98,15 @@ falsey() {
     false|0|F|f|False|FALSE|n|N|no|No|NO|off|Off|OFF) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# check if script is being run on linux or macos
+is_linux() {
+  [[ "$(uname)" == "Linux" ]]
+}
+
+is_macos() {
+  [[ "$(uname)" == "Darwin" ]]
 }
 
 # Add a single platform-arch entry to PLATFORMS, skipping duplicates
@@ -136,7 +139,11 @@ parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
   if [[ -z "${p_args}" ]]; then
-    p_args=$(IFS=,; echo "${VALID_PLATFORM_ARCHS[*]}")
+    if is_linux; then
+      p_args=$(IFS=,; echo "${VALID_NON_APPLE[*]}")
+    elif is_macos; then
+      p_args=$(IFS=,; echo "${VALID_APPLE[*]}")
+    fi
   fi
   IFS=',' read -ra P_ARRAY <<< "$p_args"
   for p in "${P_ARRAY[@]}"; do
@@ -274,7 +281,7 @@ for arg; do
       parse_licenses "${arg#*=}"
       shift;;
     --deps)
-      deps="--deps"
+      deps="--build-deps"
       shift;;
     --reset)
       reset_state=true
@@ -338,7 +345,7 @@ for arg; do
       REMOTE_RELEASE=false
       shift;;
     --snapshot)
-      SNAPSHOT=" --snapshot"
+      SNAPSHOT=true
       shift;;
     *)  
       echo "Invalid argument: ${arg}"
@@ -428,6 +435,8 @@ for platform in "${!PLATFORMS[@]}"; do
   for arch in "${arch_array[@]}"; do
     if [[ "${platform}" == "android" ]]; then
       ANDROID_PLATFORM_ARCHS+=("android-${arch}")
+    elif [[ "${platform}" == "ios" || "${platform}" == "iphonesimulator" || "${platform}" == "macos" || "${platform}" == "appletvos" || "${platform}" == "appletvsimulator" ]]; then
+      APPLE_PLATFORM_ARCHS+=("${platform}-${arch}")
     fi
     for bundle in "${BUNDLE_ARRAY[@]}"; do
       for license in "${LICENSE_ARRAY[@]}"; do
@@ -524,25 +533,33 @@ echo "========================================" | tee -a "${LOG_FILE}"
 
 rm -rf "${STATE_DIR}"
 
-# Build XCFrameworks for Apple platforms
-declare -a android_platforms
-android_platforms=()
-android_platforms_str=""
-for platform in "${!PLATFORMS[@]}"; do
-  case "${platform}" in
-    "android")
-      android_platforms+=("${platform}")
-      ;;
-    *)
-      ;;
-  esac
-done
-
-if [[ ${#android_platforms[@]} -gt 0 ]]; then
-  android_platforms_str=$(IFS=,; echo "${android_platforms[*]}")
+# Preserve the selected variants when the platform-specific packagers run.
+license_args=$(IFS=,; printf '%s' "${LICENSE_ARRAY[*]}")
+case "${#SMALL_FLAGS[@]}" in
+  1)
+    if [[ "${SMALL_FLAGS[0]}" == "small" ]]; then
+      small_arg="--small"
+    else
+      small_arg="--not-small"
+    fi
+    ;;
+  2)
+    small_arg="--both"
+    ;;
+  *)
+    echo "Error: Unexpected small-flag selection: ${SMALL_FLAGS[*]}" >&2
+    exit 1
+    ;;
+esac
+snapshot_args=()
+if truthy "${SNAPSHOT}"; then
+  snapshot_args+=(--snapshot)
 fi
 
-if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
+# Build AARs for the selected Android architectures.
+android_platforms_str=$(IFS=,; echo "${ANDROID_PLATFORM_ARCHS[*]}")
+
+if [[ -n "${android_platforms_str}" ]] && truthy "$build_bundle"; then
   echo "Building AARs..." | tee -a "${LOG_FILE}"
   repo_path="${GITHUB_REPOSITORY:-"$(get_github_owner)/$(get_github_repo)"}"
   owner="${repo_path%%/*}"
@@ -559,29 +576,17 @@ if [[ ${#android_platforms[@]} -gt 0 ]] && truthy "$build_bundle"; then
   export OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}" && \
   export OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}" && \
   sudo -E "${WORK_DIR}/scripts/android/build_aar.sh" \
+    "--platform=${android_platforms_str}" \
     "--bundle=${bundles}" \
+    "--license=${license_args}" \
+    "${small_arg}" \
     --reset \
     "${remote}" \
-    "${SNAPSHOT}"
+    "${snapshot_args[@]}"
 fi
 
-# Build XCFrameworks for Apple platforms
-declare -a apple_platforms
-apple_platforms=()
-apple_platforms_str=""
-for platform in "${!PLATFORMS[@]}"; do
-  case "${platform}" in
-    "ios"|"macos"|"appletvos")
-      apple_platforms+=("${platform}")
-      ;;
-    *)
-      ;;
-  esac
-done
-
-if [[ ${#apple_platforms[@]} -gt 0 ]]; then
-  apple_platforms_str=$(IFS=,; echo "${apple_platforms[*]}")
-fi
+# Build XCFrameworks for the selected Apple architectures.
+apple_platforms_str=$(IFS=,; echo "${APPLE_PLATFORM_ARCHS[*]}")
 
 if [[ -n "${apple_platforms_str}" ]] && truthy "$build_bundle"; then
   echo "========================================" | tee -a "${LOG_FILE}"
@@ -598,6 +603,8 @@ if [[ -n "${apple_platforms_str}" ]] && truthy "$build_bundle"; then
   sudo -E "${WORK_DIR}/scripts/apple/build_xcframework.sh" \
     "--platform=${apple_platforms_str}" \
     "--bundle=${bundles}" \
+    "--license=${license_args}" \
+    "${small_arg}" \
     --reset \
     "${remote}"
 fi

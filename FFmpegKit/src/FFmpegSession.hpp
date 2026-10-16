@@ -26,6 +26,7 @@
 #include "ffmpeg_lib.h"
 
 #include <atomic>
+#include <mutex>
 
 namespace ffmpegkit {
 
@@ -204,6 +205,16 @@ public:
   void setContext(FFmpegContext *context);
 
   /**
+   * Detaches the native context and transfers cleanup ownership to the caller.
+   */
+  FFmpegContext *detachContext();
+
+  /**
+   * Requests cancellation safely before, during, or after context attachment.
+   */
+  void requestCancel();
+
+  /**
    * Cancels the ffmpeg session.
    */
   void cancel() override;
@@ -246,7 +257,9 @@ private:
   FFmpegSessionCompleteCallback _completeCallback;
   std::shared_ptr<std::list<std::shared_ptr<ffmpegkit::Statistics>>>
       _statistics;
-  std::atomic<FFmpegContext *> _context{nullptr};
+  std::mutex _contextMutex;
+  FFmpegContext *_context{nullptr};
+  std::atomic<bool> _cancelRequested{false};
 };
 
 } // namespace ffmpegkit

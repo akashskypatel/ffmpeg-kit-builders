@@ -1,0 +1,13 @@
+diff --git a/source/CMakeLists.txt b/source/CMakeLists.txt
+--- a/source/CMakeLists.txt
++++ b/source/CMakeLists.txt
+@@ -41,6 +41,8 @@ SET(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" "${CMAKE_MODULE_PATH}")
+ 
+ # System architecture detection
+-if (APPLE AND CMAKE_OSX_ARCHITECTURES)
++if(EMSCRIPTEN)
++    set(SYSPROC wasm32)
++elseif(APPLE AND CMAKE_OSX_ARCHITECTURES)
+     string(TOLOWER "${CMAKE_OSX_ARCHITECTURES}" SYSPROC)
+ else()
+     string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" SYSPROC)

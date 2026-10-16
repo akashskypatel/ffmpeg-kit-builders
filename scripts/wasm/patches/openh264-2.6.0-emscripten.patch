@@ -1,0 +1,59 @@
+diff --git a/meson.build b/meson.build
+--- a/meson.build
++++ b/meson.build
+@@ -57,7 +57,10 @@ cpp_lib = '-lstdc++'
+ libm_dep = cpp.find_library('m', required : false)
+ deps += [libm_dep]
+ 
+-if ['linux', 'android', 'ios', 'darwin'].contains(system)
++if system == 'emscripten'
++  # Emscripten uses the portable C/C++ implementation.
++  asm_format = ''
++elif ['linux', 'android', 'ios', 'darwin'].contains(system)
+   asm_format32 = 'elf'
+   asm_format64 = 'elf64'
+   if ['ios', 'darwin'].contains(system)
+diff --git a/codec/common/meson.build b/codec/common/meson.build
+--- a/codec/common/meson.build
++++ b/codec/common/meson.build
+@@ -69,6 +69,6 @@ elif cpu_family in ['loongarch32', 'loongarch64']
+   ]
+   cpp_sources += asm_sources
+-elif cpu_family == 'riscv64'
++elif cpu_family in ['riscv64', 'wasm32']
+   asm_sources = []
+ elif cpu_family == 'ppc'
+   asm_sources = []
+diff --git a/codec/encoder/meson.build b/codec/encoder/meson.build
+--- a/codec/encoder/meson.build
++++ b/codec/encoder/meson.build
+@@ -83,6 +83,6 @@ elif cpu_family in ['loongarch32', 'loongarch64']
+   ]
+   cpp_sources += asm_sources
+-elif cpu_family == 'riscv64'
++elif cpu_family in ['riscv64', 'wasm32']
+   asm_sources = []
+ elif cpu_family == 'ppc'
+   asm_sources = []
+diff --git a/codec/decoder/meson.build b/codec/decoder/meson.build
+--- a/codec/decoder/meson.build
++++ b/codec/decoder/meson.build
+@@ -54,6 +54,6 @@ elif cpu_family in ['loongarch32', 'loongarch64']
+   ]
+   cpp_sources += asm_sources
+-elif cpu_family == 'riscv64'
++elif cpu_family in ['riscv64', 'wasm32']
+   asm_sources = []
+ elif cpu_family == 'ppc'
+   asm_sources = []
+diff --git a/codec/processing/meson.build b/codec/processing/meson.build
+--- a/codec/processing/meson.build
++++ b/codec/processing/meson.build
+@@ -56,6 +56,6 @@ elif cpu_family in ['loongarch32', 'loongarch64']
+   ]
+   cpp_sources += asm_sources
+-elif cpu_family == 'riscv64'
++elif cpu_family in ['riscv64', 'wasm32']
+   asm_sources = []
+ elif cpu_family == 'ppc'
+   asm_sources = []

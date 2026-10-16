@@ -22,6 +22,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <list>
@@ -389,7 +390,8 @@ private:
   std::chrono::time_point<std::chrono::system_clock> _startTime;
   std::chrono::time_point<std::chrono::system_clock> _endTime;
   std::shared_ptr<std::list<std::string>> _arguments;
-  std::shared_ptr<std::list<std::shared_ptr<ffmpegkit::Log>>> _logs;
+  std::shared_ptr<std::deque<std::shared_ptr<ffmpegkit::Log>>> _logs;
+  int64_t _nextLogSequence{0};
   SessionState _state{SessionStateCreated};
   std::shared_ptr<ffmpegkit::ReturnCode> _returnCode;
   std::string _failStackTrace;

@@ -771,6 +771,25 @@ EOF
       rm -rf "${xcframework_output_dir}/.tmp"
     fi
 
+    # Inspect every final signed XCFramework slice before a zip or release
+    # step can consume it. The verifier compares each slice to its linked dylib.
+    if [[ "${FFMPEGKIT_VERIFY_BINARY_EXPORTS:-OFF}" == "ON" ]]; then
+      local export_size="not-small"
+      [[ "${small}" == "small" ]] && export_size="small"
+      local -a export_profile=()
+      [[ "${FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE:-OFF}" == "ON" ]] && export_profile+=(--require-acceptance-profile)
+      mkdir -p "${BASEDIR}/export-verification/xcframework"
+      python3 "${BASEDIR}/FFmpegKit/scripts/verify-binary-exports.py" \
+        --platform apple \
+        --xcframework "${xcframework_output_dir}/${output_name}.xcframework" \
+        --bundle "${bundle}" --license "${license}" --size "${export_size}" \
+        --phase xcframework \
+        --target-family "${target_platform}" --expected-archs "${archs_for_platform}" \
+        --prepackage-root "${BASEDIR}/prebuilt" \
+        --report "${BASEDIR}/export-verification/xcframework/${output_name}.json" \
+        "${export_profile[@]}" || return 1
+    fi
+
     return 0
   else
     echo "ERROR: Failed to create XCFramework"

@@ -1,0 +1,44 @@
+diff --git a/config.sub b/config.sub
+--- a/config.sub
++++ b/config.sub
+@@ -318,6 +318,7 @@ case $basic_machine in
+ 	| ubicom32 \
+ 	| v850 | v850e | v850e1 | v850e2 | v850es | v850e2v3 \
+ 	| we32k \
++	| wasm32 \
+ 	| x86 | xc16x | xstormy16 | xtensa \
+ 	| z8k | z80)
+ 		basic_machine=$basic_machine-unknown
+@@ -437,7 +438,8 @@ case $basic_machine in
+ 	| ubicom32-* \
+ 	| v850-* | v850e-* | v850e1-* | v850es-* | v850e2-* | v850e2v3-* \
+ 	| vax-* \
+ 	| we32k-* \
++	| wasm32-* \
+ 	| x86-* | x86_64-* | xc16x-* | xps100-* \
+ 	| xstormy16-* | xtensa*-* \
+ 	| ymp-* \
+@@ -1373,7 +1375,8 @@ case $os in
+ 	      | -chorusos* | -chorusrdb* | -cegcc* \
+ 	      | -cygwin* | -msys* | -pe* | -psos* | -moss* | -proelf* | -rtems* \
+ 	      | -mingw32* | -mingw64* | -linux-gnu* | -linux-android* \
+ 	      | -linux-newlib* | -linux-musl* | -linux-uclibc* \
++	      | -emscripten* \
+ 	      | -uxpv* | -beos* | -mpeix* | -udk* \
+ 	      | -interix* | -uwin* | -mks* | -rhapsody* | -darwin* | -opened* \
+ 	      | -openstep* | -oskit* | -conix* | -pw32* | -nonstopux* \
+diff --git a/configure b/configure
+--- a/configure
++++ b/configure
+@@ -702,7 +702,11 @@ case $host_os in
+         SYS="LINUX"
+         define HAVE_MALLOC_H
+         libm="-lm"
+         ;;
++    *emscripten*)
++        SYS="EMSCRIPTEN"
++        libm="-lm"
++        ;;
+     gnu*)
+         SYS="HURD"
+         define HAVE_MALLOC_H

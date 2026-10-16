@@ -23,6 +23,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef FFMPEG_KIT_TEST_HOOKS
+#include "ffmpeg_lib.h"
+#include "libavutil/log.h"
+#endif
+
 #include "cmdutils.h"
 #include "ffmpeg_sched.h"
 #include "ffmpeg_utils.h"
@@ -307,6 +312,7 @@ struct Scheduler {
 
     enum SchedulerState state;
     atomic_int          terminate;
+    atomic_int          graph_ready;
 
     pthread_mutex_t     schedule_lock;
 
@@ -666,6 +672,7 @@ Scheduler *sch_alloc(void)
 
     sch->class    = &scheduler_class;
     sch->sdp_auto = 1;
+    atomic_init(&sch->graph_ready, 0);
 
     ret = pthread_mutex_init(&sch->schedule_lock, NULL);
     if (ret)
@@ -1898,6 +1905,9 @@ int sch_start(Scheduler *sch)
     av_assert0(sch->state == SCH_STATE_UNINIT);
     sch->state = SCH_STATE_STARTED;
 
+    /* Publish the prepared graph before cancellation traverses it. */
+    atomic_store_explicit(&sch->graph_ready, 1, memory_order_release);
+
     for (unsigned i = 0; i < sch->nb_mux; i++) {
         SchMux *mux = &sch->mux[i];
 
@@ -1986,13 +1996,16 @@ void sch_request_stop(Scheduler *sch)
 
     atomic_store(&sch->terminate, 1);
 
-    for (unsigned type = 0; type < 2; type++)
-        for (unsigned i = 0; i < (type ? sch->nb_demux : sch->nb_filters); i++) {
-            SchWaiter *w = type ? &sch->demux[i].waiter : &sch->filters[i].waiter;
-            waiter_set(w, 1);
-            if (type)
-                choke_demux(sch, i, 0);
-        }
+    /* Early cancellation signals termination without walking an unfinished graph. */
+    if (atomic_load_explicit(&sch->graph_ready, memory_order_acquire)) {
+        for (unsigned type = 0; type < 2; type++)
+            for (unsigned i = 0; i < (type ? sch->nb_demux : sch->nb_filters); i++) {
+                SchWaiter *w = type ? &sch->demux[i].waiter : &sch->filters[i].waiter;
+                waiter_set(w, 1);
+                if (type)
+                    choke_demux(sch, i, 0);
+            }
+    }
 
     pthread_mutex_lock(&sch->finish_lock);
     pthread_cond_broadcast(&sch->finish_cond);
@@ -3041,3 +3054,118 @@ int sch_stop_failed(const Scheduler *sch)
 {
     return sch ? atomic_load(&sch->stop_failed) : 0;
 }
+
+#ifdef FFMPEG_KIT_TEST_HOOKS
+static int scheduler_readiness_test_task(void *opaque)
+{
+    (void)opaque;
+    return 0;
+}
+
+static int scheduler_readiness_test_mux_init(void *opaque)
+{
+    return 0;
+}
+
+FFMPEG_API int ffmpeg_kit_test_cancel_unready_graph(void)
+{
+    Scheduler *sch = sch_alloc();
+    int demux_idx, ret, previous_log_level;
+
+    if (!sch)
+        return AVERROR(ENOMEM);
+
+    /* Exercise a stop before graph construction. */
+    sch_request_stop(sch);
+
+    demux_idx = sch_add_demux(sch, scheduler_readiness_test_task, NULL);
+    if (demux_idx < 0) {
+        sch_free(&sch);
+        return demux_idx;
+    }
+
+    ret = sch_add_demux_stream(sch, demux_idx);
+    if (ret < 0) {
+        sch_free(&sch);
+        return ret;
+    }
+
+    /* A stream without a destination is deliberately not start-ready. */
+    sch_request_stop(sch);
+    sch_request_stop(sch);
+    /* The direct scheduler test has no FFmpegKit session log context. */
+    previous_log_level = av_log_get_level();
+    av_log_set_level(AV_LOG_QUIET);
+    ret = sch_start(sch);
+    av_log_set_level(previous_log_level);
+    if (ret != AVERROR(EINVAL))
+        ret = ret < 0 ? ret : AVERROR_INVALIDDATA;
+    else
+        ret = 0;
+    sch_free(&sch);
+    return ret;
+}
+
+FFMPEG_API int ffmpeg_kit_test_cancel_ready_graph(void)
+{
+    Scheduler *sch = sch_alloc();
+    int demux_idx, demux_stream_idx, mux_idx, mux_stream_idx;
+    int ret, previous_log_level;
+
+    if (!sch)
+        return AVERROR(ENOMEM);
+
+    demux_idx = sch_add_demux(sch, scheduler_readiness_test_task, NULL);
+    if (demux_idx < 0) {
+        ret = demux_idx;
+        goto finish;
+    }
+    demux_stream_idx = sch_add_demux_stream(sch, demux_idx);
+    if (demux_stream_idx < 0) {
+        ret = demux_stream_idx;
+        goto finish;
+    }
+
+    mux_idx = sch_add_mux(sch, scheduler_readiness_test_task,
+                          scheduler_readiness_test_mux_init, NULL, 0, 0);
+    if (mux_idx < 0) {
+        ret = mux_idx;
+        goto finish;
+    }
+    mux_stream_idx = sch_add_mux_stream(sch, mux_idx);
+    if (mux_stream_idx < 0) {
+        ret = mux_stream_idx;
+        goto finish;
+    }
+    ret = sch_mux_stream_ready(sch, mux_idx, mux_stream_idx);
+    if (ret < 0)
+        goto finish;
+
+    ret = sch_connect(sch, SCH_DSTREAM(demux_idx, demux_stream_idx),
+                      SCH_MSTREAM(mux_idx, mux_stream_idx));
+    if (ret < 0)
+        goto finish;
+
+    /* The scheduler test has no FFmpegKit session log context. */
+    previous_log_level = av_log_get_level();
+    av_log_set_level(AV_LOG_QUIET);
+    ret = sch_start(sch);
+    av_log_set_level(previous_log_level);
+    if (ret < 0)
+        goto finish;
+
+    if (!atomic_load_explicit(&sch->graph_ready, memory_order_acquire)) {
+        ret = AVERROR_INVALIDDATA;
+    } else {
+        sch_request_stop(sch);
+        ret = atomic_load(&sch->demux[demux_idx].waiter.choked) ?
+              0 : AVERROR_INVALIDDATA;
+    }
+    if (sch_stop(sch, NULL) < 0 && ret >= 0)
+        ret = AVERROR(EIO);
+
+finish:
+    sch_free(&sch);
+    return ret;
+}
+#endif

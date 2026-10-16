@@ -43,6 +43,9 @@
 #include "libavutil/time.h"
 #include "libavutil/bprint.h"
 #include "libavformat/avformat.h"
+#if defined(__EMSCRIPTEN__)
+#include "ffmpegkit_wasm_http_io.h"
+#endif
 #include "libavdevice/avdevice.h"
 #include "libswscale/swscale.h"
 #include "libavutil/opt.h"
@@ -227,6 +230,9 @@ typedef struct VideoState {
     int64_t seek_rel;
     atomic_int read_pause_return;
     AVFormatContext *ic;
+#if defined(__EMSCRIPTEN__)
+    FFmpegKitWasmHttpSession *wasm_http_session;
+#endif
     int realtime;
 
     Clock audclk;
@@ -1183,11 +1189,6 @@ static void video_image_display(VideoState *is)
         vp->uploaded = 1;
         vp->flip_v = vp->frame->linesize[0] < 0;
 
-        if (vp->frame->data[0]) {
-          ffplay_lib_on_frame(vp->frame->data[0], vp->frame->width,
-                              vp->frame->height, vp->frame->linesize[0],
-                              av_get_pix_fmt_name(vp->frame->format));
-          }
     }
 
     draw_video_background(is);
@@ -1442,6 +1443,10 @@ static void stream_close(VideoState *is)
         stream_component_close(is, is->subtitle_stream);
 
     avformat_close_input(&is->ic);
+#if defined(__EMSCRIPTEN__)
+    ffmpegkit_wasm_http_session_free(is->wasm_http_session);
+    is->wasm_http_session = NULL;
+#endif
 
     packet_queue_destroy(&is->videoq);
     packet_queue_destroy(&is->audioq);
@@ -1557,6 +1562,7 @@ static void video_display(VideoState *is)
         video_audio_display(is);
     else if (is->video_st)
         video_image_display(is);
+    ffplay_lib_capture_renderer(is->renderer);
     SDL_RenderPresent(is->renderer);
 }
 
@@ -2568,7 +2574,7 @@ static int audio_decode_frame(VideoState *is)
         return -1;
 
     do {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(__EMSCRIPTEN__)
         while (frame_queue_nb_remaining(&is->sampq) == 0) {
             if ((av_gettime_relative() - is->audio_callback_time) > 1000000LL * is->audio_hw_buf_size / is->audio_tgt.bytes_per_sec / 2)
                 return -1;
@@ -3033,6 +3039,9 @@ static int read_thread(void *arg)
     SDL_mutex *wait_mutex = SDL_CreateMutex();
     int scan_all_pmts_set = 0;
     int64_t pkt_ts;
+#if defined(__EMSCRIPTEN__)
+    FFmpegKitWasmHttpSession *wasm_http_session = NULL;
+#endif
 
     if (!wait_mutex) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex(): %s\n", SDL_GetError());
@@ -3057,6 +3066,13 @@ static int read_thread(void *arg)
     }
     ic->interrupt_callback.callback = decode_interrupt_cb;
     ic->interrupt_callback.opaque = is;
+#if defined(__EMSCRIPTEN__)
+    err = ffmpegkit_wasm_http_install(ic, 0, &wasm_http_session);
+    if (err < 0) {
+        ret = err;
+        goto fail;
+    }
+#endif
     if (!av_dict_get(is->format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
         av_dict_set(&is->format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
         scan_all_pmts_set = 1;
@@ -3075,6 +3091,10 @@ static int read_thread(void *arg)
     if (ret < 0)
         goto fail;
     is->ic = ic;
+#if defined(__EMSCRIPTEN__)
+    is->wasm_http_session = wasm_http_session;
+    wasm_http_session = NULL;
+#endif
 
     if (is->genpts)
         ic->flags |= AVFMT_FLAG_GENPTS;
@@ -3368,6 +3388,9 @@ static int read_thread(void *arg)
  fail:
     if (ic && !is->ic)
         avformat_close_input(&ic);
+#if defined(__EMSCRIPTEN__)
+    ffmpegkit_wasm_http_session_free(wasm_http_session);
+#endif
 
     av_packet_free(&pkt);
     if (ret != 0) {

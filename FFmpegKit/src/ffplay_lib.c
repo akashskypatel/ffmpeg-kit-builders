@@ -20,8 +20,15 @@
 #include "ffplay_lib.h"
 #include "ffmpeg_kit_assert_override.h"
 #include "ffmpegkit_arg_parser.h"
+#include <stdint.h>
+#include <stdio.h>
 #include <SDL.h>
 #include <SDL_stdinc.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/em_js.h>
+#include <emscripten/proxying.h>
+#include <emscripten/threading.h>
+#endif
 
 FFMPEG_WEAK_SYMBOL FFMPEG_THREAD_LOCAL const char *program_name = "ffplay";
 FFMPEG_WEAK_SYMBOL FFMPEG_THREAD_LOCAL int program_birth_year = 2000;
@@ -35,11 +42,205 @@ static int has_captured_spec = 0;
 struct VideoState; // Forward declaration
 static struct VideoState *active_audio_is = NULL;
 static SDL_AudioDeviceID active_audio_dev_id = 0;
+#if defined(__EMSCRIPTEN__)
+static uint64_t wasm_audio_generation = 0;
+static uint64_t active_wasm_playback_generation = 0;
+static uint64_t active_wasm_audio_generation = 0;
+static unsigned int wasm_lifecycle_log_count = 0;
+
+static void ffplay_kit_log_wasm_event(const char *event,
+                                      uint64_t playback_generation,
+                                      uint64_t audio_generation,
+                                      SDL_AudioDeviceID device,
+                                      int result)
+{
+    unsigned int count = __atomic_add_fetch(&wasm_lifecycle_log_count, 1,
+                                             __ATOMIC_RELAXED);
+    if (count <= 128)
+        fprintf(stderr,
+                "[ffplay-wasm] event=%s playback=%llu audio=%llu device=%u result=%d\n",
+                event, (unsigned long long)playback_generation,
+                (unsigned long long)audio_generation, (unsigned int)device,
+                result);
+}
+
+/*
+ * SDL's Emscripten audio driver has no audio thread. Its ScriptProcessor
+ * callback runs on the main runtime thread, and SDL_CloseAudioDevice() frees
+ * the device without waiting for a callback in progress. A main-thread lock
+ * wait also runs proxied work, so a worker's close could even run inside a
+ * callback. Audio devices are therefore opened and closed on the main runtime
+ * thread, and a gate around the node handler defers a close until no callback
+ * is active. The gate relies on SDL 2.32's private Module.SDL2.audio state.
+ */
+EM_JS_DEPS(ffplay_kit_audio_gate, "$dynCall");
+
+EM_JS(int, ffplay_kit_audio_gate_install, (unsigned int generation), {
+    var SDL2 = Module['SDL2'];
+    var audio = SDL2 && SDL2.audio;
+    var node = audio && audio.scriptProcessorNode;
+    if (!node || typeof node.onaudioprocess !== 'function')
+        return -1;
+    var gates = Module['ffplayKitAudioGates'] = Module['ffplayKitAudioGates'] || {};
+    var gate = { depth: 0, closing: false, pending: null, timer: undefined };
+    var handler = node.onaudioprocess;
+    var run = function(e) {
+        gate.depth++;
+        try {
+            handler(e);
+        } finally {
+            if (--gate.depth === 0 && gate.pending) {
+                var pending = gate.pending;
+                gate.pending = null;
+                delete gates[generation];
+                dynCall('vp', pending.func, [pending.arg]);
+            }
+        }
+    };
+    node.onaudioprocess = function(e) {
+        if (gate.timer !== undefined) {
+            clearInterval(gate.timer);
+            gate.timer = undefined;
+        }
+        if (gate.closing) {
+            for (var c = 0; c < e.outputBuffer.numberOfChannels; ++c)
+                e.outputBuffer.getChannelData(c).fill(0);
+            return;
+        }
+        run(e);
+    };
+    // SDL feeds silence from a timer while the AudioContext is suspended;
+    // replace it with the same feed routed through the gate.
+    if (audio.silenceTimer !== undefined) {
+        var silenceBuffer = audio.silenceBuffer;
+        clearInterval(audio.silenceTimer);
+        audio.silenceTimer = undefined;
+        gate.timer = setInterval(function() {
+            if (gate.closing)
+                return;
+            if ((typeof navigator.userActivation) !== 'undefined' &&
+                navigator.userActivation.hasBeenActive)
+                SDL2.audioContext.resume();
+            run({ outputBuffer: silenceBuffer });
+            audio.currentOutputBuffer = undefined;
+        }, (silenceBuffer.length / SDL2.audioContext.sampleRate) * 1000);
+    }
+    gates[generation] = gate;
+    return 0;
+});
+
+// Returns 1 when the device can be closed now, or 0 when func(arg) will be
+// called once the active callback returns.
+EM_JS(int, ffplay_kit_audio_gate_close, (unsigned int generation, void *func, void *arg), {
+    var gates = Module['ffplayKitAudioGates'];
+    var gate = gates && gates[generation];
+    if (!gate)
+        return 1;
+    gate.closing = true;
+    if (gate.timer !== undefined) {
+        clearInterval(gate.timer);
+        gate.timer = undefined;
+    }
+    if (gate.depth === 0 || !func) {
+        delete gates[generation];
+        return 1;
+    }
+    gate.pending = { func: func, arg: arg };
+    return 0;
+});
+
+typedef struct FFplayKitAudioCall {
+    const char *device;
+    int iscapture;
+    const SDL_AudioSpec *desired;
+    SDL_AudioSpec *obtained;
+    int allowed_changes;
+    SDL_AudioDeviceID dev;
+    uint64_t generation;
+    em_proxying_ctx *ctx;
+    char error[256];
+} FFplayKitAudioCall;
+
+static void ffplay_kit_audio_open_on_main(void *arg)
+{
+    FFplayKitAudioCall *call = arg;
+
+    call->dev = SDL_OpenAudioDevice(call->device, call->iscapture, call->desired,
+                                    call->obtained, call->allowed_changes);
+    if (!call->dev) {
+        snprintf(call->error, sizeof(call->error), "%s", SDL_GetError());
+        return;
+    }
+    if (!call->iscapture &&
+        ffplay_kit_audio_gate_install((unsigned int)call->generation) < 0)
+        ffplay_kit_log_wasm_event(
+            "audio_gate_unavailable", __atomic_load_n(&active_wasm_playback_generation,
+                                                      __ATOMIC_RELAXED),
+            call->generation, call->dev, -1);
+}
+
+static void ffplay_kit_audio_deferred_close(void *arg)
+{
+    FFplayKitAudioCall *call = arg;
+
+    ffplay_kit_log_wasm_event(
+        "audio_close_deferred", __atomic_load_n(&active_wasm_playback_generation,
+                                                __ATOMIC_RELAXED),
+        call->generation, call->dev, 0);
+    SDL_CloseAudioDevice(call->dev);
+    emscripten_proxy_finish(call->ctx);
+}
+
+static void ffplay_kit_audio_close_on_main(em_proxying_ctx *ctx, void *arg)
+{
+    FFplayKitAudioCall *call = arg;
+
+    call->ctx = ctx;
+    if (ffplay_kit_audio_gate_close((unsigned int)call->generation,
+                                    (void *)ffplay_kit_audio_deferred_close, call)) {
+        SDL_CloseAudioDevice(call->dev);
+        emscripten_proxy_finish(ctx);
+    }
+}
+
+static SDL_AudioDeviceID ffplay_kit_audio_open(FFplayKitAudioCall *call)
+{
+    if (emscripten_is_main_runtime_thread())
+        ffplay_kit_audio_open_on_main(call);
+    else
+        emscripten_proxy_sync(emscripten_proxy_get_system_queue(),
+                              emscripten_main_runtime_thread_id(),
+                              ffplay_kit_audio_open_on_main, call);
+    if (!call->dev)
+        SDL_SetError("%s", call->error);
+    return call->dev;
+}
+
+// Returns after the device is closed and its callback can no longer run.
+static void ffplay_kit_audio_close(SDL_AudioDeviceID dev, uint64_t generation)
+{
+    FFplayKitAudioCall call = { .dev = dev, .generation = generation };
+
+    if (emscripten_is_main_runtime_thread()) {
+        // A callback cannot be active beneath a main-thread caller.
+        ffplay_kit_audio_gate_close((unsigned int)generation, NULL, NULL);
+        SDL_CloseAudioDevice(dev);
+        return;
+    }
+    emscripten_proxy_sync_with_ctx(emscripten_proxy_get_system_queue(),
+                                   emscripten_main_runtime_thread_id(),
+                                   ffplay_kit_audio_close_on_main, &call);
+}
+#endif
 
 // Reusable pixel buffer for ffplay_step — resized only on dimension change.
 // ffplay_step is called from a single background thread, so no lock needed.
 static void   *g_pixel_buf      = NULL;
 static size_t  g_pixel_buf_size = 0;
+static int     g_pixel_width    = 0;
+static int     g_pixel_height   = 0;
+static int     g_pixel_linesize = 0;
+static uint64_t g_pixel_generation = 0;
 
 // Interception logic
 static SDL_AudioDeviceID ffplay_kit_SDL_OpenAudioDevice(
@@ -54,7 +255,19 @@ static SDL_AudioDeviceID ffplay_kit_SDL_OpenAudioDevice(
         target = requested_audio_device;
     }
 
+#if defined(__EMSCRIPTEN__)
+    FFplayKitAudioCall call = {
+        .device = target,
+        .iscapture = iscapture,
+        .desired = desired,
+        .obtained = obtained,
+        .allowed_changes = allowed_changes,
+        .generation = __atomic_add_fetch(&wasm_audio_generation, 1, __ATOMIC_RELAXED),
+    };
+    SDL_AudioDeviceID dev = ffplay_kit_audio_open(&call);
+#else
     SDL_AudioDeviceID dev = SDL_OpenAudioDevice(target, iscapture, desired, obtained, allowed_changes);
+#endif
 
     // Capture the spec if this is our main playback session opening
     if (desired && !iscapture && dev > 0) {
@@ -62,19 +275,60 @@ static SDL_AudioDeviceID ffplay_kit_SDL_OpenAudioDevice(
         has_captured_spec = 1;
         active_audio_is = (struct VideoState *)desired->userdata;
         active_audio_dev_id = dev;
+#if defined(__EMSCRIPTEN__)
+        __atomic_store_n(&active_wasm_audio_generation, call.generation,
+                         __ATOMIC_RELAXED);
+        ffplay_kit_log_wasm_event(
+            "audio_open", __atomic_load_n(&active_wasm_playback_generation,
+                                           __ATOMIC_RELAXED),
+            __atomic_load_n(&active_wasm_audio_generation, __ATOMIC_RELAXED),
+            dev, 0);
+#endif
     }
 
     return dev;
 }
 
 static void ffplay_kit_SDL_CloseAudioDevice(SDL_AudioDeviceID dev) {
+#if defined(__EMSCRIPTEN__)
+    uint64_t generation = 0;
+#endif
     if (dev > 0 && dev == active_audio_dev_id) {
+#if defined(__EMSCRIPTEN__)
+        generation = __atomic_load_n(&active_wasm_audio_generation, __ATOMIC_RELAXED);
+        ffplay_kit_log_wasm_event(
+            "audio_close", __atomic_load_n(&active_wasm_playback_generation,
+                                           __ATOMIC_RELAXED),
+            __atomic_load_n(&active_wasm_audio_generation, __ATOMIC_RELAXED),
+            dev, 0);
+        __atomic_store_n(&active_wasm_audio_generation, 0, __ATOMIC_RELAXED);
+#endif
         active_audio_is = NULL;
         active_audio_dev_id = 0;
         has_captured_spec = 0;
     }
+#if defined(__EMSCRIPTEN__)
+    ffplay_kit_audio_close(dev, generation);
+#else
     SDL_CloseAudioDevice(dev);
+#endif
 }
+
+#if defined(__EMSCRIPTEN__)
+static void ffplay_kit_SDL_PauseAudioDevice(SDL_AudioDeviceID dev,
+                                             int pause_on)
+{
+    if (dev > 0 && dev == active_audio_dev_id)
+        ffplay_kit_log_wasm_event(
+            pause_on ? "audio_pause" : "audio_resume",
+            __atomic_load_n(&active_wasm_playback_generation,
+                            __ATOMIC_RELAXED),
+            __atomic_load_n(&active_wasm_audio_generation, __ATOMIC_RELAXED),
+            dev, 0);
+    SDL_PauseAudioDevice(dev, pause_on);
+}
+#define SDL_PauseAudioDevice ffplay_kit_SDL_PauseAudioDevice
+#endif
 
 // Redirection macro must be defined before including ffplay.c
 #define SDL_OpenAudioDevice ffplay_kit_SDL_OpenAudioDevice
@@ -84,9 +338,10 @@ static void ffplay_kit_SDL_CloseAudioDevice(SDL_AudioDeviceID dev) {
 static void lock_ffplay_api(void);
 static void unlock_ffplay_api(void);
 
-/* Global frame callback for non-Android video output (Linux, Windows, macOS, iOS).
+/* Global frame callback for native video output (Apple, Linux, Windows, Android).
  * Set by ffplay_set_frame_callback() before ffplay_init().
- * Called inside ffplay_step() with SDL_PIXELFORMAT_ABGR8888 pixel data after each video frame. */
+ * Called while the composed software-renderer RGBA frame is available. Android
+ * uses the same callback for its wrapper-owned surface bridge. */
 static FFplayFrameCallback g_frame_callback = NULL;
 static void *g_frame_callback_userdata = NULL;
 
@@ -168,10 +423,15 @@ static SDL_Window *ffplay_kit_SDL_CreateWindow(
 
 #endif /* __APPLE__ */
 
-// Keep the SDL window hidden and suppress SDL_RenderPresent: pixels are read via
-// SDL_RenderReadPixels from the software back-buffer, so no X11/present needed.
-#ifndef __ANDROID__
+/* Capture from the software back-buffer without presenting a visible window.
+ * Apple still needs FFplay's real SDL_ShowWindow transition: SDL's dummy
+ * renderer can remain logically hidden otherwise and return an untouched black
+ * back-buffer from SDL_RenderReadPixels. */
+#if !defined(__ANDROID__) && !defined(__APPLE__)
 #define SDL_ShowWindow(w) ((void)(w))
+#endif
+
+#ifndef __ANDROID__
 #define SDL_RenderPresent(r) ((void)(r))
 #endif
 // At the top of ffplay_lib.c, before ffplay.c is included, declare the real symbol:
@@ -194,6 +454,46 @@ static SDL_Renderer *ffplay_kit_SDL_CreateRenderer(
 
 #define SDL_CreateRenderer ffplay_kit_SDL_CreateRenderer
 
+/* Capture the fully composed software-renderer output. This produces one
+ * browser-friendly RGBA plane regardless of the decoder's native format and
+ * includes scaling, subtitles, and the configured video background. */
+static void ffplay_lib_capture_renderer(SDL_Renderer *renderer) {
+    int width = 0;
+    int height = 0;
+    size_t required;
+
+    if (!renderer || SDL_GetRendererOutputSize(renderer, &width, &height) < 0 ||
+        width <= 0 || height <= 0)
+        return;
+
+    required = (size_t)width * 4u * (size_t)height;
+    if (required / (size_t)height != (size_t)width * 4u)
+        return;
+
+    lock_ffplay_api();
+    if (required > g_pixel_buf_size) {
+        void *new_buffer = av_realloc(g_pixel_buf, required);
+        if (!new_buffer) {
+            unlock_ffplay_api();
+            return;
+        }
+        g_pixel_buf = new_buffer;
+        g_pixel_buf_size = required;
+    }
+
+    if (SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_RGBA32,
+                             g_pixel_buf, width * 4) == 0) {
+        g_pixel_width = width;
+        g_pixel_height = height;
+        g_pixel_linesize = width * 4;
+        g_pixel_generation++;
+        if (g_frame_callback)
+            g_frame_callback(g_frame_callback_userdata, g_pixel_buf, width,
+                             height, width * 4, "rgba");
+    }
+    unlock_ffplay_api();
+}
+
 // Include the patched ffplay.c to access internal structures and static functions.
 #include "ffplay.c"
 
@@ -213,7 +513,32 @@ struct FFplayContext {
        from reaching callers.  Reset to 0 on every seek so backwards
        movement after a seek is still reported correctly. */
     double max_seen_pos;
+#if defined(__EMSCRIPTEN__)
+    uint64_t wasm_generation;
+    unsigned int wasm_terminal_logged;
+#endif
 };
+
+#if defined(__EMSCRIPTEN__)
+static uint64_t wasm_playback_generation = 0;
+
+static void ffplay_kit_log_wasm_terminal(FFplayContext *ctx, int result)
+{
+    if (ctx && !__atomic_exchange_n(&ctx->wasm_terminal_logged, 1,
+                                     __ATOMIC_RELAXED))
+        ffplay_kit_log_wasm_event(
+            "playback_terminal", ctx->wasm_generation,
+            __atomic_load_n(&active_wasm_audio_generation, __ATOMIC_RELAXED),
+            active_audio_dev_id, result);
+}
+
+static void ffplay_kit_clear_active_playback_generation(uint64_t generation)
+{
+    uint64_t expected = generation;
+    __atomic_compare_exchange_n(&active_wasm_playback_generation, &expected, 0,
+                                0, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+}
+#endif
 
 #include <pthread.h>
 
@@ -342,6 +667,12 @@ void ffplay_lib_on_frame(const uint8_t *pixels, int width, int height,
 }
 
 void ffplay_set_frame_callback(FFplayFrameCallback callback, void *userdata) {
+#if defined(__EMSCRIPTEN__)
+    /* Wasm hosts must use the pull API; native function-pointer callbacks are
+     * not a safe cross-runtime boundary. */
+    (void)callback;
+    (void)userdata;
+#else
     /* Hold the API mutex so that when this returns with callback==NULL,
      * ffplay_step is guaranteed to have finished any in-flight call.
      * (ffplay_step holds this same mutex for the entire callback block.) */
@@ -349,6 +680,7 @@ void ffplay_set_frame_callback(FFplayFrameCallback callback, void *userdata) {
     g_frame_callback = callback;
     g_frame_callback_userdata = userdata;
     unlock_ffplay_api();
+#endif
 }
 
 /* Compatibility string entry point. Prefer ffplay_init_argv() when
@@ -380,6 +712,10 @@ static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc,
 
     FFplayContext *ctx = av_mallocz(sizeof(FFplayContext));
     if (!ctx) return NULL;
+#if defined(__EMSCRIPTEN__)
+    ctx->wasm_generation = __atomic_add_fetch(&wasm_playback_generation, 1,
+                                              __ATOMIC_RELAXED);
+#endif
 
     if (cb) {
         ctx->callbacks = *cb;
@@ -428,6 +764,13 @@ static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc,
         "SDL_AUDIODRIVER='%{public}s' args='%{public}.200s'",
         SDL_getenv("SDL_AUDIODRIVER") ? SDL_getenv("SDL_AUDIODRIVER") : "(null)",
         args_string ? args_string : "(null)");
+#elif defined(__EMSCRIPTEN__)
+    /* The host owns the DOM/canvas. FFplay renders into an in-memory software
+     * target and exposes composed RGBA frames through the frame APIs below. */
+    SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
+    SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
+    if (!SDL_getenv("SDL_AUDIODRIVER"))
+        SDL_setenv("SDL_AUDIODRIVER", "emscripten", 0);
 #else
     SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "dummy", SDL_HINT_OVERRIDE);
     SDL_SetHintWithPriority(SDL_HINT_RENDER_DRIVER, "software", SDL_HINT_OVERRIDE);
@@ -475,6 +818,10 @@ static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc,
         }
     }
 
+#if defined(__EMSCRIPTEN__)
+    __atomic_store_n(&active_wasm_playback_generation, ctx->wasm_generation,
+                     __ATOMIC_RELAXED);
+#endif
     VideoState *is = ffplay_init_internal(ctx->argc, ctx->argv);
 
     // Log the SDL drivers selected after SDL_Init to confirm the expected path.
@@ -486,6 +833,9 @@ static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc,
 
     if (!is) {
         // Init failed
+#if defined(__EMSCRIPTEN__)
+        uint64_t failed_generation = ctx->wasm_generation;
+#endif
 #ifdef __ANDROID__
         FFPLAY_LOGE("ffplay_init_internal FAILED (argc=%d) SDL_GetError='%s'",
             ctx->argc, SDL_GetError());
@@ -497,6 +847,14 @@ static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc,
         av_free(ctx);
         while (SDL_WasInit(0))
             SDL_Quit();
+#if defined(__EMSCRIPTEN__)
+        ffplay_kit_log_wasm_event("playback_start_failed",
+                                  failed_generation,
+                                  __atomic_load_n(&active_wasm_audio_generation,
+                                                  __ATOMIC_RELAXED),
+                                  active_audio_dev_id, -1);
+        ffplay_kit_clear_active_playback_generation(failed_generation);
+#endif
         ffplay_reset_cli_state();
         return NULL;
     }
@@ -508,6 +866,10 @@ static FFplayContext* ffplay_init_common(const char* args_string, int argv_argc,
     active_ffplay_ctx = ctx;
     unlock_ffplay_api();
 
+#if defined(__EMSCRIPTEN__)
+    ffplay_kit_log_wasm_event("playback_start", ctx->wasm_generation, 0, 0,
+                              0);
+#endif
 #ifdef __ANDROID__
     FFPLAY_LOGI("ffplay_init SUCCESS: ctx=%p is=%p", ctx, is);
 #endif
@@ -594,7 +956,12 @@ int ffplay_start(FFplayContext* ctx) {
 
 int ffplay_step(FFplayContext* ctx) {
     if (!ctx) return 1;
-    if (ctx->quit || !ctx->is) return 1;
+    if (ctx->quit || !ctx->is) {
+#if defined(__EMSCRIPTEN__)
+        ffplay_kit_log_wasm_terminal(ctx, 1);
+#endif
+        return 1;
+    }
 
     // Establish recovery point for av_assert0 failures inside the decode,
     // filter, and render pipelines invoked during this step.  The ptr is kept
@@ -814,6 +1181,10 @@ int ffplay_step(FFplayContext* ctx) {
 
 step_done:
     ffmpeg_kit_assert_jmp_ptr = NULL;
+#if defined(__EMSCRIPTEN__)
+    if (step_ret)
+        ffplay_kit_log_wasm_terminal(ctx, step_ret);
+#endif
     return step_ret;
 }
 
@@ -1074,6 +1445,14 @@ void ffplay_free(FFplayContext* ctx) {
       SDL_Quit();
     }
 
+#if defined(__EMSCRIPTEN__)
+    ffplay_kit_log_wasm_event(
+        "playback_close", ctx->wasm_generation,
+        __atomic_load_n(&active_wasm_audio_generation, __ATOMIC_RELAXED),
+        active_audio_dev_id, 0);
+    ffplay_kit_clear_active_playback_generation(ctx->wasm_generation);
+#endif
+
     // Cleanup globals
     if (allocated_afilters) {
         if (afilters == allocated_afilters)
@@ -1090,6 +1469,10 @@ void ffplay_free(FFplayContext* ctx) {
     av_free(g_pixel_buf);
     g_pixel_buf = NULL;
     g_pixel_buf_size = 0;
+    g_pixel_width = 0;
+    g_pixel_height = 0;
+    g_pixel_linesize = 0;
+    g_pixel_generation = 0;
 
     // argv freed
     if (ctx->argv) {
@@ -1101,6 +1484,39 @@ void ffplay_free(FFplayContext* ctx) {
     avformat_network_deinit();
 
     av_free(ctx);
+}
+
+size_t ffplay_get_frame_buffer_size(void) {
+    size_t size;
+    lock_ffplay_api();
+    size = g_pixel_width > 0 && g_pixel_height > 0
+               ? (size_t)g_pixel_linesize * (size_t)g_pixel_height
+               : 0;
+    unlock_ffplay_api();
+    return size;
+}
+
+int ffplay_copy_frame(uint8_t *destination, size_t destination_size,
+                      int *width, int *height, int *linesize,
+                      uint64_t *generation) {
+    size_t required = 0;
+    int result = 0;
+
+    lock_ffplay_api();
+    if (g_pixel_width > 0 && g_pixel_height > 0)
+        required = (size_t)g_pixel_linesize * (size_t)g_pixel_height;
+    if (!destination || destination_size < required || required == 0) {
+        result = required == 0 ? 0 : -1;
+    } else {
+        memcpy(destination, g_pixel_buf, required);
+        result = 1;
+    }
+    if (width) *width = g_pixel_width;
+    if (height) *height = g_pixel_height;
+    if (linesize) *linesize = g_pixel_linesize;
+    if (generation) *generation = g_pixel_generation;
+    unlock_ffplay_api();
+    return result;
 }
 
 void ffplay_close(FFplayContext* ctx) {

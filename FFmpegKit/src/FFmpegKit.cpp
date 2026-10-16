@@ -97,7 +97,12 @@ void ffmpegkit::FFmpegKit::cancel() {
 
 void ffmpegkit::FFmpegKit::cancel(const long sessionId) {
     av_log(NULL, AV_LOG_DEBUG, "FFmpegKit::cancel session_id=%ld\n", sessionId);
-    cancel_operation(sessionId);
+    auto session = FFmpegKitConfig::getSession(sessionId);
+    if (session && session->isFFmpeg()) {
+        std::static_pointer_cast<FFmpegSession>(session)->requestCancel();
+    } else {
+        cancel_operation(sessionId);
+    }
 }
 
 std::shared_ptr<std::list<std::shared_ptr<ffmpegkit::FFmpegSession>>>

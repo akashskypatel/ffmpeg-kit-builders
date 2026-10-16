@@ -1,0 +1,24 @@
+diff --git a/src/network.c b/src/network.c
+index 9c88e04b5..a7247a247 100755
+--- a/src/network.c
++++ b/src/network.c
+@@ -3,6 +3,13 @@
+ #include <stddef.h>
+ #include <stdint.h>
+ #include <memory.h>
++#ifdef __EMSCRIPTEN__
++/* WASM has no network interfaces — fill with zeros */
++int _librist_network_get_macaddr(uint8_t mac[]) {
++  memset(mac, 0, 6);
++  return 0;
++}
++#else /* !__EMSCRIPTEN__ */
+ #ifndef _WIN32
+ #include <ifaddrs.h>
+ #ifdef __linux__
+@@ -79,3 +86,4 @@ int _librist_network_get_macaddr(uint8_t mac[]) {
+ #endif
+   return 0;
+ }
++#endif /* !__EMSCRIPTEN__ */
+\ No newline at end of file

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FFmpegKit Wasm streaming acceptance</title>
+  <style>
+    body { font: 16px/1.45 system-ui, sans-serif; margin: 2rem auto; max-width: 68rem; padding: 0 1rem; }
+    label { display: block; margin: 1rem 0; }
+    input { box-sizing: border-box; max-width: 100%; width: 38rem; }
+    button { margin: 0.25rem 0.5rem 0.5rem 0; padding: 0.55rem 0.8rem; }
+    canvas { background: #111; display: block; height: 360px; max-width: 100%; width: 640px; }
+    pre { background: #161616; color: #eee; min-height: 12rem; overflow: auto; padding: 1rem; white-space: pre-wrap; }
+    #status { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>FFmpegKit Wasm streaming acceptance</h1>
+  <p>This standalone page calls the FFmpegKit C ABI from the locally built Wasm loader. It does not use Flutter or React Native.</p>
+  <p id="status">Load the freshly built local package to begin.</p>
+  <label>Fixture origin
+    <input id="fixture-origin" type="url" spellcheck="false">
+  </label>
+  <div>
+    <button id="load">Load local Wasm bundle</button>
+    <button id="transport" disabled>Run transport matrix</button>
+    <button id="vod" disabled>Run FFplay VOD</button>
+    <button id="live" disabled>Run FFplay live checks</button>
+    <button id="record" disabled>Record live input for 15 seconds</button>
+    <button id="cancel" disabled>Cancel active session</button>
+  </div>
+  <canvas id="canvas" width="640" height="360"></canvas>
+  <h2>Results and runtime logs</h2>
+  <pre id="log" aria-live="polite"></pre>
+  <script type="module" src="/wasm-acceptance.mjs"></script>
+</body>
+</html>

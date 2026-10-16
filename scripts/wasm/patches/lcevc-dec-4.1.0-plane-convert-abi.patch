@@ -1,0 +1,30 @@
+diff --git a/src/pixel_processing/src/convert_sse.c b/src/pixel_processing/src/convert_sse.c
+index b53fd9f4e..bc3b81ccc 100755
+--- a/src/pixel_processing/src/convert_sse.c
++++ b/src/pixel_processing/src/convert_sse.c
+@@ -255,8 +255,10 @@ static const PlaneConvertFunction kCopyTable[LdpFPCount][LdpFPCount] = {
+ 
+ /*------------------------------------------------------------------------------*/
+ 
+-PlaneConvertFunction planeConvertGetFunctionSSE(LdpFixedPoint srcFP, LdpFixedPoint dstFP, bool isNV12)
++PlaneConvertFunction planeConvertGetFunctionSSE(LdpFixedPoint srcFP, LdpFixedPoint dstFP,
++                                                uint32_t planeIndex, bool isNV12)
+ {
++    VNUnused(planeIndex);
+     if (isNV12) {
+         return NULL;
+     }
+@@ -267,10 +269,12 @@ PlaneConvertFunction planeConvertGetFunctionSSE(LdpFixedPoint srcFP, LdpFixedPoi
+ 
+ #else
+ 
+-PlaneConvertFunction planeConvertGetFunctionSSE(LdpFixedPoint srcFP, LdpFixedPoint dstFP, bool isNV12)
++PlaneConvertFunction planeConvertGetFunctionSSE(LdpFixedPoint srcFP, LdpFixedPoint dstFP,
++                                                uint32_t planeIndex, bool isNV12)
+ {
+     VNUnused(srcFP);
+     VNUnused(dstFP);
++    VNUnused(planeIndex);
+     VNUnused(isNV12);
+ 
+     return NULL;

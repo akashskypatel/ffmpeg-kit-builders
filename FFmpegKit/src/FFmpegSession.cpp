@@ -26,6 +26,7 @@
 
 extern void
 addSessionToSessionHistory(const std::shared_ptr<ffmpegkit::Session> session);
+extern "C" void cancel_operation(long id);
 
 static std::string getCurrentTimeStamp() {
   time_t now = time(0);
@@ -188,11 +189,36 @@ void ffmpegkit::FFmpegSession::addStatistics(
 }
 
 FFmpegContext *ffmpegkit::FFmpegSession::getContext() {
-  return _context.load(std::memory_order_acquire);
+  std::lock_guard<std::mutex> lock(_contextMutex);
+  return _context;
 }
 
 void ffmpegkit::FFmpegSession::setContext(FFmpegContext *context) {
-  _context.store(context, std::memory_order_release);
+  std::lock_guard<std::mutex> lock(_contextMutex);
+  _context = context;
+  if (context && _cancelRequested.load(std::memory_order_acquire)) {
+    ffmpeg_cancel(context);
+  }
+}
+
+FFmpegContext *ffmpegkit::FFmpegSession::detachContext() {
+  std::lock_guard<std::mutex> lock(_contextMutex);
+  auto *context = _context;
+  _context = nullptr;
+  return context;
+}
+
+void ffmpegkit::FFmpegSession::requestCancel() {
+  const auto state = getState();
+  if (state == SessionStateCompleted || state == SessionStateFailed) {
+    return;
+  }
+  _cancelRequested.store(true, std::memory_order_release);
+  cancel_operation(getSessionId());
+  std::lock_guard<std::mutex> lock(_contextMutex);
+  if (_context) {
+    ffmpeg_cancel(_context);
+  }
 }
 
 bool ffmpegkit::FFmpegSession::isFFmpeg() const { return true; }
@@ -204,11 +230,7 @@ bool ffmpegkit::FFmpegSession::isFFplay() const { return false; }
 bool ffmpegkit::FFmpegSession::isMediaInformation() const { return false; }
 
 void ffmpegkit::FFmpegSession::cancel() {
-  FFmpegContext *context = getContext();
-  if (context != nullptr) {
-    ffmpeg_cancel(context);
-  }
-  ffmpegkit::AbstractSession::cancel();
+  requestCancel();
 }
 
 void ffmpegkit::FFmpegSession::setCompleteCallback(

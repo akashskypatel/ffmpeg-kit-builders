@@ -2,6 +2,18 @@ include_guard(GLOBAL)
 
 include("${CMAKE_CURRENT_LIST_DIR}/FfmpegKitLinkingHelpers.cmake")
 
+function(ffmpegkit_append_dependency_if_enabled LIST_NAME CONFIG_HEADER CONFIG_NAME PACKAGE_NAME)
+    file(STRINGS "${CONFIG_HEADER}" _FFMPEGKIT_CONFIG_LINE
+        REGEX "^#define ${CONFIG_NAME} 1$"
+    )
+
+    if(_FFMPEGKIT_CONFIG_LINE)
+        set(_FFMPEGKIT_PACKAGES "${${LIST_NAME}}")
+        list(APPEND _FFMPEGKIT_PACKAGES "${PACKAGE_NAME}")
+        set(${LIST_NAME} "${_FFMPEGKIT_PACKAGES}" PARENT_SCOPE)
+    endif()
+endfunction()
+
 function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
     set(BUNDLE_LIBRARIES "")
 
@@ -17,10 +29,27 @@ function(ffmpegkit_configure_dependencies TARGET_NAME OUT_BUNDLE_LIBRARIES)
 
     set(PKG_CONFIG_USE_STATIC_LIBS ON)
     set(FFMPEG_PKG_LIST "libavdevice libavfilter libavformat libavcodec libswresample libswscale libavutil jsoncpp")
-    if(FFMPEG_KIT_BUNDLE_TYPE STREQUAL "base")
-        list(APPEND FFMPEG_PKG_LIST "sdl2")
-    else()
-        list(APPEND FFMPEG_PKG_LIST "sdl2 iconv bzip2 liblzma zlib")
+    set(_FFMPEG_CONFIG_HEADER "${FFMPEG_BUILD_DIR}/include/config.h")
+    if(NOT EXISTS "${_FFMPEG_CONFIG_HEADER}")
+        message(FATAL_ERROR "FFmpeg configuration header not found: ${_FFMPEG_CONFIG_HEADER}")
+    endif()
+
+    ffmpegkit_append_dependency_if_enabled(
+        FFMPEG_PKG_LIST "${_FFMPEG_CONFIG_HEADER}" CONFIG_SDL2 sdl2
+    )
+    if(NOT FFMPEG_KIT_BUNDLE_TYPE STREQUAL "base")
+        ffmpegkit_append_dependency_if_enabled(
+            FFMPEG_PKG_LIST "${_FFMPEG_CONFIG_HEADER}" CONFIG_ICONV iconv
+        )
+        ffmpegkit_append_dependency_if_enabled(
+            FFMPEG_PKG_LIST "${_FFMPEG_CONFIG_HEADER}" CONFIG_BZLIB bzip2
+        )
+        ffmpegkit_append_dependency_if_enabled(
+            FFMPEG_PKG_LIST "${_FFMPEG_CONFIG_HEADER}" CONFIG_LZMA liblzma
+        )
+        ffmpegkit_append_dependency_if_enabled(
+            FFMPEG_PKG_LIST "${_FFMPEG_CONFIG_HEADER}" CONFIG_ZLIB zlib
+        )
     endif()
     pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
         ${FFMPEG_PKG_LIST}

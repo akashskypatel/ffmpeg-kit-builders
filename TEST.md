@@ -1,6 +1,9 @@
 # Test documentation
 
-## Build commands to build debug builds
+This document describes library build and test commands. The examples use the
+FFmpegKit builder checkout and the prebuilt Wasm base bundle.
+
+## Build commands for debug builds
 
 ### Thread Sanitizer
 
@@ -8,7 +11,7 @@
 # Linux
 sudo ./runner.sh --host=linux --arch=x86_64 --enable-base --gpl --kit --build-deps --no-bundle --test=thread --build-debug --skip -y
 
-# Windows - note that windows build will need windows libtsan libraries which are not available by defauly on linux
+# Windows - Windows libtsan libraries are not available by default on Linux.
 sudo ./runner.sh --host=windows --arch=x86_64 --enable-base --gpl --kit --build-deps --no-bundle --test=thread --build-debug --skip -y
 ```
 
@@ -18,7 +21,7 @@ sudo ./runner.sh --host=windows --arch=x86_64 --enable-base --gpl --kit --build-
 # Linux
 sudo ./runner.sh --host=linux --arch=x86_64 --enable-base --gpl --kit --build-deps --no-bundle --test=address --build-debug --skip -y
 
-# Windows - note that windows build will need windows libasan libraries which are not available by defauly on linux
+# Windows - Windows libasan libraries are not available by default on Linux.
 sudo ./runner.sh --host=windows --arch=x86_64 --enable-base --gpl --kit --build-deps --no-bundle --test=address --build-debug --skip -y
 ```
 
@@ -28,22 +31,548 @@ sudo ./runner.sh --host=windows --arch=x86_64 --enable-base --gpl --kit --build-
 # Linux
 sudo ./runner.sh --host=linux --arch=x86_64 --enable-base --gpl --kit --build-deps --no-bundle --test=undefined --build-debug --skip -y
 
-# Windows - note that windows build will need windows libubsan libraries which are not available by defauly on linux
+# Windows - Windows libubsan libraries are not available by default on Linux.
 sudo ./runner.sh --host=windows --arch=x86_64 --enable-base --gpl --kit --build-deps --no-bundle --test=undefined --build-debug --skip -y
 ```
 
-## Test execution Commands
+## Test execution commands
+
+The native cancellation and FFprobe concurrency tests use small default
+iteration counts. For local stress runs, set
+`FFMPEG_KIT_CANCEL_RACE_ITERATIONS` or
+`FFMPEG_KIT_FFPROBE_CONCURRENCY_ITERATIONS` before running the corresponding
+Google Test filter.
+
+### Cancellation during scheduler graph construction
+
+FFmpegKit publishes its scheduler to the session context after `sch_alloc()`
+and before `ffmpeg_parse_options()` finishes building and connecting the
+transcode graph. A cancellation from another thread can therefore arrive while
+demuxer and filter graph state is incomplete.
+
+Before `start_prepare()` succeeds, cancellation sets the scheduler's terminate
+flag and broadcasts `finish_cond`, but does not traverse demuxer or filter
+waiters. After graph readiness is published, cancellation retains the normal
+waiter wake-up and demux unchoking behavior. This protects FFmpegKit's custom
+cross-thread scheduler stop path; it does not promise that cancellation skips
+option parsing or all task startup.
+
+#### Native Linux
+
+```bash
+cmake --build FFmpegKit/build --target ffmpegkit_tests -j2
+timeout 120s FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter='CancellationRaceTest.*'
+
+FFMPEG_KIT_CANCEL_RACE_ITERATIONS=1000 timeout 300s \
+  FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter='CancellationRaceTest.ConcurrentCancellationDuringExecution'
+```
+
+The focused suite includes a deterministic incomplete-graph stop check and a
+post-readiness waiter check. The real FFmpeg cancellation loop uses concurrent
+cancellers and a filter graph, but does not pause inside the CLI parser; it is
+stress coverage, not proof that every run hit the exact graph-construction
+interleaving. FFmpeg executions are serialized by the CLI's global state, so
+the independent-session cancellation check runs the sessions sequentially.
+Current local coverage is Linux x86_64; other platforms remain unverified by
+these commands.
+
+The current local debug test build uses UndefinedBehaviorSanitizer. Run its
+focused cancellation suite with:
+
+```bash
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 timeout 120s \
+  FFmpegKit/build/tests/ffmpegkit_tests \
+  --gtest_filter='CancellationRaceTest.*'
+```
+
+ThreadSanitizer and AddressSanitizer builds are optional but recommended. Build
+them with the commands in “Build commands for debug builds” above, then use the
+same focused filter; do not report sanitizer coverage unless that instrumented
+binary actually ran.
 
 ### Thread Sanitizer
 
 ```bash
-# disbale ASLR temporarily for thread sanitizer tests
+# Disable ASLR temporarily for ThreadSanitizer tests.
 setarch $(uname -m) -R ./FFmpegKit/build/tests/ffmpegkit_tests > test_tsan.log 2>&1
 ```
 
 ### Address Sanitizer
 
 ```bash
-export LSAN_OPTIONS=suppressions=/home/vscode/ffmpeg-kit-builders/FFmpegKit/tests/asan.supp && export ASAN_OPTIONS=detect_odr_violation=0:detect_leaks=1 && ./FFmpegKit/build/tests/ffmpegkit_tests > test_asan.log 2>&1
+export LSAN_OPTIONS=suppressions=/home/vscode/ffmpeg-kit-builders/FFmpegKit/tests/asan.supp
+export ASAN_OPTIONS=detect_odr_violation=0:detect_leaks=1
+./FFmpegKit/build/tests/ffmpegkit_tests > test_asan.log 2>&1
 ```
 
+## Wasm callback tests
+
+The Wasm callback harness is built with Emscripten pthread support and runs
+under Node. Each focused command uses a semantic build directory so independent
+test runs can coexist.
+
+### Common Wasm configuration
+
+```bash
+export FFMPEG_KIT_ROOT=/home/vscode/ffmpeg-kit-builders
+export FFMPEG_KIT_SOURCE=$FFMPEG_KIT_ROOT/FFmpegKit
+export FFMPEG_KIT_DEPS=$FFMPEG_KIT_ROOT/prebuilt/wasm-wasm32/libraries
+export FFMPEG_KIT_BUNDLE=$FFMPEG_KIT_ROOT/prebuilt/wasm-wasm32/ffmpeg-base-wasm-wasm32-static-gpl
+export FFMPEG_KIT_VERSION="$(sed -n 's/^## Version //p' "$FFMPEG_KIT_ROOT/CHANGELOG.md" | head -n 1)"
+export PKG_CONFIG_PATH=$FFMPEG_KIT_DEPS/lib/pkgconfig:$FFMPEG_KIT_BUNDLE/lib/pkgconfig
+source /usr/local/emsdk/emsdk_env.sh
+```
+
+### Callback thread identity
+
+This focused test verifies that a worker pthread is distinct from the main
+runtime thread and that a proxied callback is observed on the main runtime.
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-callback-authority
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-authority
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_authority_tests$'
+```
+
+### Callback lock re-entry
+
+This test registers a global log callback that unregisters itself through the
+public wrapper API while the callback-state lock is held. A watchdog makes
+lock re-entry failures explicit.
+
+#### Native Linux
+
+```bash
+cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
+ctest --test-dir "$FFMPEG_KIT_SOURCE/build" --output-on-failure -R '^ffmpegkit_tests$'
+```
+
+#### Wasm
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-callback-lock
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-lock
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_callback_lock_tests$'
+```
+
+### Pthread startup failure safety
+
+This suite injects an immediate `pthread_create()` failure and checks that
+callback redirection and each asynchronous session family reach a deterministic
+terminal state. It also exercises successful pthread startup.
+
+#### Native Linux
+
+```bash
+cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 90s \
+  "$FFMPEG_KIT_SOURCE/build/tests/ffmpegkit_tests" \
+  --gtest_filter=PthreadFailureTest.*
+```
+
+#### Wasm
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-startup-safety
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-startup-safety
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_pthread_failure_tests$'
+```
+
+### Synchronized wrapper callback state
+
+This stress test concurrently replaces and clears the global log callback while
+another thread emits unattributed logs. Callback and user-data pairs are
+snapshotted under one mutex before user code runs.
+
+#### Native Linux with ThreadSanitizer
+
+```bash
+cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s \
+  "$FFMPEG_KIT_SOURCE/build/tests/ffmpegkit_tests" \
+  --gtest_filter=WrapperCallbackStateTest.*
+```
+
+#### Wasm
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-callback-state
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-state
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_wrapper_state_tests$'
+```
+
+The Wasm configuration uses a bounded emission count to remain within the
+existing fixed test heap; callback registration still performs a larger set of
+replacements.
+
+### Stable session-ID callback ABI
+
+This boundary test verifies global C callback exports that pass the stable
+session ID as an `int64_t`. per-session opaque-handle APIs remain available, and
+a synthetic emitter validates IDs beyond the Wasm 32-bit pointer range.
+
+#### Native Linux
+
+```bash
+cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s \
+  "$FFMPEG_KIT_SOURCE/build/tests/ffmpegkit_tests" \
+  --gtest_filter=GlobalCallbackSessionIdTest.*
+```
+
+#### Wasm
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-session-id
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-session-id
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_session_id_tests$'
+```
+
+### Main-runtime callback dispatcher
+
+The dispatcher owns each payload until delivery. Native callers execute
+callbacks directly; Emscripten worker callers proxy to the main runtime.
+`process_pending()` lets deterministic hosts and tests explicitly drain the
+main-runtime queue.
+
+#### Native Linux
+
+```bash
+cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_SOURCE/build"
+cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s \
+  "$FFMPEG_KIT_SOURCE/build/tests/ffmpegkit_tests" \
+  --gtest_filter=WasmCallbackDispatcherTest.*
+```
+
+#### Wasm
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-callback-dispatch
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-dispatch
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_dispatcher_tests$'
+```
+
+### Session completion callbacks
+
+This test covers the FFmpeg, FFprobe, FFplay, and MediaInformation completion
+families. Events retain the session ID, callback pointer, and user data until
+delivery after terminal state is reached.
+
+#### Native Linux
+
+```bash
+cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s \
+  "$FFMPEG_KIT_SOURCE/build/tests/ffmpegkit_tests" \
+  --gtest_filter=SessionCompletionTest.*
+```
+
+#### Wasm
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-session-completion
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-session-completion
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_session_completion_tests$'
+```
+
+### Log and statistics callbacks
+
+This test verifies owned log payloads, scalar statistics delivery, callback
+ordering, and completion after the queue has drained.
+
+#### Native Linux
+
+```bash
+cmake --build "$FFMPEG_KIT_SOURCE/build" --target ffmpegkit_tests -j2
+setarch $(uname -m) -R timeout 120s \
+  "$FFMPEG_KIT_SOURCE/build/tests/ffmpegkit_tests" \
+  --gtest_filter=LogStatisticsTest.*
+```
+
+#### Wasm
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-log-statistics
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-log-statistics
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_log_statistics_tests$'
+```
+
+### FFplay frame callback contract
+
+The native frame callback is unsupported on WebAssembly. The Wasm API uses the
+caller-owned pull functions instead.
+
+```bash
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_ffplay_frame_tests$'
+```
+
+### Complete C/C++ Wasm callback harness
+
+The complete harness is independent of Flutter, generated bindings, and
+`ffigen_js`. It covers callback thread identity, lock re-entry, startup
+failures, synchronized state, stable session IDs, dispatch, completion,
+logging, statistics, replacement, and ordering.
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-callback-suite
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-suite
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm_callback_tests ffmpegkit_wasm -j2
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^(ffmpegkit_wasm_(authority|callback_lock|pthread_failure|wrapper_state|session_id|session_completion|log_statistics|callback_abi|dispatcher|ffplay_frame)_tests|ffmpegkit_wasm_table_growth)$'
+```
+
+### Wasm indirect function-table growth
+
+This build enables Emscripten runtime table growth on the final
+`ffmpegkit_wasm` module with `-sALLOW_TABLE_GROWTH=1`.
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-table-growth
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-table-growth
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=OFF -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm -j2
+```
+
+The built artifact is:
+
+```text
+$FFMPEG_KIT_BUILD/ffmpegkit.wasm
+```
+
+Inspect the actual `WebAssembly.Table` export `__indirect_function_table` and
+verify that `table.grow(1)` succeeds.
+
+### Wasm table-growth artifact test
+
+This automated Node test instantiates the actual Wasm binary, discovers the
+table by runtime type, verifies growth, preserves an existing callable Wasm
+function, writes compatible functions into new slots, and repeats growth.
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-table-growth-test
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-table-growth-test
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm -j2
+/usr/local/emsdk/node/24.19.0_64bit/bin/node \
+  "$FFMPEG_KIT_SOURCE/tests/table_growth_test.mjs" \
+  "$FFMPEG_KIT_BUILD/ffmpegkit.wasm"
+ctest --test-dir "$FFMPEG_KIT_BUILD" --output-on-failure \
+  -R '^ffmpegkit_wasm_table_growth$'
+```
+
+Example output:
+
+```text
+{"artifact":"FFmpegKit/build-wasm-table-growth-test/ffmpegkit.wasm","tableDiscoveryCount":1,"initialLength":14575,"firstGrowReturn":14575,"finalLength":14602,"oldFunctionIndex":9,"writableIndex":14575,"repeatedGrowth":[3,7,16],"status":"PASS"}
+```
+
+### C-to-JS Wasm callback round-trip
+
+This test-only build exports the session-ID callback emitters and uses the
+generated Emscripten loader to initialize the main runtime before registering
+callback pointers. The production environment remains `web,worker`; this
+verification build selects `node`.
+
+```bash
+export EM_CACHE=$FFMPEG_KIT_ROOT/.emscripten-cache-callback-roundtrip
+export FFMPEG_KIT_BUILD=$FFMPEG_KIT_SOURCE/build-wasm-callback-node
+emcmake cmake -S "$FFMPEG_KIT_SOURCE" -B "$FFMPEG_KIT_BUILD" \
+  -DBUILD_TESTS=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Debug \
+  -DFFMPEG_KIT_WASM_ENVIRONMENT=node \
+  -DFFMPEG_BUILD_DIR="$FFMPEG_KIT_BUNDLE" \
+  -DDEPENDENCY_BUILD_DIR="$FFMPEG_KIT_DEPS" \
+  -DFFMPEG_KIT_BUNDLE_TYPE=base -DFFMPEG_KIT_WASM_PTHREAD_POOL_SIZE=4 \
+  -DFFMPEG_KIT_VERSION="$FFMPEG_KIT_VERSION"
+cmake --build "$FFMPEG_KIT_BUILD" --target ffmpegkit_wasm -j2
+```
+
+From the Windows checkout, run the loader-initialized test with the artifact
+and generated loader from the Wasm build:
+
+```bash
+wsl.exe -d ManyLinux -- bash -lc "cd /mnt/d/Projects/ffmpeg_kit_extended && /usr/local/emsdk/node/24.19.0_64bit/bin/node flutter/web/ffmpegkit_callback_roundtrip_test.mjs /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-node/ffmpegkit.wasm /home/vscode/ffmpeg-kit-builders/FFmpegKit/build-wasm-callback-node/ffmpegkit.mjs"
+```
+
+### Flutter Web callback probe
+
+Run the public API callback test from the Flutter example checkout against the
+locally staged Wasm bundle. The test runner launches Chrome headlessly, so it
+does not open a browser window or accept interactive input. Pthread-enabled
+bundles require cross-origin isolation.
+```bash
+cd /mnt/d/Projects/ffmpeg_kit_extended/flutter/example
+flutter test --platform chrome --wasm test/wasm_callback_test.dart
+```
+
+For an interactive manual probe, launch the example explicitly with
+`flutter run -d chrome --wasm -t lib/wasm_callback_probe.dart`.
+
+The probe reports FFmpeg completion, logs, statistics, FFprobe completion and logs, and MediaInformation completion. Each completion must be delivered exactly once.
+
+The test should report one completion, the expected log and statistics counts,
+the stable session ID, and `"status":"PASS"`.
+
+## Final binary export verification (full GPL)
+
+The opt-in `FFMPEGKIT_VERIFY_BINARY_EXPORTS` CMake option checks the final
+linked native shared library, or the Emscripten `ffmpegkit.wasm` module, after
+linking. Set `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` and
+`FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON` in the runner environment; the shared
+runner forwards them only to FFmpegKit's CMake configure step. The Apple
+XCFramework builder also checks every final signed slice when those variables
+are set. These checks do not build or run GTests or sanitizers.
+
+Build each supported target with the normal runner's full, GPL, non-small,
+shared-kit options and `--deps` to fetch prebuilt dependencies. The following
+example uses Linux x86_64; repeat with the supported host/arch pairs in
+`scripts/supported.sh`:
+
+```bash
+sudo env FFMPEGKIT_BUILD_FLAGS='--host=linux --arch=x86_64 --skip -y --enable-full --gpl --gpl-all --deps --kit=shared --release=local -fk' \
+  FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
+  FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
+  ./runner.sh --host=linux --arch=x86_64 --skip -y \
+  --enable-full --gpl --gpl-all --deps --kit=shared --release=local -fk
+```
+
+Set `FFMPEGKIT_BUILD_FLAGS` to the exact positional arguments for the runner or
+package command. Linked-binary and XCFramework JSON reports record the parsed
+tokens in `build_flags`, alongside the effective bundle, license, size, and CMake
+configuration.
+
+For WASM, build `ffmpegkit_wasm`; the verifier reads the linked `.wasm` export
+section and confirms each public loader mapping points to a real module export.
+Baseline checks compare stable public API names across the baseline and current
+loaders, while retaining minified alias additions/removals as diagnostics.
+On cross-build hosts, retain the runner's toolchain environment when
+reconfiguring directly. A nonzero verifier result fails the CMake build.
+Reports and sorted raw export lists are written under
+`FFmpegKit/build/export-verification/`. Use `--baseline-exports` with an
+explicitly captured same-target pristine JSON to reject unreviewed ABI
+removals. `--capture-baseline` is an explicit, overwrite-protected operation;
+verification never updates a baseline automatically.
+
+On the Mac build host, use the same runner flags for each iOS, simulator,
+macOS, and tvOS pair, for example:
+
+```bash
+sudo env FFMPEGKIT_BUILD_FLAGS='--host=ios --arch=aarch64 --skip -y --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle' \
+  ./runner.sh --host=ios --arch=aarch64 --skip -y \
+  --enable-full --gpl --gpl-all --deps --kit --release=local -fk --no-bundle
+```
+
+The verifier uses ELF dynamic symbols (`readelf` or NDK `llvm-readelf`), the
+PE export directory (`objdump` and `llvm-readobj`), per-arch Mach-O external
+defined names (`xcrun nm`), and the WASM Export section validated with
+`wasm-dis`. JSON reports include the raw-list path, hashes, API checks,
+forbidden matches, and same-target baseline additions/removals.
+
+For Apple packages, set `FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON` and
+`FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON` when invoking
+`scripts/apple/build_xcframework.sh`. The package hook reads
+`Info.plist`'s `AvailableLibraries`, requires all requested platform/arch
+slices, compares each final symbol set to its pre-package dylib, and checks
+architecture, platform, dSYM UUIDs and compile units, install name, rpaths,
+bundled dependencies, iOS LZMA names, and code signatures before zipping.
+For the local full-GPL package gate, run:
+
+```bash
+sudo env FFMPEGKIT_BUILD_FLAGS='--platform=ios,macos,appletvos --bundle=full --license=gpl --not-small --local --create-framework --reset' \
+  FFMPEGKIT_VERIFY_BINARY_EXPORTS=ON \
+  FFMPEGKIT_VERIFY_FULL_GPL_ACCEPTANCE=ON \
+  ./scripts/apple/build_xcframework.sh \
+  --platform=ios,macos,appletvos --bundle=full --license=gpl \
+  --not-small --local --create-framework --reset
+```
+
+The unattributed-log helper's declaration and definition are guarded by
+`FFMPEG_KIT_TEST_HOOKS`. CMake defines this macro for FFmpegKit only when
+`BUILD_TESTS=ON`, and production acceptance builds require `BUILD_TESTS=OFF`.
+The verifier rejects any test-only export in the final binary; its baseline
+allowance for `ffmpeg_kit_test_emit_unattributed_log` permits only that exact
+intentional removal while preserving checks for every other public API.

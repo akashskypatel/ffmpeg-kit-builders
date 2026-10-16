@@ -517,8 +517,13 @@ GITHUB_USERNAME="${GITHUB_USERNAME:-${owner:-$(get_github_owner)}}"
 GITHUB_REPO="${GITHUB_REPO:-${repo_name:-$(get_github_repo)}}"
 GITHUB_PASSWORD="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token)}}"
 GITHUB_PASSWORD_CLASSIC="${GH_TOKEN:-${GITHUB_TOKEN:-$(get_github_token_classic)}}"
-OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}"
-OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
+if [[ "$local_build" == "true" ]]; then
+  OSSRH_USERNAME="${OSSRH_USERNAME:-}"
+  OSSRH_PASSWORD="${OSSRH_PASSWORD:-}"
+else
+  OSSRH_USERNAME="${OSSRH_USERNAME:-$(get_maven_username)}"
+  OSSRH_PASSWORD="${OSSRH_PASSWORD:-$(get_maven_password)}"
+fi
 GRADLE_COMMAND="publishToMavenLocal" # "publishToMavenCentral"
 GRADLE_SIGN_PUBLICATIONS="false" # "true"
 SIGNING_HOME="${GITHUB_WORKSPACE:-$(get_userhome)}"

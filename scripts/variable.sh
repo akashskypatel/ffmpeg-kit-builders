@@ -62,7 +62,7 @@ else
 fi
 export original_cpu_count=$cpu_count # save it away for some that revert it temporarily
 export PKG_CONFIG_LIBDIR= # disable pkg-config from finding [and using] normal linux system installed libs [yikes]
-export original_path=$PATH:/usr/local/cargo/bin
+export original_path=$PATH:$HOME/.local/bin:/usr/local/cargo/bin
 export license_dir_list=()
 export extra_ffmpeg_c_flags=""
 
@@ -97,6 +97,9 @@ CONFIG_ANDROID=" \
 --enable-openssl \
 --enable-mediacodec"
 
+CONFIG_WASM=" \
+--enable-openssl"
+
 CONFIG_WINDOWS="\
 --enable-d3d11va \
 --enable-d3d12va \
@@ -127,7 +130,8 @@ CONFIG_GENERAL="\
 --enable-lzma \
 --enable-zlib"
 
-CONFIG_BASE="--enable-libjsoncpp \
+CONFIG_BASE="\
+--enable-libjsoncpp \
 --enable-sdl2"
 
 # must pick crypto type for streaming support
@@ -611,6 +615,79 @@ CONFIG_ANDROID_UNSUPPORTED="\
 --disable-mmal \
 --disable-libonnxruntime \
 --disable-ohcodec"
+
+CONFIG_WASM_UNSUPPORTED="\
+--disable-libtorch \
+--disable-libopenvino \
+--disable-libtensorflow \
+--disable-libonnxruntime \
+--disable-opencl \
+--disable-cuda-nvcc \
+--disable-cuda-llvm \
+--disable-ffnvcodec \
+--disable-nvdec \
+--disable-nvenc \
+--disable-cuvid \
+--disable-alsa \
+--disable-jni \
+--disable-mediacodec \
+--disable-d3d11va \
+--disable-d3d12va \
+--disable-dxva2 \
+--disable-schannel \
+--disable-mediafoundation \
+--disable-ohcodec \
+--disable-appkit \
+--disable-avfoundation \
+--disable-audiotoolbox \
+--disable-coreimage \
+--disable-metal \
+--disable-securetransport \
+--disable-videotoolbox \
+--disable-libdc1394 \
+--disable-libdrm \
+--disable-libiec61883 \
+--disable-libv4l2 \
+--disable-libxcb-shape \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-libxcb \
+--disable-rkmpp \
+--disable-v4l2-m2m \
+--disable-vaapi \
+--disable-xlib \
+--disable-sndio \
+--disable-libxvid \
+--disable-libpulse \
+--disable-libjack \
+--disable-vdpau \
+--disable-mmal \
+--disable-opencl \
+--disable-ladspa \
+--disable-opengl \
+--disable-alsa \
+--disable-libsrt \
+--disable-libasound2 \
+--disable-libvpl \
+--disable-libsvtav1 \
+--disable-amf \
+--disable-librtmp \
+--disable-libssh \
+--disable-libsmbclient \
+--disable-librabbitmq \
+--disable-librist \
+--disable-libzmq \
+--disable-vulkan \
+--disable-vulkan-static \
+--disable-libplacebo \
+--disable-libmfx \
+--disable-avisynth \
+--disable-libcdio \
+--disable-decklink \
+--disable-frei0r \
+--disable-lv2 \
+--disable-vapoursynth \
+--disable-libsvtjpegxs"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
 # build_mediacodec        # config_options+= --disable-mediacodec         # Video  # enable Android MediaCodec support [no]
