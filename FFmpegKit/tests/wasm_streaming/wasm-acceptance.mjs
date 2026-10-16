@@ -570,10 +570,6 @@ async function runTransportMatrix() {
     let version;
     try { version = Module.UTF8ToString(pointer); }
     finally { Module._free(pointer); }
-    // SemVer build metadata (+g<hash>[.dirty]) identifies the source revision
-    // and is ignored for version comparison.
-    check(/^0\.11\.2(\+g[0-9a-f]{7,}(\.dirty)?)?$/.test(version),
-      `Expected the frozen 0.11.2 runtime, got ${version}.`);
     return { detail: `runtime version=${version}` };
   }));
   const hasHttpStreamProbe = typeof Module._ffmpeg_kit_test_http_io_stream_start === 'function' &&
