@@ -1,6 +1,6 @@
 # Wasm streaming input design
 
-This document defines the private Wasm transport and audio contracts for FFmpegKit ABI 0.11.2. [PHASE-1-STATUS.md](PHASE-1-STATUS.md) is the authoritative goal, case and gate tracker; [PHASE-1-HANDOFF.md](PHASE-1-HANDOFF.md) identifies the local package and reproduction instructions.
+This document defines the private Wasm transport and audio contracts for FFmpegKit ABI.
 
 ## Scope and ownership
 
@@ -30,9 +30,7 @@ flowchart TD
     M[HLS playlist, segment, key and reload] --> G
 ```
 
-The pinned FFmpeg public header documents that nested `io_open` callbacks receive the same `opaque` pointer (`prebuilt/src/ffmpeg/libavformat/avformat.h`, `AVFormatContext.io_open`). Its demux path invokes `s->io_open` for root input (`libavformat/demux.c::init_input`); HLS `open_url` uses the same callback for playlists, segments and keys (`libavformat/hls.c::open_url`, `read_key`, `open_input`). HLS also asks each opened AVIO child for `location` after redirects. The custom AVIO child class exposes the effective `responseUrl` through that option so HLS can resolve relative playlist URLs from the redirected base. The helper exposes `headers` and `rw_timeout` as child options for HLS's `ffio_copy_url_options`, and keeps `withCredentials` in the per-root session for nested opens. This establishes source-level feasibility; only the built Wasm request trace can establish runtime behavior.
-
-Runtime results and artifact identities are recorded in [PHASE-1-STATUS.md](PHASE-1-STATUS.md). Production pthread stacks are 1 MiB; MPEG-TS input open overflowed the former 64 KiB default and corrupted adjacent heap memory.
+The FFmpeg public header documents that nested `io_open` callbacks receive the same `opaque` pointer (`prebuilt/src/ffmpeg/libavformat/avformat.h`, `AVFormatContext.io_open`). Its demux path invokes `s->io_open` for root input (`libavformat/demux.c::init_input`); HLS `open_url` uses the same callback for playlists, segments and keys (`libavformat/hls.c::open_url`, `read_key`, `open_input`). HLS also asks each opened AVIO child for `location` after redirects. The custom AVIO child class exposes the effective `responseUrl` through that option so HLS can resolve relative playlist URLs from the redirected base. The helper exposes `headers` and `rw_timeout` as child options for HLS's `ffio_copy_url_options`, and keeps `withCredentials` in the per-root session for nested opens. This establishes source-level feasibility; only the built Wasm request trace can establish runtime behavior.
 
 ## Threading and request lifecycle
 
@@ -43,8 +41,6 @@ Each request is heap-owned. The worker, every queued task, the live Fetch object
 **Transport decision.** The transport stays on asynchronous Emscripten Fetch on the main runtime thread, hardened as described above. Synchronous Fetch from the worker was considered and rejected for two reasons:
 - Emscripten sets no timeout on synchronous requests, and an in-flight request can't be aborted, so mid-request cancellation would be lost.
 - Synchronous XHR delivers no progress events, so a server that ignores Range would be downloaded in full before it could be rejected, losing the memory bound.
-
-Socket-over-proxy stacks (FFmpeg `http`, libcurl, libcurl.js), the WasmFS fetch backend and lazy files were also rejected; see the decisions list in [`PHASE-1-STATUS.md`](PHASE-1-STATUS.md#decisions-recorded).
 
 The transport has no legacy waitable/synchronous proxy fallback and no infinite main-dependent wait. An initial queue allocation failure can be retried on the next request. Fetch close is queued onto the main runtime thread so an XHR `readystatechange` callback can return before Emscripten frees its Fetch object; closing inline from that callback can re-enter XHR cleanup and underflow the runtime keepalive count. If close queuing fails on a worker, pending main-thread work can retry. If it fails on main, a zero-delay timer owns a retained request reference and closes after the callback returns. Successful response bytes are already copied into request-owned storage, so the worker returns without waiting for main-thread destruction; delayed cleanup cannot turn those bytes into a timeout. The module retains bounded request resources until main resumes. The Fetch-start wrapper handles browser API exceptions and rethrows Wasm traps. The source is compiled with `-Wframe-larger-than=2048 -Werror=frame-larger-than` for Wasm.
 
@@ -110,4 +106,4 @@ The coordinator relies on SDL 2.32.8's private `Module.SDL2.audio` state. An una
 
 FFmpeg's existing `AVERROR_EXIT` to return-code 0 mapping is intentional for host application stability and remains in Emscripten. A cancelled HTTP command must interrupt transport, release resources, deliver one terminal completion callback, and leave the web app able to execute subsequent commands. Return code 0 alone does not establish that cancelled media processing completed. FFprobe retains its existing cancellation result. The diagnostic completion observer registers real callbacks through the public async APIs; its helpers are absent from production.
 
-Use the existing async FFmpeg/FFprobe execution exports for HTTP input, a module-local canvas and lifecycle, the packaged pthread worker/loader, and the existing callback/handle ownership rules. Serve the generated loader unchanged. Keep its module alive until sessions and their cleanup complete. Native FFplay uses its reader pthread. The runtime requires `SharedArrayBuffer`, cross-origin isolation and the browser/server policies described above. Phase 2 authorization and unresolved review requirements live in [PHASE-1-STATUS.md](PHASE-1-STATUS.md).
+Use the existing async FFmpeg/FFprobe execution exports for HTTP input, a module-local canvas and lifecycle, the packaged pthread worker/loader, and the existing callback/handle ownership rules. Serve the generated loader unchanged. Keep its module alive until sessions and their cleanup complete. Native FFplay uses its reader pthread. The runtime requires `SharedArrayBuffer`, cross-origin isolation and the browser/server policies described above.
