@@ -57,6 +57,13 @@ VALID_APPLE=(
   "${VALID_MACOS[@]}"
 )
 
+VALID_NON_APPLE=(
+  "${VALID_LINUX[@]}"
+  "${VALID_WINDOWS[@]}"
+  "${VALID_ANDROID[@]}"
+  "${VALID_WASM[@]}"
+)
+
 # combine all platform/arch combinations
 VALID_PLATFORM_ARCHS=(
   "${VALID_LINUX[@]}"

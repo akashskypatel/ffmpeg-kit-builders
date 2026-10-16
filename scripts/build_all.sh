@@ -66,13 +66,6 @@ p_args=""
 deps=""
 bundles=""
 reset_state=false
-# now imported from supported.sh
-# VALID_BUNDLES=("full" "video_hw" "video" "audio" "base" "debug")
-# VALID_PLATFORMS=("linux" "windows" "android" "ios" "iphonesimulator" "macos")
-# VALID_PLATFORM_ARCHS=("linux-x86_64" "windows-x86_64" "android-aarch64" "android-armv7a" "android-x86_64" "ios-aarch64" "iphonesimulator-aarch64" "macos-aarch64" "macos-x86_64")
-# VALID_BUILDS=("ffmpeg" "kit" "bundle")
-# VALID_LICENSES=("lgpl" "gpl")
-# VALID_SMALL_FLAGS=("small" "")
 SMALL_FLAGS=("small" "")
 ANDROID_PLATFORM_ARCHS=()
 APPLE_PLATFORM_ARCHS=()
@@ -107,6 +100,15 @@ falsey() {
   esac
 }
 
+# check if script is being run on linux or macos
+is_linux() {
+  [[ "$(uname)" == "Linux" ]]
+}
+
+is_macos() {
+  [[ "$(uname)" == "Darwin" ]]
+}
+
 # Add a single platform-arch entry to PLATFORMS, skipping duplicates
 _add_platform_arch() {
   local key="${1}" value="${2}"
@@ -137,7 +139,11 @@ parse_platforms() {
   p_args="${1}"
   # Ensure p_args is populated if empty
   if [[ -z "${p_args}" ]]; then
-    p_args=$(IFS=,; echo "${VALID_PLATFORM_ARCHS[*]}")
+    if is_linux; then
+      p_args=$(IFS=,; echo "${VALID_NON_APPLE[*]}")
+    elif is_macos; then
+      p_args=$(IFS=,; echo "${VALID_APPLE[*]}")
+    fi
   fi
   IFS=',' read -ra P_ARRAY <<< "$p_args"
   for p in "${P_ARRAY[@]}"; do
