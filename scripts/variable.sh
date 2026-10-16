@@ -677,6 +677,16 @@ CONFIG_WASM_UNSUPPORTED="\
 --disable-librabbitmq \
 --disable-librist \
 --disable-libzmq \
+--disable-vulkan \
+--disable-vulkan-static \
+--disable-libplacebo \
+--disable-libmfx \
+--disable-avisynth \
+--disable-libcdio \
+--disable-decklink \
+--disable-frei0r \
+--disable-lv2 \
+--disable-vapoursynth \
 --disable-libsvtjpegxs"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]
