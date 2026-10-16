@@ -97,6 +97,7 @@ Bundle presets:
                                      Hardware video bundle with GPU AI libraries
   --full-bundle                      All supported feature groups
   --no-bundle                        Do not create an FFmpegKit bundle
+  --bundle-name=NAME                 Custom bundle name
 
 Build selection:
   --build-deps-only, --build-deps, --deps
@@ -570,6 +571,11 @@ while [ $# -gt 0 ]; do
     export enable_audio_ai=y
     export gpu_support=y
     pick_gpu_type "rocm"
+    shift
+    ;;
+  # custom bundle name
+  --bundle-name=*)
+    export bundle_name="${arg#*=}"
     shift
     ;;
   --video-hw-bundle|--enable-video_hw)

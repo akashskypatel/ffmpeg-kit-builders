@@ -667,6 +667,12 @@ CONFIG_WASM_UNSUPPORTED="\
 --disable-libvpl \
 --disable-libsvtav1 \
 --disable-amf \
+--disable-librtmp \
+--disable-libssh \
+--disable-libsmbclient \
+--disable-librabbitmq \
+--disable-librist \
+--disable-libzmq \
 --disable-libsvtjpegxs"
 
 # build_jni               # config_options+= --disable-jni                # System # enable JNI support [no]

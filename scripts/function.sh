@@ -1780,8 +1780,12 @@ get_bundle_type() {
     echo "streaming"
   elif truthy "$enable_full"; then
     echo "full"
+  elif [[ -n "$bundle_name" ]]; then
+    echo "$bundle_name"
   else
-    echo "custom"
+    # generate random string of 8 characters
+    bundle_name="custom_$(tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 8)"
+    echo "$bundle_name"
   fi
 }
 
