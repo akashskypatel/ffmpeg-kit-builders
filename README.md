@@ -15,6 +15,7 @@
 [![v0.11.2-macos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.2-macos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.2-macos)
 [![v0.11.2-appletvos](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.2-appletvos/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.2-appletvos)
 [![v0.11.2-windows](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.2-windows/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.2-windows)
+[![v0.11.2-wasm](https://img.shields.io/github/downloads/akashskypatel/ffmpeg-kit-builders/v0.11.2-wasm/total?style=flat-square&color=144DB3)](https://github.com/akashskypatel/ffmpeg-kit-builders/releases#release-v0.11.2-wasm)
 
 </div>
 
